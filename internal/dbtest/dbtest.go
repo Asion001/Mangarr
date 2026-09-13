@@ -74,4 +74,32 @@ func ForEachDialect(t *testing.T, fn func(t *testing.T, d *db.DB)) {
 }
 
 // Name returns a sanitized name for logs.
-func Name(d *db.DB) string { return strings.ToLower(string(d.Dialect)) }
+func Name(d *db.DB) string { return strings.ToLower(string(d.Kind)) }
+
+// DSNs returns database DSNs for app-level tests: a fresh SQLite file and,
+// when MANGARR_TEST_POSTGRES is set, a freshly created Postgres database.
+func DSNs(t *testing.T) map[string]string {
+	t.Helper()
+	out := map[string]string{"sqlite": "sqlite://" + filepath.Join(t.TempDir(), "app.db")}
+	base := os.Getenv("MANGARR_TEST_POSTGRES")
+	if base == "" {
+		return out
+	}
+	ctx := context.Background()
+	admin, err := db.Open(ctx, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	name := fmt.Sprintf("mangarr_app_%d_%d", time.Now().UnixNano()%1e9, counter.Add(1))
+	if _, err := admin.ExecContext(ctx, "CREATE DATABASE "+name); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = admin.ExecContext(context.Background(), "DROP DATABASE IF EXISTS "+name+" WITH (FORCE)")
+		_ = admin.Close()
+	})
+	u, _ := url.Parse(base)
+	u.Path = "/" + name
+	out["postgres"] = u.String()
+	return out
+}

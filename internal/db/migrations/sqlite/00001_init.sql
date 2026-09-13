@@ -62,6 +62,7 @@ CREATE TABLE series (
     reading_direction     TEXT      NOT NULL DEFAULT 'rtl',
     tags                  TEXT      NOT NULL DEFAULT '[]',
     metadata              TEXT      NOT NULL DEFAULT '{}',
+    add_options           TEXT      NOT NULL DEFAULT '{}',
     added_at              TIMESTAMP NOT NULL,
     updated_at            TIMESTAMP NOT NULL,
     last_metadata_refresh TIMESTAMP

@@ -28,7 +28,10 @@ func init() {
 		func(i modules.Instance) string { _, ok := i.(source.Preferences); return capIf(ok, "preferences") },
 		func(i modules.Instance) string { _, ok := i.(source.Latest); return capIf(ok, "browse") },
 		func(i modules.Instance) string { _, ok := i.(library.ProgressReader); return capIf(ok, "progress") },
-		func(i modules.Instance) string { _, ok := i.(metadata.ExternalLookup); return capIf(ok, "externalLookup") },
+		func(i modules.Instance) string {
+			_, ok := i.(metadata.ExternalLookup)
+			return capIf(ok, "externalLookup")
+		},
 	)
 	register((*Server).registerSources)
 }

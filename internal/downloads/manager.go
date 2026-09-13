@@ -1,0 +1,740 @@
+package downloads
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"log/slog"
+	"net"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/uptrace/bun"
+
+	"github.com/Asion001/mangarr/internal/cbz"
+	"github.com/Asion001/mangarr/internal/comicinfo"
+	"github.com/Asion001/mangarr/internal/db"
+	"github.com/Asion001/mangarr/internal/events"
+	"github.com/Asion001/mangarr/internal/fsutil"
+	"github.com/Asion001/mangarr/internal/history"
+	"github.com/Asion001/mangarr/internal/imagecheck"
+	"github.com/Asion001/mangarr/internal/library"
+	"github.com/Asion001/mangarr/internal/model"
+	"github.com/Asion001/mangarr/internal/modules"
+	"github.com/Asion001/mangarr/internal/modules/source"
+	"github.com/Asion001/mangarr/internal/settings"
+)
+
+// PageFile is a validated page on disk.
+type PageFile struct {
+	Name   string // archive name, e.g. 0001.jpg
+	Path   string
+	Format string
+	Width  int
+	Height int
+}
+
+// Processor transforms pages before import (e.g. upscaling). applied=false
+// means pages were left untouched.
+type Processor interface {
+	Process(ctx context.Context, cfg model.UpscaleConfig, pages []PageFile, workDir string) (out []PageFile, applied bool, modelName string, err error)
+}
+
+// permanentError marks failures that should blocklist the release.
+type permanentError struct{ error }
+
+func permanent(err error) error { return permanentError{err} }
+
+// infraError marks failures of our own infrastructure (engine down, disk full)
+// that must never blocklist a release.
+type infraError struct{ error }
+
+type Manager struct {
+	db       *db.DB
+	bus      *events.Bus
+	mods     *modules.Manager
+	settings *settings.Store
+	lib      *library.Library
+	queue    *Queue
+	searcher *Searcher
+	log      *slog.Logger
+	dataDir  string
+
+	Processor Processor
+
+	mu          sync.Mutex
+	running     map[int64]context.CancelFunc
+	runningSrc  map[string]int
+	lastMaint   time.Time
+	wasBusy     bool
+	progressMu  sync.Mutex
+	lastPersist map[int64]time.Time
+}
+
+func NewManager(d *db.DB, bus *events.Bus, mods *modules.Manager, st *settings.Store, lib *library.Library, q *Queue, s *Searcher, log *slog.Logger, dataDir string) *Manager {
+	return &Manager{db: d, bus: bus, mods: mods, settings: st, lib: lib, queue: q, searcher: s, log: log, dataDir: dataDir,
+		running: map[int64]context.CancelFunc{}, runningSrc: map[string]int{}, lastPersist: map[int64]time.Time{}}
+}
+
+// Start recovers interrupted jobs and starts the scheduling loop.
+func (m *Manager) Start(ctx context.Context) error {
+	now := time.Now().UTC()
+	if _, err := m.db.NewUpdate().Model((*model.DownloadJob)(nil)).
+		Set("status = ?", model.JobQueued).Set("not_before = ?", now).Set("updated_at = ?", now).
+		Where("status IN (?)", bun.In([]string{model.JobDownloading, model.JobProcessing, model.JobImporting})).Exec(ctx); err != nil {
+		return err
+	}
+	_ = os.RemoveAll(filepath.Join(m.dataDir, "staging"))
+	go m.loop(ctx)
+	return nil
+}
+
+// Cancel stops a running job (used when the user removes it from the queue).
+func (m *Manager) Cancel(jobID int64) {
+	m.mu.Lock()
+	if c, ok := m.running[jobID]; ok {
+		c()
+	}
+	m.mu.Unlock()
+}
+
+func (m *Manager) loop(ctx context.Context) {
+	t := time.NewTicker(5 * time.Second)
+	defer t.Stop()
+	for {
+		m.dispatch(ctx)
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		case <-m.queue.wake:
+		}
+	}
+}
+
+type queuedJob struct {
+	model.DownloadJob
+	SourceID string `bun:"source_id"`
+}
+
+func (m *Manager) dispatch(ctx context.Context) {
+	dl, _ := m.settings.Downloads(ctx)
+	if dl.MaxConcurrent <= 0 {
+		dl.MaxConcurrent = 1
+	}
+	if dl.MaxPerSource <= 0 {
+		dl.MaxPerSource = 1
+	}
+	var jobs []queuedJob
+	err := m.db.NewSelect().TableExpr("download_jobs AS j").ColumnExpr("j.*, COALESCE(ss.source_id, '') AS source_id").
+		Join("LEFT JOIN chapter_releases AS r ON r.id = j.release_id").
+		Join("LEFT JOIN series_sources AS ss ON ss.id = r.series_source_id").
+		Where("j.status = ? AND j.not_before <= ?", model.JobQueued, time.Now().UTC()).
+		OrderExpr("j.id").Limit(100).Scan(ctx, &jobs)
+	if err != nil {
+		if ctx.Err() == nil {
+			m.log.Error("download queue", "err", err)
+		}
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	busy := len(m.running) > 0
+	for _, j := range jobs {
+		if len(m.running) >= dl.MaxConcurrent {
+			break
+		}
+		if _, ok := m.running[j.ID]; ok {
+			continue
+		}
+		if j.SourceID != "" && m.runningSrc[j.SourceID] >= dl.MaxPerSource {
+			continue
+		}
+		jctx, cancel := context.WithCancel(ctx)
+		m.running[j.ID] = cancel
+		m.runningSrc[j.SourceID]++
+		busy = true
+		go func(job model.DownloadJob, src string) {
+			defer func() {
+				cancel()
+				m.mu.Lock()
+				delete(m.running, job.ID)
+				m.runningSrc[src]--
+				m.mu.Unlock()
+				m.queue.signal()
+			}()
+			m.run(jctx, job)
+		}(j.DownloadJob, j.SourceID)
+	}
+	// Queue drained: run module housekeeping (e.g. clear engine page caches).
+	if !busy && m.wasBusy && time.Since(m.lastMaint) > 10*time.Minute {
+		m.lastMaint = time.Now()
+		go m.maintain(context.WithoutCancel(ctx))
+	}
+	m.wasBusy = busy
+}
+
+func (m *Manager) maintain(ctx context.Context) {
+	for _, mt := range modules.ActiveAs[source.Maintainer](m.mods, modules.KindSource) {
+		if err := mt.Instance.Maintain(ctx); err != nil {
+			m.log.Debug("source maintenance", "module", mt.Def.Name, "err", err)
+		}
+	}
+}
+
+// jobCtx bundles everything loaded for a job.
+type jobCtx struct {
+	job     *model.DownloadJob
+	series  model.Series
+	profile model.Profile
+	chapter model.Chapter
+	release *model.ChapterRelease
+	link    *model.SeriesSource
+	file    *model.ChapterFile
+}
+
+func (m *Manager) load(ctx context.Context, job *model.DownloadJob) (*jobCtx, error) {
+	jc := &jobCtx{job: job}
+	if err := m.db.NewSelect().Model(&jc.chapter).Where("id = ?", job.ChapterID).Scan(ctx); err != nil {
+		return nil, err
+	}
+	if err := m.db.NewSelect().Model(&jc.series).Where("id = ?", job.SeriesID).Scan(ctx); err != nil {
+		return nil, err
+	}
+	if err := m.db.NewSelect().Model(&jc.profile).Where("id = ?", jc.series.ProfileID).Scan(ctx); err != nil {
+		return nil, err
+	}
+	if jc.chapter.FileID != nil {
+		var f model.ChapterFile
+		if err := m.db.NewSelect().Model(&f).Where("id = ?", *jc.chapter.FileID).Scan(ctx); err == nil {
+			jc.file = &f
+		}
+	}
+	if job.ReleaseID != nil {
+		var r model.ChapterRelease
+		if err := m.db.NewSelect().Model(&r).Where("id = ?", *job.ReleaseID).Scan(ctx); err == nil {
+			jc.release = &r
+			var ss model.SeriesSource
+			if err := m.db.NewSelect().Model(&ss).Where("id = ?", r.SeriesSourceID).Scan(ctx); err == nil {
+				jc.link = &ss
+			}
+		}
+	}
+	return jc, nil
+}
+
+func (m *Manager) setStatus(ctx context.Context, job *model.DownloadJob, status string, chapterState string) {
+	now := time.Now().UTC()
+	job.Status, job.UpdatedAt = status, now
+	cols := []string{"status", "updated_at"}
+	if status == model.JobDownloading && job.StartedAt == nil {
+		job.StartedAt = &now
+		cols = append(cols, "started_at")
+	}
+	_, _ = m.db.NewUpdate().Model(job).Column(cols...).WherePK().Exec(ctx)
+	if chapterState != "" && !job.IsUpgrade && job.Kind == model.JobKindDownload {
+		_, _ = m.db.NewUpdate().Model((*model.Chapter)(nil)).Set("state = ?", chapterState).Set("updated_at = ?", now).Where("id = ?", job.ChapterID).Exec(ctx)
+		m.bus.Changed("chapter", "updated", job.ChapterID)
+	}
+	m.bus.Changed("queue", "updated", job.ID)
+}
+
+func (m *Manager) progress(job *model.DownloadJob, done, total int) {
+	job.PagesDone, job.PagesTotal = done, total
+	if total > 0 {
+		job.Progress = done * 100 / total
+	}
+	m.progressMu.Lock()
+	last := m.lastPersist[job.ID]
+	persist := time.Since(last) > 2*time.Second || done == total
+	if persist {
+		m.lastPersist[job.ID] = time.Now()
+	}
+	m.progressMu.Unlock()
+	if persist {
+		_, _ = m.db.NewUpdate().Model(job).Column("pages_done", "pages_total", "progress").WherePK().Exec(context.Background())
+		m.bus.Changed("queue", "updated", job.ID)
+	}
+}
+
+func (m *Manager) run(ctx context.Context, job model.DownloadJob) {
+	log := m.log.With("job", job.ID, "chapter", job.ChapterID)
+	jc, err := m.load(ctx, &job)
+	if err != nil {
+		log.Error("load job", "err", err)
+		m.fail(ctx, &job, nil, err)
+		return
+	}
+	workDir := filepath.Join(m.dataDir, "staging", "job-"+strconv.FormatInt(job.ID, 10))
+	defer os.RemoveAll(workDir)
+	if err := os.MkdirAll(workDir, 0o775); err != nil {
+		m.fail(ctx, &job, jc, infraError{err})
+		return
+	}
+	var pages []PageFile
+	switch job.Kind {
+	case model.JobKindReprocess:
+		pages, err = m.extractExisting(jc, workDir)
+	default:
+		if jc.release == nil || jc.link == nil {
+			cand, upgrade, cerr := m.searcher.NextCandidate(ctx, jc.series.ID, jc.chapter.ID)
+			if cerr != nil || cand == nil {
+				m.fail(ctx, &job, jc, permanent(errors.New("no downloadable release left for this chapter")))
+				return
+			}
+			rel, link := cand.Release, cand.Source
+			jc.release, jc.link, job.ReleaseID, job.IsUpgrade = &rel, &link, &rel.ID, upgrade
+			_, _ = m.db.NewUpdate().Model(&job).Column("release_id", "is_upgrade").WherePK().Exec(ctx)
+		}
+		m.setStatus(ctx, &job, model.JobDownloading, model.ChapterDownloading)
+		pages, err = m.fetchPages(ctx, jc, workDir)
+	}
+	if err != nil {
+		m.fail(ctx, &job, jc, err)
+		return
+	}
+
+	// processing (upscale)
+	upscaled, upscaleModel := false, ""
+	var sizeBefore int64
+	for _, p := range pages {
+		if st, err := os.Stat(p.Path); err == nil {
+			sizeBefore += st.Size()
+		}
+	}
+	if m.Processor != nil && jc.profile.Config.Upscale.Enabled {
+		m.setStatus(ctx, &job, model.JobProcessing, model.ChapterProcessing)
+		out, applied, mdl, perr := m.Processor.Process(ctx, jc.profile.Config.Upscale, pages, workDir)
+		switch {
+		case perr != nil && ctx.Err() != nil:
+			m.fail(ctx, &job, jc, ctx.Err())
+			return
+		case perr != nil:
+			log.Warn("upscaling failed, importing original pages", "err", perr)
+			m.bus.Publish(events.Event{Type: events.HealthIssue, SeriesID: jc.series.ID, Payload: events.MessagePayload{
+				Title: "Upscaling failed", Message: fmt.Sprintf("%s ch. %s was imported without upscaling: %v", jc.series.Title, jc.chapter.NumberKey, perr)}})
+		case applied:
+			pages, upscaled, upscaleModel = out, true, mdl
+		}
+	} else if job.Kind == model.JobKindReprocess {
+		m.fail(ctx, &job, jc, permanent(errors.New("upscaling is not enabled for this series' profile")))
+		return
+	}
+
+	m.setStatus(ctx, &job, model.JobImporting, "")
+	if err := m.importChapter(ctx, jc, pages, upscaled, upscaleModel, sizeBefore); err != nil {
+		m.fail(ctx, &job, jc, err)
+		return
+	}
+	log.Info("chapter imported", "series", jc.series.Title, "chapter", jc.chapter.NumberKey, "pages", len(pages), "upscaled", upscaled)
+}
+
+// fetchPages downloads and validates every page into workDir.
+func (m *Manager) fetchPages(ctx context.Context, jc *jobCtx, workDir string) ([]PageFile, error) {
+	mod, _, err := modules.GetAs[source.Module](m.mods, jc.link.ModuleID)
+	if err != nil {
+		return nil, infraError{err}
+	}
+	dl, _ := m.settings.Downloads(ctx)
+	ref := source.ChapterRef{
+		Manga:     source.MangaRef{SourceID: jc.link.SourceID, URL: jc.link.MangaURL, EngineRef: jc.link.EngineRef, TitleHint: firstNonEmpty(jc.link.Title, jc.series.Title)},
+		URL:       jc.release.ChapterURL,
+		EngineRef: jc.release.EngineRef,
+	}
+	pctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+	list, err := mod.Pages(pctx, ref)
+	cancel()
+	if err != nil {
+		if errors.Is(err, source.ErrNotFound) {
+			return nil, permanent(err)
+		}
+		return nil, classify(err)
+	}
+	if min := jc.profile.Config.MinPages; min > 0 && len(list) < min {
+		return nil, permanent(fmt.Errorf("chapter has %d pages, profile requires at least %d", len(list), min))
+	}
+	pages := make([]PageFile, len(list))
+	conc := dl.PageConcurrency
+	if conc <= 0 {
+		conc = 2
+	}
+	retries := dl.PageRetries
+	if retries <= 0 {
+		retries = 3
+	}
+	sem := make(chan struct{}, conc)
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var firstErr error
+	done := 0
+	m.progress(jc.job, 0, len(list))
+	for i, p := range list {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			mu.Lock()
+			stop := firstErr != nil
+			mu.Unlock()
+			if stop {
+				return
+			}
+			pf, err := m.fetchPage(ctx, mod, p, i, workDir, retries)
+			mu.Lock()
+			defer mu.Unlock()
+			if err != nil {
+				if firstErr == nil {
+					firstErr = fmt.Errorf("page %d: %w", i+1, err)
+				}
+				return
+			}
+			pages[i] = pf
+			done++
+			m.progress(jc.job, done, len(list))
+		}()
+	}
+	wg.Wait()
+	if firstErr != nil {
+		return nil, firstErr
+	}
+	return pages, nil
+}
+
+func (m *Manager) fetchPage(ctx context.Context, mod source.Module, p source.Page, i int, workDir string, retries int) (PageFile, error) {
+	var lastErr error
+	for attempt := 0; attempt < retries; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return PageFile{}, ctx.Err()
+			case <-time.After(time.Duration(1<<(2*attempt)) * time.Second): // 4s, 16s
+			}
+		}
+		fctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		body, _, err := mod.FetchPage(fctx, p)
+		if err != nil {
+			cancel()
+			lastErr = classify(err)
+			continue
+		}
+		data, err := io.ReadAll(io.LimitReader(body, 64<<20))
+		body.Close()
+		cancel()
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		info, err := imagecheck.Detect(data)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		name := cbz.PageName(i, imagecheck.Ext(info.Format))
+		path := filepath.Join(workDir, name)
+		if err := os.WriteFile(path, data, 0o664); err != nil {
+			return PageFile{}, infraError{err}
+		}
+		return PageFile{Name: name, Path: path, Format: info.Format, Width: info.Width, Height: info.Height}, nil
+	}
+	return PageFile{}, lastErr
+}
+
+// extractExisting unpacks an imported CBZ for re-processing.
+func (m *Manager) extractExisting(jc *jobCtx, workDir string) ([]PageFile, error) {
+	if jc.file == nil {
+		return nil, permanent(errors.New("chapter has no file to re-process"))
+	}
+	dir, err := m.lib.SeriesDir(context.Background(), &jc.series)
+	if err != nil {
+		return nil, infraError{err}
+	}
+	pages, _, err := cbz.Read(filepath.Join(dir, jc.file.RelativePath))
+	if err != nil {
+		return nil, permanent(fmt.Errorf("read existing file: %w", err))
+	}
+	out := make([]PageFile, 0, len(pages))
+	for i, p := range pages {
+		info, err := imagecheck.Detect(p.Data)
+		if err != nil {
+			return nil, permanent(fmt.Errorf("existing page %s: %w", p.Name, err))
+		}
+		name := cbz.PageName(i, imagecheck.Ext(info.Format))
+		path := filepath.Join(workDir, name)
+		if err := os.WriteFile(path, p.Data, 0o664); err != nil {
+			return nil, infraError{err}
+		}
+		out = append(out, PageFile{Name: name, Path: path, Format: info.Format, Width: info.Width, Height: info.Height})
+	}
+	return out, nil
+}
+
+func (m *Manager) importChapter(ctx context.Context, jc *jobCtx, pages []PageFile, upscaled bool, upscaleModel string, sizeBefore int64) error {
+	mm, _ := m.settings.MediaManagement(ctx)
+	dir, err := m.lib.EnsureSeriesDir(ctx, &jc.series)
+	if err != nil {
+		return infraError{err}
+	}
+	if mm.MinFreeSpaceMB > 0 {
+		if free, err := fsutil.FreeSpace(dir); err == nil && free < uint64(mm.MinFreeSpaceMB)<<20 {
+			return infraError{fmt.Errorf("not enough free space in %s (%d MB free, %d MB required)", dir, free>>20, mm.MinFreeSpaceMB)}
+		}
+	}
+	// Keep the existing path on upgrades/re-processing so reader servers keep
+	// book ids and read progress.
+	rel := ""
+	if jc.file != nil {
+		rel = jc.file.RelativePath
+	} else {
+		sourceName := ""
+		if jc.link != nil {
+			sourceName = jc.link.SourceName
+		}
+		rel = m.lib.ChapterFileName(ctx, &jc.series, &jc.chapter, jc.release, sourceName)
+	}
+	target := filepath.Join(dir, rel)
+	if _, err := os.Stat(target); err == nil {
+		if _, err := m.lib.Recycle(ctx, target, jc.series.Path, true); err != nil {
+			m.log.Warn("recycle previous file", "path", target, "err", err)
+		}
+	}
+
+	ci := m.comicInfo(ctx, jc, len(pages), mm.WriteVolume)
+	xmlData, err := ci.Marshal()
+	if err != nil {
+		return err
+	}
+	fmode, _ := m.lib.Modes(ctx)
+	cbzPages := make([]cbz.Page, len(pages))
+	widthSum := 0
+	formats := map[string]int{}
+	for i, p := range pages {
+		cbzPages[i] = cbz.Page{Name: p.Name, Path: p.Path}
+		widthSum += p.Width
+		formats[p.Format]++
+	}
+	res, err := cbz.Write(target, cbzPages, xmlData, fmode, time.Now())
+	if err != nil {
+		return infraError{fmt.Errorf("write %s: %w", target, err)}
+	}
+	format := ""
+	for f, n := range formats {
+		if n > formats[format] {
+			format = f
+		}
+	}
+	now := time.Now().UTC()
+	file := &model.ChapterFile{ChapterID: jc.chapter.ID, SeriesID: jc.series.ID, RelativePath: rel, Size: res.Size, PageCount: len(pages),
+		Format: format, SHA256: res.SHA256, Upscaled: upscaled, UpscaleModel: upscaleModel, ImportedAt: now}
+	if len(pages) > 0 {
+		file.AvgWidth = widthSum / len(pages)
+	}
+	if upscaled {
+		file.SizeBefore = sizeBefore
+	}
+	if jc.release != nil {
+		file.ReleaseID, file.Scanlator = &jc.release.ID, jc.release.Scanlator
+	}
+	if jc.link != nil {
+		file.SourceName = jc.link.SourceName
+	}
+	if jc.job.Kind == model.JobKindReprocess && jc.file != nil {
+		file.ReleaseID, file.Scanlator, file.SourceName = jc.file.ReleaseID, jc.file.Scanlator, jc.file.SourceName
+		if !upscaled {
+			file.Upscaled, file.UpscaleModel = jc.file.Upscaled, jc.file.UpscaleModel
+		}
+	}
+	event := model.HistoryImported
+	if jc.file != nil {
+		event = model.HistoryUpgraded
+		if jc.job.Kind == model.JobKindReprocess {
+			event = model.HistoryUpscaled
+		}
+	}
+	err = m.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		if _, err := tx.NewDelete().Model((*model.ChapterFile)(nil)).Where("chapter_id = ?", jc.chapter.ID).Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := tx.NewInsert().Model(file).Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := tx.NewUpdate().Model((*model.Chapter)(nil)).Set("file_id = ?", file.ID).Set("state = ?", model.ChapterImported).
+			Set("cleaned_at = NULL").Set("updated_at = ?", now).Where("id = ?", jc.chapter.ID).Exec(ctx); err != nil {
+			return err
+		}
+		jc.job.Status, jc.job.Progress, jc.job.Error, jc.job.UpdatedAt = model.JobCompleted, 100, "", now
+		if _, err := tx.NewUpdate().Model(jc.job).Column("status", "progress", "error", "updated_at").WherePK().Exec(ctx); err != nil {
+			return err
+		}
+		src := ""
+		if jc.release != nil {
+			src = jc.release.Name
+		}
+		chID := jc.chapter.ID
+		return history.Record(ctx, tx, jc.series.ID, &chID, event, src, map[string]string{
+			"path": rel, "size": strconv.FormatInt(res.Size, 10), "pages": strconv.Itoa(len(pages)),
+			"source": file.SourceName, "scanlator": file.Scanlator, "upscaled": strconv.FormatBool(upscaled)})
+	})
+	if err != nil {
+		return err
+	}
+	evType := events.ChapterImported
+	if event == model.HistoryUpgraded {
+		evType = events.ChapterUpgraded
+	}
+	if event != model.HistoryUpscaled {
+		m.bus.Publish(events.Event{Type: evType, SeriesID: jc.series.ID, Payload: events.ChapterImportedPayload{
+			SeriesTitle: jc.series.Title, Chapter: jc.chapter.NumberKey, NumberSort: jc.chapter.NumberSort, Title: jc.chapter.Title,
+			Source: file.SourceName, Scanlator: file.Scanlator, Upgrade: event == model.HistoryUpgraded, Upscaled: upscaled,
+			CoverURL: jc.series.Metadata.CoverURL}})
+	}
+	m.bus.Publish(events.Event{Type: EventFileWritten, SeriesID: jc.series.ID, Payload: target})
+	m.bus.Changed("chapter", "updated", jc.chapter.ID)
+	m.bus.Changed("series", "updated", jc.series.ID)
+	m.bus.Changed("queue", "updated", jc.job.ID)
+	return nil
+}
+
+// EventFileWritten is published (payload: absolute path) whenever a library
+// file is written or deleted, so library modules can rescan.
+const EventFileWritten = "library.file"
+
+func (m *Manager) comicInfo(ctx context.Context, jc *jobCtx, pageCount int, writeVolume bool) comicinfo.ComicInfo {
+	s := jc.series
+	in := comicinfo.Input{
+		SeriesTitle: s.Title, ChapterNumberKey: jc.chapter.NumberKey, ChapterTitle: jc.chapter.Title,
+		Summary: s.Metadata.Description, Authors: s.Metadata.Authors, Artists: s.Metadata.Artists, Publisher: s.Metadata.Publisher,
+		Genres: s.Metadata.Genres, Tags: s.Metadata.Tags, PageCount: pageCount, Language: s.Language,
+		ReadingDirection: s.ReadingDirection, AgeRating: s.Metadata.AgeRating, ReleaseDate: jc.chapter.ReleaseDate,
+	}
+	if writeVolume {
+		in.Volume = jc.chapter.Volume
+	}
+	if jc.release != nil {
+		in.Scanlator = jc.release.Scanlator
+		if jc.release.UploadDate != nil {
+			in.ReleaseDate = jc.release.UploadDate
+		}
+		in.WebLinks = append(in.WebLinks, jc.release.WebURL)
+	} else if jc.file != nil {
+		in.Scanlator = jc.file.Scanlator
+	}
+	if u := s.Metadata.Links["AniList"]; u != "" {
+		in.WebLinks = append(in.WebLinks, u)
+	}
+	if s.Status == model.StatusCompleted || s.Status == model.StatusCancelled {
+		in.TotalCount = s.Metadata.TotalChapters
+		if in.TotalCount == 0 {
+			n, _ := m.db.NewSelect().Model((*model.Chapter)(nil)).Where("series_id = ?", s.ID).Count(ctx)
+			in.TotalCount = n
+		}
+	}
+	if jc.link != nil {
+		in.Notes = "Downloaded by mangarr from " + jc.link.SourceName
+	}
+	return comicinfo.Build(in)
+}
+
+func classify(err error) error {
+	if err == nil {
+		return nil
+	}
+	var ne net.Error
+	msg := strings.ToLower(err.Error())
+	if errors.As(err, &ne) || strings.Contains(msg, "connection refused") || strings.Contains(msg, "no such host") ||
+		strings.Contains(msg, "unauthorized (check") {
+		return infraError{err}
+	}
+	return err
+}
+
+var retryDelays = []time.Duration{30 * time.Second, 2 * time.Minute, 10 * time.Minute}
+
+// fail handles a failed attempt: retry, fall back to another release, or fail.
+func (m *Manager) fail(ctx context.Context, job *model.DownloadJob, jc *jobCtx, err error) {
+	if ctx.Err() != nil {
+		// cancelled by the user or shutting down; the queue entry decides what happens
+		return
+	}
+	bg := context.Background()
+	dl, _ := m.settings.Downloads(bg)
+	maxAttempts := dl.MaxAttempts
+	if maxAttempts <= 0 {
+		maxAttempts = 3
+	}
+	now := time.Now().UTC()
+	job.Attempt++
+	job.Error = err.Error()
+	job.UpdatedAt = now
+	var perm permanentError
+	var infra infraError
+	isPerm := errors.As(err, &perm)
+	isInfra := errors.As(err, &infra)
+	m.log.Warn("download attempt failed", "job", job.ID, "attempt", job.Attempt, "err", err, "permanent", isPerm)
+
+	requeue := func(delay time.Duration) {
+		job.Status, job.NotBefore = model.JobQueued, now.Add(delay)
+		_, _ = m.db.NewUpdate().Model(job).Column("status", "attempt", "error", "not_before", "updated_at", "release_id").WherePK().Exec(bg)
+		m.bus.Changed("queue", "updated", job.ID)
+	}
+	switch {
+	case isInfra:
+		// our side is broken: keep retrying with growing delay, never blocklist
+		d := time.Duration(job.Attempt) * 5 * time.Minute
+		if d > time.Hour {
+			d = time.Hour
+		}
+		requeue(d)
+		return
+	case !isPerm && job.Attempt < maxAttempts && job.Kind == model.JobKindDownload:
+		requeue(retryDelays[min(job.Attempt-1, len(retryDelays)-1)])
+		return
+	}
+	if job.Kind == model.JobKindDownload && job.ReleaseID != nil {
+		if berr := BlocklistRelease(bg, m.db, *job.ReleaseID, err.Error()); berr != nil {
+			m.log.Warn("blocklist release", "err", berr)
+		}
+		if jc != nil {
+			if cand, upgrade, cerr := m.searcher.NextCandidate(bg, jc.series.ID, jc.chapter.ID); cerr == nil && cand != nil {
+				rid := cand.Release.ID
+				job.ReleaseID, job.IsUpgrade, job.Attempt = &rid, upgrade, 0
+				_, _ = m.db.NewUpdate().Model(job).Column("is_upgrade").WherePK().Exec(bg)
+				m.log.Info("trying next release", "job", job.ID, "source", cand.Source.SourceName, "scanlator", cand.Release.Scanlator)
+				requeue(5 * time.Second)
+				return
+			}
+		}
+	}
+	job.Status = model.JobFailed
+	_, _ = m.db.NewUpdate().Model(job).Column("status", "attempt", "error", "updated_at").WherePK().Exec(bg)
+	if job.Kind == model.JobKindDownload {
+		_ = resetChapterState(bg, m.db, job.ChapterID)
+		var ch model.Chapter
+		if m.db.NewSelect().Model(&ch).Where("id = ?", job.ChapterID).Scan(bg) == nil && ch.FileID == nil {
+			_, _ = m.db.NewUpdate().Model((*model.Chapter)(nil)).Set("state = ?", model.ChapterFailed).Where("id = ?", ch.ID).Exec(bg)
+		}
+	}
+	if jc != nil {
+		chID := jc.chapter.ID
+		_ = history.Record(bg, m.db, jc.series.ID, &chID, model.HistoryFailed, "", map[string]string{"error": err.Error()})
+		m.bus.Publish(events.Event{Type: events.DownloadFailed, SeriesID: jc.series.ID, Payload: events.MessagePayload{
+			Title:   "Download failed",
+			Message: fmt.Sprintf("%s ch. %s: %v", jc.series.Title, jc.chapter.NumberKey, err)}})
+	}
+	m.bus.Changed("queue", "updated", job.ID)
+	m.bus.Changed("chapter", "updated", job.ChapterID)
+}
+
+func firstNonEmpty(xs ...string) string {
+	for _, x := range xs {
+		if x != "" {
+			return x
+		}
+	}
+	return ""
+}

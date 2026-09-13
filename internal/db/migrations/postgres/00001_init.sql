@@ -62,6 +62,7 @@ CREATE TABLE series (
     reading_direction     TEXT      NOT NULL DEFAULT 'rtl',
     tags                  JSONB      NOT NULL DEFAULT '[]',
     metadata              JSONB      NOT NULL DEFAULT '{}',
+    add_options           JSONB      NOT NULL DEFAULT '{}',
     added_at              TIMESTAMPTZ NOT NULL,
     updated_at            TIMESTAMPTZ NOT NULL,
     last_metadata_refresh TIMESTAMPTZ

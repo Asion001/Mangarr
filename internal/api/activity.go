@@ -1,0 +1,154 @@
+package api
+
+import (
+	"context"
+	"net/http"
+	"time"
+
+	"github.com/danielgtaylor/huma/v2"
+
+	"github.com/Asion001/mangarr/internal/downloads"
+	"github.com/Asion001/mangarr/internal/history"
+	"github.com/Asion001/mangarr/internal/model"
+)
+
+func init() { register((*Server).registerActivity) }
+
+type WantedItem struct {
+	model.Chapter
+	SeriesTitle string `json:"seriesTitle"`
+	Releases    int    `json:"releases"`
+}
+
+type WantedPage struct {
+	Items    []WantedItem `json:"items"`
+	Total    int          `json:"total"`
+	Page     int          `json:"page"`
+	PageSize int          `json:"pageSize"`
+}
+
+type BlocklistView struct {
+	model.Blocklist
+	SeriesTitle string `json:"seriesTitle"`
+	SourceName  string `json:"sourceName"`
+}
+
+func (s *Server) registerActivity() {
+	tags := []string{"Activity"}
+	huma.Register(s.api, huma.Operation{OperationID: "queue-list", Method: http.MethodGet, Path: "/api/v1/queue", Tags: tags},
+		func(ctx context.Context, in *struct {
+			IncludeDone bool `query:"includeDone"`
+		}) (*struct{ Body []downloads.JobView }, error) {
+			list, err := s.app.DLQueue.List(ctx, in.IncludeDone)
+			return &struct{ Body []downloads.JobView }{list}, toHTTPError(err)
+		})
+	huma.Register(s.api, huma.Operation{OperationID: "queue-remove", Method: http.MethodDelete, Path: "/api/v1/queue/{id}", Tags: tags},
+		func(ctx context.Context, in *struct {
+			ID        int64 `path:"id"`
+			Blocklist bool  `query:"blocklist"`
+		}) (*struct{}, error) {
+			if s.app.Downloads != nil {
+				s.app.Downloads.Cancel(in.ID)
+			}
+			err := s.app.DLQueue.Remove(ctx, in.ID, in.Blocklist)
+			s.app.Bus.Changed("queue", "deleted", in.ID)
+			return nil, toHTTPError(err)
+		})
+	huma.Register(s.api, huma.Operation{OperationID: "queue-retry", Method: http.MethodPost, Path: "/api/v1/queue/{id}/retry", Tags: tags},
+		func(ctx context.Context, in *IDPath) (*struct{}, error) {
+			return nil, toHTTPError(s.app.DLQueue.Retry(ctx, in.ID))
+		})
+	huma.Register(s.api, huma.Operation{OperationID: "queue-clear", Method: http.MethodPost, Path: "/api/v1/queue/clear-finished", Tags: tags},
+		func(ctx context.Context, _ *struct{}) (*struct{}, error) {
+			err := s.app.DLQueue.ClearFinished(ctx, 0)
+			s.app.Bus.Changed("queue", "sync", 0)
+			return nil, toHTTPError(err)
+		})
+
+	huma.Register(s.api, huma.Operation{OperationID: "history-list", Method: http.MethodGet, Path: "/api/v1/history", Tags: tags},
+		func(ctx context.Context, in *struct {
+			SeriesID  int64  `query:"seriesId"`
+			ChapterID int64  `query:"chapterId"`
+			EventType string `query:"eventType"`
+			Page      int    `query:"page" default:"1"`
+			PageSize  int    `query:"pageSize" default:"50"`
+		}) (*struct{ Body *history.Page }, error) {
+			p, err := history.List(ctx, s.app.DB, history.Query{SeriesID: in.SeriesID, ChapterID: in.ChapterID, EventType: in.EventType, Page: in.Page, PageSize: in.PageSize})
+			return &struct{ Body *history.Page }{p}, toHTTPError(err)
+		})
+
+	huma.Register(s.api, huma.Operation{OperationID: "blocklist-list", Method: http.MethodGet, Path: "/api/v1/blocklist", Tags: tags},
+		func(ctx context.Context, in *struct {
+			SeriesID int64 `query:"seriesId"`
+		}) (*struct{ Body []BlocklistView }, error) {
+			var out []BlocklistView
+			q := s.app.DB.NewSelect().TableExpr("blocklist AS b").ColumnExpr("b.*, s.title AS series_title, COALESCE(ss.source_name, '') AS source_name").
+				Join("JOIN series AS s ON s.id = b.series_id").Join("LEFT JOIN series_sources AS ss ON ss.id = b.series_source_id")
+			if in.SeriesID > 0 {
+				q = q.Where("b.series_id = ?", in.SeriesID)
+			}
+			err := q.OrderExpr("b.id DESC").Limit(1000).Scan(ctx, &out)
+			if out == nil {
+				out = []BlocklistView{}
+			}
+			return &struct{ Body []BlocklistView }{out}, toHTTPError(err)
+		})
+	huma.Register(s.api, huma.Operation{OperationID: "blocklist-delete", Method: http.MethodDelete, Path: "/api/v1/blocklist/{id}", Tags: tags},
+		func(ctx context.Context, in *IDPath) (*struct{}, error) {
+			_, err := s.app.DB.NewDelete().Model((*model.Blocklist)(nil)).Where("id = ?", in.ID).Exec(ctx)
+			s.app.Bus.Changed("blocklist", "deleted", in.ID)
+			return nil, toHTTPError(err)
+		})
+
+	huma.Register(s.api, huma.Operation{OperationID: "wanted-missing", Method: http.MethodGet, Path: "/api/v1/wanted/missing", Tags: tags,
+		Summary: "Monitored chapters of monitored series without a file"},
+		func(ctx context.Context, in *struct {
+			Page     int `query:"page" default:"1"`
+			PageSize int `query:"pageSize" default:"50"`
+		}) (*struct{ Body WantedPage }, error) {
+			if in.Page < 1 {
+				in.Page = 1
+			}
+			if in.PageSize <= 0 || in.PageSize > 500 {
+				in.PageSize = 50
+			}
+			var items []WantedItem
+			q := s.app.DB.NewSelect().TableExpr("chapters AS c").
+				ColumnExpr("c.*, s.title AS series_title").
+				ColumnExpr("(SELECT COUNT(*) FROM chapter_releases r WHERE r.chapter_id = c.id AND r.removed = ?) AS releases", false).
+				Join("JOIN series AS s ON s.id = c.series_id").
+				Where("s.monitored = ? AND c.monitored = ? AND c.file_id IS NULL AND c.state <> ?", true, true, model.ChapterCleaned)
+			total, err := q.Count(ctx)
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			err = q.OrderExpr("c.release_date DESC NULLS LAST, c.id DESC").Limit(in.PageSize).Offset((in.Page-1)*in.PageSize).Scan(ctx, &items)
+			if items == nil {
+				items = []WantedItem{}
+			}
+			return &struct{ Body WantedPage }{WantedPage{Items: items, Total: total, Page: in.Page, PageSize: in.PageSize}}, toHTTPError(err)
+		})
+
+	huma.Register(s.api, huma.Operation{OperationID: "calendar", Method: http.MethodGet, Path: "/api/v1/calendar", Tags: tags,
+		Summary: "Chapters released in a date range (by source upload date)"},
+		func(ctx context.Context, in *struct {
+			Start time.Time `query:"start"`
+			End   time.Time `query:"end"`
+		}) (*struct{ Body []WantedItem }, error) {
+			if in.End.IsZero() {
+				in.End = time.Now().UTC()
+			}
+			if in.Start.IsZero() {
+				in.Start = in.End.Add(-14 * 24 * time.Hour)
+			}
+			var items []WantedItem
+			err := s.app.DB.NewSelect().TableExpr("chapters AS c").ColumnExpr("c.*, s.title AS series_title").
+				Join("JOIN series AS s ON s.id = c.series_id").
+				Where("c.release_date >= ? AND c.release_date <= ?", in.Start.UTC(), in.End.UTC()).
+				OrderExpr("c.release_date DESC").Limit(1000).Scan(ctx, &items)
+			if items == nil {
+				items = []WantedItem{}
+			}
+			return &struct{ Body []WantedItem }{items}, toHTTPError(err)
+		})
+}

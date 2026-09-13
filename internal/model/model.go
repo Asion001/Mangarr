@@ -131,9 +131,28 @@ type Series struct {
 	ReadingDirection    string         `bun:"reading_direction,notnull" json:"readingDirection"` // rtl | ltr | vertical | webtoon
 	Tags                []int64        `bun:"tags,notnull" json:"tags"`
 	Metadata            SeriesMetadata `bun:"metadata,notnull" json:"metadata"`
+	AddOptions          AddOptions     `bun:"add_options,notnull" json:"addOptions"`
 	AddedAt             time.Time      `bun:"added_at,notnull" json:"addedAt"`
 	UpdatedAt           time.Time      `bun:"updated_at,notnull" json:"updatedAt"`
 	LastMetadataRefresh *time.Time     `bun:"last_metadata_refresh" json:"lastMetadataRefresh,omitempty"`
+}
+
+// Monitor options applied after the first chapter sync of a new series.
+const (
+	MonitorAll    = "all"
+	MonitorFuture = "future"
+	MonitorLatest = "latest"
+	MonitorFrom   = "from"
+	MonitorNone   = "none"
+)
+
+// AddOptions are applied on the first successful sync, then cleared (Pending=false).
+type AddOptions struct {
+	Pending       bool    `json:"pending"`
+	Monitor       string  `json:"monitor,omitempty"`
+	LatestCount   int     `json:"latestCount,omitempty"`
+	FromChapter   float64 `json:"fromChapter,omitempty"`
+	SearchMissing bool    `json:"searchMissing,omitempty"`
 }
 
 // SeriesMetadata is the merged metadata of a series plus provenance and locks.

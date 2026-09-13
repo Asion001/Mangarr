@@ -5,6 +5,7 @@ package metadata
 
 import (
 	"context"
+	"errors"
 
 	"github.com/Asion001/mangarr/internal/modules"
 )
@@ -44,3 +45,6 @@ type Module interface {
 type ExternalLookup interface {
 	LookupExternal(ctx context.Context, provider, id string) (*SeriesMetadata, error)
 }
+
+// ErrNotFound is returned when a provider has no such series.
+var ErrNotFound = errors.New("metadata not found")

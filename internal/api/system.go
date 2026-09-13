@@ -45,7 +45,7 @@ func (s *Server) registerSystem() {
 		func(ctx context.Context, _ *struct{}) (*struct{ Body SystemStatus }, error) {
 			return &struct{ Body SystemStatus }{SystemStatus{
 				Version: version.Version, Commit: version.Commit, GoVersion: runtime.Version(), OS: runtime.GOOS, Arch: runtime.GOARCH,
-				Database: string(s.app.DB.Dialect), DataDir: s.app.Cfg.DataDir, StartedAt: s.app.StartedAt, URLBase: s.app.Cfg.URLBase,
+				Database: string(s.app.DB.Kind), DataDir: s.app.Cfg.DataDir, StartedAt: s.app.StartedAt, URLBase: s.app.Cfg.URLBase,
 			}}, nil
 		})
 

@@ -44,6 +44,9 @@ type MediaManagement struct {
 	WriteSeriesJSON bool `json:"writeSeriesJson"`
 	// WriteCover writes cover.jpg into series folders.
 	WriteCover bool `json:"writeCover"`
+	// WriteVolume writes <Volume> into ComicInfo.xml. Off by default: volume
+	// numbers change Kavita's grouping and Komga's default series titles.
+	WriteVolume bool `json:"writeVolume"`
 	// FileMode / DirMode for created files (octal strings like "0664").
 	FileMode string `json:"fileMode"`
 	DirMode  string `json:"dirMode"`
@@ -143,7 +146,11 @@ func (s *Store) Get(ctx context.Context, key string, out any) error {
 		var row model.Setting
 		err := s.db.NewSelect().Model(&row).Where("key = ?", key).Scan(ctx)
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil // keep defaults
+			// remember "not stored" so defaults don't cost a query each time
+			s.mu.Lock()
+			s.cache[key] = json.RawMessage("null")
+			s.mu.Unlock()
+			return nil
 		}
 		if err != nil {
 			return err

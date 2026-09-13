@@ -2,5 +2,6 @@
 package all
 
 import (
+	_ "github.com/Asion001/mangarr/internal/modules/metadata/anilist"
 	_ "github.com/Asion001/mangarr/internal/modules/source/suwayomi"
 )

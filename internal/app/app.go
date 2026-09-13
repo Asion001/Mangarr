@@ -33,6 +33,7 @@ type App struct {
 	Scheduler *jobs.Scheduler
 	HTTP      *http.Client
 	StartedAt time.Time
+	Services
 
 	services []Service
 }

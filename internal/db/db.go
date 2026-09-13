@@ -34,7 +34,7 @@ const (
 
 type DB struct {
 	*bun.DB
-	Dialect Dialect
+	Kind Dialect
 	// Path is the SQLite file path (empty for Postgres).
 	Path string
 }
@@ -71,13 +71,13 @@ func openSQLite(ctx context.Context, path string) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	// A single connection serializes writers and removes "database is locked"
-	// errors entirely; the workload is small enough that reads don't suffer.
-	sqldb.SetMaxOpenConns(1)
+	// WAL allows concurrent readers; writers serialize through BEGIN IMMEDIATE
+	// and busy_timeout. Keep the pool small: the workload is light.
+	sqldb.SetMaxOpenConns(4)
 	if err := sqldb.PingContext(ctx); err != nil {
 		return nil, fmt.Errorf("open sqlite %s: %w", path, err)
 	}
-	return &DB{DB: bun.NewDB(sqldb, sqlitedialect.New()), Dialect: SQLite, Path: path}, nil
+	return &DB{DB: bun.NewDB(sqldb, sqlitedialect.New()), Kind: SQLite, Path: path}, nil
 }
 
 func openPostgres(ctx context.Context, dsn string) (*DB, error) {
@@ -86,17 +86,17 @@ func openPostgres(ctx context.Context, dsn string) (*DB, error) {
 	if err := sqldb.PingContext(ctx); err != nil {
 		return nil, fmt.Errorf("open postgres %s: %w", redact(dsn), err)
 	}
-	return &DB{DB: bun.NewDB(sqldb, pgdialect.New()), Dialect: Postgres}, nil
+	return &DB{DB: bun.NewDB(sqldb, pgdialect.New()), Kind: Postgres}, nil
 }
 
 // Migrate applies all pending migrations for the active dialect.
 func (d *DB) Migrate(ctx context.Context) error {
-	sub, err := fs.Sub(migrationsFS, "migrations/"+string(d.Dialect))
+	sub, err := fs.Sub(migrationsFS, "migrations/"+string(d.Kind))
 	if err != nil {
 		return err
 	}
 	gd := goose.DialectSQLite3
-	if d.Dialect == Postgres {
+	if d.Kind == Postgres {
 		gd = goose.DialectPostgres
 	}
 	p, err := goose.NewProvider(gd, d.DB.DB, sub)
@@ -113,7 +113,7 @@ func (d *DB) Migrate(ctx context.Context) error {
 // Backup writes a consistent copy of an SQLite database to dst. Postgres
 // deployments should use pg_dump instead.
 func (d *DB) Backup(ctx context.Context, dst string) error {
-	if d.Dialect != SQLite {
+	if d.Kind != SQLite {
 		return fmt.Errorf("database backup is only built in for SQLite; use pg_dump for Postgres")
 	}
 	_ = os.Remove(dst)

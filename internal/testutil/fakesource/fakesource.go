@@ -1,0 +1,184 @@
+// Package fakesource is an in-memory source module for tests. Importing it
+// registers the "fake" source implementation; tests configure behavior
+// through named scenarios.
+package fakesource
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"image"
+	"image/color"
+	"image/png"
+	"io"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/Asion001/mangarr/internal/modules"
+	"github.com/Asion001/mangarr/internal/modules/source"
+)
+
+type Settings struct {
+	Scenario string `json:"scenario" required:"true"`
+}
+
+type Chapter struct {
+	URL       string
+	Name      string
+	Number    float64
+	Scanlator string
+	Uploaded  time.Time
+	Pages     int
+	// FailWith makes page listing fail for this chapter.
+	FailWith error
+}
+
+type Manga struct {
+	SourceID string
+	URL      string
+	Title    string
+	Status   string
+	Chapters []Chapter
+}
+
+type Scenario struct {
+	mu        sync.Mutex
+	Sources   []source.SourceInfo
+	Mangas    map[string]*Manga // key: sourceID|url
+	PageWidth int
+	Fetches   int
+}
+
+var (
+	mu        sync.Mutex
+	scenarios = map[string]*Scenario{}
+)
+
+// NewScenario registers and returns a scenario.
+func NewScenario(name string) *Scenario {
+	s := &Scenario{Mangas: map[string]*Manga{}, PageWidth: 64}
+	mu.Lock()
+	scenarios[name] = s
+	mu.Unlock()
+	return s
+}
+
+func (s *Scenario) AddManga(m *Manga) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Mangas[m.SourceID+"|"+m.URL] = m
+}
+
+// Update runs fn with the scenario locked (to mutate chapters mid-test).
+func (s *Scenario) Update(fn func()) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	fn()
+}
+
+func init() {
+	modules.Register(&modules.Implementation{
+		Kind: modules.KindSource, Name: "fake", DisplayName: "Fake (tests)",
+		Settings: func() any { return &Settings{} },
+		New: func(deps modules.Deps, st any) (modules.Instance, error) {
+			name := st.(*Settings).Scenario
+			mu.Lock()
+			sc := scenarios[name]
+			mu.Unlock()
+			if sc == nil {
+				return nil, fmt.Errorf("unknown scenario %q", name)
+			}
+			return &Module{sc: sc}, nil
+		},
+	})
+}
+
+type Module struct{ sc *Scenario }
+
+func (m *Module) Test(ctx context.Context) error { return nil }
+
+func (m *Module) Sources(ctx context.Context) ([]source.SourceInfo, error) {
+	return m.sc.Sources, nil
+}
+
+func (m *Module) Search(ctx context.Context, sourceID, query string, page int) (*source.MangaPage, error) {
+	m.sc.mu.Lock()
+	defer m.sc.mu.Unlock()
+	res := &source.MangaPage{Mangas: []source.Manga{}}
+	for _, mg := range m.sc.Mangas {
+		if mg.SourceID == sourceID && strings.Contains(strings.ToLower(mg.Title), strings.ToLower(query)) {
+			res.Mangas = append(res.Mangas, source.Manga{MangaRef: source.MangaRef{SourceID: sourceID, URL: mg.URL}, Title: mg.Title})
+		}
+	}
+	return res, nil
+}
+
+func (m *Module) Manga(ctx context.Context, ref source.MangaRef, withChapters bool) (*source.MangaDetails, []source.Chapter, error) {
+	m.sc.mu.Lock()
+	defer m.sc.mu.Unlock()
+	mg := m.sc.Mangas[ref.SourceID+"|"+ref.URL]
+	if mg == nil {
+		return nil, nil, source.ErrNotFound
+	}
+	det := &source.MangaDetails{Manga: source.Manga{MangaRef: source.MangaRef{SourceID: ref.SourceID, URL: ref.URL, EngineRef: "e-" + ref.URL}, Title: mg.Title},
+		Status: mg.Status, Author: "Fake Author", Genres: []string{"Action"}, Description: "fake description"}
+	var chs []source.Chapter
+	for _, c := range mg.Chapters {
+		up := c.Uploaded
+		chs = append(chs, source.Chapter{URL: c.URL, Name: c.Name, Number: c.Number, Scanlator: c.Scanlator, UploadDate: &up})
+	}
+	return det, chs, nil
+}
+
+func (m *Module) find(ref source.ChapterRef) (*Chapter, error) {
+	mg := m.sc.Mangas[ref.Manga.SourceID+"|"+ref.Manga.URL]
+	if mg == nil {
+		return nil, source.ErrNotFound
+	}
+	for i := range mg.Chapters {
+		if mg.Chapters[i].URL == ref.URL {
+			return &mg.Chapters[i], nil
+		}
+	}
+	return nil, source.ErrNotFound
+}
+
+func (m *Module) Pages(ctx context.Context, ref source.ChapterRef) ([]source.Page, error) {
+	m.sc.mu.Lock()
+	defer m.sc.mu.Unlock()
+	c, err := m.find(ref)
+	if err != nil {
+		return nil, err
+	}
+	if c.FailWith != nil {
+		return nil, c.FailWith
+	}
+	n := c.Pages
+	if n == 0 {
+		n = 3
+	}
+	pages := make([]source.Page, n)
+	for i := range pages {
+		pages[i] = source.Page{Index: i, URL: fmt.Sprintf("%s#%d", c.URL, i)}
+	}
+	return pages, nil
+}
+
+func (m *Module) FetchPage(ctx context.Context, p source.Page) (io.ReadCloser, string, error) {
+	m.sc.mu.Lock()
+	m.sc.Fetches++
+	w := m.sc.PageWidth
+	m.sc.mu.Unlock()
+	img := image.NewRGBA(image.Rect(0, 0, w, w*3/2))
+	img.Set(0, 0, color.Black)
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		return nil, "", err
+	}
+	return io.NopCloser(&buf), "image/png", nil
+}
+
+// ErrForbidden is a convenient page failure.
+var ErrForbidden = errors.New("HTTP 403 from source")
