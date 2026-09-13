@@ -1,0 +1,73 @@
+# Example stack: mangarr + Suwayomi (extension engine) + FlareSolverr +
+# Komga (serves the library to Mihon, Paperback, Panels, KOReader...) and
+# the optional upscaler worker.
+#
+#   docker compose -f docker/compose.example.yml up -d
+#
+# Keep the library on one mount per container so moves inside it are atomic.
+# Run mangarr and Komga as the same user/group (here 1000:1000).
+
+services:
+  mangarr:
+    image: ghcr.io/asion001/mangarr:latest
+    container_name: mangarr
+    user: "1000:1000"
+    environment:
+      TZ: Europe/Madrid
+      # SQLite by default; optional Postgres:
+      # MANGARR_DB: postgres://mangarr:secret@db:5432/mangarr?sslmode=disable
+    volumes:
+      - ./mangarr:/config
+      - /data/storage/manga:/data/manga
+    ports:
+      - "8787:8787"
+    restart: unless-stopped
+    depends_on: [suwayomi]
+
+  # Headless engine for Keiyoushi extensions. No published port and no access
+  # to the library; mangarr manages its settings (updater off, FlareSolverr).
+  suwayomi:
+    image: ghcr.io/suwayomi/suwayomi-server:v2.3.2243 # tested version; mangarr warns on others
+    container_name: suwayomi
+    environment:
+      TZ: Europe/Madrid
+      WEB_UI_ENABLED: "false"
+      KCEF_ENABLED: "false" # enable only if a source you need requires WebView
+      JAVA_TOOL_OPTIONS: "-Xmx512m"
+    volumes:
+      - ./suwayomi:/home/suwayomi/.local/share/Tachidesk
+    mem_limit: 1g
+    restart: unless-stopped
+
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: flaresolverr
+    environment:
+      TZ: Europe/Madrid
+    restart: unless-stopped
+
+  komga:
+    image: gotson/komga:latest
+    container_name: komga
+    user: "1000:1000"
+    environment:
+      TZ: Europe/Madrid
+    volumes:
+      - ./komga:/config
+      - /data/storage/manga:/data/manga:ro
+    ports:
+      - "25600:25600"
+    restart: unless-stopped
+
+  # Optional: page upscaling. Pass the iGPU (Intel/AMD) through /dev/dri.
+  # Remove this service to disable, or run the image on a machine with a
+  # better GPU and point mangarr's upscaler module at it.
+  mangarr-upscaler:
+    image: ghcr.io/asion001/mangarr-upscaler:latest
+    container_name: mangarr-upscaler
+    platform: linux/amd64
+    environment:
+      UPSCALER_TOKEN: change-me
+    devices:
+      - /dev/dri:/dev/dri
+    restart: unless-stopped

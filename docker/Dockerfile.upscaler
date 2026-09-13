@@ -1,0 +1,47 @@
+# syntax=docker/dockerfile:1
+# mangarr-upscaler: waifu2x / Real-CUGAN / Real-ESRGAN (ncnn + Vulkan).
+# The upstream binaries are x86_64 only, so this image is linux/amd64.
+# Pass the GPU with `devices: [/dev/dri:/dev/dri]` (Intel/AMD) or the NVIDIA
+# container toolkit. Without a GPU, Mesa's lavapipe runs on the CPU (slow).
+
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS build
+ARG TARGETOS
+ARG TARGETARCH
+ARG VERSION=dev
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath \
+    -ldflags "-s -w -X github.com/Asion001/mangarr/internal/version.Version=${VERSION}" \
+    -o /out/mangarr-upscaler ./cmd/mangarr-upscaler
+
+FROM debian:trixie-slim AS tools
+ARG WAIFU2X_VERSION=20250915
+ARG REALCUGAN_VERSION=20220728
+ARG REALESRGAN_RELEASE=v0.2.5.0
+ARG REALESRGAN_VERSION=20220424
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl unzip && rm -rf /var/lib/apt/lists/*
+WORKDIR /tmp/dl
+RUN set -eux; \
+    mkdir -p /opt/upscalers; \
+    curl -fsSL -o w.zip "https://github.com/nihui/waifu2x-ncnn-vulkan/releases/download/${WAIFU2X_VERSION}/waifu2x-ncnn-vulkan-${WAIFU2X_VERSION}-linux.zip"; \
+    unzip -q w.zip -d w; mv w/*/ /opt/upscalers/waifu2x; \
+    curl -fsSL -o c.zip "https://github.com/nihui/realcugan-ncnn-vulkan/releases/download/${REALCUGAN_VERSION}/realcugan-ncnn-vulkan-${REALCUGAN_VERSION}-ubuntu.zip"; \
+    unzip -q c.zip -d c; mv c/*/ /opt/upscalers/realcugan; \
+    curl -fsSL -o r.zip "https://github.com/xinntao/Real-ESRGAN/releases/download/${REALESRGAN_RELEASE}/realesrgan-ncnn-vulkan-${REALESRGAN_VERSION}-ubuntu.zip"; \
+    mkdir -p /opt/upscalers/realesrgan; unzip -q r.zip -d /opt/upscalers/realesrgan; \
+    chmod +x /opt/upscalers/*/*-ncnn-vulkan; \
+    ls -la /opt/upscalers/*
+
+FROM debian:trixie-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates libvulkan1 mesa-vulkan-drivers libgomp1 webp vulkan-tools \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=tools /opt/upscalers /opt/upscalers
+COPY --from=build /out/mangarr-upscaler /usr/local/bin/mangarr-upscaler
+ENV UPSCALER_TOOLS_DIR=/opt/upscalers \
+    UPSCALER_LISTEN=:8788
+EXPOSE 8788
+HEALTHCHECK --interval=30s --timeout=5s CMD ["mangarr-upscaler", "healthcheck"]
+ENTRYPOINT ["mangarr-upscaler"]

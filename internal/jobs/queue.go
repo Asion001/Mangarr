@@ -52,11 +52,15 @@ func (r *Run) Body(v any) error {
 
 // Progress updates the visible status message (throttled persistence).
 func (r *Run) Progress(format string, args ...any) {
-	r.Command.Message = fmt.Sprintf(format, args...)
+	msg := fmt.Sprintf(format, args...)
+	r.q.mu.Lock()
+	r.Command.Message = msg
+	snap := *r.Command
+	r.q.mu.Unlock()
 	if time.Since(r.lastMsg) > time.Second {
 		r.lastMsg = time.Now()
-		_, _ = r.q.db.NewUpdate().Model(r.Command).Column("message").WherePK().Exec(context.Background())
-		r.q.bus.Changed("command", "updated", r.Command.ID)
+		_, _ = r.q.db.NewUpdate().Model(&snap).Column("message").WherePK().Exec(context.Background())
+		r.q.bus.Changed("command", "updated", snap.ID)
 	}
 }
 
@@ -126,14 +130,16 @@ func (q *Queue) Push(ctx context.Context, name string, body map[string]any, trig
 	key := bodyKey(name, body)
 	for _, c := range q.queued {
 		if bodyKey(c.Name, c.Body) == key {
+			cp := *c
 			q.mu.Unlock()
-			return c, nil
+			return &cp, nil
 		}
 	}
 	for _, c := range q.running {
 		if bodyKey(c.Name, c.Body) == key {
+			cp := *c
 			q.mu.Unlock()
-			return c, nil
+			return &cp, nil
 		}
 	}
 	q.mu.Unlock()
@@ -142,12 +148,13 @@ func (q *Queue) Push(ctx context.Context, name string, body map[string]any, trig
 	if _, err := q.db.NewInsert().Model(cmd).Exec(ctx); err != nil {
 		return nil, err
 	}
+	cp := *cmd
 	q.mu.Lock()
 	q.queued = append(q.queued, cmd)
 	q.mu.Unlock()
-	q.bus.Changed("command", "created", cmd.ID)
+	q.bus.Changed("command", "created", cp.ID)
 	q.signal()
-	return cmd, nil
+	return &cp, nil
 }
 
 func (q *Queue) signal() {
@@ -242,9 +249,12 @@ func (q *Queue) next() (*model.Command, Definition) {
 
 func (q *Queue) execute(ctx context.Context, cmd *model.Command, def Definition) {
 	start := time.Now().UTC()
+	q.mu.Lock()
 	cmd.Status = model.CommandStarted
 	cmd.StartedAt = &start
-	_, _ = q.db.NewUpdate().Model(cmd).Column("status", "started_at").WherePK().Exec(ctx)
+	snap := *cmd
+	q.mu.Unlock()
+	_, _ = q.db.NewUpdate().Model(&snap).Column("status", "started_at").WherePK().Exec(ctx)
 	q.bus.Changed("command", "updated", cmd.ID)
 	q.log.Debug("command started", "name", cmd.Name, "id", cmd.ID)
 
@@ -262,24 +272,31 @@ func (q *Queue) execute(ctx context.Context, cmd *model.Command, def Definition)
 	}()
 
 	end := time.Now().UTC()
+	q.mu.Lock()
 	cmd.EndedAt = &end
 	cmd.DurationMs = end.Sub(start).Milliseconds()
 	if err != nil {
 		cmd.Status = model.CommandFailed
 		cmd.Error = err.Error()
-		q.log.Warn("command failed", "name", cmd.Name, "id", cmd.ID, "err", err)
 	} else {
 		cmd.Status = model.CommandCompleted
-		q.log.Debug("command completed", "name", cmd.Name, "id", cmd.ID, "duration", end.Sub(start))
 	}
-	_, _ = q.db.NewUpdate().Model(cmd).Column("status", "ended_at", "duration_ms", "error", "message").WherePK().Exec(context.Background())
+	final := *cmd
+	q.mu.Unlock()
+	if err != nil {
+		q.log.Warn("command failed", "name", final.Name, "id", final.ID, "err", err)
+	} else {
+		q.log.Debug("command completed", "name", final.Name, "id", final.ID, "duration", end.Sub(start))
+	}
+	// persist before removing from the running set so Get never sees a gap
+	_, _ = q.db.NewUpdate().Model(&final).Column("status", "ended_at", "duration_ms", "error", "message").WherePK().Exec(context.Background())
 
 	q.mu.Lock()
-	delete(q.running, cmd.ID)
+	delete(q.running, final.ID)
 	q.mu.Unlock()
-	q.bus.Changed("command", "updated", cmd.ID)
+	q.bus.Changed("command", "updated", final.ID)
 	for _, fn := range q.onDone {
-		fn(cmd)
+		fn(&final)
 	}
 }
 
@@ -289,9 +306,13 @@ func (q *Queue) Active() []*model.Command {
 	defer q.mu.Unlock()
 	out := make([]*model.Command, 0, len(q.queued)+len(q.running))
 	for _, c := range q.running {
-		out = append(out, c)
+		cp := *c
+		out = append(out, &cp)
 	}
-	out = append(out, q.queued...)
+	for _, c := range q.queued {
+		cp := *c
+		out = append(out, &cp)
+	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out
 }
@@ -307,8 +328,9 @@ func (q *Queue) Recent(ctx context.Context, limit int) ([]model.Command, error) 
 func (q *Queue) Get(ctx context.Context, id int64) (*model.Command, error) {
 	q.mu.Lock()
 	if c, ok := q.running[id]; ok {
+		cp := *c
 		q.mu.Unlock()
-		return c, nil
+		return &cp, nil
 	}
 	q.mu.Unlock()
 	var c model.Command

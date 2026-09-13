@@ -1,0 +1,8 @@
+.git
+bin
+config
+data
+web/node_modules
+web/dist/assets
+web/dist/index.html
+**/*.test
