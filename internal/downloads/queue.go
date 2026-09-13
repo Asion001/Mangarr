@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/uptrace/bun"
@@ -61,6 +62,13 @@ func (q *Queue) Enqueue(ctx context.Context, seriesID, chapterID int64, releaseI
 		return nil
 	})
 	if err != nil {
+		if isUniqueViolation(err) {
+			// lost a race with a concurrent enqueue: return the winner
+			var winner model.DownloadJob
+			if e2 := q.db.NewSelect().Model(&winner).Where("chapter_id = ?", chapterID).Where("status IN (?)", bun.In(activeStatuses)).Limit(1).Scan(ctx); e2 == nil {
+				return &winner, false, nil
+			}
+		}
 		return nil, false, err
 	}
 	q.bus.Changed("queue", "created", job.ID)
@@ -181,4 +189,9 @@ func BlocklistRelease(ctx context.Context, db bun.IDB, releaseID int64, reason s
 		return err
 	}
 	return history.Record(ctx, db, r.SeriesID, r.ChapterID, model.HistoryBlocklist, r.Name, map[string]string{"reason": reason, "scanlator": r.Scanlator})
+}
+
+func isUniqueViolation(err error) bool {
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "unique") || strings.Contains(msg, "duplicate key")
 }

@@ -262,7 +262,24 @@ func (m *Manager) progress(job *model.DownloadJob, done, total int) {
 	}
 }
 
+// claim atomically moves a queued job to "downloading" so a stale dispatch
+// snapshot can never run the same job twice.
+func (m *Manager) claim(ctx context.Context, job *model.DownloadJob) bool {
+	now := time.Now().UTC()
+	res, err := m.db.NewUpdate().Model((*model.DownloadJob)(nil)).
+		Set("status = ?", model.JobDownloading).Set("updated_at = ?", now).
+		Where("id = ? AND status = ?", job.ID, model.JobQueued).Exec(ctx)
+	if err != nil {
+		return false
+	}
+	n, _ := res.RowsAffected()
+	return n == 1
+}
+
 func (m *Manager) run(ctx context.Context, job model.DownloadJob) {
+	if !m.claim(ctx, &job) {
+		return
+	}
 	log := m.log.With("job", job.ID, "chapter", job.ChapterID)
 	jc, err := m.load(ctx, &job)
 	if err != nil {

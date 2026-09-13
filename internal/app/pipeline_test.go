@@ -203,8 +203,25 @@ func TestPipeline(t *testing.T) {
 			var hist []model.History
 			_ = e.App.DB.NewSelect().Model(&hist).Where("series_id = ? AND event_type = ?", ser.ID, model.HistoryUpgraded).Scan(e.Ctx)
 			if len(hist) != 1 {
+				var all []model.History
+				_ = e.App.DB.NewSelect().Model(&all).Where("series_id = ?", ser.ID).Order("id").Scan(e.Ctx)
+				var jobs []model.DownloadJob
+				_ = e.App.DB.NewSelect().Model(&jobs).Where("series_id = ?", ser.ID).Order("id").Scan(e.Ctx)
+				for _, h := range all {
+					t.Logf("history %s ch=%v %s %v", h.EventType, deref(h.ChapterID), h.SourceTitle, h.Data)
+				}
+				for _, j := range jobs {
+					t.Logf("job %d ch=%d rel=%v status=%s upgrade=%v attempt=%d err=%s", j.ID, j.ChapterID, deref(j.ReleaseID), j.Status, j.IsUpgrade, j.Attempt, j.Error)
+				}
 				t.Fatalf("expected one upgraded history event, got %d", len(hist))
 			}
 		})
 	}
+}
+
+func deref(p *int64) int64 {
+	if p == nil {
+		return 0
+	}
+	return *p
 }

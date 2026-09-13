@@ -1,0 +1,359 @@
+package upscaler
+
+import (
+	"archive/zip"
+	"bytes"
+	"context"
+	"crypto/subtle"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"image"
+	_ "image/gif"
+	"image/jpeg"
+	"image/png"
+	"io"
+	"log/slog"
+	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync/atomic"
+	"time"
+
+	"golang.org/x/image/draw"
+	_ "golang.org/x/image/webp"
+)
+
+type Config struct {
+	Token   string
+	TmpDir  string
+	CWebP   string // path to cwebp; empty = look up in PATH
+	Timeout time.Duration
+	MaxBody int64
+	Version string
+}
+
+type Server struct {
+	cfg    Config
+	runner Runner
+	log    *slog.Logger
+	slot   chan struct{}
+	queued atomic.Int32
+}
+
+func NewServer(cfg Config, runner Runner, log *slog.Logger) *Server {
+	if cfg.Timeout <= 0 {
+		cfg.Timeout = 30 * time.Minute
+	}
+	if cfg.MaxBody <= 0 {
+		cfg.MaxBody = 1 << 30
+	}
+	if cfg.TmpDir == "" {
+		cfg.TmpDir = os.TempDir()
+	}
+	if cfg.CWebP == "" {
+		if p, err := exec.LookPath("cwebp"); err == nil {
+			cfg.CWebP = p
+		}
+	}
+	return &Server{cfg: cfg, runner: runner, log: log, slot: make(chan struct{}, 1)}
+}
+
+type Info struct {
+	Version string   `json:"version"`
+	Devices []string `json:"devices"`
+	Models  []Engine `json:"models"`
+	Formats []string `json:"formats"`
+	Queued  int      `json:"queued"`
+}
+
+func (s *Server) Handler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
+	mux.HandleFunc("GET /v1/info", s.auth(s.handleInfo))
+	mux.HandleFunc("POST /v1/upscale", s.auth(s.handleUpscale))
+	return mux
+}
+
+func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.cfg.Token != "" {
+			got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+			if subtle.ConstantTimeCompare([]byte(got), []byte(s.cfg.Token)) != 1 {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+		}
+		next(w, r)
+	}
+}
+
+func (s *Server) Info() Info {
+	info := Info{Version: s.cfg.Version, Devices: devices(), Models: []Engine{}, Formats: []string{"png", "jpeg"}, Queued: int(s.queued.Load())}
+	if s.cfg.CWebP != "" {
+		info.Formats = append(info.Formats, "webp")
+	}
+	for _, e := range Catalog {
+		if s.runner.Available(e) {
+			info.Models = append(info.Models, e)
+		}
+	}
+	return info
+}
+
+func (s *Server) handleInfo(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(s.Info())
+}
+
+// devices lists Vulkan devices via vulkaninfo when available.
+func devices() []string {
+	out := []string{}
+	p, err := exec.LookPath("vulkaninfo")
+	if err != nil {
+		return out
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	b, err := exec.CommandContext(ctx, p, "--summary").Output()
+	if err != nil {
+		return out
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "deviceName") {
+			if _, v, ok := strings.Cut(line, "="); ok {
+				out = append(out, strings.TrimSpace(v))
+			}
+		}
+	}
+	return out
+}
+
+type Params struct {
+	Model    string
+	Scale    int
+	Noise    int
+	Format   string
+	Quality  int
+	MaxWidth int
+}
+
+func parseParams(r *http.Request) (Params, error) {
+	q := r.URL.Query()
+	atoi := func(k string, def int) int {
+		if v, err := strconv.Atoi(q.Get(k)); err == nil {
+			return v
+		}
+		return def
+	}
+	p := Params{Model: q.Get("model"), Scale: atoi("scale", 2), Noise: atoi("noise", 1), Format: strings.ToLower(q.Get("format")),
+		Quality: atoi("quality", 90), MaxWidth: atoi("maxWidth", 0)}
+	if p.Format == "" {
+		p.Format = "webp"
+	}
+	if p.Format == "jpg" {
+		p.Format = "jpeg"
+	}
+	if p.Format != "webp" && p.Format != "jpeg" && p.Format != "png" {
+		return p, fmt.Errorf("unsupported format %q", p.Format)
+	}
+	if p.Quality <= 0 || p.Quality > 100 {
+		p.Quality = 90
+	}
+	return p, nil
+}
+
+func (s *Server) handleUpscale(w http.ResponseWriter, r *http.Request) {
+	p, err := parseParams(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	eng, ok := findEngine(p.Model)
+	if !ok || !s.runner.Available(eng) {
+		http.Error(w, "model not available: "+p.Model, http.StatusBadRequest)
+		return
+	}
+	if !contains(eng.Scales, p.Scale) {
+		http.Error(w, fmt.Sprintf("model %s supports scales %v", eng.Name, eng.Scales), http.StatusBadRequest)
+		return
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, s.cfg.MaxBody))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	// one GPU job at a time
+	s.queued.Add(1)
+	select {
+	case s.slot <- struct{}{}:
+		s.queued.Add(-1)
+	case <-r.Context().Done():
+		s.queued.Add(-1)
+		return
+	}
+	defer func() { <-s.slot }()
+
+	ctx, cancel := context.WithTimeout(r.Context(), s.cfg.Timeout)
+	defer cancel()
+	start := time.Now()
+	out, n, err := s.process(ctx, eng, p, body)
+	if err != nil {
+		s.log.Warn("upscale failed", "model", p.Model, "err", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.log.Info("upscaled batch", "model", p.Model, "scale", p.Scale, "pages", n, "duration", time.Since(start).Round(time.Millisecond))
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("X-Upscale-Duration-Ms", strconv.FormatInt(time.Since(start).Milliseconds(), 10))
+	_, _ = w.Write(out)
+}
+
+// process unpacks a zip of images, runs the engine and packs the results.
+func (s *Server) process(ctx context.Context, eng Engine, p Params, body []byte) ([]byte, int, error) {
+	work, err := os.MkdirTemp(s.cfg.TmpDir, "upscale-*")
+	if err != nil {
+		return nil, 0, err
+	}
+	defer os.RemoveAll(work)
+	in, outDir := filepath.Join(work, "in"), filepath.Join(work, "out")
+	if err := os.MkdirAll(in, 0o755); err != nil {
+		return nil, 0, err
+	}
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		return nil, 0, err
+	}
+	zr, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	if err != nil {
+		return nil, 0, fmt.Errorf("invalid zip: %w", err)
+	}
+	var names []string
+	for _, f := range zr.File {
+		name := filepath.Base(f.Name)
+		if f.FileInfo().IsDir() || name == "." || strings.HasPrefix(name, ".") {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return nil, 0, err
+		}
+		data, err := io.ReadAll(rc)
+		rc.Close()
+		if err != nil {
+			return nil, 0, err
+		}
+		ext := strings.ToLower(filepath.Ext(name))
+		base := strings.TrimSuffix(name, filepath.Ext(name))
+		switch ext {
+		case ".png", ".jpg", ".jpeg", ".webp":
+			if err := os.WriteFile(filepath.Join(in, name), data, 0o644); err != nil {
+				return nil, 0, err
+			}
+		default:
+			// normalize other formats (e.g. gif) to png for the engines
+			img, _, err := image.Decode(bytes.NewReader(data))
+			if err != nil {
+				return nil, 0, fmt.Errorf("%s: %w", name, err)
+			}
+			f, err := os.Create(filepath.Join(in, base+".png"))
+			if err != nil {
+				return nil, 0, err
+			}
+			err = png.Encode(f, img)
+			f.Close()
+			if err != nil {
+				return nil, 0, err
+			}
+		}
+		names = append(names, base)
+	}
+	if len(names) == 0 {
+		return nil, 0, errors.New("no images in request")
+	}
+	if err := s.runner.Run(ctx, eng, in, outDir, p.Scale, p.Noise); err != nil {
+		return nil, 0, err
+	}
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for _, base := range names {
+		src := filepath.Join(outDir, base+".png")
+		data, ext, err := s.finish(ctx, src, p)
+		if err != nil {
+			return nil, 0, fmt.Errorf("%s: %w", base, err)
+		}
+		w, err := zw.CreateHeader(&zip.FileHeader{Name: base + ext, Method: zip.Store})
+		if err != nil {
+			return nil, 0, err
+		}
+		if _, err := w.Write(data); err != nil {
+			return nil, 0, err
+		}
+	}
+	if err := zw.Close(); err != nil {
+		return nil, 0, err
+	}
+	return buf.Bytes(), len(names), nil
+}
+
+// finish downsizes to MaxWidth and encodes to the requested format.
+func (s *Server) finish(ctx context.Context, src string, p Params) ([]byte, string, error) {
+	f, err := os.Open(src)
+	if err != nil {
+		return nil, "", fmt.Errorf("engine produced no output: %w", err)
+	}
+	img, _, err := image.Decode(f)
+	f.Close()
+	if err != nil {
+		return nil, "", err
+	}
+	if b := img.Bounds(); p.MaxWidth > 0 && b.Dx() > p.MaxWidth {
+		h := b.Dy() * p.MaxWidth / b.Dx()
+		dst := image.NewRGBA(image.Rect(0, 0, p.MaxWidth, h))
+		draw.CatmullRom.Scale(dst, dst.Bounds(), img, b, draw.Src, nil)
+		img = dst
+	}
+	format := p.Format
+	if format == "webp" && s.cfg.CWebP == "" {
+		format = "jpeg"
+	}
+	var buf bytes.Buffer
+	switch format {
+	case "png":
+		err = png.Encode(&buf, img)
+		return buf.Bytes(), ".png", err
+	case "jpeg":
+		err = jpeg.Encode(&buf, img, &jpeg.Options{Quality: p.Quality})
+		return buf.Bytes(), ".jpg", err
+	}
+	// webp through cwebp (lossy, quality q)
+	tmpPNG := src + ".resized.png"
+	out := src + ".webp"
+	pf, err := os.Create(tmpPNG)
+	if err != nil {
+		return nil, "", err
+	}
+	if err := png.Encode(pf, img); err != nil {
+		pf.Close()
+		return nil, "", err
+	}
+	pf.Close()
+	cmd := exec.CommandContext(ctx, s.cfg.CWebP, "-quiet", "-mt", "-q", strconv.Itoa(p.Quality), tmpPNG, "-o", out)
+	if b, err := cmd.CombinedOutput(); err != nil {
+		return nil, "", fmt.Errorf("cwebp: %w: %s", err, b)
+	}
+	data, err := os.ReadFile(out)
+	return data, ".webp", err
+}
+
+func contains(xs []int, x int) bool {
+	for _, v := range xs {
+		if v == x {
+			return true
+		}
+	}
+	return false
+}

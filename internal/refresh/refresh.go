@@ -42,6 +42,7 @@ type Refresher struct {
 	log      *slog.Logger
 
 	sourceLocks sync.Map // sourceID -> *sync.Mutex
+	seriesLocks sync.Map // seriesID -> *sync.Mutex
 }
 
 func New(d *db.DB, bus *events.Bus, mods *modules.Manager, st *settings.Store, searcher *downloads.Searcher, lib *library.Library, log *slog.Logger) *Refresher {
@@ -58,6 +59,11 @@ type Result struct {
 // SyncSeries refreshes every enabled source of a series, applies pending add
 // options and evaluates downloads.
 func (r *Refresher) SyncSeries(ctx context.Context, seriesID int64, onlyDue bool) (Result, error) {
+	// one sync per series at a time (RefreshSources and RefreshSeries may overlap)
+	v, _ := r.seriesLocks.LoadOrStore(seriesID, &sync.Mutex{})
+	mu := v.(*sync.Mutex)
+	mu.Lock()
+	defer mu.Unlock()
 	var res Result
 	var s model.Series
 	if err := r.db.NewSelect().Model(&s).Where("id = ?", seriesID).Scan(ctx); err != nil {

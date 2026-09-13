@@ -169,6 +169,9 @@ CREATE TABLE download_jobs (
     started_at  TIMESTAMP
 );
 CREATE INDEX download_jobs_status ON download_jobs (status);
+-- at most one active job per chapter (enqueue races resolve to the existing job)
+CREATE UNIQUE INDEX download_jobs_active_chapter ON download_jobs (chapter_id)
+    WHERE status IN ('queued', 'downloading', 'processing', 'importing');
 
 CREATE TABLE history (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,

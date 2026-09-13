@@ -12,4 +12,5 @@ import (
 	_ "github.com/Asion001/mangarr/internal/modules/notify/telegram"
 	_ "github.com/Asion001/mangarr/internal/modules/notify/webhook"
 	_ "github.com/Asion001/mangarr/internal/modules/source/suwayomi"
+	_ "github.com/Asion001/mangarr/internal/modules/upscale/ncnnworker"
 )
