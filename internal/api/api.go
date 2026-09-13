@@ -7,6 +7,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"reflect"
 	"strings"
 	"time"
 
@@ -48,6 +49,7 @@ func New(a *app.App) http.Handler {
 		"apiKey": {Type: "apiKey", In: "header", Name: "X-Api-Key"},
 	}
 	cfg.Security = []map[string][]string{{"apiKey": {}}}
+	cfg.Components.Schemas = huma.NewMapRegistry("#/components/schemas/", schemaNamer)
 	s.api = humachi.New(sub, cfg)
 
 	s.registerAuth()
@@ -69,6 +71,39 @@ func New(a *app.App) http.Handler {
 		r.Mount("/", sub)
 	}
 	return r
+}
+
+// schemaNamer prefixes types from module/interface packages so equally named
+// Go types (model.Chapter vs source.Chapter) get distinct schema names.
+func schemaNamer(t reflect.Type, hint string) string {
+	name := huma.DefaultSchemaNamer(t, hint)
+	for t.Kind() == reflect.Pointer || t.Kind() == reflect.Slice || t.Kind() == reflect.Array || t.Kind() == reflect.Map {
+		t = t.Elem()
+	}
+	pkg := t.PkgPath()
+	switch {
+	case strings.HasSuffix(pkg, "/internal/modules/source"):
+		return "Source" + name
+	case strings.HasSuffix(pkg, "/internal/modules/metadata"):
+		return "Metadata" + name
+	case strings.HasSuffix(pkg, "/internal/modules/upscale"):
+		return "Upscale" + name
+	case strings.HasSuffix(pkg, "/internal/modules/library"):
+		return "Library" + name
+	case strings.HasSuffix(pkg, "/internal/modules"):
+		return "Module" + name
+	case strings.HasSuffix(pkg, "/internal/decision"):
+		return "Decision" + name
+	case strings.HasSuffix(pkg, "/internal/cleanup"):
+		return "Cleanup" + name
+	case strings.HasSuffix(pkg, "/internal/health"):
+		return "Health" + name
+	case strings.HasSuffix(pkg, "/internal/backup"):
+		return "Backup" + name
+	case strings.HasSuffix(pkg, "/internal/metadataagg"):
+		return "Metadata" + name
+	}
+	return name
 }
 
 // extraRoutes lets feature files register their operations.

@@ -2,6 +2,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,8 +12,6 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
-
-	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/Asion001/mangarr/internal/api"
 	"github.com/Asion001/mangarr/internal/app"
@@ -109,12 +108,12 @@ func dumpOpenAPI() error {
 	if rec.status != 0 && rec.status != 200 {
 		return fmt.Errorf("openapi: status %d", rec.status)
 	}
-	var doc huma.OpenAPI
-	if err := json.Unmarshal(rec.body, &doc); err != nil {
+	var out bytes.Buffer
+	if err := json.Indent(&out, rec.body, "", "  "); err != nil {
 		return err
 	}
-	out, _ := json.MarshalIndent(doc, "", "  ")
-	_, err = os.Stdout.Write(append(out, '\n'))
+	out.WriteByte('\n')
+	_, err = os.Stdout.Write(out.Bytes())
 	return err
 }
 
