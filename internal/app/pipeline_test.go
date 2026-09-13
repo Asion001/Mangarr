@@ -18,6 +18,7 @@ import (
 	"github.com/Asion001/mangarr/internal/modules/source"
 	"github.com/Asion001/mangarr/internal/series"
 	"github.com/Asion001/mangarr/internal/settings"
+	_ "github.com/Asion001/mangarr/internal/testutil/fakelibrary"
 	"github.com/Asion001/mangarr/internal/testutil/fakesource"
 )
 
@@ -46,6 +47,7 @@ func newTestApp(t *testing.T, dsn string) *testEnv {
 	if err := a.Settings.Set(ctx, settings.KeyDownloads, dl); err != nil {
 		t.Fatal(err)
 	}
+	a.Rescanner.Quiet = 100 * time.Millisecond // fast debounce in tests
 	if err := a.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
