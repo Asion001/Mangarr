@@ -177,3 +177,8 @@ type Maintainer interface {
 type Assets interface {
 	FetchAsset(ctx context.Context, path string) (body io.ReadCloser, contentType string, err error)
 }
+
+// AutoUpdater is implemented by extension managers that may install updates automatically.
+type AutoUpdater interface {
+	AutoUpdateExtensions() bool
+}

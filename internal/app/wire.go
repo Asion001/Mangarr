@@ -108,7 +108,7 @@ func (a *App) wire(ctx context.Context) error {
 			return nil
 		}})
 
-	if err := a.Scheduler.Add(ctx, jobs.Task{Name: "RefreshSources", Interval: 10 * time.Minute}); err != nil {
+	if err := a.Scheduler.Add(ctx, jobs.Task{Name: "RefreshSources", Interval: 10 * time.Minute, RunOnStart: true}); err != nil {
 		return err
 	}
 	if err := a.Scheduler.Add(ctx, jobs.Task{Name: "RefreshMetadata", Interval: 24 * time.Hour}); err != nil {

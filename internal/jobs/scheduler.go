@@ -15,6 +15,8 @@ type Task struct {
 	Name     string
 	Interval time.Duration
 	Body     map[string]any
+	// RunOnStart runs a newly created task immediately instead of after one interval.
+	RunOnStart bool
 }
 
 type Scheduler struct {
@@ -39,6 +41,10 @@ func (s *Scheduler) Add(ctx context.Context, t Task) error {
 	s.tasks[t.Name] = &t
 	s.mu.Unlock()
 	row := &model.ScheduledTask{Name: t.Name, IntervalMinutes: int(t.Interval / time.Minute)}
+	if !t.RunOnStart {
+		now := time.Now().UTC()
+		row.LastExecution = &now // first run after one interval
+	}
 	_, err := s.db.NewInsert().Model(row).
 		On("CONFLICT (name) DO UPDATE").Set("interval_minutes = EXCLUDED.interval_minutes").
 		Exec(ctx)

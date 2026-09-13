@@ -34,6 +34,8 @@ type App struct {
 	HTTP      *http.Client
 	StartedAt time.Time
 	Services
+	MoreServices
+	ReaderServices
 
 	services []Service
 }

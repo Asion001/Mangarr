@@ -107,3 +107,9 @@ func Implementations(kind Kind) []*Implementation {
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
 }
+
+// HealthChecker is implemented by instances with a cheap health probe. A
+// non-empty warning is shown without failing the check.
+type HealthChecker interface {
+	HealthCheck(ctx context.Context) (warning string, err error)
+}

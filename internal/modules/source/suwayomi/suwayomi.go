@@ -35,6 +35,8 @@ type Settings struct {
 
 	ExtensionStores []string `json:"extensionStores" label:"Extension stores" type:"tags" order:"4" help:"Extension repository index URLs. Keiyoushi is added by default."`
 
+	AutoUpdateExtensions bool `json:"autoUpdateExtensions" label:"Auto-update extensions" order:"6" help:"Install extension updates automatically (sites change often; updates keep sources working)."`
+
 	ManageSettings bool `json:"manageSettings" label:"Manage Suwayomi settings" order:"5" help:"Turn off Suwayomi's own library updater and auto-download (mangarr schedules everything) and apply the FlareSolverr settings below."`
 
 	FlareSolverrEnabled          bool   `json:"flareSolverrEnabled" label:"Use FlareSolverr" order:"10" help:"Solve Cloudflare challenges through FlareSolverr/Byparr."`
@@ -66,7 +68,7 @@ func init() {
 		InfoURL:     "https://github.com/Suwayomi/Suwayomi-Server",
 		Settings: func() any {
 			return &Settings{
-				URL: "http://suwayomi:4567", ExtensionStores: []string{DefaultStore}, ManageSettings: true,
+				URL: "http://suwayomi:4567", ExtensionStores: []string{DefaultStore}, ManageSettings: true, AutoUpdateExtensions: true,
 				FlareSolverrTimeout: 60, FlareSolverrSessionTTL: 15, RequestTimeout: 180,
 			}
 		},
@@ -136,18 +138,6 @@ func (m *Module) Test(ctx context.Context) error {
 	m.appliedAt = time.Time{} // force re-apply
 	m.mu.Unlock()
 	return m.ensure(ctx)
-}
-
-// VersionWarning returns a message when the server differs from the pinned version.
-func (m *Module) VersionWarning(ctx context.Context) string {
-	a, err := m.About(ctx)
-	if err != nil {
-		return ""
-	}
-	if a.Version != PinnedVersion {
-		return fmt.Sprintf("Suwayomi %s differs from the tested version %s; if things break, pin the image to %s", a.Version, PinnedVersion, PinnedVersion)
-	}
-	return ""
 }
 
 // ensure applies managed settings and extension stores (at most hourly).
@@ -699,3 +689,18 @@ var (
 	_ source.Maintainer       = (*Module)(nil)
 	_ source.Assets           = (*Module)(nil)
 )
+
+// HealthCheck pings the server and warns when its version differs from the pinned one.
+func (m *Module) HealthCheck(ctx context.Context) (string, error) {
+	a, err := m.About(ctx)
+	if err != nil {
+		return "", err
+	}
+	if a.Version != PinnedVersion {
+		return fmt.Sprintf("Suwayomi %s differs from the tested version %s", a.Version, PinnedVersion), nil
+	}
+	return "", nil
+}
+
+// AutoUpdateExtensions reports whether extension updates are installed automatically.
+func (m *Module) AutoUpdateExtensions() bool { return m.s.AutoUpdateExtensions }
