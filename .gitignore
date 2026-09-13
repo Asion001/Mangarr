@@ -1,0 +1,32 @@
+# Build output
+/bin/
+/dist/
+*.exe
+*.test
+*.out
+coverage.*
+
+# Local runtime data
+/config/
+/data/
+/tmp/
+*.db
+*.db-shm
+*.db-wal
+
+# Web
+web/node_modules/
+web/dist/*
+!web/dist/.gitkeep
+web/.vite/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Env
+.env
+.env.*
+!.env.example

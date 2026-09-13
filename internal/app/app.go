@@ -1,0 +1,120 @@
+// Package app wires every service together. It is the composition root used
+// by cmd/mangarr and by integration tests.
+package app
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"time"
+
+	"github.com/Asion001/mangarr/internal/auth"
+	"github.com/Asion001/mangarr/internal/config"
+	"github.com/Asion001/mangarr/internal/db"
+	"github.com/Asion001/mangarr/internal/events"
+	"github.com/Asion001/mangarr/internal/jobs"
+	"github.com/Asion001/mangarr/internal/logging"
+	"github.com/Asion001/mangarr/internal/model"
+	"github.com/Asion001/mangarr/internal/modules"
+	"github.com/Asion001/mangarr/internal/settings"
+)
+
+type App struct {
+	Cfg       *config.Config
+	Log       *slog.Logger
+	LogRing   *logging.Ring
+	DB        *db.DB
+	Settings  *settings.Store
+	Bus       *events.Bus
+	Auth      *auth.Service
+	Modules   *modules.Manager
+	Queue     *jobs.Queue
+	Scheduler *jobs.Scheduler
+	HTTP      *http.Client
+	StartedAt time.Time
+
+	services []Service
+}
+
+// Service is a long-running component started with the app.
+type Service interface {
+	Start(ctx context.Context) error
+}
+
+func New(ctx context.Context, cfg *config.Config, log *slog.Logger, ring *logging.Ring) (*App, error) {
+	d, err := db.Open(ctx, cfg.DB)
+	if err != nil {
+		return nil, err
+	}
+	if err := d.Migrate(ctx); err != nil {
+		return nil, fmt.Errorf("migrate: %w", err)
+	}
+	a := &App{
+		Cfg: cfg, Log: log, LogRing: ring, DB: d,
+		Settings:  settings.NewStore(d),
+		Bus:       events.NewBus(),
+		HTTP:      &http.Client{Timeout: 5 * time.Minute},
+		StartedAt: time.Now().UTC(),
+	}
+	if _, err := a.Settings.EnsureSecrets(ctx); err != nil {
+		return nil, err
+	}
+	if err := a.ensureDefaults(ctx); err != nil {
+		return nil, err
+	}
+	a.Auth = auth.NewService(d, a.Settings, cfg.AuthDisabled)
+	a.Modules = modules.NewManager(d, a.HTTP, log, cfg.DataDir)
+	a.Queue = jobs.NewQueue(d, a.Bus, log.With("component", "commands"), 3)
+	a.Scheduler = jobs.NewScheduler(d, a.Queue, log.With("component", "scheduler"))
+	if err := a.Modules.Reload(ctx); err != nil {
+		return nil, err
+	}
+	a.Modules.OnChange(func() { a.Bus.Changed("module", "sync", 0) })
+	if err := a.wire(ctx); err != nil {
+		return nil, err
+	}
+	return a, nil
+}
+
+// AddService registers a component started by Start.
+func (a *App) AddService(s Service) { a.services = append(a.services, s) }
+
+// Start launches background workers. It returns once they are running.
+func (a *App) Start(ctx context.Context) error {
+	if err := a.Queue.Start(ctx); err != nil {
+		return err
+	}
+	for _, s := range a.services {
+		if err := s.Start(ctx); err != nil {
+			return err
+		}
+	}
+	go a.Scheduler.Run(ctx)
+	return nil
+}
+
+func (a *App) Close() error { return a.DB.Close() }
+
+// ensureDefaults creates the default profile on first start.
+func (a *App) ensureDefaults(ctx context.Context) error {
+	n, err := a.DB.NewSelect().Model((*model.Profile)(nil)).Count(ctx)
+	if err != nil || n > 0 {
+		return err
+	}
+	now := time.Now().UTC()
+	p := &model.Profile{Name: "Default", IsDefault: true, CreatedAt: now, UpdatedAt: now, Config: DefaultProfileConfig()}
+	_, err = a.DB.NewInsert().Model(p).Exec(ctx)
+	return err
+}
+
+func DefaultProfileConfig() model.ProfileConfig {
+	return model.ProfileConfig{
+		PreferredScanlators: []string{},
+		BlockedScanlators:   []string{},
+		AllowUpgrades:       false,
+		Upscale: model.UpscaleConfig{
+			Enabled: false, MinWidth: 1400, MaxWidth: 2048, Model: "waifu2x-cunet", Noise: 1, Format: "webp", Quality: 90,
+		},
+	}
+}
