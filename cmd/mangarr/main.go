@@ -132,9 +132,12 @@ type captureWriter struct {
 	status int
 }
 
-func (c *captureWriter) Header() http.Header         { return c.header }
-func (c *captureWriter) Write(b []byte) (int, error) { c.body = append(c.body, b...); return len(b), nil }
-func (c *captureWriter) WriteHeader(s int)           { c.status = s }
+func (c *captureWriter) Header() http.Header { return c.header }
+func (c *captureWriter) Write(b []byte) (int, error) {
+	c.body = append(c.body, b...)
+	return len(b), nil
+}
+func (c *captureWriter) WriteHeader(s int) { c.status = s }
 
 // healthcheck is used by the Docker HEALTHCHECK (distroless has no curl).
 func healthcheck() int {

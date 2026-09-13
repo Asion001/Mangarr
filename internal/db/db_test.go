@@ -27,7 +27,7 @@ func TestMigrateAndRoundTrip(t *testing.T) {
 		s := &model.Series{Title: "One Piece", SortTitle: "one piece", Status: model.StatusOngoing, Monitored: true,
 			MonitorNew: "all", RootFolderID: rf.ID, Path: "One Piece", ProfileID: p.ID, Tags: []int64{1, 2},
 			Metadata: model.SeriesMetadata{Genres: []string{"Action"}, ExternalIDs: map[string]string{"anilist": "30013"}},
-			AddedAt: now, UpdatedAt: now}
+			AddedAt:  now, UpdatedAt: now}
 		if _, err := d.NewInsert().Model(s).Exec(ctx); err != nil {
 			t.Fatal(err)
 		}

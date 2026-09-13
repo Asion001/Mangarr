@@ -5,7 +5,7 @@ import "testing"
 func TestRender(t *testing.T) {
 	v := Values{SeriesTitle: "Re:Zero", Chapter: 12, HasChapter: true, Scanlator: "Group/A"}
 	cases := map[string]string{
-		"{Series Title} Ch.{Chapter:0000}":                 "Re-Zero Ch.0012",
+		"{Series Title} Ch.{Chapter:0000}":                  "Re-Zero Ch.0012",
 		"{Series Title}[ Vol.{Volume:00}] Ch.{Chapter:000}": "Re-Zero Ch.012",
 		"{Series CleanTitle} - {Chapter} [{Scanlator}]":     "ReZero - 12 Group-A",
 		"{Series Title}[ ({Series Year})]":                  "Re-Zero",
@@ -28,7 +28,7 @@ func TestRender(t *testing.T) {
 
 func TestSanitize(t *testing.T) {
 	cases := map[string]string{
-		"  a/b\\c:d*e?  ": "a-b-c-de",
+		"  a/b\\c:d*e?  ":  "a-b-c-de",
 		"trailing dots...": "trailing dots",
 		"":                 "_",
 		"x\x00y":           "xy",

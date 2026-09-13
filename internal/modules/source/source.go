@@ -31,6 +31,8 @@ type MangaRef struct {
 	SourceID  string `json:"sourceId"`
 	URL       string `json:"url"`
 	EngineRef string `json:"engineRef,omitempty"`
+	// TitleHint is used to re-link when the engine lost the manga.
+	TitleHint string `json:"titleHint,omitempty"`
 }
 
 type Manga struct {
@@ -158,3 +160,20 @@ var (
 	// ErrUnsupported means the module does not support the operation.
 	ErrUnsupported = errors.New("operation not supported by this source module")
 )
+
+// Thumbnails is implemented by modules that can proxy cover thumbnails.
+type Thumbnails interface {
+	Thumbnail(ctx context.Context, ref MangaRef) (body io.ReadCloser, contentType string, err error)
+}
+
+// Maintainer is implemented by modules with housekeeping (e.g. cache cleanup),
+// called by the download manager when the queue is idle.
+type Maintainer interface {
+	Maintain(ctx context.Context) error
+}
+
+// Assets is implemented by modules whose icon/image URLs are relative paths
+// on an internal server that browsers cannot reach; the API proxies them.
+type Assets interface {
+	FetchAsset(ctx context.Context, path string) (body io.ReadCloser, contentType string, err error)
+}

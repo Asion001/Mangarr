@@ -69,7 +69,9 @@ func TestSeriesJSONHasRequiredFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var doc struct{ Metadata map[string]any `json:"metadata"` }
+	var doc struct {
+		Metadata map[string]any `json:"metadata"`
+	}
 	if err := json.Unmarshal(b, &doc); err != nil {
 		t.Fatal(err)
 	}
