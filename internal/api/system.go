@@ -92,6 +92,9 @@ func (s *Server) registerSystem() {
 			Limit int `query:"limit" default:"50" maximum:"500"`
 		}) (*struct{ Body []model.Command }, error) {
 			out, err := s.app.Queue.Recent(ctx, in.Limit)
+			if out == nil {
+				out = []model.Command{}
+			}
 			// overlay live messages of running commands
 			live := map[int64]*model.Command{}
 			for _, c := range s.app.Queue.Active() {

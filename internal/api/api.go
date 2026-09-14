@@ -26,6 +26,12 @@ type Server struct {
 	api huma.API
 }
 
+func init() {
+	// Every list the API returns is a JSON array (never null), so don't mark
+	// arrays nullable in the schema (keeps generated client types simple).
+	huma.DefaultArrayNullable = false
+}
+
 // New returns the root HTTP handler.
 func New(a *app.App) http.Handler {
 	r := chi.NewMux()

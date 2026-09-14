@@ -1,0 +1,7425 @@
+{
+  "components": {
+    "schemas": {
+      "AccountInput": {
+        "additionalProperties": false,
+        "properties": {
+          "credentials": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "moduleId": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "moduleId",
+          "credentials"
+        ],
+        "type": "object"
+      },
+      "AddOptions": {
+        "additionalProperties": false,
+        "properties": {
+          "fromChapter": {
+            "format": "double",
+            "type": "number"
+          },
+          "latestCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "monitor": {
+            "type": "string"
+          },
+          "pending": {
+            "type": "boolean"
+          },
+          "searchMissing": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "pending"
+        ],
+        "type": "object"
+      },
+      "AddRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "fromChapter": {
+            "format": "double",
+            "type": "number"
+          },
+          "language": {
+            "type": "string"
+          },
+          "latestCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/MetadataRef"
+          },
+          "monitor": {
+            "enum": [
+              "all",
+              "future",
+              "latest",
+              "from",
+              "none"
+            ],
+            "type": "string"
+          },
+          "monitorNew": {
+            "enum": [
+              "all",
+              "none"
+            ],
+            "type": "string"
+          },
+          "profileId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "readingDirection": {
+            "enum": [
+              "rtl",
+              "ltr",
+              "vertical",
+              "webtoon"
+            ],
+            "type": "string"
+          },
+          "rootFolderId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "searchMissing": {
+            "type": "boolean"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SourceLink"
+            },
+            "type": "array"
+          },
+          "tags": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sources",
+          "rootFolderId",
+          "monitor",
+          "searchMissing"
+        ],
+        "type": "object"
+      },
+      "Auth-passwordRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "password": {
+            "minLength": 6,
+            "type": "string"
+          }
+        },
+        "required": [
+          "password"
+        ],
+        "type": "object"
+      },
+      "AuthStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "authDisabled": {
+            "type": "boolean"
+          },
+          "authenticated": {
+            "type": "boolean"
+          },
+          "needsSetup": {
+            "type": "boolean"
+          },
+          "user": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "needsSetup",
+          "authenticated",
+          "authDisabled"
+        ],
+        "type": "object"
+      },
+      "BackupBackup": {
+        "additionalProperties": false,
+        "properties": {
+          "created": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "size": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "size",
+          "created"
+        ],
+        "type": "object"
+      },
+      "BlocklistView": {
+        "additionalProperties": false,
+        "properties": {
+          "chapterId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "chapterUrl": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "scanlator": {
+            "type": "string"
+          },
+          "seriesId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "seriesSourceId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "seriesTitle": {
+            "type": "string"
+          },
+          "sourceName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "seriesTitle",
+          "sourceName",
+          "id",
+          "seriesId",
+          "seriesSourceId",
+          "chapterUrl",
+          "scanlator",
+          "reason",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "Chapter": {
+        "additionalProperties": false,
+        "properties": {
+          "cleanedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "fileId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "firstSeenAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "monitored": {
+            "type": "boolean"
+          },
+          "number": {
+            "type": "string"
+          },
+          "numberSort": {
+            "format": "double",
+            "type": "number"
+          },
+          "releaseDate": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "seriesId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "state": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "volume": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "seriesId",
+          "number",
+          "numberSort",
+          "volume",
+          "title",
+          "monitored",
+          "state",
+          "firstSeenAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "Chapter-decisionResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "approved": {
+            "$ref": "#/components/schemas/ReleaseView"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/DecisionDecision"
+          }
+        },
+        "required": [
+          "decision"
+        ],
+        "type": "object"
+      },
+      "ChapterFile": {
+        "additionalProperties": false,
+        "properties": {
+          "avgWidth": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "chapterId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "format": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "importedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "pageCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "relativePath": {
+            "type": "string"
+          },
+          "releaseId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "scanlator": {
+            "type": "string"
+          },
+          "seriesId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "size": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sizeBefore": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sourceName": {
+            "type": "string"
+          },
+          "upscaleModel": {
+            "type": "string"
+          },
+          "upscaled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "chapterId",
+          "seriesId",
+          "relativePath",
+          "size",
+          "pageCount",
+          "avgWidth",
+          "format",
+          "scanlator",
+          "sourceName",
+          "sha256",
+          "upscaled",
+          "upscaleModel",
+          "sizeBefore",
+          "importedAt"
+        ],
+        "type": "object"
+      },
+      "ChapterResource": {
+        "additionalProperties": false,
+        "properties": {
+          "cleanedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "file": {
+            "$ref": "#/components/schemas/ChapterFile"
+          },
+          "fileId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "firstSeenAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "job": {
+            "$ref": "#/components/schemas/DownloadJob"
+          },
+          "monitored": {
+            "type": "boolean"
+          },
+          "number": {
+            "type": "string"
+          },
+          "numberSort": {
+            "format": "double",
+            "type": "number"
+          },
+          "readBy": {
+            "items": {
+              "$ref": "#/components/schemas/ReadStateView"
+            },
+            "type": "array"
+          },
+          "releaseDate": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "releases": {
+            "items": {
+              "$ref": "#/components/schemas/ReleaseView"
+            },
+            "type": "array"
+          },
+          "seriesId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "state": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "volume": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "releases",
+          "readBy",
+          "id",
+          "seriesId",
+          "number",
+          "numberSort",
+          "volume",
+          "title",
+          "monitored",
+          "state",
+          "firstSeenAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "Chapters-monitorRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "chapterIds": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "monitored": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "chapterIds",
+          "monitored"
+        ],
+        "type": "object"
+      },
+      "Cleanup": {
+        "additionalProperties": false,
+        "properties": {
+          "dryRun": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "excludeTags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "graceDays": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "ignoreReadersNotStarted": {
+            "type": "boolean"
+          },
+          "keepLastRead": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "minFreeSpaceGb": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "readerIds": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "statuses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "useRecycleBin": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled",
+          "dryRun",
+          "statuses",
+          "readerIds",
+          "ignoreReadersNotStarted",
+          "keepLastRead",
+          "graceDays",
+          "minFreeSpaceGb",
+          "excludeTags",
+          "useRecycleBin"
+        ],
+        "type": "object"
+      },
+      "CleanupCandidate": {
+        "additionalProperties": false,
+        "properties": {
+          "chapter": {
+            "type": "string"
+          },
+          "chapterId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "fileId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "lastReadAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "seriesId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "seriesTitle": {
+            "type": "string"
+          },
+          "size": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "seriesId",
+          "seriesTitle",
+          "chapterId",
+          "chapter",
+          "fileId",
+          "path",
+          "size",
+          "lastReadAt"
+        ],
+        "type": "object"
+      },
+      "CleanupOverride": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "graceDays": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "keepLastRead": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "CleanupPlan": {
+        "additionalProperties": false,
+        "properties": {
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/CleanupCandidate"
+            },
+            "type": "array"
+          },
+          "dryRun": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "skipped": {
+            "items": {
+              "$ref": "#/components/schemas/CleanupSkip"
+            },
+            "type": "array"
+          },
+          "totalSize": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "enabled",
+          "dryRun",
+          "candidates",
+          "skipped",
+          "totalSize"
+        ],
+        "type": "object"
+      },
+      "CleanupSkip": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "seriesId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "seriesTitle": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "seriesId",
+          "seriesTitle",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "Command": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "durationMs": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "endedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "message": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "queuedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "trigger": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "body",
+          "status",
+          "trigger",
+          "message",
+          "queuedAt",
+          "durationMs",
+          "error"
+        ],
+        "type": "object"
+      },
+      "CommandInput": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "Credentials": {
+        "additionalProperties": false,
+        "properties": {
+          "password": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "username": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "type": "object"
+      },
+      "DecisionDecision": {
+        "additionalProperties": false,
+        "properties": {
+          "chapterId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "isUpgrade": {
+            "type": "boolean"
+          },
+          "rejections": {
+            "items": {
+              "$ref": "#/components/schemas/DecisionRejection"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "chapterId",
+          "isUpgrade",
+          "rejections"
+        ],
+        "type": "object"
+      },
+      "DecisionRejection": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "releaseId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "temporary": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "reason",
+          "temporary"
+        ],
+        "type": "object"
+      },
+      "DownloadJob": {
+        "additionalProperties": false,
+        "properties": {
+          "attempt": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "chapterId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "isUpgrade": {
+            "type": "boolean"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "notBefore": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "pagesDone": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "pagesTotal": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "progress": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "releaseId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "seriesId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "seriesId",
+          "chapterId",
+          "status",
+          "progress",
+          "pagesDone",
+          "pagesTotal",
+          "attempt",
+          "isUpgrade",
+          "error",
+          "notBefore",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "Downloads": {
+        "additionalProperties": false,
+        "properties": {
+          "defaultCheckIntervalMinutes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "maxAttempts": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "maxConcurrent": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "maxPerSource": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "pageConcurrency": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "pageRetries": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "maxConcurrent",
+          "maxPerSource",
+          "pageConcurrency",
+          "pageRetries",
+          "maxAttempts",
+          "defaultCheckIntervalMinutes"
+        ],
+        "type": "object"
+      },
+      "Entry": {
+        "additionalProperties": false,
+        "properties": {
+          "attrs": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "level": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "time": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "time",
+          "level",
+          "message"
+        ],
+        "type": "object"
+      },
+      "ErrorDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "location": {
+            "description": "Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id'",
+            "type": "string"
+          },
+          "message": {
+            "description": "Error message text",
+            "type": "string"
+          },
+          "value": {
+            "description": "The value at the given location"
+          }
+        },
+        "type": "object"
+      },
+      "ErrorModel": {
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "description": "A human-readable explanation specific to this occurrence of the problem.",
+            "examples": [
+              "Property foo is required but is missing."
+            ],
+            "type": "string"
+          },
+          "errors": {
+            "description": "Optional list of individual error details",
+            "items": {
+              "$ref": "#/components/schemas/ErrorDetail"
+            },
+            "type": "array"
+          },
+          "instance": {
+            "description": "A URI reference that identifies the specific occurrence of the problem.",
+            "examples": [
+              "https://example.com/error-log/abc123"
+            ],
+            "format": "uri",
+            "type": "string"
+          },
+          "status": {
+            "description": "HTTP status code",
+            "examples": [
+              400
+            ],
+            "format": "int64",
+            "type": "integer"
+          },
+          "title": {
+            "description": "A short, human-readable summary of the problem type. This value should not change between occurrences of the error.",
+            "examples": [
+              "Bad Request"
+            ],
+            "type": "string"
+          },
+          "type": {
+            "default": "about:blank",
+            "description": "A URI reference to human-readable documentation for the error.",
+            "examples": [
+              "https://example.com/errors/example"
+            ],
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "GeneralSettingsResource": {
+        "additionalProperties": false,
+        "properties": {
+          "apiKey": {
+            "readOnly": true,
+            "type": "string"
+          },
+          "backupRetention": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "instanceName": {
+            "type": "string"
+          },
+          "publicUrl": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "apiKey",
+          "instanceName",
+          "publicUrl",
+          "backupRetention"
+        ],
+        "type": "object"
+      },
+      "HealthCheck": {
+        "additionalProperties": false,
+        "properties": {
+          "link": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "type",
+          "message"
+        ],
+        "type": "object"
+      },
+      "HealthResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "checkedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/HealthCheck"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "checks",
+          "checkedAt"
+        ],
+        "type": "object"
+      },
+      "History": {
+        "additionalProperties": false,
+        "properties": {
+          "chapterId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "data": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "eventType": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "seriesId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sourceTitle": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "seriesId",
+          "eventType",
+          "sourceTitle",
+          "data",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "ImplementationResource": {
+        "additionalProperties": false,
+        "properties": {
+          "accountFields": {
+            "items": {
+              "$ref": "#/components/schemas/ModuleField"
+            },
+            "type": "array"
+          },
+          "description": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "events": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/ModuleField"
+            },
+            "type": "array"
+          },
+          "infoUrl": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "name",
+          "displayName",
+          "description",
+          "fields"
+        ],
+        "type": "object"
+      },
+      "JobView": {
+        "additionalProperties": false,
+        "properties": {
+          "attempt": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "chapter": {
+            "type": "string"
+          },
+          "chapterId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "isUpgrade": {
+            "type": "boolean"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "notBefore": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "numberSort": {
+            "format": "double",
+            "type": "number"
+          },
+          "pagesDone": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "pagesTotal": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "progress": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "releaseId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "scanlator": {
+            "type": "string"
+          },
+          "seriesId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "seriesTitle": {
+            "type": "string"
+          },
+          "sourceName": {
+            "type": "string"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "seriesTitle",
+          "chapter",
+          "numberSort",
+          "sourceName",
+          "scanlator",
+          "id",
+          "kind",
+          "seriesId",
+          "chapterId",
+          "status",
+          "progress",
+          "pagesDone",
+          "pagesTotal",
+          "attempt",
+          "isUpgrade",
+          "error",
+          "notBefore",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "LookupResult": {
+        "additionalProperties": false,
+        "properties": {
+          "adult": {
+            "type": "boolean"
+          },
+          "also": {
+            "items": {
+              "$ref": "#/components/schemas/MetadataRef"
+            },
+            "type": "array"
+          },
+          "altTitles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "artists": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "authors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "country": {
+            "type": "string"
+          },
+          "coverUrl": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "existingSeriesId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "externalIds": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "format": {
+            "type": "string"
+          },
+          "genres": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "links": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "moduleId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "moduleName": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "publisher": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": "string"
+          },
+          "totalChapters": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "url": {
+            "type": "string"
+          },
+          "year": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "moduleId",
+          "moduleName",
+          "provider",
+          "id",
+          "title"
+        ],
+        "type": "object"
+      },
+      "MediaManagement": {
+        "additionalProperties": false,
+        "properties": {
+          "chapterFormat": {
+            "type": "string"
+          },
+          "dirMode": {
+            "type": "string"
+          },
+          "fileMode": {
+            "type": "string"
+          },
+          "minFreeSpaceMb": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "recycleBinDays": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "recycleBinPath": {
+            "type": "string"
+          },
+          "seriesFolderFormat": {
+            "type": "string"
+          },
+          "writeCover": {
+            "type": "boolean"
+          },
+          "writeSeriesJson": {
+            "type": "boolean"
+          },
+          "writeVolume": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "chapterFormat",
+          "seriesFolderFormat",
+          "recycleBinPath",
+          "recycleBinDays",
+          "minFreeSpaceMb",
+          "writeSeriesJson",
+          "writeCover",
+          "writeVolume",
+          "fileMode",
+          "dirMode"
+        ],
+        "type": "object"
+      },
+      "MetadataRef": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "moduleId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "provider": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "moduleId",
+          "provider",
+          "id"
+        ],
+        "type": "object"
+      },
+      "ModuleField": {
+        "additionalProperties": false,
+        "properties": {
+          "advanced": {
+            "type": "boolean"
+          },
+          "default": {},
+          "help": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/ModuleOption"
+            },
+            "type": "array"
+          },
+          "order": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "placeholder": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "secret": {
+            "type": "boolean"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "label",
+          "type",
+          "order"
+        ],
+        "type": "object"
+      },
+      "ModuleInput": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "events": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "implementation": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "source",
+              "metadata",
+              "library",
+              "notify",
+              "upscale"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "priority": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "settings": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "tags": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "kind",
+          "implementation",
+          "name",
+          "enabled",
+          "priority",
+          "settings"
+        ],
+        "type": "object"
+      },
+      "ModuleOption": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "label"
+        ],
+        "type": "object"
+      },
+      "ModuleResource": {
+        "additionalProperties": false,
+        "properties": {
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string"
+          },
+          "events": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "implementation": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "priority": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "settings": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "tags": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "capabilities",
+          "id",
+          "kind",
+          "implementation",
+          "name",
+          "enabled",
+          "priority",
+          "tags",
+          "events",
+          "settings",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "Modules-testRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "events": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "implementation": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "source",
+              "metadata",
+              "library",
+              "notify",
+              "upscale"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "priority": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "settings": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "tags": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "kind",
+          "implementation",
+          "name",
+          "enabled",
+          "priority",
+          "settings"
+        ],
+        "type": "object"
+      },
+      "NamingPreview": {
+        "additionalProperties": false,
+        "properties": {
+          "chapter": {
+            "type": "string"
+          },
+          "decimal": {
+            "type": "string"
+          },
+          "examples": {
+            "type": "string"
+          },
+          "folder": {
+            "type": "string"
+          },
+          "volume": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "folder",
+          "chapter",
+          "decimal",
+          "volume",
+          "examples"
+        ],
+        "type": "object"
+      },
+      "Page": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/History"
+            },
+            "type": "array"
+          },
+          "page": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "pageSize": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "type": "object"
+      },
+      "Profile": {
+        "additionalProperties": false,
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/ProfileConfig"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "isDefault": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "isDefault",
+          "config",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "ProfileConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "allowUpgrades": {
+            "type": "boolean"
+          },
+          "blockedScanlators": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "cleanup": {
+            "$ref": "#/components/schemas/CleanupOverride"
+          },
+          "minPages": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "preferredScanlators": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "upscale": {
+            "$ref": "#/components/schemas/UpscaleConfig"
+          }
+        },
+        "required": [
+          "preferredScanlators",
+          "blockedScanlators",
+          "allowUpgrades",
+          "minPages",
+          "upscale",
+          "cleanup"
+        ],
+        "type": "object"
+      },
+      "ReadStateView": {
+        "additionalProperties": false,
+        "properties": {
+          "completed": {
+            "type": "boolean"
+          },
+          "page": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "readAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "reader": {
+            "type": "string"
+          },
+          "readerId": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "readerId",
+          "reader",
+          "completed",
+          "page"
+        ],
+        "type": "object"
+      },
+      "ReadSync": {
+        "additionalProperties": false,
+        "properties": {
+          "intervalMinutes": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "intervalMinutes"
+        ],
+        "type": "object"
+      },
+      "Reader": {
+        "additionalProperties": false,
+        "properties": {
+          "countForCleanup": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "countForCleanup",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "ReaderAccount": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "externalUser": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "lastError": {
+            "type": "string"
+          },
+          "lastSyncAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "moduleId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "readerId": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "readerId",
+          "moduleId",
+          "externalUser",
+          "lastError",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "ReaderAccountView": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "externalUser": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "lastError": {
+            "type": "string"
+          },
+          "lastSyncAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "moduleId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "moduleName": {
+            "type": "string"
+          },
+          "readerId": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "moduleName",
+          "id",
+          "readerId",
+          "moduleId",
+          "externalUser",
+          "lastError",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "ReaderResource": {
+        "additionalProperties": false,
+        "properties": {
+          "accounts": {
+            "items": {
+              "$ref": "#/components/schemas/ReaderAccountView"
+            },
+            "type": "array"
+          },
+          "completedCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "countForCleanup": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "accounts",
+          "completedCount",
+          "id",
+          "name",
+          "countForCleanup",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "Readers-createRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "countForCleanup": {
+            "type": "boolean"
+          },
+          "name": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "countForCleanup"
+        ],
+        "type": "object"
+      },
+      "Readers-updateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "countForCleanup": {
+            "type": "boolean"
+          },
+          "name": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "countForCleanup"
+        ],
+        "type": "object"
+      },
+      "ReleaseView": {
+        "additionalProperties": false,
+        "properties": {
+          "blocklisted": {
+            "type": "boolean"
+          },
+          "chapterId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "chapterUrl": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "priority": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "rawNumber": {
+            "format": "double",
+            "type": "number"
+          },
+          "removed": {
+            "type": "boolean"
+          },
+          "scanlator": {
+            "type": "string"
+          },
+          "seriesId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "seriesSourceId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sourceName": {
+            "type": "string"
+          },
+          "uploadDate": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "webUrl": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sourceName",
+          "priority",
+          "blocklisted",
+          "id",
+          "seriesId",
+          "seriesSourceId",
+          "chapterUrl",
+          "webUrl",
+          "name",
+          "scanlator",
+          "rawNumber",
+          "removed",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "RootFolder": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "language": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "path",
+          "language",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "RootFolderResource": {
+        "additionalProperties": false,
+        "properties": {
+          "accessible": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "freeSpace": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "language": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "seriesCount": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "accessible",
+          "freeSpace",
+          "seriesCount",
+          "id",
+          "path",
+          "language",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "Rootfolders-createRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "language": {
+            "type": "string"
+          },
+          "path": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "language"
+        ],
+        "type": "object"
+      },
+      "SearchResultGroup": {
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "hasNext": {
+            "type": "boolean"
+          },
+          "lang": {
+            "type": "string"
+          },
+          "moduleId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/SourceManga"
+            },
+            "type": "array"
+          },
+          "sourceId": {
+            "type": "string"
+          },
+          "sourceName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "moduleId",
+          "sourceId",
+          "sourceName",
+          "lang",
+          "results",
+          "hasNext"
+        ],
+        "type": "object"
+      },
+      "Series-lookupResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/LookupResult"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "results",
+          "errors"
+        ],
+        "type": "object"
+      },
+      "Series-searchRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "chapterIds": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "SeriesMetadata": {
+        "additionalProperties": false,
+        "properties": {
+          "ageRating": {
+            "type": "string"
+          },
+          "altTitles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "artists": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "authors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "coverUrl": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "externalIds": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "format": {
+            "type": "string"
+          },
+          "genres": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "links": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "locks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "provenance": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "publisher": {
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "totalChapters": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "year": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "SeriesResource": {
+        "additionalProperties": false,
+        "properties": {
+          "addOptions": {
+            "$ref": "#/components/schemas/AddOptions"
+          },
+          "addedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "coverUrl": {
+            "type": "string"
+          },
+          "fullPath": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "language": {
+            "type": "string"
+          },
+          "lastMetadataRefresh": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/SeriesMetadata"
+          },
+          "monitorNew": {
+            "type": "string"
+          },
+          "monitored": {
+            "type": "boolean"
+          },
+          "path": {
+            "type": "string"
+          },
+          "profileId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "readingDirection": {
+            "type": "string"
+          },
+          "rootFolderId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sortTitle": {
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SeriesSource"
+            },
+            "type": "array"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/SeriesStats"
+          },
+          "status": {
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stats",
+          "coverUrl",
+          "id",
+          "title",
+          "sortTitle",
+          "status",
+          "monitored",
+          "monitorNew",
+          "rootFolderId",
+          "path",
+          "profileId",
+          "language",
+          "readingDirection",
+          "tags",
+          "metadata",
+          "addOptions",
+          "addedAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "SeriesSource": {
+        "additionalProperties": false,
+        "properties": {
+          "backoffUntil": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "checkIntervalMinutes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "consecutiveFailures": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "lang": {
+            "type": "string"
+          },
+          "lastCheckedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "lastError": {
+            "type": "string"
+          },
+          "lastSuccessAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "mangaUrl": {
+            "type": "string"
+          },
+          "moduleId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "nextCheckAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "priority": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "seriesId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sourceId": {
+            "type": "string"
+          },
+          "sourceName": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "webUrl": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "seriesId",
+          "moduleId",
+          "sourceId",
+          "sourceName",
+          "lang",
+          "mangaUrl",
+          "title",
+          "webUrl",
+          "priority",
+          "enabled",
+          "checkIntervalMinutes",
+          "nextCheckAt",
+          "consecutiveFailures",
+          "lastError",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "SeriesStats": {
+        "additionalProperties": false,
+        "properties": {
+          "chapterCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "cleanedCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "fileCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "lastChapter": {
+            "format": "double",
+            "type": "number"
+          },
+          "missingCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "monitoredCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sizeOnDisk": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "chapterCount",
+          "monitoredCount",
+          "fileCount",
+          "missingCount",
+          "cleanedCount",
+          "sizeOnDisk",
+          "lastChapter"
+        ],
+        "type": "object"
+      },
+      "Source-preferences-setRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "position": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "type": {
+            "type": "string"
+          },
+          "value": {}
+        },
+        "required": [
+          "position",
+          "type",
+          "value"
+        ],
+        "type": "object"
+      },
+      "SourceChapter": {
+        "additionalProperties": false,
+        "properties": {
+          "engineRef": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "number": {
+            "format": "double",
+            "type": "number"
+          },
+          "scanlator": {
+            "type": "string"
+          },
+          "uploadDate": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "webUrl": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "name",
+          "number"
+        ],
+        "type": "object"
+      },
+      "SourceExtension": {
+        "additionalProperties": false,
+        "properties": {
+          "hasUpdate": {
+            "type": "boolean"
+          },
+          "iconUrl": {
+            "type": "string"
+          },
+          "installed": {
+            "type": "boolean"
+          },
+          "lang": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nsfw": {
+            "type": "boolean"
+          },
+          "obsolete": {
+            "type": "boolean"
+          },
+          "pkg": {
+            "type": "string"
+          },
+          "versionCode": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "versionName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "pkg",
+          "name",
+          "lang",
+          "versionName",
+          "versionCode",
+          "installed",
+          "hasUpdate",
+          "obsolete",
+          "nsfw"
+        ],
+        "type": "object"
+      },
+      "SourceLink": {
+        "additionalProperties": false,
+        "properties": {
+          "engineRef": {
+            "type": "string"
+          },
+          "lang": {
+            "type": "string"
+          },
+          "moduleId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sourceId": {
+            "type": "string"
+          },
+          "sourceName": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "moduleId",
+          "sourceId",
+          "url"
+        ],
+        "type": "object"
+      },
+      "SourceManga": {
+        "additionalProperties": false,
+        "properties": {
+          "engineRef": {
+            "type": "string"
+          },
+          "sourceId": {
+            "type": "string"
+          },
+          "thumbnailUrl": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "titleHint": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "sourceId",
+          "url"
+        ],
+        "type": "object"
+      },
+      "SourceMangaDetails": {
+        "additionalProperties": false,
+        "properties": {
+          "artist": {
+            "type": "string"
+          },
+          "author": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "engineRef": {
+            "type": "string"
+          },
+          "genres": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "sourceId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "thumbnailUrl": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "titleHint": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "webUrl": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "title",
+          "sourceId",
+          "url"
+        ],
+        "type": "object"
+      },
+      "SourceMangaPage": {
+        "additionalProperties": false,
+        "properties": {
+          "hasNext": {
+            "type": "boolean"
+          },
+          "mangas": {
+            "items": {
+              "$ref": "#/components/schemas/SourceManga"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "mangas",
+          "hasNext"
+        ],
+        "type": "object"
+      },
+      "SourcePreference": {
+        "additionalProperties": false,
+        "properties": {
+          "defaultValue": {},
+          "entries": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "entryValues": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "key": {
+            "type": "string"
+          },
+          "position": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "value": {},
+          "visible": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key",
+          "position",
+          "type",
+          "title",
+          "value",
+          "visible"
+        ],
+        "type": "object"
+      },
+      "SourceResource": {
+        "additionalProperties": false,
+        "properties": {
+          "displayName": {
+            "type": "string"
+          },
+          "extension": {
+            "type": "string"
+          },
+          "iconUrl": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "lang": {
+            "type": "string"
+          },
+          "moduleId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "moduleName": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nsfw": {
+            "type": "boolean"
+          },
+          "supportsLatest": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "moduleId",
+          "moduleName",
+          "id",
+          "name",
+          "lang",
+          "displayName",
+          "supportsLatest",
+          "nsfw"
+        ],
+        "type": "object"
+      },
+      "SourceUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "checkIntervalMinutes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "moduleId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "priority": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "Sources-mangaResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "chapters": {
+            "items": {
+              "$ref": "#/components/schemas/SourceChapter"
+            },
+            "type": "array"
+          },
+          "details": {
+            "$ref": "#/components/schemas/SourceMangaDetails"
+          }
+        },
+        "required": [
+          "details",
+          "chapters"
+        ],
+        "type": "object"
+      },
+      "Stores-addRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "url": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "type": "object"
+      },
+      "SystemStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "arch": {
+            "type": "string"
+          },
+          "commit": {
+            "type": "string"
+          },
+          "dataDir": {
+            "type": "string"
+          },
+          "database": {
+            "type": "string"
+          },
+          "goVersion": {
+            "type": "string"
+          },
+          "os": {
+            "type": "string"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "urlBase": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "commit",
+          "goVersion",
+          "os",
+          "arch",
+          "database",
+          "dataDir",
+          "startedAt",
+          "urlBase"
+        ],
+        "type": "object"
+      },
+      "Tag": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ],
+        "type": "object"
+      },
+      "Tags-createRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "label"
+        ],
+        "type": "object"
+      },
+      "TaskInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "intervalMinutes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "lastExecution": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nextExecution": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "scheduled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "intervalMinutes",
+          "scheduled"
+        ],
+        "type": "object"
+      },
+      "UpdateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "locks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "monitorNew": {
+            "enum": [
+              "all",
+              "none"
+            ],
+            "type": "string"
+          },
+          "monitored": {
+            "type": "boolean"
+          },
+          "profileId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "readingDirection": {
+            "enum": [
+              "rtl",
+              "ltr",
+              "vertical",
+              "webtoon"
+            ],
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "unknown",
+              "ongoing",
+              "completed",
+              "hiatus",
+              "cancelled"
+            ],
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpscaleConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "format": {
+            "type": "string"
+          },
+          "maxWidth": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "minWidth": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "model": {
+            "type": "string"
+          },
+          "noise": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "quality": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "upscalerId": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "enabled",
+          "upscalerId",
+          "minWidth",
+          "maxWidth",
+          "model",
+          "noise",
+          "format",
+          "quality"
+        ],
+        "type": "object"
+      },
+      "UpscaleInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "devices": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/UpscaleModel"
+            },
+            "type": "array"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "devices",
+          "models"
+        ],
+        "type": "object"
+      },
+      "UpscaleModel": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "noiseLevels": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "scales": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "scales"
+        ],
+        "type": "object"
+      },
+      "WantedItem": {
+        "additionalProperties": false,
+        "properties": {
+          "cleanedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "fileId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "firstSeenAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "monitored": {
+            "type": "boolean"
+          },
+          "number": {
+            "type": "string"
+          },
+          "numberSort": {
+            "format": "double",
+            "type": "number"
+          },
+          "releaseDate": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "releases": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "seriesId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "seriesTitle": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "volume": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "seriesTitle",
+          "releases",
+          "id",
+          "seriesId",
+          "number",
+          "numberSort",
+          "volume",
+          "title",
+          "monitored",
+          "state",
+          "firstSeenAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "WantedPage": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WantedItem"
+            },
+            "type": "array"
+          },
+          "page": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "pageSize": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "apiKey": {
+        "in": "header",
+        "name": "X-Api-Key",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "description": "Sonarr-style PVR for manga. All endpoints accept an X-Api-Key header.",
+    "title": "mangarr",
+    "version": "dev"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/auth/login": {
+      "post": {
+        "operationId": "auth-login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Credentials"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthStatus"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [],
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "operationId": "auth-logout",
+        "responses": {
+          "204": {
+            "description": "No Content",
+            "headers": {
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/v1/auth/password": {
+      "post": {
+        "operationId": "auth-password",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Auth-passwordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/v1/auth/setup": {
+      "post": {
+        "operationId": "auth-setup",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Credentials"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthStatus"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [],
+        "summary": "Create the first user (only allowed when no user exists)",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/v1/auth/status": {
+      "get": {
+        "operationId": "auth-status",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthStatus"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [],
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/v1/blocklist": {
+      "get": {
+        "operationId": "blocklist-list",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "seriesId",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BlocklistView"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Activity"
+        ]
+      }
+    },
+    "/api/v1/blocklist/{id}": {
+      "delete": {
+        "operationId": "blocklist-delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Activity"
+        ]
+      }
+    },
+    "/api/v1/calendar": {
+      "get": {
+        "operationId": "calendar",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "start",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "end",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WantedItem"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Chapters released in a date range (by source upload date)",
+        "tags": [
+          "Activity"
+        ]
+      }
+    },
+    "/api/v1/chapters/monitor": {
+      "put": {
+        "operationId": "chapters-monitor",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Chapters-monitorRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Series"
+        ]
+      }
+    },
+    "/api/v1/chapters/{id}/restore": {
+      "post": {
+        "operationId": "chapter-restore",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Chapter"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Make a cleaned chapter wanted again and download it",
+        "tags": [
+          "Cleanup"
+        ]
+      }
+    },
+    "/api/v1/cleanup/preview": {
+      "get": {
+        "operationId": "cleanup-preview",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleanupPlan"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "What a cleanup run would delete with the current settings",
+        "tags": [
+          "Cleanup"
+        ]
+      }
+    },
+    "/api/v1/cleanup/run": {
+      "post": {
+        "operationId": "cleanup-run",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "force",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Command"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Queue a cleanup. force=true deletes even when dry run is enabled.",
+        "tags": [
+          "Cleanup"
+        ]
+      }
+    },
+    "/api/v1/commands": {
+      "get": {
+        "operationId": "commands-list",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "format": "int64",
+              "maximum": 500,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Command"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "System"
+        ]
+      },
+      "post": {
+        "operationId": "commands-push",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommandInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Command"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Queue a command (e.g. RefreshSources, RefreshSeries {seriesId}, SearchMissing, Cleanup)",
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/api/v1/commands/{id}": {
+      "get": {
+        "operationId": "commands-get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Command"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "operationId": "health-get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/api/v1/health/check": {
+      "post": {
+        "operationId": "health-run",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/api/v1/history": {
+      "get": {
+        "operationId": "history-list",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "seriesId",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "chapterId",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "eventType",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "pageSize",
+            "schema": {
+              "default": 50,
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Activity"
+        ]
+      }
+    },
+    "/api/v1/modules": {
+      "get": {
+        "operationId": "modules-list",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "kind",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ModuleResource"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Modules"
+        ]
+      },
+      "post": {
+        "operationId": "modules-create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModuleInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModuleResource"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Modules"
+        ]
+      }
+    },
+    "/api/v1/modules/schema": {
+      "get": {
+        "operationId": "modules-schema",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "kind",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ImplementationResource"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List available implementations and their settings fields",
+        "tags": [
+          "Modules"
+        ]
+      }
+    },
+    "/api/v1/modules/test": {
+      "post": {
+        "operationId": "modules-test",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Modules-testRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Test a module definition without saving it",
+        "tags": [
+          "Modules"
+        ]
+      }
+    },
+    "/api/v1/modules/{id}": {
+      "delete": {
+        "operationId": "modules-delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Modules"
+        ]
+      },
+      "put": {
+        "operationId": "modules-update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModuleInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModuleResource"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Modules"
+        ]
+      }
+    },
+    "/api/v1/modules/{id}/asset": {
+      "get": {
+        "operationId": "modules-asset",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "path",
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "contentEncoding": "base64",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Type": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Proxy a module-relative image (e.g. extension icons)",
+        "tags": [
+          "Sources"
+        ]
+      }
+    },
+    "/api/v1/modules/{id}/extensions": {
+      "get": {
+        "operationId": "extensions-list",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "refresh",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SourceExtension"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Extensions"
+        ]
+      }
+    },
+    "/api/v1/modules/{id}/extensions/{pkg}/{action}": {
+      "post": {
+        "operationId": "extensions-action",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "pkg",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "action",
+            "required": true,
+            "schema": {
+              "enum": [
+                "install",
+                "update",
+                "uninstall"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Extensions"
+        ]
+      }
+    },
+    "/api/v1/modules/{id}/stores": {
+      "delete": {
+        "operationId": "stores-remove",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "url",
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Extensions"
+        ]
+      },
+      "get": {
+        "operationId": "stores-list",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Extensions"
+        ]
+      },
+      "post": {
+        "operationId": "stores-add",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Stores-addRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Extensions"
+        ]
+      }
+    },
+    "/api/v1/modules/{id}/test": {
+      "post": {
+        "operationId": "modules-test-saved",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Modules"
+        ]
+      }
+    },
+    "/api/v1/modules/{id}/upscaler-info": {
+      "get": {
+        "operationId": "upscaler-info",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpscaleInfo"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Models and devices of an upscaler module",
+        "tags": [
+          "Modules"
+        ]
+      }
+    },
+    "/api/v1/profiles": {
+      "get": {
+        "operationId": "profiles-list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Profile"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Profiles"
+        ]
+      },
+      "post": {
+        "operationId": "profiles-create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Profile"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Profile"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Profiles"
+        ]
+      }
+    },
+    "/api/v1/profiles/{id}": {
+      "delete": {
+        "operationId": "profiles-delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Profiles"
+        ]
+      },
+      "put": {
+        "operationId": "profiles-update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Profile"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Profile"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Profiles"
+        ]
+      }
+    },
+    "/api/v1/queue": {
+      "get": {
+        "operationId": "queue-list",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "includeDone",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/JobView"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Activity"
+        ]
+      }
+    },
+    "/api/v1/queue/clear-finished": {
+      "post": {
+        "operationId": "queue-clear",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Activity"
+        ]
+      }
+    },
+    "/api/v1/queue/{id}": {
+      "delete": {
+        "operationId": "queue-remove",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "blocklist",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Activity"
+        ]
+      }
+    },
+    "/api/v1/queue/{id}/retry": {
+      "post": {
+        "operationId": "queue-retry",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Activity"
+        ]
+      }
+    },
+    "/api/v1/readers": {
+      "get": {
+        "operationId": "readers-list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ReaderResource"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Readers"
+        ]
+      },
+      "post": {
+        "operationId": "readers-create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Readers-createRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Reader"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Readers"
+        ]
+      }
+    },
+    "/api/v1/readers/{id}": {
+      "delete": {
+        "operationId": "readers-delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Readers"
+        ]
+      },
+      "put": {
+        "operationId": "readers-update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Readers-updateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Readers"
+        ]
+      }
+    },
+    "/api/v1/readers/{id}/accounts": {
+      "post": {
+        "operationId": "readers-account-save",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReaderAccount"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Add or replace the reader's account on a library module (credentials are tested first)",
+        "tags": [
+          "Readers"
+        ]
+      }
+    },
+    "/api/v1/readers/{id}/accounts/{accountId}": {
+      "delete": {
+        "operationId": "readers-account-delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Readers"
+        ]
+      }
+    },
+    "/api/v1/rootfolders": {
+      "get": {
+        "operationId": "rootfolders-list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RootFolderResource"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Root folders"
+        ]
+      },
+      "post": {
+        "operationId": "rootfolders-create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Rootfolders-createRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RootFolder"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Root folders"
+        ]
+      }
+    },
+    "/api/v1/rootfolders/{id}": {
+      "delete": {
+        "operationId": "rootfolders-delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Root folders"
+        ]
+      }
+    },
+    "/api/v1/series": {
+      "get": {
+        "operationId": "series-list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SeriesResource"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Series"
+        ]
+      },
+      "post": {
+        "operationId": "series-add",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesResource"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Series"
+        ]
+      }
+    },
+    "/api/v1/series/lookup": {
+      "get": {
+        "operationId": "series-lookup",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Series-lookupResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Search metadata modules (merged by priority) for a new series",
+        "tags": [
+          "Series"
+        ]
+      }
+    },
+    "/api/v1/series/{id}": {
+      "delete": {
+        "operationId": "series-delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "deleteFiles",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Series"
+        ]
+      },
+      "get": {
+        "operationId": "series-get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesResource"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Series"
+        ]
+      },
+      "put": {
+        "operationId": "series-update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesResource"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Series"
+        ]
+      }
+    },
+    "/api/v1/series/{id}/chapters": {
+      "get": {
+        "operationId": "series-chapters",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ChapterResource"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Series"
+        ]
+      }
+    },
+    "/api/v1/series/{id}/chapters/{chapterId}/decision": {
+      "get": {
+        "operationId": "chapter-decision",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "chapterId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Chapter-decisionResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Explain why a chapter would or would not be downloaded",
+        "tags": [
+          "Series"
+        ]
+      }
+    },
+    "/api/v1/series/{id}/cover": {
+      "get": {
+        "operationId": "series-cover",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "v",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "contentEncoding": "base64",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Type": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Series"
+        ]
+      }
+    },
+    "/api/v1/series/{id}/metadata": {
+      "put": {
+        "operationId": "series-metadata-link",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MetadataRef"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesResource"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Replace the metadata match of a series",
+        "tags": [
+          "Series"
+        ]
+      }
+    },
+    "/api/v1/series/{id}/metadata/refresh": {
+      "post": {
+        "operationId": "series-metadata-refresh",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Command"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Series"
+        ]
+      }
+    },
+    "/api/v1/series/{id}/refresh": {
+      "post": {
+        "operationId": "series-refresh",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Command"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Series"
+        ]
+      }
+    },
+    "/api/v1/series/{id}/search": {
+      "post": {
+        "operationId": "series-search",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Series-searchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Command"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Grab missing chapters. With chapterIds, only those (explicit search ignores monitoring).",
+        "tags": [
+          "Series"
+        ]
+      }
+    },
+    "/api/v1/series/{id}/sources": {
+      "post": {
+        "operationId": "series-source-link",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceLink"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesSource"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Series"
+        ]
+      }
+    },
+    "/api/v1/series/{id}/sources/{linkId}": {
+      "delete": {
+        "operationId": "series-source-unlink",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "linkId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Series"
+        ]
+      },
+      "put": {
+        "operationId": "series-source-update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "linkId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesSource"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Series"
+        ]
+      }
+    },
+    "/api/v1/settings/cleanup": {
+      "get": {
+        "operationId": "settings-get-cleanup",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Cleanup"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Settings"
+        ]
+      },
+      "put": {
+        "operationId": "settings-put-cleanup",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Cleanup"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Cleanup"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
+    "/api/v1/settings/downloads": {
+      "get": {
+        "operationId": "settings-get-downloads",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Downloads"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Settings"
+        ]
+      },
+      "put": {
+        "operationId": "settings-put-downloads",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Downloads"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Downloads"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
+    "/api/v1/settings/general": {
+      "get": {
+        "operationId": "settings-get-general",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneralSettingsResource"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Settings"
+        ]
+      },
+      "put": {
+        "operationId": "settings-put-general",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GeneralSettingsResource"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneralSettingsResource"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
+    "/api/v1/settings/general/apikey": {
+      "post": {
+        "operationId": "settings-regenerate-apikey",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneralSettingsResource"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
+    "/api/v1/settings/media": {
+      "get": {
+        "operationId": "settings-get-media",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaManagement"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Settings"
+        ]
+      },
+      "put": {
+        "operationId": "settings-put-media",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MediaManagement"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaManagement"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
+    "/api/v1/settings/media/preview": {
+      "get": {
+        "operationId": "naming-preview",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "chapterFormat",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "folderFormat",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NamingPreview"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Render naming templates with sample values",
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
+    "/api/v1/settings/readsync": {
+      "get": {
+        "operationId": "settings-get-readsync",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadSync"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Settings"
+        ]
+      },
+      "put": {
+        "operationId": "settings-put-readsync",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadSync"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadSync"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
+    "/api/v1/sources": {
+      "get": {
+        "operationId": "sources-list",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "refresh",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SourceResource"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List catalogs of all active source modules",
+        "tags": [
+          "Sources"
+        ]
+      }
+    },
+    "/api/v1/sources/search": {
+      "get": {
+        "operationId": "sources-search",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "source",
+            "schema": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "lang",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SearchResultGroup"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Search several catalogs at once. Select catalogs with source=moduleId:sourceId (repeatable) or lang.",
+        "tags": [
+          "Sources"
+        ]
+      }
+    },
+    "/api/v1/sources/{moduleId}/{sourceId}/browse": {
+      "get": {
+        "operationId": "sources-browse",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "moduleId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sourceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "type",
+            "schema": {
+              "default": "popular",
+              "enum": [
+                "latest",
+                "popular",
+                "search"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceMangaPage"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Sources"
+        ]
+      }
+    },
+    "/api/v1/sources/{moduleId}/{sourceId}/manga": {
+      "get": {
+        "operationId": "sources-manga",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "moduleId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sourceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "url",
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "engineRef",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Sources-mangaResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Fetch details and chapters of a manga at a source (preview before adding)",
+        "tags": [
+          "Sources"
+        ]
+      }
+    },
+    "/api/v1/sources/{moduleId}/{sourceId}/preferences": {
+      "get": {
+        "operationId": "source-preferences",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "moduleId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sourceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SourcePreference"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Sources"
+        ]
+      },
+      "put": {
+        "operationId": "source-preferences-set",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "moduleId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sourceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Source-preferences-setRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Sources"
+        ]
+      }
+    },
+    "/api/v1/sources/{moduleId}/{sourceId}/thumbnail": {
+      "get": {
+        "operationId": "sources-thumbnail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "moduleId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sourceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "url",
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "engineRef",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "contentEncoding": "base64",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Type": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Proxy (and cache) a manga thumbnail through its source module",
+        "tags": [
+          "Sources"
+        ]
+      }
+    },
+    "/api/v1/system/backups": {
+      "get": {
+        "operationId": "backups-list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BackupBackup"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "System"
+        ]
+      },
+      "post": {
+        "operationId": "backups-create",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupBackup"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/api/v1/system/backups/{name}": {
+      "delete": {
+        "operationId": "backups-delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "System"
+        ]
+      },
+      "get": {
+        "operationId": "backups-download",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/api/v1/system/logs": {
+      "get": {
+        "operationId": "system-logs",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "level",
+            "schema": {
+              "default": "info",
+              "enum": [
+                "debug",
+                "info",
+                "warn",
+                "error"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 500,
+              "format": "int64",
+              "maximum": 2000,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Entry"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/api/v1/system/status": {
+      "get": {
+        "operationId": "system-status",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemStatus"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/api/v1/system/tasks": {
+      "get": {
+        "operationId": "system-tasks",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TaskInfo"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/api/v1/tags": {
+      "get": {
+        "operationId": "tags-list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Tag"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Tags"
+        ]
+      },
+      "post": {
+        "operationId": "tags-create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Tags-createRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Tag"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Tags"
+        ]
+      }
+    },
+    "/api/v1/tags/{id}": {
+      "delete": {
+        "operationId": "tags-delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Tags"
+        ]
+      }
+    },
+    "/api/v1/wanted/missing": {
+      "get": {
+        "operationId": "wanted-missing",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "pageSize",
+            "schema": {
+              "default": 50,
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WantedPage"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Monitored chapters of monitored series without a file",
+        "tags": [
+          "Activity"
+        ]
+      }
+    }
+  },
+  "security": [
+    {
+      "apiKey": []
+    }
+  ]
+}

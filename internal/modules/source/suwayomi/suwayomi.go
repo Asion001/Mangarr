@@ -514,9 +514,38 @@ func (m *Module) FetchAsset(ctx context.Context, path string) (io.ReadCloser, st
 	}
 	resp, err := m.c.get(ctx, path)
 	if err != nil {
+		// Suwayomi only serves icons of installed extensions; Keiyoushi hosts
+		// the others in its extensions-source repository.
+		if pkg, ok := strings.CutPrefix(path, "/api/v1/extension/icon/"); ok {
+			if body, ct, ferr := m.keiyoushiIcon(ctx, pkg); ferr == nil {
+				return body, ct, nil
+			}
+		}
 		return nil, "", err
 	}
 	return resp.Body, resp.Header.Get("Content-Type"), nil
+}
+
+func (m *Module) keiyoushiIcon(ctx context.Context, pkg string) (io.ReadCloser, string, error) {
+	rest, ok := strings.CutPrefix(pkg, "eu.kanade.tachiyomi.extension.")
+	lang, name, ok2 := strings.Cut(rest, ".")
+	if !ok || !ok2 || strings.ContainsAny(name, "/.") {
+		return nil, "", fmt.Errorf("not a keiyoushi package")
+	}
+	u := "https://cdn.jsdelivr.net/gh/keiyoushi/extensions-source@main/src/" + url.PathEscape(lang) + "/" + url.PathEscape(name) + "/res/mipmap-xhdpi/ic_launcher.png"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	resp, err := (&http.Client{Timeout: 20 * time.Second}).Do(req)
+	if err != nil {
+		return nil, "", err
+	}
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		return nil, "", fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	return resp.Body, "image/png", nil
 }
 
 // ---- extensions ------------------------------------------------------------------

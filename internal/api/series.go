@@ -359,6 +359,12 @@ func (s *Server) registerSeries() {
 					Approved *ReleaseView       `json:"approved,omitempty"`
 				}
 			}{}
+			if d == nil {
+				d = &decision.Decision{}
+			}
+			if d.Rejections == nil {
+				d.Rejections = []decision.Rejection{}
+			}
 			out.Body.Decision = d
 			if best != nil {
 				out.Body.Approved = &ReleaseView{ChapterRelease: best.Release, SourceName: best.Source.SourceName, Priority: best.Source.Priority}
