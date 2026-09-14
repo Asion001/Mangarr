@@ -72,6 +72,10 @@ type AddRequest struct {
 	Tags             []int64          `json:"tags,omitempty"`
 	ReadingDirection string           `json:"readingDirection,omitempty" enum:"rtl,ltr,vertical,webtoon"`
 	Language         string           `json:"language,omitempty"`
+	// BlockedScanlators are scanlator names never downloaded for this series.
+	BlockedScanlators []string `json:"blockedScanlators,omitempty"`
+	// NoRefresh skips queueing the first refresh (the caller syncs itself).
+	NoRefresh bool `json:"-"`
 }
 
 // Add creates a series, links its sources and queues the first refresh.
@@ -98,6 +102,7 @@ func (s *Service) Add(ctx context.Context, req AddRequest) (*model.Series, error
 	if ser.Tags == nil {
 		ser.Tags = []int64{}
 	}
+	ser.BlockedScanlators = cleanNames(req.BlockedScanlators)
 	if req.Metadata != nil {
 		resolved, err := s.agg.Resolve(ctx, *req.Metadata, nil)
 		if err != nil {
@@ -147,8 +152,10 @@ func (s *Service) Add(ctx context.Context, req AddRequest) (*model.Series, error
 	if _, err := s.lib.EnsureSeriesDir(ctx, ser); err != nil {
 		s.log.Warn("create series folder", "series", ser.Title, "err", err)
 	}
-	if _, err := s.queue.Push(ctx, "RefreshSeries", map[string]any{"seriesId": ser.ID}, "series-add"); err != nil {
-		s.log.Warn("queue refresh", "err", err)
+	if !req.NoRefresh {
+		if _, err := s.queue.Push(ctx, "RefreshSeries", map[string]any{"seriesId": ser.ID}, "series-add"); err != nil {
+			s.log.Warn("queue refresh", "err", err)
+		}
 	}
 	s.bus.Publish(events.Event{Type: events.SeriesAdded, SeriesID: ser.ID, Payload: events.MessagePayload{Title: "Series added", Message: ser.Title}})
 	s.bus.Changed("series", "created", ser.ID)
@@ -251,6 +258,8 @@ type UpdateRequest struct {
 	Status           *string   `json:"status,omitempty" enum:"unknown,ongoing,completed,hiatus,cancelled"`
 	Description      *string   `json:"description,omitempty"`
 	Locks            *[]string `json:"locks,omitempty"`
+	// BlockedScanlators replaces the series' blocked scanlator names.
+	BlockedScanlators *[]string `json:"blockedScanlators,omitempty"`
 	// Location changes are applied by a MoveSeries command (see the API).
 	RootFolderID *int64  `json:"rootFolderId,omitempty"`
 	Path         *string `json:"path,omitempty"`
@@ -311,6 +320,9 @@ func (s *Service) Update(ctx context.Context, id int64, req UpdateRequest) (*mod
 	}
 	if req.Locks != nil {
 		ser.Metadata.Locks = *req.Locks
+	}
+	if req.BlockedScanlators != nil {
+		ser.BlockedScanlators = cleanNames(*req.BlockedScanlators)
 	}
 	ser.UpdatedAt = time.Now().UTC()
 	if _, err := s.db.NewUpdate().Model(ser).WherePK().Exec(ctx); err != nil {
@@ -474,6 +486,21 @@ func (s *Service) LinkMetadata(ctx context.Context, id int64, ref metadataagg.Re
 	_ = s.lib.RefreshCover(ctx, ser, nil)
 	s.bus.Changed("series", "updated", ser.ID)
 	return ser, nil
+}
+
+// cleanNames trims names and drops empty and duplicate ones.
+func cleanNames(names []string) []string {
+	out := []string{}
+	seen := map[string]bool{}
+	for _, n := range names {
+		n = strings.TrimSpace(n)
+		if n == "" || seen[strings.ToLower(n)] {
+			continue
+		}
+		seen[strings.ToLower(n)] = true
+		out = append(out, n)
+	}
+	return out
 }
 
 func orDefault(v, def string) string {

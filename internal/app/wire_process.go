@@ -40,6 +40,9 @@ func (a *App) wireProcess(ctx context.Context) error {
 	if err := a.wireOrganize(ctx); err != nil {
 		return err
 	}
+	if err := a.wireImports(ctx); err != nil {
+		return err
+	}
 
 	existing := func(ctx context.Context, r *jobs.Run) error {
 		var body struct {

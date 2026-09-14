@@ -1,0 +1,109 @@
+package app
+
+import (
+	"context"
+	"fmt"
+	"path/filepath"
+	"sync"
+	"time"
+
+	"github.com/Asion001/mangarr/internal/events"
+	"github.com/Asion001/mangarr/internal/imports"
+	"github.com/Asion001/mangarr/internal/jobs"
+	"github.com/Asion001/mangarr/internal/model"
+)
+
+// PushProgressDelay batches chapter imports before imported read state is
+// written to library servers.
+var PushProgressDelay = 2 * time.Minute
+
+// wireImports registers backup imports.
+func (a *App) wireImports(ctx context.Context) error {
+	a.Imports = &imports.Service{DB: a.DB, Bus: a.Bus, Settings: a.Settings, Mods: a.Modules, Catalogs: a.Catalogs, Search: a.Search,
+		Metadata: a.Metadata, Series: a.Series, Log: a.Log.With("component", "imports"), Dir: filepath.Join(a.Cfg.DataDir, "imports"),
+		Sync: func(ctx context.Context, seriesID int64) error {
+			_, err := a.Refresher.SyncSeries(ctx, seriesID, false)
+			return err
+		},
+		Push: func(ctx context.Context, name string, body map[string]any) error {
+			_, err := a.Queue.Push(ctx, name, body, "import")
+			return err
+		}}
+
+	a.Queue.Register(jobs.Definition{Name: "MapImport", Description: "Match a backup's manga to catalogs and metadata",
+		Handler: func(ctx context.Context, r *jobs.Run) error {
+			var body struct {
+				ImportID int64   `json:"importId"`
+				EntryIDs []int64 `json:"entryIds"`
+			}
+			if err := r.Body(&body); err != nil || body.ImportID == 0 {
+				return fmt.Errorf("importId required")
+			}
+			return a.Imports.Map(ctx, body.ImportID, body.EntryIDs, func(done, total int) { r.Progress("matched %d of %d", done, total) })
+		}})
+	a.Queue.Register(jobs.Definition{Name: "InstallImportExtensions", Description: "Install the extensions a backup import needs",
+		Handler: func(ctx context.Context, r *jobs.Run) error {
+			var body struct {
+				ImportID int64 `json:"importId"`
+			}
+			if err := r.Body(&body); err != nil || body.ImportID == 0 {
+				return fmt.Errorf("importId required")
+			}
+			ids, err := a.Imports.InstallExtensions(ctx, body.ImportID, func(s string) { r.Progress("%s", s) })
+			if len(ids) > 0 {
+				if merr := a.Imports.Map(ctx, body.ImportID, ids, func(done, total int) { r.Progress("matched %d of %d", done, total) }); merr != nil {
+					return merr
+				}
+			}
+			return err
+		}})
+	a.Queue.Register(jobs.Definition{Name: "RunImport", Description: "Add a backup's manga to the library with their read chapters",
+		Handler: func(ctx context.Context, r *jobs.Run) error {
+			var body struct {
+				ImportID int64 `json:"importId"`
+			}
+			if err := r.Body(&body); err != nil || body.ImportID == 0 {
+				return fmt.Errorf("importId required")
+			}
+			res, err := a.Imports.Run(ctx, body.ImportID, func(s string) { r.Progress("%s", s) })
+			if err == nil {
+				r.Progress("%d added, %d merged, %d failed", res.Added, res.Merged, res.Failed)
+			}
+			return err
+		}})
+
+	remap, err := a.Imports.Recover(ctx)
+	if err != nil {
+		return err
+	}
+	for _, id := range remap {
+		_, _ = a.Queue.Push(ctx, "MapImport", map[string]any{"importId": id}, "startup")
+	}
+
+	// imported read state is written to Komga/Kavita once chapters are on disk
+	var mu sync.Mutex
+	pending := map[int64]bool{}
+	a.Bus.Subscribe(func(e events.Event) {
+		if e.SeriesID == 0 {
+			return
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		if pending[e.SeriesID] {
+			return
+		}
+		pending[e.SeriesID] = true
+		id := e.SeriesID
+		time.AfterFunc(PushProgressDelay, func() {
+			mu.Lock()
+			delete(pending, id)
+			mu.Unlock()
+			ctx := context.Background()
+			n, err := a.DB.NewSelect().Model((*model.ChapterReadState)(nil)).Where("series_id = ? AND origin = ?", id, model.ReadOriginBackup).Count(ctx)
+			if err == nil && n > 0 {
+				_, _ = a.Queue.Push(ctx, "RestoreProgress", map[string]any{"seriesId": id}, "imported-read-state")
+			}
+		})
+	}, events.ChapterImported)
+	return nil
+}

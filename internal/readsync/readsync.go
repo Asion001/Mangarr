@@ -177,11 +177,11 @@ func (s *Syncer) syncAccount(ctx context.Context, acc *model.ReaderAccount, idx 
 				updated++
 				continue
 			}
-			if st.Completed == bp.Completed && st.Page == bp.Page && (readAt == nil || (st.ReadAt != nil && st.ReadAt.Equal(*readAt))) {
+			if st.Origin == "" && st.Completed == bp.Completed && st.Page == bp.Page && (readAt == nil || (st.ReadAt != nil && st.ReadAt.Equal(*readAt))) {
 				continue
 			}
-			if s.isProtected(ref.seriesID) && (st.Completed && !bp.Completed || st.Page > bp.Page) {
-				continue // don't lower progress that is being restored
+			if (s.isProtected(ref.seriesID) || st.Origin != "") && (st.Completed && !bp.Completed || st.Page > bp.Page) {
+				continue // don't lower progress that is being restored or was imported
 			}
 			if readAt == nil && bp.Completed && !st.Completed {
 				readAt = &now
@@ -189,8 +189,9 @@ func (s *Syncer) syncAccount(ctx context.Context, acc *model.ReaderAccount, idx 
 			if readAt == nil {
 				readAt = st.ReadAt
 			}
-			st.Completed, st.Page, st.ReadAt, st.SyncedAt = bp.Completed, bp.Page, readAt, now
-			if _, err := tx.NewUpdate().Model(st).Column("completed", "page", "read_at", "synced_at").WherePK().Exec(ctx); err != nil {
+			// the server knows this chapter now; it owns the state from here on
+			st.Completed, st.Page, st.ReadAt, st.SyncedAt, st.Origin = bp.Completed, bp.Page, readAt, now, ""
+			if _, err := tx.NewUpdate().Model(st).Column("completed", "page", "read_at", "synced_at", "origin").WherePK().Exec(ctx); err != nil {
 				return err
 			}
 			updated++
@@ -204,8 +205,8 @@ func (s *Syncer) syncAccount(ctx context.Context, acc *model.ReaderAccount, idx 
 			if !withFile[chID] {
 				continue // cleaned/deleted files are not reported; keep their state
 			}
-			if s.isProtected(st.SeriesID) {
-				continue
+			if s.isProtected(st.SeriesID) || st.Origin != "" {
+				continue // imported states wait until they're written to the server
 			}
 			if _, err := tx.NewDelete().Model(st).WherePK().Exec(ctx); err != nil {
 				return err

@@ -16,6 +16,7 @@ import (
 	"github.com/Asion001/mangarr/internal/envcfg"
 	"github.com/Asion001/mangarr/internal/events"
 	"github.com/Asion001/mangarr/internal/imageenc"
+	"github.com/Asion001/mangarr/internal/imports"
 	"github.com/Asion001/mangarr/internal/jobs"
 	"github.com/Asion001/mangarr/internal/logging"
 	"github.com/Asion001/mangarr/internal/model"
@@ -46,6 +47,7 @@ type App struct {
 	Processing *processing.Processor
 	Nodes      *Nodes
 	Organize   *organize.Service
+	Imports    *imports.Service
 	Queue      *jobs.Queue
 	Scheduler  *jobs.Scheduler
 	HTTP       *http.Client

@@ -94,6 +94,8 @@ func Decide(in Input, cands []Candidate) Decision {
 			d.Rejections = append(d.Rejections, Rejection{rid, "release is blocklisted", false})
 		case matchAny(blocked, c.Release.Scanlator):
 			d.Rejections = append(d.Rejections, Rejection{rid, "scanlator " + c.Release.Scanlator + " is blocked by the profile", false})
+		case blockedForSeries(in.Series.BlockedScanlators, c.Release.Scanlator):
+			d.Rejections = append(d.Rejections, Rejection{rid, "scanlator " + c.Release.Scanlator + " is blocked for this series", false})
 		default:
 			ok = append(ok, c)
 		}
@@ -172,6 +174,27 @@ func matchAny(res []*regexp.Regexp, s string) bool {
 	for _, re := range res {
 		if re.MatchString(s) {
 			return true
+		}
+	}
+	return false
+}
+
+// blockedForSeries matches literal scanlator names (case-insensitive; a
+// release by several groups is blocked when any of them is).
+func blockedForSeries(names []string, scanlator string) bool {
+	if scanlator == "" || len(names) == 0 {
+		return false
+	}
+	parts := strings.FieldsFunc(strings.ToLower(scanlator), func(r rune) bool { return r == '&' || r == ',' || r == '|' })
+	for _, n := range names {
+		n = strings.ToLower(strings.TrimSpace(n))
+		if n == strings.ToLower(strings.TrimSpace(scanlator)) {
+			return true
+		}
+		for _, p := range parts {
+			if n == strings.TrimSpace(p) {
+				return true
+			}
 		}
 	}
 	return false

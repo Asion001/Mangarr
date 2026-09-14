@@ -132,10 +132,36 @@ func Parse(data []byte) (*Backup, error) {
 			return nil, ErrLegacyJSON
 		}
 		return parseAidokuJSON(data)
-	case len(data) > 0 && data[0] == 0x0a: // field 1 (backupManga), length-delimited
+	case len(data) > 0 && data[0]&7 == 2 && data[0]>>3 > 0: // a length-delimited protobuf field
 		return parseMihon(data)
 	case len(data) == 0:
 		return nil, errors.New("the backup is empty")
 	}
 	return nil, ErrUnknownFormat
+}
+
+// ResumeFrom returns the chapter number to monitor from: just after the
+// highest read chapter. ok is false when nothing was read.
+func (e Entry) ResumeFrom() (from float64, ok bool) {
+	maxRead := -1.0
+	for _, c := range e.Chapters {
+		if c.Read && c.Number >= 0 && c.Number > maxRead {
+			maxRead = c.Number
+		}
+	}
+	if maxRead < 0 {
+		return 0, false
+	}
+	next := -1.0
+	for _, c := range e.Chapters {
+		if !c.Read && c.Number > maxRead && (next < 0 || c.Number < next) {
+			next = c.Number
+		}
+	}
+	if next < 0 {
+		// everything known is read: only chapters after the last one
+		return maxRead + 0.001, true
+	}
+	// float32 numbers in backups (10.1 -> 10.100000381) must not skip 10.1
+	return next - 0.001, true
 }

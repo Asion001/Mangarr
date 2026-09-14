@@ -227,24 +227,27 @@ const (
 )
 
 type Series struct {
-	bun.BaseModel       `bun:"table:series"`
-	ID                  int64          `bun:"id,pk,autoincrement" json:"id"`
-	Title               string         `bun:"title,notnull" json:"title"`
-	SortTitle           string         `bun:"sort_title,notnull" json:"sortTitle"`
-	Status              string         `bun:"status,notnull" json:"status"`
-	Monitored           bool           `bun:"monitored,notnull" json:"monitored"`
-	MonitorNew          string         `bun:"monitor_new,notnull" json:"monitorNew"` // "all" | "none"
-	RootFolderID        int64          `bun:"root_folder_id,notnull" json:"rootFolderId"`
-	Path                string         `bun:"path,notnull" json:"path"` // folder name under the root folder
-	ProfileID           int64          `bun:"profile_id,notnull" json:"profileId"`
-	Language            string         `bun:"language,notnull" json:"language"`
-	ReadingDirection    string         `bun:"reading_direction,notnull" json:"readingDirection"` // rtl | ltr | vertical | webtoon
-	Tags                []int64        `bun:"tags,notnull" json:"tags"`
-	Metadata            SeriesMetadata `bun:"metadata,notnull" json:"metadata"`
-	AddOptions          AddOptions     `bun:"add_options,notnull" json:"addOptions"`
-	AddedAt             time.Time      `bun:"added_at,notnull" json:"addedAt"`
-	UpdatedAt           time.Time      `bun:"updated_at,notnull" json:"updatedAt"`
-	LastMetadataRefresh *time.Time     `bun:"last_metadata_refresh" json:"lastMetadataRefresh,omitempty"`
+	bun.BaseModel    `bun:"table:series"`
+	ID               int64          `bun:"id,pk,autoincrement" json:"id"`
+	Title            string         `bun:"title,notnull" json:"title"`
+	SortTitle        string         `bun:"sort_title,notnull" json:"sortTitle"`
+	Status           string         `bun:"status,notnull" json:"status"`
+	Monitored        bool           `bun:"monitored,notnull" json:"monitored"`
+	MonitorNew       string         `bun:"monitor_new,notnull" json:"monitorNew"` // "all" | "none"
+	RootFolderID     int64          `bun:"root_folder_id,notnull" json:"rootFolderId"`
+	Path             string         `bun:"path,notnull" json:"path"` // folder name under the root folder
+	ProfileID        int64          `bun:"profile_id,notnull" json:"profileId"`
+	Language         string         `bun:"language,notnull" json:"language"`
+	ReadingDirection string         `bun:"reading_direction,notnull" json:"readingDirection"` // rtl | ltr | vertical | webtoon
+	Tags             []int64        `bun:"tags,notnull" json:"tags"`
+	Metadata         SeriesMetadata `bun:"metadata,notnull" json:"metadata"`
+	AddOptions       AddOptions     `bun:"add_options,notnull" json:"addOptions"`
+	// BlockedScanlators are scanlator names never downloaded for this series
+	// (in addition to the profile's patterns).
+	BlockedScanlators   []string   `bun:"blocked_scanlators,notnull" json:"blockedScanlators,omitempty"`
+	AddedAt             time.Time  `bun:"added_at,notnull" json:"addedAt"`
+	UpdatedAt           time.Time  `bun:"updated_at,notnull" json:"updatedAt"`
+	LastMetadataRefresh *time.Time `bun:"last_metadata_refresh" json:"lastMetadataRefresh,omitempty"`
 }
 
 // Monitor options applied after the first chapter sync of a new series.
@@ -539,4 +542,10 @@ type ChapterReadState struct {
 	Page          int        `bun:"page,notnull" json:"page"`
 	ReadAt        *time.Time `bun:"read_at" json:"readAt,omitempty"`
 	SyncedAt      time.Time  `bun:"synced_at,notnull" json:"syncedAt"`
+	// Origin is "" for states read from a library server and ReadOriginBackup
+	// for imported ones (kept until a server reports the chapter).
+	Origin string `bun:"origin,notnull" json:"origin,omitempty"`
 }
+
+// ReadOriginBackup marks read states imported from a backup.
+const ReadOriginBackup = "backup"

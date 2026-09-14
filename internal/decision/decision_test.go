@@ -100,3 +100,16 @@ func TestUpgrades(t *testing.T) {
 		t.Fatal("equal rank (even if earlier) must not trigger an upgrade")
 	}
 }
+
+func TestSeriesBlockedScanlators(t *testing.T) {
+	t0 := time.Now()
+	in := baseInput()
+	in.Series.BlockedScanlators = []string{"Bad Scans"}
+	d := Decide(in, []Candidate{cand(1, 0, "bad scans", t0), cand(2, 0, "Good & Bad Scans", t0), cand(3, 1, "Bad Scans Plus", t0)})
+	if d.Approved == nil || d.Approved.Release.ID != 3 {
+		t.Fatalf("only the other group should pass, got %+v", d)
+	}
+	if len(d.Rejections) != 2 {
+		t.Fatalf("rejections = %+v", d.Rejections)
+	}
+}

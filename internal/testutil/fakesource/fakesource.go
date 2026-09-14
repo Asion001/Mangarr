@@ -61,6 +61,15 @@ type Scenario struct {
 	// ThumbErr makes thumbnail requests fail; Thumbs counts them.
 	ThumbErr error
 	Thumbs   int
+	// Extensions makes the module an extension manager: installing one
+	// adds its catalogs to Sources.
+	Extensions []Extension
+}
+
+// Extension is an installable package offering catalogs.
+type Extension struct {
+	source.Extension
+	Sources []source.SourceInfo
 }
 
 var (
@@ -102,6 +111,9 @@ func init() {
 			if sc == nil {
 				return nil, fmt.Errorf("unknown scenario %q", name)
 			}
+			if sc.Extensions != nil {
+				return &ExtModule{Module{sc: sc}}, nil
+			}
 			return &Module{sc: sc}, nil
 		},
 	})
@@ -111,8 +123,45 @@ type Module struct{ sc *Scenario }
 
 func (m *Module) Test(ctx context.Context) error { return nil }
 
+// ExtModule is a Module with extensions.
+type ExtModule struct{ Module }
+
+func (m *ExtModule) Extensions(ctx context.Context, refresh bool) ([]source.Extension, error) {
+	m.sc.mu.Lock()
+	defer m.sc.mu.Unlock()
+	out := []source.Extension{}
+	for _, e := range m.sc.Extensions {
+		out = append(out, e.Extension)
+	}
+	return out, nil
+}
+
+func (m *ExtModule) InstallExtension(ctx context.Context, pkg string) error {
+	m.sc.mu.Lock()
+	defer m.sc.mu.Unlock()
+	for i := range m.sc.Extensions {
+		e := &m.sc.Extensions[i]
+		if e.Pkg == pkg {
+			if !e.Installed {
+				e.Installed = true
+				m.sc.Sources = append(m.sc.Sources, e.Sources...)
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("no extension %s", pkg)
+}
+
+func (m *ExtModule) UpdateExtension(ctx context.Context, pkg string) error    { return nil }
+func (m *ExtModule) UninstallExtension(ctx context.Context, pkg string) error { return nil }
+func (m *ExtModule) Stores(ctx context.Context) ([]string, error)             { return []string{}, nil }
+func (m *ExtModule) AddStore(ctx context.Context, url string) error           { return nil }
+func (m *ExtModule) RemoveStore(ctx context.Context, url string) error        { return nil }
+
 func (m *Module) Sources(ctx context.Context) ([]source.SourceInfo, error) {
-	return m.sc.Sources, nil
+	m.sc.mu.Lock()
+	defer m.sc.mu.Unlock()
+	return append([]source.SourceInfo{}, m.sc.Sources...), nil
 }
 
 func (m *Module) Search(ctx context.Context, sourceID, query string, page int) (*source.MangaPage, error) {

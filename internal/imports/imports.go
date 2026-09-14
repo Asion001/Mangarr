@@ -1,0 +1,381 @@
+// Package imports restores other apps' libraries into mangarr: an uploaded
+// backup (see internal/backupimport) is mapped entry by entry to catalog
+// manga and metadata, reviewed by the user, then added with its read state.
+package imports
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/uptrace/bun"
+
+	"github.com/Asion001/mangarr/internal/backupimport"
+	"github.com/Asion001/mangarr/internal/catalogs"
+	"github.com/Asion001/mangarr/internal/db"
+	"github.com/Asion001/mangarr/internal/events"
+	"github.com/Asion001/mangarr/internal/metadataagg"
+	"github.com/Asion001/mangarr/internal/model"
+	"github.com/Asion001/mangarr/internal/modules"
+	"github.com/Asion001/mangarr/internal/series"
+	"github.com/Asion001/mangarr/internal/settings"
+	"github.com/Asion001/mangarr/internal/sourcesearch"
+)
+
+var (
+	ErrNotFound = errors.New("import not found")
+	// ErrBusy is returned while an import is being mapped or run.
+	ErrBusy = errors.New("this import is busy; wait for it to finish")
+)
+
+type Service struct {
+	DB       *db.DB
+	Bus      *events.Bus
+	Settings *settings.Store
+	Mods     *modules.Manager
+	Catalogs *catalogs.Service
+	Search   *sourcesearch.Service
+	Metadata *metadataagg.Aggregator
+	Series   *series.Service
+	// Sync refreshes a series' sources (applying its add options).
+	Sync func(ctx context.Context, seriesID int64) error
+	// Push queues a command (RestoreProgress, RefreshSeries).
+	Push func(ctx context.Context, name string, body map[string]any) error
+	Log  *slog.Logger
+	// Dir keeps the uploaded files.
+	Dir string
+
+	busy sync.Map // import id -> struct{}
+}
+
+// lock marks an import busy (mapping or running).
+func (s *Service) lock(id int64) (func(), error) {
+	if _, loaded := s.busy.LoadOrStore(id, struct{}{}); loaded {
+		return nil, ErrBusy
+	}
+	return func() { s.busy.Delete(id) }, nil
+}
+
+// Busy reports whether an import is being mapped or run.
+func (s *Service) Busy(id int64) bool {
+	_, ok := s.busy.Load(id)
+	return ok
+}
+
+var unsafeName = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
+
+// Create parses a backup and stores it with one entry per manga.
+func (s *Service) Create(ctx context.Context, fileName string, data []byte) (*model.Import, error) {
+	b, err := backupimport.Parse(data)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().UTC()
+	opts := model.DefaultImportOptions()
+	var rf model.RootFolder
+	if err := s.DB.NewSelect().Model(&rf).Order("id").Limit(1).Scan(ctx); err == nil {
+		opts.RootFolderID = rf.ID
+	}
+	var readers []model.Reader
+	if err := s.DB.NewSelect().Model(&readers).Order("id").Scan(ctx); err != nil {
+		return nil, err
+	}
+	if len(readers) == 1 {
+		opts.ReaderID = readers[0].ID
+	}
+	imp := &model.Import{Format: b.Format, FileName: filepath.Base(fileName), Status: model.ImportMapping, Options: opts,
+		Info: model.ImportInfo{Categories: b.Categories, Sources: b.Sources, Entries: len(b.Entries)}, CreatedAt: now, UpdatedAt: now}
+	if imp.FileName == "" || imp.FileName == "." {
+		imp.FileName = "backup"
+	}
+	if !b.CreatedAt.IsZero() {
+		imp.Info.BackupDate = &b.CreatedAt
+	}
+	err = s.DB.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		if _, err := tx.NewInsert().Model(imp).Exec(ctx); err != nil {
+			return err
+		}
+		entries := make([]model.ImportEntry, 0, len(b.Entries))
+		for i, e := range b.Entries {
+			entries = append(entries, model.ImportEntry{ImportID: imp.ID, Position: i, Title: e.Title, State: model.EntryPending,
+				Selected: selectedByDefault(e, opts), Data: e, UpdatedAt: now})
+		}
+		for start := 0; start < len(entries); start += 200 {
+			chunk := entries[start:min(start+200, len(entries))]
+			if _, err := tx.NewInsert().Model(&chunk).Exec(ctx); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if s.Dir != "" {
+		if err := os.MkdirAll(s.Dir, 0o750); err == nil {
+			name := fmt.Sprintf("%d-%s", imp.ID, unsafeName.ReplaceAllString(imp.FileName, "_"))
+			if err := os.WriteFile(filepath.Join(s.Dir, name), data, 0o640); err != nil {
+				s.Log.Warn("keep uploaded backup", "err", err)
+			}
+		}
+	}
+	s.Bus.Changed("import", "created", imp.ID)
+	return imp, nil
+}
+
+func selectedByDefault(e backupimport.Entry, opts model.ImportOptions) bool {
+	if opts.OnlyFavorites && !e.Favorite {
+		return false
+	}
+	for _, c := range e.Categories {
+		if opts.Categories[c].Skip {
+			return false
+		}
+	}
+	return true
+}
+
+// Get loads an import.
+func (s *Service) Get(ctx context.Context, id int64) (*model.Import, error) {
+	var imp model.Import
+	if err := s.DB.NewSelect().Model(&imp).Where("id = ?", id).Scan(ctx); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &imp, nil
+}
+
+// List returns all imports, newest first.
+func (s *Service) List(ctx context.Context) ([]model.Import, error) {
+	out := []model.Import{}
+	err := s.DB.NewSelect().Model(&out).Order("id DESC").Scan(ctx)
+	return out, err
+}
+
+// Counts returns the number of entries per state (and "selected").
+func (s *Service) Counts(ctx context.Context, id int64) (map[string]int, error) {
+	var rows []struct {
+		State    string `bun:"state"`
+		Selected bool   `bun:"selected"`
+		N        int    `bun:"n"`
+	}
+	err := s.DB.NewSelect().Model((*model.ImportEntry)(nil)).Column("state", "selected").ColumnExpr("COUNT(*) AS n").
+		Where("import_id = ?", id).Group("state", "selected").Scan(ctx, &rows)
+	counts := map[string]int{}
+	for _, r := range rows {
+		counts[r.State] += r.N
+		counts["all"] += r.N
+		if r.Selected {
+			counts["selected"] += r.N
+			counts["selected:"+r.State] += r.N
+		}
+	}
+	return counts, err
+}
+
+// EntryFilter selects entries.
+type EntryFilter struct {
+	State    string
+	Selected *bool
+	Query    string
+	IDs      []int64
+}
+
+func (f EntryFilter) apply(q *bun.SelectQuery) *bun.SelectQuery {
+	if f.State != "" {
+		q = q.Where("state = ?", f.State)
+	}
+	if f.Selected != nil {
+		q = q.Where("selected = ?", *f.Selected)
+	}
+	if f.Query != "" {
+		q = q.Where("LOWER(title) LIKE ?", "%"+strings.ToLower(f.Query)+"%")
+	}
+	if len(f.IDs) > 0 {
+		q = q.Where("id IN (?)", bun.In(f.IDs))
+	}
+	return q
+}
+
+// Entries lists a page of entries.
+func (s *Service) Entries(ctx context.Context, id int64, f EntryFilter, page, pageSize int) ([]model.ImportEntry, int, error) {
+	out := []model.ImportEntry{}
+	q := f.apply(s.DB.NewSelect().Model(&out).Where("import_id = ?", id)).Order("position")
+	if pageSize > 0 {
+		q = q.Limit(pageSize).Offset(max(page-1, 0) * pageSize)
+	}
+	total, err := q.ScanAndCount(ctx)
+	return out, total, err
+}
+
+// EntryPatch changes entries.
+type EntryPatch struct {
+	Selected *bool `json:"selected,omitempty"`
+	// Source picks the catalog manga (one entry).
+	Source *model.ImportSource `json:"source,omitempty"`
+	// Metadata picks the metadata series (one entry); ClearMetadata removes it.
+	Metadata      *model.ImportMetadata `json:"metadata,omitempty"`
+	ClearMetadata bool                  `json:"clearMetadata,omitempty"`
+	// Accept confirms the suggested source of entries under review.
+	Accept bool `json:"accept,omitempty"`
+}
+
+// UpdateEntries applies a patch to the entries matching f.
+func (s *Service) UpdateEntries(ctx context.Context, id int64, f EntryFilter, p EntryPatch) (int, error) {
+	if s.Busy(id) {
+		return 0, ErrBusy
+	}
+	var entries []model.ImportEntry
+	if err := f.apply(s.DB.NewSelect().Model(&entries).Where("import_id = ?", id)).Scan(ctx); err != nil {
+		return 0, err
+	}
+	if (p.Source != nil || p.Metadata != nil) && len(entries) != 1 {
+		return 0, fmt.Errorf("a source or metadata can only be set for one entry at a time")
+	}
+	now := time.Now().UTC()
+	changed := 0
+	err := s.DB.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		for i := range entries {
+			e := &entries[i]
+			if e.State == model.EntryImported {
+				continue
+			}
+			if p.Selected != nil {
+				e.Selected = *p.Selected
+			}
+			if p.Source != nil {
+				src := *p.Source
+				src.How = model.MatchManual
+				e.Source, e.State, e.Message, e.Extension = &src, model.EntryReady, "", nil
+				e.Selected = true
+			}
+			if p.Accept && e.State == model.EntryReview && e.Source != nil {
+				e.State, e.Message, e.Selected = model.EntryReady, "", true
+			}
+			if p.Metadata != nil {
+				md := *p.Metadata
+				md.How = model.MatchManual
+				e.Metadata = &md
+			}
+			if p.ClearMetadata {
+				e.Metadata = nil
+			}
+			e.UpdatedAt = now
+			if _, err := tx.NewUpdate().Model(e).Column("selected", "source", "metadata", "extension", "state", "message", "updated_at").
+				WherePK().Exec(ctx); err != nil {
+				return err
+			}
+			changed++
+		}
+		return nil
+	})
+	if err == nil && changed > 0 {
+		s.Bus.Changed("import", "updated", id)
+	}
+	return changed, err
+}
+
+// SetOptions saves an import's options.
+func (s *Service) SetOptions(ctx context.Context, id int64, opts model.ImportOptions) (*model.Import, error) {
+	imp, err := s.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if imp.Status == model.ImportRunning {
+		return nil, ErrBusy
+	}
+	onlyFavChanged := opts.OnlyFavorites != imp.Options.OnlyFavorites
+	imp.Options, imp.UpdatedAt = opts, time.Now().UTC()
+	if _, err := s.DB.NewUpdate().Model(imp).Column("options", "updated_at").WherePK().Exec(ctx); err != nil {
+		return nil, err
+	}
+	if onlyFavChanged || len(opts.Categories) > 0 {
+		// reselect entries that aren't mapped to anything the user touched
+		var entries []model.ImportEntry
+		if err := s.DB.NewSelect().Model(&entries).Where("import_id = ? AND state <> ?", id, model.EntryImported).Scan(ctx); err != nil {
+			return nil, err
+		}
+		for i := range entries {
+			e := &entries[i]
+			sel := selectedByDefault(e.Data, opts) && e.State != model.EntryReview && e.State != model.EntryExtension
+			if e.Source != nil && e.Source.How == model.MatchManual {
+				sel = selectedByDefault(e.Data, opts)
+			}
+			if sel != e.Selected {
+				e.Selected = sel
+				if _, err := s.DB.NewUpdate().Model(e).Column("selected").WherePK().Exec(ctx); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+	s.Bus.Changed("import", "updated", id)
+	return imp, nil
+}
+
+// Delete removes an import (series already added stay).
+func (s *Service) Delete(ctx context.Context, id int64) error {
+	if s.Busy(id) {
+		return ErrBusy
+	}
+	imp, err := s.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	if _, err := s.DB.NewDelete().Model((*model.ImportEntry)(nil)).Where("import_id = ?", id).Exec(ctx); err != nil {
+		return err
+	}
+	if _, err := s.DB.NewDelete().Model(imp).WherePK().Exec(ctx); err != nil {
+		return err
+	}
+	if s.Dir != "" {
+		name := fmt.Sprintf("%d-%s", imp.ID, unsafeName.ReplaceAllString(imp.FileName, "_"))
+		_ = os.Remove(filepath.Join(s.Dir, name))
+	}
+	s.Bus.Changed("import", "deleted", id)
+	return nil
+}
+
+func (s *Service) setStatus(ctx context.Context, imp *model.Import, status, progress, errMsg string) {
+	imp.Status, imp.Progress, imp.Error, imp.UpdatedAt = status, progress, errMsg, time.Now().UTC()
+	if _, err := s.DB.NewUpdate().Model(imp).Column("status", "progress", "error", "updated_at", "options").WherePK().Exec(ctx); err != nil {
+		s.Log.Warn("save import status", "err", err)
+	}
+	s.Bus.Changed("import", "updated", imp.ID)
+}
+
+func (s *Service) saveEntry(ctx context.Context, e *model.ImportEntry) error {
+	e.UpdatedAt = time.Now().UTC()
+	_, err := s.DB.NewUpdate().Model(e).Column("state", "selected", "source", "metadata", "extension", "series_id", "message", "updated_at").
+		WherePK().Exec(ctx)
+	return err
+}
+
+// Recover fixes imports interrupted by a restart: mapping continues,
+// running ones wait for the user to start them again.
+func (s *Service) Recover(ctx context.Context) ([]int64, error) {
+	var list []model.Import
+	if err := s.DB.NewSelect().Model(&list).Where("status IN (?)", bun.In([]string{model.ImportMapping, model.ImportRunning})).Scan(ctx); err != nil {
+		return nil, err
+	}
+	var remap []int64
+	for i := range list {
+		imp := &list[i]
+		if imp.Status == model.ImportMapping {
+			remap = append(remap, imp.ID)
+			continue
+		}
+		s.setStatus(ctx, imp, model.ImportReview, "", "interrupted by a restart; start it again to import the rest")
+	}
+	return remap, nil
+}
