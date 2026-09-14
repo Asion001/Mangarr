@@ -1812,7 +1812,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/ImportEntry"
+              "$ref": "#/components/schemas/ImportEntryView"
             },
             "type": "array"
           },
@@ -1869,9 +1869,38 @@
         },
         "type": "object"
       },
-      "ImportEntry": {
+      "ImportEntryFilter": {
         "additionalProperties": false,
         "properties": {
+          "q": {
+            "type": "string"
+          },
+          "selected": {
+            "type": "boolean"
+          },
+          "state": {
+            "enum": [
+              "",
+              "pending",
+              "ready",
+              "review",
+              "extension",
+              "library",
+              "imported",
+              "failed"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ImportEntryView": {
+        "additionalProperties": false,
+        "properties": {
+          "chapterCount": {
+            "format": "int64",
+            "type": "integer"
+          },
           "data": {
             "$ref": "#/components/schemas/BackupManga"
           },
@@ -1893,6 +1922,10 @@
             "$ref": "#/components/schemas/ImportMetadata"
           },
           "position": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "readCount": {
             "format": "int64",
             "type": "integer"
           },
@@ -1927,6 +1960,8 @@
           }
         },
         "required": [
+          "chapterCount",
+          "readCount",
           "id",
           "importId",
           "position",
@@ -1937,31 +1972,6 @@
           "message",
           "updatedAt"
         ],
-        "type": "object"
-      },
-      "ImportEntryFilter": {
-        "additionalProperties": false,
-        "properties": {
-          "q": {
-            "type": "string"
-          },
-          "selected": {
-            "type": "boolean"
-          },
-          "state": {
-            "enum": [
-              "",
-              "pending",
-              "ready",
-              "review",
-              "extension",
-              "library",
-              "imported",
-              "failed"
-            ],
-            "type": "string"
-          }
-        },
         "type": "object"
       },
       "ImportExtension": {
@@ -5487,7 +5497,7 @@
   "info": {
     "description": "Sonarr-style PVR for manga. All endpoints accept an X-Api-Key header.",
     "title": "mangarr",
-    "version": "a5a9cf0-dirty"
+    "version": "3c7f740-dirty"
   },
   "openapi": "3.1.0",
   "paths": {

@@ -22,8 +22,15 @@ type ImportResource struct {
 	Busy bool `json:"busy"`
 }
 
+// ImportEntryView is an entry without its chapter list (see the counts).
+type ImportEntryView struct {
+	model.ImportEntry
+	ChapterCount int `json:"chapterCount"`
+	ReadCount    int `json:"readCount"`
+}
+
 type ImportEntriesPage struct {
-	Items    []model.ImportEntry `json:"items"`
+	Items    []ImportEntryView `json:"items"`
 	Total    int                 `json:"total"`
 	Page     int                 `json:"page"`
 	PageSize int                 `json:"pageSize"`
@@ -130,7 +137,13 @@ func (s *Server) registerImports() {
 			if err != nil {
 				return nil, importError(err)
 			}
-			return &struct{ Body ImportEntriesPage }{ImportEntriesPage{Items: items, Total: total, Page: max(in.Page, 1), PageSize: pageSize}}, nil
+			views := make([]ImportEntryView, 0, len(items))
+			for _, e := range items {
+				v := ImportEntryView{ImportEntry: e, ChapterCount: len(e.Data.Chapters), ReadCount: e.Data.ReadCount()}
+				v.Data.Chapters = nil // can be thousands per manga
+				views = append(views, v)
+			}
+			return &struct{ Body ImportEntriesPage }{ImportEntriesPage{Items: views, Total: total, Page: max(in.Page, 1), PageSize: pageSize}}, nil
 		})
 
 	huma.Register(s.api, huma.Operation{OperationID: "imports-entries-update", Method: http.MethodPatch, Path: "/api/v1/imports/{id}/entries", Tags: tags,

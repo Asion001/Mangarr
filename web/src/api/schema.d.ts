@@ -2255,7 +2255,7 @@ export interface components {
             skip?: boolean;
         };
         ImportEntriesPage: {
-            items: components["schemas"]["ImportEntry"][];
+            items: components["schemas"]["ImportEntryView"][];
             /** Format: int64 */
             page: number;
             /** Format: int64 */
@@ -2273,7 +2273,15 @@ export interface components {
             selected?: boolean;
             source?: components["schemas"]["ImportSource"];
         };
-        ImportEntry: {
+        ImportEntryFilter: {
+            q?: string;
+            selected?: boolean;
+            /** @enum {string} */
+            state?: "" | "pending" | "ready" | "review" | "extension" | "library" | "imported" | "failed";
+        };
+        ImportEntryView: {
+            /** Format: int64 */
+            chapterCount: number;
             data: components["schemas"]["BackupManga"];
             extension?: components["schemas"]["ImportExtension"];
             /** Format: int64 */
@@ -2284,6 +2292,8 @@ export interface components {
             metadata?: components["schemas"]["ImportMetadata"];
             /** Format: int64 */
             position: number;
+            /** Format: int64 */
+            readCount: number;
             selected: boolean;
             /** Format: int64 */
             seriesId?: number;
@@ -2293,12 +2303,6 @@ export interface components {
             title: string;
             /** Format: date-time */
             updatedAt: string;
-        };
-        ImportEntryFilter: {
-            q?: string;
-            selected?: boolean;
-            /** @enum {string} */
-            state?: "" | "pending" | "ready" | "review" | "extension" | "library" | "imported" | "failed";
         };
         ImportExtension: {
             lang: string;

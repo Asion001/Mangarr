@@ -106,6 +106,9 @@ func (s *Service) Run(ctx context.Context, id int64, progress func(string)) (Run
 			return fail(err)
 		}
 		opts.ReaderID, imp.Options.ReaderID = r.ID, r.ID
+		if _, err := s.DB.NewUpdate().Model(imp).Column("options").WherePK().Exec(ctx); err != nil {
+			return fail(err)
+		}
 		s.Bus.Changed("readers", "created", r.ID)
 	}
 	tags := map[string]int64{}

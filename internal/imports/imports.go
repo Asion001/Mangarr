@@ -381,7 +381,7 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 
 func (s *Service) setStatus(ctx context.Context, imp *model.Import, status, progress, errMsg string) {
 	imp.Status, imp.Progress, imp.Error, imp.UpdatedAt = status, progress, errMsg, time.Now().UTC()
-	if _, err := s.DB.NewUpdate().Model(imp).Column("status", "progress", "error", "updated_at", "options").WherePK().Exec(ctx); err != nil {
+	if _, err := s.DB.NewUpdate().Model(imp).Column("status", "progress", "error", "updated_at").WherePK().Exec(ctx); err != nil {
 		s.Log.Warn("save import status", "err", err)
 	}
 	s.Bus.Changed("import", "updated", imp.ID)

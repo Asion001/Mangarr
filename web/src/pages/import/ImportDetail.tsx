@@ -13,7 +13,7 @@ import { MetadataSearch } from "../series/AddSeries";
 import { SourceSearchModal } from "../series/SourceSearch";
 import { formatLabel, statusLabel, statusTone } from "./Imports";
 
-type Entry = S["ImportEntry"];
+type Entry = S["ImportEntryView"];
 type Options = S["ImportOptions"];
 type Patch = S["ImportEntriesPatch"];
 
@@ -318,7 +318,6 @@ function EntryRow({
   onPickMeta: () => void;
 }) {
   const src = e.source;
-  const read = (e.data.chapters ?? []).filter((c) => c.read).length;
   const thumb = src && e.state !== "extension" ? apiUrl(`api/v1/sources/${src.moduleId}/${src.sourceId}/thumbnail`, { url: src.url }) : e.data.thumbnailUrl;
   return (
     <tr className={`hover:bg-panel-2/60 ${e.selected ? "" : "opacity-70"}`}>
@@ -332,9 +331,9 @@ function EntryRow({
             <div className="font-medium">{e.title}</div>
             <div className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-muted">
               <span>{e.data.sourceName || e.data.sourceId}</span>
-              {(e.data.chapters?.length ?? 0) > 0 && (
+              {e.chapterCount > 0 && (
                 <span>
-                  · {read}/{e.data.chapters!.length} read
+                  · {e.readCount}/{e.chapterCount} read
                 </span>
               )}
               {!e.data.favorite && <Badge>history only</Badge>}
