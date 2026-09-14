@@ -122,9 +122,10 @@ func DefaultReadSync() ReadSync { return ReadSync{IntervalMinutes: 30} }
 
 // Store caches settings documents in memory.
 type Store struct {
-	db    *db.DB
-	mu    sync.RWMutex
-	cache map[string]json.RawMessage
+	db     *db.DB
+	mu     sync.RWMutex
+	cache  map[string]json.RawMessage
+	warmed bool
 }
 
 func NewStore(d *db.DB) *Store { return &Store{db: d, cache: map[string]json.RawMessage{}} }
@@ -137,11 +138,32 @@ const (
 	KeyReadSync        = "read_sync"
 )
 
+// Warm loads every stored document into the cache. Afterwards Get never
+// queries the database (writes go through Set), so settings can be read
+// safely while a write transaction holds a pooled SQLite connection.
+func (s *Store) Warm(ctx context.Context) error {
+	var rows []model.Setting
+	if err := s.db.NewSelect().Model(&rows).Scan(ctx); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, r := range rows {
+		s.cache[r.Key] = json.RawMessage(r.Value)
+	}
+	s.warmed = true
+	return nil
+}
+
 // Get decodes the document at key into out (which must hold defaults).
 func (s *Store) Get(ctx context.Context, key string, out any) error {
 	s.mu.RLock()
 	raw, ok := s.cache[key]
+	warmed := s.warmed
 	s.mu.RUnlock()
+	if !ok && warmed {
+		return nil // not stored: keep defaults
+	}
 	if !ok {
 		var row model.Setting
 		err := s.db.NewSelect().Model(&row).Where("key = ?", key).Scan(ctx)

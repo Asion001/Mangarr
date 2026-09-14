@@ -12,6 +12,8 @@ const map: Record<string, string[][]> = {
   health: [["health"]],
   module: [["modules"], ["sources"], ["health"]],
   extension: [["extensions"], ["sources"]],
+  // catalog set changed: cached searches/browses may include removed catalogs
+  catalogs: [["sources"], ["catalogs"], ["source-search"], ["browse"], ["source-manga"]],
   settings: [["settings"]],
   readers: [["readers"], ["series"]],
   rootfolder: [["rootfolders"]],

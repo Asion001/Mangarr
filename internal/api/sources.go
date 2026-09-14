@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -65,43 +64,12 @@ type imageOutput struct {
 	Body         []byte
 }
 
-// sourceCatalogs caches catalog lists per module for a minute.
-type catalogCache struct {
-	mu   sync.Mutex
-	at   map[int64]time.Time
-	list map[int64][]source.SourceInfo
-}
-
-var catalogs = catalogCache{at: map[int64]time.Time{}, list: map[int64][]source.SourceInfo{}}
-
 func (s *Server) listSources(ctx context.Context, fresh bool) ([]SourceResource, []string) {
-	var out []SourceResource
-	var errs []string
-	for _, m := range modules.ActiveAs[source.Module](s.app.Modules, modules.KindSource) {
-		catalogs.mu.Lock()
-		list, ok := catalogs.list[m.Def.ID]
-		if !ok || fresh || time.Since(catalogs.at[m.Def.ID]) > time.Minute {
-			catalogs.mu.Unlock()
-			l, err := m.Instance.Sources(ctx)
-			if err != nil {
-				errs = append(errs, m.Def.Name+": "+err.Error())
-				continue
-			}
-			catalogs.mu.Lock()
-			catalogs.list[m.Def.ID], catalogs.at[m.Def.ID] = l, time.Now()
-			list = l
-		}
-		catalogs.mu.Unlock()
-		for _, si := range list {
-			out = append(out, SourceResource{ModuleID: m.Def.ID, ModuleName: m.Def.Name, SourceInfo: si})
-		}
+	list, errs := s.app.Catalogs.List(ctx, fresh)
+	out := make([]SourceResource, len(list))
+	for i, c := range list {
+		out[i] = SourceResource(c)
 	}
-	sort.SliceStable(out, func(i, j int) bool {
-		if out[i].Lang != out[j].Lang {
-			return out[i].Lang < out[j].Lang
-		}
-		return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
-	})
 	return out, errs
 }
 
@@ -330,9 +298,7 @@ func (s *Server) registerSources() {
 			if err != nil {
 				return nil, huma.Error502BadGateway(err.Error())
 			}
-			catalogs.mu.Lock()
-			delete(catalogs.list, in.ID)
-			catalogs.mu.Unlock()
+			s.app.Catalogs.Invalidate(in.ID)
 			s.app.Bus.Changed("extension", "updated", in.ID)
 			return nil, nil
 		})

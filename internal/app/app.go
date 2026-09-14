@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Asion001/mangarr/internal/auth"
+	"github.com/Asion001/mangarr/internal/catalogs"
 	"github.com/Asion001/mangarr/internal/config"
 	"github.com/Asion001/mangarr/internal/db"
 	"github.com/Asion001/mangarr/internal/events"
@@ -29,6 +30,7 @@ type App struct {
 	Bus       *events.Bus
 	Auth      *auth.Service
 	Modules   *modules.Manager
+	Catalogs  *catalogs.Service
 	Queue     *jobs.Queue
 	Scheduler *jobs.Scheduler
 	HTTP      *http.Client
@@ -60,6 +62,9 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger, ring *loggin
 		HTTP:      &http.Client{Timeout: 5 * time.Minute},
 		StartedAt: time.Now().UTC(),
 	}
+	if err := a.Settings.Warm(ctx); err != nil {
+		return nil, err
+	}
 	if _, err := a.Settings.EnsureSecrets(ctx); err != nil {
 		return nil, err
 	}
@@ -68,6 +73,7 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger, ring *loggin
 	}
 	a.Auth = auth.NewService(d, a.Settings, cfg.AuthDisabled)
 	a.Modules = modules.NewManager(d, a.HTTP, log, cfg.DataDir)
+	a.Catalogs = catalogs.New(a.Modules, a.Bus)
 	a.Queue = jobs.NewQueue(d, a.Bus, log.With("component", "commands"), 3)
 	a.Scheduler = jobs.NewScheduler(d, a.Queue, log.With("component", "scheduler"))
 	if err := a.Modules.Reload(ctx); err != nil {
