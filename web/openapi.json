@@ -635,6 +635,46 @@
         ],
         "type": "object"
       },
+      "ChapterSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "description": {
+            "type": "string"
+          },
+          "detailsCached": {
+            "type": "boolean"
+          },
+          "latestName": {
+            "type": "string"
+          },
+          "latestNumber": {
+            "format": "double",
+            "type": "number"
+          },
+          "latestUpload": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "scanlators": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "count",
+          "detailsCached"
+        ],
+        "type": "object"
+      },
       "Chapters-monitorRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2101,6 +2141,43 @@
         ],
         "type": "object"
       },
+      "QuickCandidate": {
+        "additionalProperties": false,
+        "properties": {
+          "chapters": {
+            "$ref": "#/components/schemas/ChapterSummary"
+          },
+          "lang": {
+            "type": "string"
+          },
+          "manga": {
+            "$ref": "#/components/schemas/SourceManga"
+          },
+          "moduleId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "score": {
+            "format": "double",
+            "type": "number"
+          },
+          "sourceId": {
+            "type": "string"
+          },
+          "sourceName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "moduleId",
+          "sourceId",
+          "sourceName",
+          "lang",
+          "manga",
+          "score"
+        ],
+        "type": "object"
+      },
       "QuickSearch": {
         "additionalProperties": false,
         "properties": {
@@ -2134,6 +2211,124 @@
           "details",
           "topN",
           "budgetSeconds"
+        ],
+        "type": "object"
+      },
+      "QuickSearchInput": {
+        "additionalProperties": false,
+        "properties": {
+          "lang": {
+            "type": "string"
+          },
+          "query": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "active",
+              "all",
+              ""
+            ],
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "titles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "type": "object"
+      },
+      "QuickSearchResult": {
+        "additionalProperties": false,
+        "properties": {
+          "generation": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/SearchResultGroup"
+            },
+            "type": "array"
+          },
+          "match": {
+            "$ref": "#/components/schemas/QuickCandidate"
+          },
+          "remaining": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "searched": {
+            "items": {
+              "$ref": "#/components/schemas/QuickSearched"
+            },
+            "type": "array"
+          },
+          "threshold": {
+            "format": "double",
+            "type": "number"
+          },
+          "top": {
+            "items": {
+              "$ref": "#/components/schemas/QuickCandidate"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "top",
+          "searched",
+          "remaining",
+          "groups",
+          "threshold",
+          "generation"
+        ],
+        "type": "object"
+      },
+      "QuickSearched": {
+        "additionalProperties": false,
+        "properties": {
+          "bestScore": {
+            "format": "double",
+            "type": "number"
+          },
+          "cached": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "results": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sourceName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "sourceName",
+          "results",
+          "bestScore",
+          "cached"
         ],
         "type": "object"
       },
@@ -3064,6 +3259,10 @@
       "SourceManga": {
         "additionalProperties": false,
         "properties": {
+          "chapterCount": {
+            "format": "int64",
+            "type": "integer"
+          },
           "engineRef": {
             "type": "string"
           },
@@ -3098,6 +3297,10 @@
           },
           "author": {
             "type": "string"
+          },
+          "chapterCount": {
+            "format": "int64",
+            "type": "integer"
           },
           "description": {
             "type": "string"
@@ -3796,7 +3999,7 @@
   "info": {
     "description": "Sonarr-style PVR for manga. All endpoints accept an X-Api-Key header.",
     "title": "mangarr",
-    "version": "10e9363-dirty"
+    "version": "1efdc08-dirty"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -5989,6 +6192,56 @@
         ]
       }
     },
+    "/api/v1/series/lookup/{moduleId}/{id}": {
+      "get": {
+        "operationId": "series-lookup-get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "moduleId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LookupResult"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get one metadata result by module and provider id",
+        "tags": [
+          "Series"
+        ]
+      }
+    },
     "/api/v1/series/{id}": {
       "delete": {
         "operationId": "series-delete",
@@ -7176,6 +7429,47 @@
           }
         },
         "summary": "List usable catalogs of all active source modules (hidden NSFW catalogs excluded)",
+        "tags": [
+          "Sources"
+        ]
+      }
+    },
+    "/api/v1/sources/quick-search": {
+      "post": {
+        "operationId": "sources-quick-search",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuickSearchInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuickSearchResult"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Search catalogs one by one in priority order and stop at the first confident title match",
         "tags": [
           "Sources"
         ]

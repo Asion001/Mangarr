@@ -690,6 +690,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/series/lookup/{moduleId}/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one metadata result by module and provider id */
+        get: operations["series-lookup-get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/series/{id}": {
         parameters: {
             query?: never;
@@ -1010,6 +1027,23 @@ export interface paths {
         get: operations["sources-list"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sources/quick-search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Search catalogs one by one in priority order and stop at the first confident title match */
+        post: operations["sources-quick-search"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1479,6 +1513,19 @@ export interface components {
             updatedAt: string;
             volume: string;
         };
+        ChapterSummary: {
+            /** Format: int64 */
+            count: number;
+            description?: string;
+            detailsCached: boolean;
+            latestName?: string;
+            /** Format: double */
+            latestNumber?: number;
+            /** Format: date-time */
+            latestUpload?: string;
+            scanlators?: string[];
+            status?: string;
+        };
         "Chapters-monitorRequest": {
             chapterIds: number[];
             monitored: boolean;
@@ -1936,6 +1983,17 @@ export interface components {
             preferredScanlators: string[];
             upscale: components["schemas"]["UpscaleConfig"];
         };
+        QuickCandidate: {
+            chapters?: components["schemas"]["ChapterSummary"];
+            lang: string;
+            manga: components["schemas"]["SourceManga"];
+            /** Format: int64 */
+            moduleId: number;
+            /** Format: double */
+            score: number;
+            sourceId: string;
+            sourceName: string;
+        };
         QuickSearch: {
             /** Format: int64 */
             budgetSeconds: number;
@@ -1946,6 +2004,35 @@ export interface components {
             threshold: number;
             /** Format: int64 */
             topN: number;
+        };
+        QuickSearchInput: {
+            lang?: string;
+            query: string;
+            /** @enum {string} */
+            scope?: "active" | "all" | "";
+            sources?: string[];
+            titles?: string[];
+        };
+        QuickSearchResult: {
+            /** Format: int64 */
+            generation: number;
+            groups: components["schemas"]["SearchResultGroup"][];
+            match?: components["schemas"]["QuickCandidate"];
+            remaining: string[];
+            searched: components["schemas"]["QuickSearched"][];
+            /** Format: double */
+            threshold: number;
+            top: components["schemas"]["QuickCandidate"][];
+        };
+        QuickSearched: {
+            /** Format: double */
+            bestScore: number;
+            cached: boolean;
+            error?: string;
+            key: string;
+            /** Format: int64 */
+            results: number;
+            sourceName: string;
         };
         ReadStateView: {
             completed: boolean;
@@ -2232,6 +2319,8 @@ export interface components {
             url: string;
         };
         SourceManga: {
+            /** Format: int64 */
+            chapterCount?: number;
             engineRef?: string;
             sourceId: string;
             thumbnailUrl?: string;
@@ -2242,6 +2331,8 @@ export interface components {
         SourceMangaDetails: {
             artist?: string;
             author?: string;
+            /** Format: int64 */
+            chapterCount?: number;
             description?: string;
             engineRef?: string;
             genres?: string[];
@@ -4133,6 +4224,38 @@ export interface operations {
             };
         };
     };
+    "series-lookup-get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                moduleId: number;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LookupResult"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "series-get": {
         parameters: {
             query?: never;
@@ -5043,6 +5166,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Catalog"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "sources-quick-search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuickSearchInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuickSearchResult"];
                 };
             };
             /** @description Error */

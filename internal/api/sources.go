@@ -74,13 +74,9 @@ const (
 	detailsTTL = 60 * time.Minute
 )
 
-func (s *Server) cacheKey(parts ...string) string {
-	return strconv.FormatInt(s.app.Catalogs.Generation(), 10) + "|" + strings.Join(parts, "|")
-}
-
 // searchCatalog searches one catalog through the cache.
 func (s *Server) searchCatalog(ctx context.Context, moduleID int64, sourceID, query string, page int) (*source.MangaPage, bool, error) {
-	key := s.cacheKey("search", strconv.FormatInt(moduleID, 10), sourceID, strings.ToLower(strings.TrimSpace(query)), strconv.Itoa(page))
+	key := sourcecache.SearchKey(s.app.Catalogs.Generation(), moduleID, sourceID, query, page)
 	return sourcecache.Do(s.app.SourceCache, key, searchTTL, func() (*source.MangaPage, error) {
 		mod, _, err := modules.GetAs[source.Module](s.app.Modules, moduleID)
 		if err != nil {
@@ -91,12 +87,12 @@ func (s *Server) searchCatalog(ctx context.Context, moduleID int64, sourceID, qu
 }
 
 // mangaDetails fetches details and chapters through the cache.
-func (s *Server) mangaDetails(ctx context.Context, moduleID int64, ref source.MangaRef, fresh bool) (*MangaDetailsResult, bool, error) {
-	key := s.cacheKey("manga", strconv.FormatInt(moduleID, 10), ref.SourceID, ref.URL)
+func (s *Server) mangaDetails(ctx context.Context, moduleID int64, ref source.MangaRef, fresh bool) (*sourcecache.Details, bool, error) {
+	key := sourcecache.DetailsKey(s.app.Catalogs.Generation(), moduleID, ref.SourceID, ref.URL)
 	if fresh {
 		s.app.SourceCache.DeletePrefix(key)
 	}
-	return sourcecache.Do(s.app.SourceCache, key, detailsTTL, func() (*MangaDetailsResult, error) {
+	return sourcecache.Do(s.app.SourceCache, key, detailsTTL, func() (*sourcecache.Details, error) {
 		mod, _, err := modules.GetAs[source.Module](s.app.Modules, moduleID)
 		if err != nil {
 			return nil, err
@@ -108,7 +104,7 @@ func (s *Server) mangaDetails(ctx context.Context, moduleID int64, ref source.Ma
 		if chs == nil {
 			chs = []source.Chapter{}
 		}
-		return &MangaDetailsResult{Details: det, Chapters: chs}, nil
+		return &sourcecache.Details{Details: det, Chapters: chs, FetchedAt: time.Now()}, nil
 	})
 }
 
@@ -247,7 +243,7 @@ func (s *Server) registerSources() {
 			if in.Type == "search" {
 				res, _, err = s.searchCatalog(ctx, in.ModuleID, in.SourceID, in.Query, in.Page)
 			} else {
-				key := s.cacheKey(in.Type, strconv.FormatInt(in.ModuleID, 10), in.SourceID, strconv.Itoa(in.Page))
+				key := sourcecache.BrowseKey(s.app.Catalogs.Generation(), in.ModuleID, in.SourceID, in.Type, in.Page)
 				res, _, err = sourcecache.Do(s.app.SourceCache, key, browseTTL, func() (*source.MangaPage, error) {
 					l, _, err := modules.GetAs[source.Latest](s.app.Modules, in.ModuleID)
 					if err != nil {
@@ -281,9 +277,7 @@ func (s *Server) registerSources() {
 			if err != nil {
 				return nil, sourceError(err)
 			}
-			out := *res
-			out.Cached = cached
-			return &struct{ Body *MangaDetailsResult }{&out}, nil
+			return &struct{ Body *MangaDetailsResult }{&MangaDetailsResult{Details: res.Details, Chapters: res.Chapters, Cached: cached}}, nil
 		})
 
 	huma.Register(s.api, huma.Operation{OperationID: "sources-thumbnail", Method: http.MethodGet, Path: "/api/v1/sources/{moduleId}/{sourceId}/thumbnail", Tags: tags,

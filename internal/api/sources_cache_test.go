@@ -245,3 +245,47 @@ func TestThrottledCatalogCoolsDown(t *testing.T) {
 		t.Fatalf("still failing after clearing the cooldown: %v", got["A"].Error)
 	}
 }
+
+func TestQuickSearchStopsAtFirstConfidentMatch(t *testing.T) {
+	e := newCacheEnv(t, "quick")
+	e.sc.Update(func() {
+		e.sc.Mangas["J|/tower"].Chapters = []fakesource.Chapter{{URL: "/c1", Name: "Ch. 1", Number: 1}, {URL: "/c2", Name: "Ch. 2", Number: 2}}
+		e.sc.Mangas["A|/tower"].Title = "Tower of God (Official)"
+	})
+	// J is searched first
+	doJSON(t, http.MethodPut, e.url+"/api/v1/catalogs", fmt.Sprintf(`{%q:{"priority":10},%q:{"priority":20},%q:{"priority":30}}`, e.key("J"), e.key("A"), e.key("N")), nil)
+	before := e.searches()
+	var res api.QuickSearchResult
+	if code := doJSON(t, http.MethodPost, e.url+"/api/v1/sources/quick-search", `{"query":"tower","titles":["Tower of God","Sinui Tap"]}`, &res); code != 200 {
+		t.Fatalf("quick search: %d", code)
+	}
+	if res.Match == nil || res.Match.SourceID != "J" || res.Match.Score < 0.99 {
+		t.Fatalf("match: %+v", res.Match)
+	}
+	if res.Match.Chapters == nil || res.Match.Chapters.Count != 2 || res.Match.Chapters.LatestNumber != 2 {
+		t.Fatalf("chapter summary: %+v", res.Match.Chapters)
+	}
+	if n := e.searches() - before; n != 1 || len(res.Remaining) != 2 || len(res.Searched) != 1 {
+		t.Fatalf("should stop after one catalog: searches=%d searched=%+v remaining=%v", n, res.Searched, res.Remaining)
+	}
+	// no confident match: every catalog is searched (results cached for the grid)
+	res = api.QuickSearchResult{}
+	doJSON(t, http.MethodPost, e.url+"/api/v1/sources/quick-search", `{"query":"tower","titles":["Tower of Babel"]}`, &res)
+	if res.Match != nil || len(res.Searched) != 3 || len(res.Remaining) != 0 || len(res.Top) == 0 {
+		t.Fatalf("no-match search: %+v", res)
+	}
+	if !res.Searched[0].Cached {
+		t.Fatal("catalogs searched earlier should come from the cache")
+	}
+	// a confident match without chapters (licensed/removed) doesn't stop the search
+	e.sc.Update(func() {
+		e.sc.Mangas["J|/tower"].Chapters = nil
+		e.sc.Mangas["A|/tower"].Chapters = []fakesource.Chapter{{URL: "/a1", Name: "Ch. 1", Number: 1}}
+	})
+	doJSON(t, http.MethodPost, e.url+"/api/v1/system/cache/clear", `{"catalogs":true}`, nil)
+	res = api.QuickSearchResult{}
+	doJSON(t, http.MethodPost, e.url+"/api/v1/sources/quick-search", `{"query":"tower","titles":["Tower of God"]}`, &res)
+	if res.Match == nil || res.Match.SourceID != "A" || res.Match.Chapters.Count != 1 {
+		t.Fatalf("want the match with chapters at A, got %+v", res.Match)
+	}
+}

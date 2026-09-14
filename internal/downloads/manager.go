@@ -301,7 +301,7 @@ func (m *Manager) run(ctx context.Context, job model.DownloadJob) {
 	if !m.claim(ctx, &job) {
 		return
 	}
-	log := m.log.With("job", job.ID, "chapter", job.ChapterID)
+	log := m.log.With("job", job.ID, "chapterId", job.ChapterID)
 	jc, err := m.load(ctx, &job)
 	if err != nil {
 		log.Error("load job", "err", err)

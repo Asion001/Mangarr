@@ -8,11 +8,14 @@ package sourcecache
 import (
 	"container/list"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
 
 	"golang.org/x/sync/singleflight"
+
+	"github.com/Asion001/mangarr/internal/modules/source"
 )
 
 type entry struct {
@@ -136,4 +139,25 @@ func sizeOf(v any) int64 {
 		return 1 << 10
 	}
 	return int64(len(b)) + 256
+}
+
+// Keys shared by the API and background jobs. gen is the catalogs generation.
+
+func SearchKey(gen, moduleID int64, sourceID, query string, page int) string {
+	return fmt.Sprintf("%d|search|%d|%s|%s|%d", gen, moduleID, sourceID, strings.ToLower(strings.TrimSpace(query)), page)
+}
+
+func BrowseKey(gen, moduleID int64, sourceID, kind string, page int) string {
+	return fmt.Sprintf("%d|%s|%d|%s|%d", gen, kind, moduleID, sourceID, page)
+}
+
+func DetailsKey(gen, moduleID int64, sourceID, url string) string {
+	return fmt.Sprintf("%d|manga|%d|%s|%s", gen, moduleID, sourceID, url)
+}
+
+// Details is a cached manga details response.
+type Details struct {
+	Details   *source.MangaDetails `json:"details"`
+	Chapters  []source.Chapter     `json:"chapters"`
+	FetchedAt time.Time            `json:"fetchedAt"`
 }

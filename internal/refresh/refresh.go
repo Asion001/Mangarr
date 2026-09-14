@@ -30,6 +30,7 @@ import (
 	"github.com/Asion001/mangarr/internal/modules/metadata"
 	"github.com/Asion001/mangarr/internal/modules/source"
 	"github.com/Asion001/mangarr/internal/settings"
+	"github.com/Asion001/mangarr/internal/sourcecache"
 	"github.com/Asion001/mangarr/internal/sourcegov"
 )
 
@@ -47,6 +48,10 @@ type Refresher struct {
 
 	// Gov (optional) paces checks per catalog and reports cooldowns.
 	Gov *sourcegov.Governor
+	// Cache/Gen (optional) let the first check of a new series reuse the
+	// details fetched while adding it.
+	Cache *sourcecache.Cache
+	Gen   func() int64
 }
 
 func New(d *db.DB, bus *events.Bus, mods *modules.Manager, st *settings.Store, searcher *downloads.Searcher, lib *library.Library, log *slog.Logger) *Refresher {
@@ -193,6 +198,23 @@ func ChapterTitle(name string) string {
 	return strings.TrimSpace(name[loc[1]:])
 }
 
+// recentDetails returns details fetched in the last 10 minutes (while the
+// user was adding the series) for the first check of a new series.
+func (r *Refresher) recentDetails(s *model.Series, ss *model.SeriesSource) *sourcecache.Details {
+	if r.Cache == nil || r.Gen == nil || !s.AddOptions.Pending || ss.LastCheckedAt != nil {
+		return nil
+	}
+	v, ok := r.Cache.Get(sourcecache.DetailsKey(r.Gen(), ss.ModuleID, ss.SourceID, ss.MangaURL))
+	if !ok {
+		return nil
+	}
+	d := v.(*sourcecache.Details)
+	if d.Details == nil || time.Since(d.FetchedAt) > 10*time.Minute {
+		return nil
+	}
+	return d
+}
+
 // syncSource fetches one source and upserts chapters/releases.
 func (r *Refresher) syncSource(ctx context.Context, s *model.Series, ss *model.SeriesSource) (*source.MangaDetails, int, int, error) {
 	unlock := r.lockSource(ss.SourceID)
@@ -236,9 +258,15 @@ func (r *Refresher) syncSource(ctx context.Context, s *model.Series, ss *model.S
 		title = s.Title
 	}
 	ref := source.MangaRef{SourceID: ss.SourceID, URL: ss.MangaURL, EngineRef: ss.EngineRef, TitleHint: title}
-	sctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-	det, chs, err := mod.Manga(sctx, ref, true)
-	cancel()
+	var det *source.MangaDetails
+	var chs []source.Chapter
+	if cached := r.recentDetails(s, ss); cached != nil {
+		det, chs = cached.Details, cached.Chapters
+	} else {
+		sctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+		det, chs, err = mod.Manga(sctx, ref, true)
+		cancel()
+	}
 	if err != nil {
 		if cd, ok := sourcegov.CoolingDown(err); ok {
 			return postpone(cd.Until, err)

@@ -9,7 +9,7 @@ import { useToast } from "./lib/toast";
 import { LoginPage } from "./pages/auth/Login";
 import { SeriesIndex } from "./pages/series/SeriesIndex";
 import { SeriesDetail } from "./pages/series/SeriesDetail";
-import { AddSeries } from "./pages/series/AddSeries";
+import { AddOptionsStep, AddSearchStep, AddSourcesStep } from "./pages/series/AddSeries";
 import { QueuePage } from "./pages/activity/Queue";
 import { HistoryPage } from "./pages/activity/History";
 import { BlocklistPage } from "./pages/activity/Blocklist";
@@ -62,7 +62,9 @@ export function App() {
       <Route element={<Layout />}>
         <Route index element={<SeriesIndex />} />
         <Route path="series/:id" element={<SeriesDetail />} />
-        <Route path="add" element={<AddSeries />} />
+        <Route path="add" element={<AddSearchStep />} />
+        <Route path="add/:moduleId/:metaId/sources" element={<AddSourcesStep />} />
+        <Route path="add/:moduleId/:metaId/options" element={<AddOptionsStep />} />
         <Route path="activity" element={<Navigate to="/activity/queue" replace />} />
         <Route path="activity/queue" element={<QueuePage />} />
         <Route path="activity/history" element={<HistoryPage />} />

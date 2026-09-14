@@ -17,6 +17,7 @@ import (
 	"github.com/Asion001/mangarr/internal/metadataagg"
 	"github.com/Asion001/mangarr/internal/model"
 	"github.com/Asion001/mangarr/internal/modules"
+	"github.com/Asion001/mangarr/internal/modules/metadata"
 	"github.com/Asion001/mangarr/internal/modules/source"
 	"github.com/Asion001/mangarr/internal/series"
 )
@@ -218,6 +219,22 @@ type LookupResult struct {
 	ExistingSeriesID int64 `json:"existingSeriesId,omitempty"`
 }
 
+// existingByExternalID returns a matcher from external ids to series in the library.
+func (s *Server) existingByExternalID(ctx context.Context) func(ids map[string]string) int64 {
+	var existing []model.Series
+	_ = s.app.DB.NewSelect().Model(&existing).Column("id", "metadata").Scan(ctx)
+	return func(ids map[string]string) int64 {
+		for _, e := range existing {
+			for k, v := range ids {
+				if k != "mal" && v != "" && e.Metadata.ExternalIDs[k] == v {
+					return e.ID
+				}
+			}
+		}
+		return 0
+	}
+}
+
 func (s *Server) registerSeries() {
 	tags := []string{"Series"}
 	huma.Register(s.api, huma.Operation{OperationID: "series-list", Method: http.MethodGet, Path: "/api/v1/series", Tags: tags},
@@ -268,25 +285,32 @@ func (s *Server) registerSeries() {
 				}
 			}{}
 			out.Body.Results, out.Body.Errors = []LookupResult{}, []string{}
-			var existing []model.Series
-			_ = s.app.DB.NewSelect().Model(&existing).Column("id", "metadata").Scan(ctx)
+			existing := s.existingByExternalID(ctx)
 			for _, c := range cands {
-				lr := LookupResult{Candidate: c}
-			outer:
-				for _, e := range existing {
-					for k, v := range c.ExternalIDs {
-						if k != "mal" && v != "" && e.Metadata.ExternalIDs[k] == v {
-							lr.ExistingSeriesID = e.ID
-							break outer
-						}
-					}
-				}
-				out.Body.Results = append(out.Body.Results, lr)
+				out.Body.Results = append(out.Body.Results, LookupResult{Candidate: c, ExistingSeriesID: existing(c.ExternalIDs)})
 			}
 			for _, e := range errs {
 				out.Body.Errors = append(out.Body.Errors, e.Error())
 			}
 			return out, nil
+		})
+
+	huma.Register(s.api, huma.Operation{OperationID: "series-lookup-get", Method: http.MethodGet, Path: "/api/v1/series/lookup/{moduleId}/{id}", Tags: tags,
+		Summary: "Get one metadata result by module and provider id"},
+		func(ctx context.Context, in *struct {
+			ModuleID int64  `path:"moduleId"`
+			ID       string `path:"id"`
+		}) (*struct{ Body LookupResult }, error) {
+			mod, def, err := modules.GetAs[metadata.Module](s.app.Modules, in.ModuleID)
+			if err != nil {
+				return nil, huma.Error404NotFound(err.Error())
+			}
+			md, err := mod.Get(ctx, in.ID)
+			if err != nil {
+				return nil, huma.Error404NotFound(err.Error())
+			}
+			c := metadataagg.Candidate{SeriesMetadata: *md, ModuleID: def.ID, ModuleName: def.Name}
+			return &struct{ Body LookupResult }{LookupResult{Candidate: c, ExistingSeriesID: s.existingByExternalID(ctx)(md.ExternalIDs)}}, nil
 		})
 
 	huma.Register(s.api, huma.Operation{OperationID: "series-add", Method: http.MethodPost, Path: "/api/v1/series", Tags: tags},

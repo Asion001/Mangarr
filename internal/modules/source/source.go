@@ -39,6 +39,9 @@ type Manga struct {
 	MangaRef
 	Title        string `json:"title"`
 	ThumbnailURL string `json:"thumbnailUrl,omitempty"`
+	// ChapterCount is set when the engine already knows the chapter list
+	// (nil = unknown; getting it needs a details request).
+	ChapterCount *int `json:"chapterCount,omitempty"`
 }
 
 type MangaPage struct {

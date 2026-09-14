@@ -134,6 +134,7 @@ export function SourcesPanel({ series }: { series: Series }) {
       {adding && (
         <SourceSearchModal
           initialQuery={series.title}
+          titles={[series.title, ...(series.metadata?.altTitles ?? [])]}
           title="Link a source"
           onClose={() => setAdding(false)}
           onPick={async (m, g) => {

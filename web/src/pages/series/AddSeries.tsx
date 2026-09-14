@@ -1,18 +1,32 @@
-import { useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router";
+import { useEffect, useState } from "react";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, BookPlus, Search, X } from "lucide-react";
 import { api, unwrap, type AddRequest, type LookupResult } from "../../api/client";
 import { useProfiles, useRootFolders } from "../../api/queries";
 import { Cover } from "../../components/Cover";
 import { Badge, Button, Card, ErrorBox, Field, IconButton, Input, Loading, PageHeader, Select, Switch } from "../../components/ui";
+import { sessionState, useQueryParam } from "../../lib/urlState";
 import { useToast } from "../../lib/toast";
-import { SourceResults, SourceSearchBar, type Picked } from "./SourceSearch";
+import { SourceSearch, pickKey, type Picked, type Scope } from "./SourceSearch";
 
 /** MetadataSearch looks up series across metadata modules. */
-export function MetadataSearch({ initialQuery = "", onPick }: { initialQuery?: string; onPick: (c: LookupResult) => void }) {
-  const [draft, setDraft] = useState(initialQuery);
-  const [query, setQuery] = useState(initialQuery);
+export function MetadataSearch({
+  initialQuery = "",
+  query: controlled,
+  setQuery: setControlled,
+  onPick,
+}: {
+  initialQuery?: string;
+  query?: string;
+  setQuery?: (q: string) => void;
+  onPick: (c: LookupResult) => void;
+}) {
+  const [local, setLocal] = useState(initialQuery);
+  const query = controlled ?? local;
+  const setQuery = setControlled ?? setLocal;
+  const [draft, setDraft] = useState(query);
+  useEffect(() => setDraft(query), [query]);
   const { data, isFetching, error } = useQuery({
     queryKey: ["lookup", query],
     queryFn: () => unwrap(api.GET("/api/v1/series/lookup", { params: { query: { q: query } } })),
@@ -77,42 +91,224 @@ export function MetadataSearch({ initialQuery = "", onPick }: { initialQuery?: s
   );
 }
 
-export function AddSeries() {
+const steps = ["Metadata", "Sources", "Options"] as const;
+
+function StepHeader({ step, title, base, search }: { step: 0 | 1 | 2; title?: string; base?: string; search?: string }) {
+  const links = ["/add", base ? `${base}/sources${search ?? ""}` : undefined, base ? `${base}/options${search ?? ""}` : undefined];
+  return (
+    <PageHeader
+      title={title ? `Add ${title}` : "Add series"}
+      subtitle={
+        <span className="flex flex-wrap gap-2">
+          {steps.map((s, i) => (
+            <span key={s} className={i === step ? "font-medium text-fg" : ""}>
+              {i < step && links[i] ? <Link to={links[i]!}>{`${i + 1}. ${s}`}</Link> : `${i + 1}. ${s}`}
+              {i < steps.length - 1 && <span className="ml-2 text-muted">›</span>}
+            </span>
+          ))}
+        </span>
+      }
+    />
+  );
+}
+
+/** Step 1 (/add?q=): pick metadata or continue with a title only. */
+export function AddSearchStep() {
   const nav = useNavigate();
   const qc = useQueryClient();
+  const [q, setQ] = useQueryParam("q");
+  const [title, setTitle] = useState(q);
+  const pick = (r: LookupResult) => {
+    qc.setQueryData(["lookup-item", r.moduleId, r.id], r);
+    nav(`/add/${r.moduleId}/${encodeURIComponent(r.id)}/sources`);
+  };
+  return (
+    <>
+      <StepHeader step={0} />
+      <Card>
+        <MetadataSearch query={q} setQuery={(v) => setQ(v, { replace: false })} onPick={pick} />
+        <div className="mt-4 border-t border-border pt-4">
+          <p className="mb-2 text-sm text-muted">Not on any metadata site? Add it using only the source's information.</p>
+          <form
+            className="flex gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (title.trim()) nav(`/add/manual/-/sources?title=${encodeURIComponent(title.trim())}`);
+            }}
+          >
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Series title" />
+            <Button type="submit">Continue without metadata</Button>
+          </form>
+        </div>
+      </Card>
+    </>
+  );
+}
+
+/** useAddContext resolves the series being added from the route. */
+function useAddContext() {
+  const { moduleId = "", metaId = "" } = useParams();
+  const [params] = useSearchParams();
+  const manual = moduleId === "manual";
+  const meta = useQuery({
+    queryKey: ["lookup-item", Number(moduleId), metaId],
+    queryFn: () => unwrap(api.GET("/api/v1/series/lookup/{moduleId}/{id}", { params: { path: { moduleId: Number(moduleId), id: metaId } } })),
+    enabled: !manual && !!metaId,
+    staleTime: 30 * 60_000,
+  });
+  const title = manual ? (params.get("title") ?? "") : (meta.data?.title ?? "");
+  const base = `/add/${moduleId}/${encodeURIComponent(metaId)}`;
+  const search = manual ? `?title=${encodeURIComponent(title)}` : "";
+  const storageKey = `mangarr.add:${moduleId}:${manual ? title : metaId}`;
+  const titles = [title, ...(meta.data?.altTitles ?? [])].filter(Boolean);
+  return { manual, meta: meta.data ?? null, metaLoading: meta.isLoading, metaError: meta.error, title, titles, base, search, storageKey };
+}
+
+function usePicked(storageKey: string): [Picked[], (fn: (cur: Picked[]) => Picked[]) => void] {
+  const [picked, setPicked] = useState<Picked[]>(() => sessionState.get<Picked[]>(storageKey + ":picked", []));
+  useEffect(() => setPicked(sessionState.get<Picked[]>(storageKey + ":picked", [])), [storageKey]);
+  const update = (fn: (cur: Picked[]) => Picked[]) =>
+    setPicked((cur) => {
+      const next = fn(cur);
+      sessionState.set(storageKey + ":picked", next);
+      return next;
+    });
+  return [picked, update];
+}
+
+/** Step 2 (/add/:moduleId/:metaId/sources): find the series at sources. */
+export function AddSourcesStep() {
+  const nav = useNavigate();
+  const loc = useLocation();
+  const ctx = useAddContext();
+  const [picked, setPicked] = usePicked(ctx.storageKey);
+  const [sq, setSq] = useQueryParam("sq", ctx.title);
+  const [scope, setScope] = useQueryParam("scope", "active");
+  const [lang, setLang] = useQueryParam("lang");
+  const [src, setSrc] = useQueryParam("src");
+  const [more, setMore] = useQueryParam("more");
+  const keys = src ? src.split(",") : [];
+  const options = `${ctx.base}/options${ctx.search}`;
+
+  if (ctx.metaLoading) return <Loading />;
+  if (ctx.metaError) return <ErrorBox error={ctx.metaError} />;
+  if (!ctx.title) return <ErrorBox error="Missing series title" />;
+  const toggle = (p: Picked) => setPicked((cur) => (cur.some((x) => pickKey(x) === pickKey(p)) ? cur.filter((x) => pickKey(x) !== pickKey(p)) : [...cur, p]));
+  return (
+    <>
+      <StepHeader step={1} title={ctx.title} base={ctx.base} search={ctx.search} />
+      <Card
+        title={
+          <span>
+            Sources for <span className="text-accent-2">{ctx.title}</span>
+          </span>
+        }
+        actions={
+          <>
+            <Button size="sm" onClick={() => nav(`/add?q=${encodeURIComponent(ctx.title)}`)}>
+              Back
+            </Button>
+            <Button size="sm" variant="primary" disabled={picked.length === 0} onClick={() => nav(options, { state: { from: loc.pathname + loc.search } })}>
+              Next ({picked.length})
+            </Button>
+          </>
+        }
+      >
+        <p className="mb-3 text-sm text-muted">Pick one or more sources. The first one has the highest priority; others are fallbacks.</p>
+        {picked.length > 0 && (
+          <div className="mb-4 flex flex-col gap-1.5">
+            {picked.map((p, i) => (
+              <div key={pickKey(p)} className="flex items-center gap-2 rounded-md bg-panel-2 px-3 py-1.5 text-sm">
+                <span className="w-5 text-muted">{i + 1}.</span>
+                <Badge>{p.group.sourceName}</Badge>
+                <span className="flex-1 truncate">{p.manga.title}</span>
+                {p.manga.chapterCount != null && <span className="text-xs text-muted">{p.manga.chapterCount} ch</span>}
+                <IconButton title="Up" disabled={i === 0} onClick={() => setPicked((c) => swap(c, i, i - 1))}>
+                  <ArrowUp className="size-3.5" />
+                </IconButton>
+                <IconButton title="Down" disabled={i === picked.length - 1} onClick={() => setPicked((c) => swap(c, i, i + 1))}>
+                  <ArrowDown className="size-3.5" />
+                </IconButton>
+                <IconButton title="Remove" onClick={() => toggle(p)}>
+                  <X className="size-3.5" />
+                </IconButton>
+              </div>
+            ))}
+          </div>
+        )}
+        <SourceSearch
+          query={sq}
+          setQuery={(v) => setSq(v, { replace: false })}
+          titles={ctx.titles}
+          scope={scope as Scope}
+          setScope={(s) => setScope(s)}
+          lang={lang}
+          setLang={setLang}
+          keys={keys}
+          setKeys={(k) => setSrc(k.join(","))}
+          more={more === "1"}
+          setMore={(v) => setMore(v ? "1" : "", { replace: false })}
+          selected={picked}
+          onPick={(m, g, use) => {
+            const p = { manga: m, group: g };
+            if (use) {
+              // "Use this": keep it first and continue to the options
+              setPicked((cur) => [p, ...cur.filter((x) => pickKey(x) !== pickKey(p))]);
+              nav(options, { state: { from: loc.pathname + loc.search } });
+            } else {
+              toggle(p);
+            }
+          }}
+        />
+      </Card>
+    </>
+  );
+}
+
+type Options = {
+  rootId: number;
+  profileId: number;
+  monitor: string;
+  latestCount: number;
+  fromChapter: number;
+  monitorNew: string;
+  searchMissing: boolean;
+  direction: string;
+};
+
+/** Step 3 (/add/:moduleId/:metaId/options): monitoring options, then add. */
+export function AddOptionsStep() {
+  const nav = useNavigate();
+  const loc = useLocation();
+  const qc = useQueryClient();
   const toast = useToast();
+  const ctx = useAddContext();
+  const [picked] = usePicked(ctx.storageKey);
   const { data: roots } = useRootFolders();
   const { data: profiles } = useProfiles();
-  const [params] = useSearchParams();
-  const prefill = params.get("q") ?? "";
-  const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [meta, setMeta] = useState<LookupResult | null>(null);
-  const [title, setTitle] = useState(prefill);
-  const [query, setQuery] = useState("");
-  const [lang, setLang] = useState("en");
-  const [picked, setPicked] = useState<Picked[]>([]);
-  const [rootId, setRootId] = useState<number>(0);
-  const [profileId, setProfileId] = useState<number>(0);
-  const [monitor, setMonitor] = useState("all");
-  const [latestCount, setLatestCount] = useState(5);
-  const [fromChapter, setFromChapter] = useState(1);
-  const [monitorNew, setMonitorNew] = useState("all");
-  const [searchMissing, setSearchMissing] = useState(true);
-  const [direction, setDirection] = useState("");
+  const defaults: Options = {
+    rootId: 0,
+    profileId: 0,
+    monitor: "all",
+    latestCount: 5,
+    fromChapter: 1,
+    monitorNew: "all",
+    searchMissing: true,
+    direction: ctx.meta?.format === "manhwa" || ctx.meta?.format === "manhua" ? "webtoon" : "",
+  };
+  const [o, setO] = useState<Options>(() => ({ ...defaults, ...sessionState.get<Partial<Options>>(ctx.storageKey + ":options", {}) }));
+  const patch = (p: Partial<Options>) =>
+    setO((cur) => {
+      const next = { ...cur, ...p };
+      sessionState.set(ctx.storageKey + ":options", next);
+      return next;
+    });
   const [adding, setAdding] = useState(false);
+  const back = (loc.state as { from?: string } | null)?.from ?? `${ctx.base}/sources${ctx.search}`;
 
-  const pickMeta = (c: LookupResult | null, t: string) => {
-    setMeta(c);
-    setTitle(t);
-    setQuery(t);
-    if (c?.format === "manhwa" || c?.format === "manhua") setDirection("webtoon");
-    setStep(2);
-  };
-
-  const togglePick = (p: Picked) => {
-    const key = (x: Picked) => `${x.group.moduleId}:${x.group.sourceId}:${x.manga.url}`;
-    setPicked((cur) => (cur.some((x) => key(x) === key(p)) ? cur.filter((x) => key(x) !== key(p)) : [...cur, p]));
-  };
+  if (ctx.metaLoading) return <Loading />;
+  const rootId = o.rootId || roots?.[0]?.id || 0;
+  const profileId = o.profileId || profiles?.find((p) => p.isDefault)?.id || profiles?.[0]?.id || 0;
 
   const add = async () => {
     setAdding(true);
@@ -120,8 +316,8 @@ export function AddSeries() {
       const s = await unwrap(
         api.POST("/api/v1/series", {
           body: {
-            metadata: meta ? { moduleId: meta.moduleId, provider: meta.provider, id: meta.id } : undefined,
-            title: meta ? undefined : title,
+            metadata: ctx.meta ? { moduleId: ctx.meta.moduleId, provider: ctx.meta.provider, id: ctx.meta.id } : undefined,
+            title: ctx.meta ? undefined : ctx.title,
             sources: picked.map((p) => ({
               moduleId: p.group.moduleId,
               sourceId: p.group.sourceId,
@@ -131,17 +327,19 @@ export function AddSeries() {
               sourceName: p.group.sourceName,
               lang: p.group.lang,
             })),
-            rootFolderId: rootId || roots?.[0]?.id || 0,
+            rootFolderId: rootId,
             profileId: profileId || undefined,
-            monitor: monitor as AddRequest["monitor"],
-            latestCount: monitor === "latest" ? latestCount : undefined,
-            fromChapter: monitor === "from" ? fromChapter : undefined,
-            monitorNew: monitorNew as AddRequest["monitorNew"],
-            searchMissing,
-            readingDirection: (direction || undefined) as AddRequest["readingDirection"],
+            monitor: o.monitor as AddRequest["monitor"],
+            latestCount: o.monitor === "latest" ? o.latestCount : undefined,
+            fromChapter: o.monitor === "from" ? o.fromChapter : undefined,
+            monitorNew: o.monitorNew as AddRequest["monitorNew"],
+            searchMissing: o.searchMissing,
+            readingDirection: (o.direction || undefined) as AddRequest["readingDirection"],
           },
         }),
       );
+      sessionState.remove(ctx.storageKey + ":picked");
+      sessionState.remove(ctx.storageKey + ":options");
       qc.invalidateQueries({ queryKey: ["series"] });
       toast.success(`${s.title} added`, "Fetching chapters…");
       nav(`/series/${s.id}`);
@@ -154,150 +352,94 @@ export function AddSeries() {
 
   return (
     <>
-      <PageHeader title="Add series" subtitle={`Step ${step} of 3 · ${["Metadata", "Sources", "Options"][step - 1]}`} />
-      {step === 1 && (
-        <Card>
-          <MetadataSearch initialQuery={prefill} onPick={(c) => pickMeta(c, c.title)} />
-          <div className="mt-4 border-t border-border pt-4">
-            <p className="mb-2 text-sm text-muted">Not on any metadata site? Add it using only the source's information.</p>
-            <form
-              className="flex gap-2"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (title.trim()) pickMeta(null, title.trim());
-              }}
-            >
-              <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Series title" />
-              <Button type="submit">Continue without metadata</Button>
-            </form>
+      <StepHeader step={2} title={ctx.title} base={ctx.base} search={ctx.search} />
+      <Card
+        title="Options"
+        actions={
+          <>
+            <Button size="sm" onClick={() => nav(back)}>
+              Back
+            </Button>
+            <Button size="sm" variant="primary" loading={adding} disabled={!picked.length} icon={<BookPlus className="size-4" />} onClick={add}>
+              Add {ctx.title}
+            </Button>
+          </>
+        }
+      >
+        {!picked.length && <ErrorBox error="Pick at least one source first." />}
+        {picked.length > 0 && (
+          <p className="mb-4 text-sm text-muted">
+            Sources:{" "}
+            {picked.map((p, i) => (
+              <span key={pickKey(p)}>
+                {i > 0 && " → "}
+                <b className="text-fg">{p.group.sourceName}</b>
+              </span>
+            ))}
+          </p>
+        )}
+        {!roots?.length ? (
+          <ErrorBox error="Add a root folder in Settings → Media management first." />
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="Root folder">
+              <Select value={rootId} onChange={(e) => patch({ rootId: Number(e.target.value) })}>
+                {roots.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.path} {r.language ? `(${r.language})` : ""}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Profile">
+              <Select value={profileId} onChange={(e) => patch({ profileId: Number(e.target.value) })}>
+                {profiles?.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                    {p.isDefault ? " (default)" : ""}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Monitor" help="Which existing chapters to download. Future chapters follow the setting below.">
+              <Select value={o.monitor} onChange={(e) => patch({ monitor: e.target.value })}>
+                <option value="all">All chapters</option>
+                <option value="latest">Latest N chapters</option>
+                <option value="from">From chapter…</option>
+                <option value="future">Only future chapters</option>
+                <option value="none">None</option>
+              </Select>
+            </Field>
+            {o.monitor === "latest" && (
+              <Field label="Number of latest chapters">
+                <Input type="number" min={1} value={o.latestCount} onChange={(e) => patch({ latestCount: Number(e.target.value) })} />
+              </Field>
+            )}
+            {o.monitor === "from" && (
+              <Field label="First chapter">
+                <Input type="number" step="0.1" value={o.fromChapter} onChange={(e) => patch({ fromChapter: Number(e.target.value) })} />
+              </Field>
+            )}
+            <Field label="New chapters">
+              <Select value={o.monitorNew} onChange={(e) => patch({ monitorNew: e.target.value })}>
+                <option value="all">Monitor and download</option>
+                <option value="none">Don't monitor</option>
+              </Select>
+            </Field>
+            <Field label="Reading direction">
+              <Select value={o.direction} onChange={(e) => patch({ direction: e.target.value })}>
+                <option value="">Automatic</option>
+                <option value="rtl">Right to left (manga)</option>
+                <option value="ltr">Left to right</option>
+                <option value="webtoon">Webtoon (long strip)</option>
+              </Select>
+            </Field>
+            <div className="md:col-span-2">
+              <Switch checked={o.searchMissing} onChange={(v) => patch({ searchMissing: v })} label="Start downloading monitored chapters right away" />
+            </div>
           </div>
-        </Card>
-      )}
-
-      {step === 2 && (
-        <Card
-          title={
-            <span>
-              Sources for <span className="text-accent-2">{title}</span>
-            </span>
-          }
-          actions={
-            <>
-              <Button size="sm" onClick={() => setStep(1)}>
-                Back
-              </Button>
-              <Button size="sm" variant="primary" disabled={picked.length === 0} onClick={() => setStep(3)}>
-                Next ({picked.length})
-              </Button>
-            </>
-          }
-        >
-          <p className="mb-3 text-sm text-muted">Pick one or more sources. The first one has the highest priority; others are fallbacks.</p>
-          {picked.length > 0 && (
-            <div className="mb-4 flex flex-col gap-1.5">
-              {picked.map((p, i) => (
-                <div key={i} className="flex items-center gap-2 rounded-md bg-panel-2 px-3 py-1.5 text-sm">
-                  <span className="w-5 text-muted">{i + 1}.</span>
-                  <Badge>{p.group.sourceName}</Badge>
-                  <span className="flex-1 truncate">{p.manga.title}</span>
-                  <IconButton title="Up" disabled={i === 0} onClick={() => setPicked((c) => swap(c, i, i - 1))}>
-                    <ArrowUp className="size-3.5" />
-                  </IconButton>
-                  <IconButton title="Down" disabled={i === picked.length - 1} onClick={() => setPicked((c) => swap(c, i, i + 1))}>
-                    <ArrowDown className="size-3.5" />
-                  </IconButton>
-                  <IconButton title="Remove" onClick={() => togglePick(p)}>
-                    <X className="size-3.5" />
-                  </IconButton>
-                </div>
-              ))}
-            </div>
-          )}
-          <SourceSearchBar query={query} setQuery={setQuery} lang={lang} setLang={setLang} />
-          <SourceResults query={query} lang={lang} selected={picked} onPick={(m, g) => togglePick({ manga: m, group: g })} />
-        </Card>
-      )}
-
-      {step === 3 && (
-        <Card
-          title="Options"
-          actions={
-            <>
-              <Button size="sm" onClick={() => setStep(2)}>
-                Back
-              </Button>
-              <Button size="sm" variant="primary" loading={adding} icon={<BookPlus className="size-4" />} onClick={add}>
-                Add {title}
-              </Button>
-            </>
-          }
-        >
-          {!roots?.length ? (
-            <ErrorBox error="Add a root folder in Settings → Media management first." />
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Root folder">
-                <Select value={rootId || roots[0].id} onChange={(e) => setRootId(Number(e.target.value))}>
-                  {roots.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.path} {r.language ? `(${r.language})` : ""}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Profile">
-                <Select
-                  value={profileId || profiles?.find((p) => p.isDefault)?.id || profiles?.[0]?.id || 0}
-                  onChange={(e) => setProfileId(Number(e.target.value))}
-                >
-                  {profiles?.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                      {p.isDefault ? " (default)" : ""}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Monitor" help="Which existing chapters to download. Future chapters follow the setting below.">
-                <Select value={monitor} onChange={(e) => setMonitor(e.target.value)}>
-                  <option value="all">All chapters</option>
-                  <option value="latest">Latest N chapters</option>
-                  <option value="from">From chapter…</option>
-                  <option value="future">Only future chapters</option>
-                  <option value="none">None</option>
-                </Select>
-              </Field>
-              {monitor === "latest" && (
-                <Field label="Number of latest chapters">
-                  <Input type="number" min={1} value={latestCount} onChange={(e) => setLatestCount(Number(e.target.value))} />
-                </Field>
-              )}
-              {monitor === "from" && (
-                <Field label="First chapter">
-                  <Input type="number" step="0.1" value={fromChapter} onChange={(e) => setFromChapter(Number(e.target.value))} />
-                </Field>
-              )}
-              <Field label="New chapters">
-                <Select value={monitorNew} onChange={(e) => setMonitorNew(e.target.value)}>
-                  <option value="all">Monitor and download</option>
-                  <option value="none">Don't monitor</option>
-                </Select>
-              </Field>
-              <Field label="Reading direction">
-                <Select value={direction} onChange={(e) => setDirection(e.target.value)}>
-                  <option value="">Automatic</option>
-                  <option value="rtl">Right to left (manga)</option>
-                  <option value="ltr">Left to right</option>
-                  <option value="webtoon">Webtoon (long strip)</option>
-                </Select>
-              </Field>
-              <div className="md:col-span-2">
-                <Switch checked={searchMissing} onChange={setSearchMissing} label="Start downloading monitored chapters right away" />
-              </div>
-            </div>
-          )}
-        </Card>
-      )}
+        )}
+      </Card>
     </>
   );
 }

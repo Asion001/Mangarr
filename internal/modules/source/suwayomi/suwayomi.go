@@ -237,14 +237,24 @@ type gqlManga struct {
 	Genre        []string `json:"genre"`
 	Status       string   `json:"status"`
 	RealURL      string   `json:"realUrl"`
+	// chapters are only known once Suwayomi fetched them (chaptersLastFetchedAt > 0)
+	ChaptersLastFetchedAt string `json:"chaptersLastFetchedAt"`
+	Chapters              *struct {
+		TotalCount int `json:"totalCount"`
+	} `json:"chapters"`
 }
 
 func (g gqlManga) toManga() source.Manga {
-	return source.Manga{
+	m := source.Manga{
 		MangaRef:     source.MangaRef{SourceID: g.SourceID, URL: g.URL, EngineRef: strconv.Itoa(g.ID)},
 		Title:        g.Title,
 		ThumbnailURL: g.ThumbnailURL,
 	}
+	if g.Chapters != nil && g.ChaptersLastFetchedAt != "" && g.ChaptersLastFetchedAt != "0" {
+		n := g.Chapters.TotalCount
+		m.ChapterCount = &n
+	}
+	return m
 }
 
 func (m *Module) browse(ctx context.Context, sourceID, typ, query string, page int) (*source.MangaPage, error) {

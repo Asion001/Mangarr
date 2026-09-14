@@ -9,7 +9,7 @@ const opSources = `query Sources {
   sources { nodes { id name lang displayName supportsLatest contentWarning iconUrl extension { pkgName } } }
 }`
 
-const mangaFields = `id sourceId url title thumbnailUrl`
+const mangaFields = `id sourceId url title thumbnailUrl chaptersLastFetchedAt chapters { totalCount }`
 
 const opFetchSourceManga = `mutation FetchSourceManga($source: LongString!, $type: FetchSourceMangaType!, $page: Int!, $query: String) {
   fetchSourceManga(input: {source: $source, type: $type, page: $page, query: $query}) {

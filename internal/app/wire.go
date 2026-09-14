@@ -34,6 +34,7 @@ func (a *App) wire(ctx context.Context) error {
 	a.Searcher = downloads.NewSearcher(a.DB, a.DLQueue, log.With("component", "search"))
 	a.Refresher = refresh.New(a.DB, a.Bus, a.Modules, a.Settings, a.Searcher, a.Library, log.With("component", "refresh"))
 	a.Refresher.Gov = a.Catalogs.Gov
+	a.Refresher.Cache, a.Refresher.Gen = a.SourceCache, a.Catalogs.Generation
 	a.Downloads = downloads.NewManager(a.DB, a.Bus, a.Modules, a.Settings, a.Library, a.DLQueue, a.Searcher, log.With("component", "downloads"), a.Cfg.DataDir)
 	a.Downloads.Gov = a.Catalogs.Gov
 	a.AddService(a.Downloads)
