@@ -91,3 +91,67 @@ func TestUpscaling(t *testing.T) {
 }
 
 func bytesReader(b []byte) io.Reader { return bytes.NewReader(b) }
+
+// TestReprocessWithNothingToDo checks that reprocess jobs that have no work
+// (upscaling disabled, or every page already wide enough) complete without
+// rewriting the chapter file.
+func TestReprocessWithNothingToDo(t *testing.T) {
+	dsn := dbtest.DSNs(t)["sqlite"]
+	worker := upscaler.NewServer(upscaler.Config{Token: "tok", TmpDir: t.TempDir(), Version: "test"}, fakeupscaler.Runner{},
+		slog.New(slog.NewTextHandler(io.Discard, nil)))
+	ws := httptest.NewServer(worker.Handler())
+	defer ws.Close()
+
+	sc := fakesource.NewScenario("reprocess-noop")
+	sc.PageWidth = 64
+	sc.Sources = []source.SourceInfo{{ID: "A", Name: "Source A", Lang: "en"}}
+	sc.AddManga(&fakesource.Manga{SourceID: "A", URL: "/m", Title: "Wide Enough", Status: source.StatusOngoing,
+		Chapters: []fakesource.Chapter{{URL: "/c1", Name: "Chapter 1", Number: 1, Uploaded: time.Now()}}})
+
+	e := newTestApp(t, dsn)
+	mod := e.addFakeModule(t, "reprocess-noop")
+	up := &model.ProviderDefinition{Kind: "upscale", Implementation: "ncnn-worker", Name: "GPU", Enabled: true,
+		Settings: map[string]any{"url": ws.URL, "token": "tok"}}
+	if err := e.App.Modules.Create(e.Ctx, up); err != nil {
+		t.Fatal(err)
+	}
+	ser, err := e.App.Series.Add(e.Ctx, series.AddRequest{Title: "Wide Enough", RootFolderID: e.RFID, Monitor: model.MonitorAll, SearchMissing: true,
+		Sources: []series.SourceLink{{ModuleID: mod, SourceID: "A", URL: "/m", SourceName: "Source A", Lang: "en"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.runCommand(t, "RefreshSeries", map[string]any{"seriesId": ser.ID})
+	waitFor(t, 20*time.Second, "download", func() bool { return len(e.chapterFiles(t, ser.ID)) == 1 })
+	before := e.chapterFiles(t, ser.ID)["1"]
+
+	reprocessDone := func(n int) func() bool {
+		return func() bool {
+			c, _ := e.App.DB.NewSelect().Model((*model.DownloadJob)(nil)).
+				Where("kind = ? AND status = ?", model.JobKindReprocess, model.JobCompleted).Count(e.Ctx)
+			return c >= n
+		}
+	}
+	// 1. upscaling disabled on the profile
+	e.runCommand(t, "UpscaleExisting", map[string]any{"seriesId": ser.ID, "force": true})
+	waitFor(t, 20*time.Second, "skipped reprocess", reprocessDone(1))
+
+	// 2. enabled, but pages are already wider than MinWidth
+	var prof model.Profile
+	_ = e.App.DB.NewSelect().Model(&prof).Where("id = ?", ser.ProfileID).Scan(e.Ctx)
+	prof.Config.Upscale = model.UpscaleConfig{Enabled: true, MinWidth: 32, Model: "waifu2x-cunet", Noise: 1, Format: "png", Quality: 90}
+	if _, err := e.App.DB.NewUpdate().Model(&prof).WherePK().Exec(e.Ctx); err != nil {
+		t.Fatal(err)
+	}
+	e.runCommand(t, "UpscaleExisting", map[string]any{"seriesId": ser.ID, "force": true})
+	waitFor(t, 20*time.Second, "no-op reprocess", reprocessDone(2))
+
+	after := e.chapterFiles(t, ser.ID)["1"]
+	if after.ID != before.ID || after.SHA256 != before.SHA256 || after.Upscaled {
+		t.Fatalf("file was rewritten: before %+v after %+v", before, after)
+	}
+	var failed int
+	failed, _ = e.App.DB.NewSelect().Model((*model.DownloadJob)(nil)).Where("status = ?", model.JobFailed).Count(e.Ctx)
+	if failed != 0 {
+		t.Fatalf("%d failed jobs", failed)
+	}
+}

@@ -166,6 +166,9 @@ func (m *Manager) dispatch(ctx context.Context) {
 				delete(m.running, job.ID)
 				m.runningSrc[src]--
 				m.mu.Unlock()
+				m.progressMu.Lock()
+				delete(m.lastPersist, job.ID)
+				m.progressMu.Unlock()
 				m.queue.signal()
 			}()
 			m.run(jctx, job)
@@ -331,15 +334,23 @@ func (m *Manager) run(ctx context.Context, job model.DownloadJob) {
 		case perr != nil && ctx.Err() != nil:
 			m.fail(ctx, &job, jc, ctx.Err())
 			return
+		case perr != nil && job.Kind == model.JobKindReprocess:
+			// the file on disk is fine; retry once the upscaler is back
+			m.fail(ctx, &job, jc, infraError{fmt.Errorf("upscaling: %w", perr)})
+			return
 		case perr != nil:
 			log.Warn("upscaling failed, importing original pages", "err", perr)
 			m.bus.Publish(events.Event{Type: events.HealthIssue, SeriesID: jc.series.ID, Payload: events.MessagePayload{
 				Title: "Upscaling failed", Message: fmt.Sprintf("%s ch. %s was imported without upscaling: %v", jc.series.Title, jc.chapter.NumberKey, perr)}})
 		case applied:
 			pages, upscaled, upscaleModel = out, true, mdl
+		case job.Kind == model.JobKindReprocess:
+			// every page is already wide enough: keep the file as it is
+			m.completeUnchanged(ctx, &job, "no page needed upscaling")
+			return
 		}
 	} else if job.Kind == model.JobKindReprocess {
-		m.fail(ctx, &job, jc, permanent(errors.New("upscaling is not enabled for this series' profile")))
+		m.completeUnchanged(ctx, &job, "upscaling is disabled for this series' profile")
 		return
 	}
 
@@ -349,6 +360,15 @@ func (m *Manager) run(ctx context.Context, job model.DownloadJob) {
 		return
 	}
 	log.Info("chapter imported", "series", jc.series.Title, "chapter", jc.chapter.NumberKey, "pages", len(pages), "upscaled", upscaled)
+}
+
+// completeUnchanged finishes a reprocess job that had nothing to do, leaving
+// the chapter file untouched.
+func (m *Manager) completeUnchanged(ctx context.Context, job *model.DownloadJob, reason string) {
+	job.Status, job.Progress, job.Error, job.UpdatedAt = model.JobCompleted, 100, "", time.Now().UTC()
+	_, _ = m.db.NewUpdate().Model(job).Column("status", "progress", "error", "updated_at").WherePK().Exec(ctx)
+	m.log.Info("reprocess skipped", "job", job.ID, "chapter", job.ChapterID, "reason", reason)
+	m.bus.Changed("queue", "updated", job.ID)
 }
 
 // fetchPages downloads and validates every page into workDir.
