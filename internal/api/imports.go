@@ -31,9 +31,9 @@ type ImportEntryView struct {
 
 type ImportEntriesPage struct {
 	Items    []ImportEntryView `json:"items"`
-	Total    int                 `json:"total"`
-	Page     int                 `json:"page"`
-	PageSize int                 `json:"pageSize"`
+	Total    int               `json:"total"`
+	Page     int               `json:"page"`
+	PageSize int               `json:"pageSize"`
 }
 
 // ImportEntryFilter selects entries for bulk changes.
