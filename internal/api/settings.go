@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/uptrace/bun"
 
 	"github.com/Asion001/mangarr/internal/fsutil"
 	"github.com/Asion001/mangarr/internal/model"
@@ -202,7 +203,13 @@ func (s *Server) registerSettings() {
 			if err := validateProfile(&p); err != nil {
 				return nil, huma.Error400BadRequest(err.Error())
 			}
-			if _, err := s.app.DB.NewInsert().Model(&p).Exec(ctx); err != nil {
+			err := s.app.DB.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+				if _, err := tx.NewInsert().Model(&p).Exec(ctx); err != nil {
+					return err
+				}
+				return clearOtherDefaults(ctx, tx, &p)
+			})
+			if err != nil {
 				return nil, huma.Error409Conflict(err.Error())
 			}
 			s.app.Bus.Changed("profile", "created", p.ID)
@@ -222,10 +229,16 @@ func (s *Server) registerSettings() {
 			if err := validateProfile(&p); err != nil {
 				return nil, huma.Error400BadRequest(err.Error())
 			}
-			if p.IsDefault {
-				_, _ = s.app.DB.NewUpdate().Model((*model.Profile)(nil)).Set("is_default = ?", false).Where("id <> ?", p.ID).Exec(ctx)
+			if stored.IsDefault && !p.IsDefault {
+				return nil, huma.Error400BadRequest("mark another profile as default instead")
 			}
-			if _, err := s.app.DB.NewUpdate().Model(&p).WherePK().Exec(ctx); err != nil {
+			err := s.app.DB.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+				if _, err := tx.NewUpdate().Model(&p).WherePK().Exec(ctx); err != nil {
+					return err
+				}
+				return clearOtherDefaults(ctx, tx, &p)
+			})
+			if err != nil {
 				return nil, toHTTPError(err)
 			}
 			s.app.Bus.Changed("profile", "updated", p.ID)
@@ -245,6 +258,15 @@ func (s *Server) registerSettings() {
 			s.app.Bus.Changed("profile", "deleted", in.ID)
 			return nil, toHTTPError(err)
 		})
+}
+
+// clearOtherDefaults keeps exactly one default profile.
+func clearOtherDefaults(ctx context.Context, tx bun.Tx, p *model.Profile) error {
+	if !p.IsDefault {
+		return nil
+	}
+	_, err := tx.NewUpdate().Model((*model.Profile)(nil)).Set("is_default = ?", false).Where("id <> ?", p.ID).Exec(ctx)
+	return err
 }
 
 func validateProfile(p *model.Profile) error {

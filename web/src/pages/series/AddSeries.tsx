@@ -246,11 +246,14 @@ export function AddSeries() {
                 </Select>
               </Field>
               <Field label="Profile">
-                <Select value={profileId} onChange={(e) => setProfileId(Number(e.target.value))}>
-                  <option value={0}>Default</option>
+                <Select
+                  value={profileId || profiles?.find((p) => p.isDefault)?.id || profiles?.[0]?.id || 0}
+                  onChange={(e) => setProfileId(Number(e.target.value))}
+                >
                   {profiles?.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name}
+                      {p.isDefault ? " (default)" : ""}
                     </option>
                   ))}
                 </Select>
