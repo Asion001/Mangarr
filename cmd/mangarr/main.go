@@ -17,6 +17,7 @@ import (
 	"github.com/Asion001/mangarr/internal/api"
 	"github.com/Asion001/mangarr/internal/app"
 	"github.com/Asion001/mangarr/internal/config"
+	"github.com/Asion001/mangarr/internal/envcfg"
 	"github.com/Asion001/mangarr/internal/logging"
 	_ "github.com/Asion001/mangarr/internal/modules/all"
 	"github.com/Asion001/mangarr/internal/version"
@@ -36,6 +37,13 @@ func main() {
 			return
 		case "healthcheck":
 			os.Exit(healthcheck())
+		case "env":
+			if len(os.Args) > 2 && os.Args[2] == "--markdown" {
+				envcfg.WriteMarkdown(os.Stdout)
+			} else {
+				envcfg.WriteText(os.Stdout, config.Environ())
+			}
+			return
 		}
 	}
 	if err := run(); err != nil {

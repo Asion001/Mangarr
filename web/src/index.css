@@ -21,3 +21,9 @@ body { font-family: var(--font-sans); }
 ::selection { background: color-mix(in oklab, var(--color-accent) 40%, transparent); }
 * { scrollbar-color: var(--color-border) transparent; }
 input, select, textarea { color-scheme: dark; }
+
+/* controls pinned by environment variables */
+fieldset:disabled :is(input, select, textarea, button) {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

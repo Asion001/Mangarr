@@ -34,6 +34,7 @@ type Manager struct {
 	loaded map[int64]*Loaded
 	// onChange is called after definitions change (e.g. to refresh health).
 	onChange []func()
+	envLocks map[string]*EnvLock
 }
 
 func NewManager(d *db.DB, httpClient *http.Client, log *slog.Logger, dataDir string) *Manager {
@@ -205,7 +206,7 @@ func (m *Manager) Create(ctx context.Context, def *model.ProviderDefinition) err
 		return err
 	}
 	now := time.Now().UTC()
-	def.ID = 0
+	def.ID, def.ManagedBy = 0, ""
 	def.CreatedAt, def.UpdatedAt = now, now
 	if _, err := m.db.NewInsert().Model(def).Exec(ctx); err != nil {
 		return err
@@ -221,9 +222,12 @@ func (m *Manager) Update(ctx context.Context, def *model.ProviderDefinition) err
 		}
 		return err
 	}
-	def.Kind, def.Implementation = stored.Kind, stored.Implementation
+	def.Kind, def.Implementation, def.ManagedBy = stored.Kind, stored.Implementation, stored.ManagedBy
 	if impl, ok := Lookup(Kind(def.Kind), def.Implementation); ok {
 		def.Settings = MergeSecrets(impl, def.Settings, stored.Settings)
+	}
+	if l := m.EnvLockFor(stored); l != nil {
+		l.Apply(def)
 	}
 	if err := Validate(def); err != nil {
 		return err
@@ -237,6 +241,9 @@ func (m *Manager) Update(ctx context.Context, def *model.ProviderDefinition) err
 }
 
 func (m *Manager) Delete(ctx context.Context, id int64) error {
+	if l, ok := m.Get(id); ok && l.Def.ManagedBy != "" {
+		return ErrManaged
+	}
 	res, err := m.db.NewDelete().Model((*model.ProviderDefinition)(nil)).Where("id = ?", id).Exec(ctx)
 	if err != nil {
 		return err

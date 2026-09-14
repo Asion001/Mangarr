@@ -37,13 +37,18 @@ func settingsDoc[T any](s *Server, name, key string, get func(context.Context) (
 			if err := s.app.Settings.Set(ctx, key, in.Body); err != nil {
 				return nil, toHTTPError(err)
 			}
+			// respond with the effective document (env-pinned fields win)
+			v, err := get(ctx)
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
 			if after != nil {
-				if err := after(ctx, in.Body); err != nil {
+				if err := after(ctx, v); err != nil {
 					return nil, toHTTPError(err)
 				}
 			}
 			s.app.Bus.Changed("settings", "updated", 0)
-			return &struct{ Body T }{in.Body}, nil
+			return &struct{ Body T }{v}, nil
 		})
 }
 
@@ -81,11 +86,30 @@ func (s *Server) registerSettings() {
 			if err != nil {
 				return nil, toHTTPError(err)
 			}
+			for _, l := range s.app.Settings.Locks(settings.KeyGeneral) {
+				if l.Path == "apiKey" {
+					return nil, huma.Error409Conflict("the API key is set by " + l.Env)
+				}
+			}
 			g.APIKey = settings.RandomHex(16)
 			if err := s.app.Settings.Set(ctx, settings.KeyGeneral, g); err != nil {
 				return nil, toHTTPError(err)
 			}
 			return &struct{ Body GeneralSettingsResource }{GeneralSettingsResource{g.APIKey, g.InstanceName, g.PublicURL, g.BackupRetention}}, nil
+		})
+
+	huma.Register(s.api, huma.Operation{OperationID: "settings-locks", Method: http.MethodGet, Path: "/api/v1/settings/locks", Tags: tags,
+		Summary: "Settings fields pinned by environment variables, per document"},
+		func(ctx context.Context, _ *struct{}) (*struct{ Body map[string][]settings.Lock }, error) {
+			out := map[string][]settings.Lock{}
+			for _, d := range settings.Docs {
+				l := s.app.Settings.Locks(d.Key)
+				if l == nil {
+					l = []settings.Lock{}
+				}
+				out[d.Name] = l
+			}
+			return &struct{ Body map[string][]settings.Lock }{out}, nil
 		})
 
 	settingsDoc(s, "media", settings.KeyMediaManagement, s.app.Settings.MediaManagement, nil)
@@ -144,6 +168,10 @@ func (s *Server) registerSettings() {
 		})
 	huma.Register(s.api, huma.Operation{OperationID: "rootfolders-delete", Method: http.MethodDelete, Path: "/api/v1/rootfolders/{id}", Tags: rtags},
 		func(ctx context.Context, in *IDPath) (*struct{}, error) {
+			var rf model.RootFolder
+			if err := s.app.DB.NewSelect().Model(&rf).Where("id = ?", in.ID).Scan(ctx); err == nil && rf.ManagedBy != "" {
+				return nil, huma.Error409Conflict("this root folder is set by MANGARR_ROOT_FOLDERS")
+			}
 			n, _ := s.app.DB.NewSelect().Model((*model.Series)(nil)).Where("root_folder_id = ?", in.ID).Count(ctx)
 			if n > 0 {
 				return nil, huma.Error409Conflict("root folder still has series")

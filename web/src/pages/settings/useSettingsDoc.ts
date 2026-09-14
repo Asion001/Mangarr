@@ -40,5 +40,23 @@ export function useSettingsDoc<T extends object>(name: Doc) {
     }
   };
   const patch = (p: Partial<T>) => setValue((v) => (v ? { ...v, ...p } : v));
-  return { value, setValue, patch, save, saving, isLoading, error };
+  const locks = useSettingsLocks();
+  /** lock returns the environment variable pinning a field (JSON path), if any. */
+  const lock = (path: string) => locks.data?.[name]?.find((l) => l.path === path)?.env;
+  return { value, setValue, patch, save, saving, isLoading, error, lock };
+}
+
+type Lock = { path: string; env: string };
+
+/** useSettingsLocks lists settings fields pinned by environment variables. */
+export function useSettingsLocks() {
+  return useQuery({
+    queryKey: ["settings", "locks"],
+    queryFn: async () => {
+      const r = await fetch(`${basePath}/api/v1/settings/locks`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return (await r.json()) as Record<string, Lock[]>;
+    },
+    staleTime: 5 * 60_000,
+  });
 }

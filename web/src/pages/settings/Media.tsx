@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FolderPlus, Trash2 } from "lucide-react";
 import { api, unwrap, type S } from "../../api/client";
 import { useRootFolders } from "../../api/queries";
-import { Badge, Button, Card, ErrorBox, Field, IconButton, Input, Loading, PageHeader, Switch, Table, Td, Th } from "../../components/ui";
+import { Badge, Button, Card, EnvLock, ErrorBox, Field, IconButton, Input, Loading, PageHeader, Switch, Table, Td, Th } from "../../components/ui";
 import { bytes } from "../../lib/format";
 import { useToast } from "../../lib/toast";
 import { useSettingsDoc } from "./useSettingsDoc";
@@ -11,7 +11,7 @@ import { useSettingsDoc } from "./useSettingsDoc";
 type Media = S["MediaManagement"];
 
 export function MediaPage() {
-  const { value: m, patch, save, saving, isLoading, error } = useSettingsDoc<Media>("media");
+  const { value: m, patch, save, saving, isLoading, error, lock } = useSettingsDoc<Media>("media");
   const { data: preview } = useQuery({
     queryKey: ["naming-preview", m?.chapterFormat, m?.seriesFolderFormat],
     queryFn: () => unwrap(api.GET("/api/v1/settings/media/preview", { params: { query: { chapterFormat: m!.chapterFormat, folderFormat: m!.seriesFolderFormat } } })),
@@ -34,10 +34,10 @@ export function MediaPage() {
         <>
           <Card title="File naming" className="mb-6">
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Chapter file format" help="Tokens: {Series Title} {Series CleanTitle} {Series Year} {Chapter:0000} {Volume:00} {Chapter Title} {Scanlator} {Source} {Language}. [ ] = optional group.">
+              <Field env={lock("chapterFormat")} label="Chapter file format" help="Tokens: {Series Title} {Series CleanTitle} {Series Year} {Chapter:0000} {Volume:00} {Chapter Title} {Scanlator} {Source} {Language}. [ ] = optional group.">
                 <Input value={m.chapterFormat} onChange={(e) => patch({ chapterFormat: e.target.value })} />
               </Field>
-              <Field label="Series folder format">
+              <Field env={lock("seriesFolderFormat")} label="Series folder format">
                 <Input value={m.seriesFolderFormat} onChange={(e) => patch({ seriesFolderFormat: e.target.value })} />
               </Field>
             </div>
@@ -55,26 +55,26 @@ export function MediaPage() {
           </Card>
           <Card title="Library files" className="mb-6">
             <div className="grid gap-4 md:grid-cols-2">
-              <Switch checked={m.writeSeriesJson} onChange={(v) => patch({ writeSeriesJson: v })} label="Write series.json (Komga series metadata)" />
-              <Switch checked={m.writeCover} onChange={(v) => patch({ writeCover: v })} label="Write cover.jpg" />
-              <Switch checked={m.writeVolume} onChange={(v) => patch({ writeVolume: v })} label="Write volume numbers into ComicInfo.xml" />
-              <Field label="Minimum free space (MB)" help="Downloads pause when a root folder has less.">
+              <Switch env={lock("writeSeriesJson")} checked={m.writeSeriesJson} onChange={(v) => patch({ writeSeriesJson: v })} label="Write series.json (Komga series metadata)" />
+              <Switch env={lock("writeCover")} checked={m.writeCover} onChange={(v) => patch({ writeCover: v })} label="Write cover.jpg" />
+              <Switch env={lock("writeVolume")} checked={m.writeVolume} onChange={(v) => patch({ writeVolume: v })} label="Write volume numbers into ComicInfo.xml" />
+              <Field env={lock("minFreeSpaceMb")} label="Minimum free space (MB)" help="Downloads pause when a root folder has less.">
                 <Input type="number" value={m.minFreeSpaceMb} onChange={(e) => patch({ minFreeSpaceMb: Number(e.target.value) })} />
               </Field>
-              <Field label="File permissions" help="Octal, e.g. 0664">
+              <Field env={lock("fileMode")} label="File permissions" help="Octal, e.g. 0664">
                 <Input value={m.fileMode} onChange={(e) => patch({ fileMode: e.target.value })} />
               </Field>
-              <Field label="Folder permissions">
+              <Field env={lock("dirMode")} label="Folder permissions">
                 <Input value={m.dirMode} onChange={(e) => patch({ dirMode: e.target.value })} />
               </Field>
             </div>
           </Card>
           <Card title="Recycle bin">
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Recycle bin folder" help="Replaced and cleaned files go here. Empty = inside the data folder.">
+              <Field env={lock("recycleBinPath")} label="Recycle bin folder" help="Replaced and cleaned files go here. Empty = inside the data folder.">
                 <Input value={m.recycleBinPath} onChange={(e) => patch({ recycleBinPath: e.target.value })} />
               </Field>
-              <Field label="Keep recycled files (days)" help="0 = forever">
+              <Field env={lock("recycleBinDays")} label="Keep recycled files (days)" help="0 = forever">
                 <Input type="number" value={m.recycleBinDays} onChange={(e) => patch({ recycleBinDays: Number(e.target.value) })} />
               </Field>
             </div>
@@ -125,12 +125,14 @@ function RootFolders() {
           <tbody>
             {data.map((r) => (
               <tr key={r.id}>
-                <Td className="font-mono text-xs">{r.path}</Td>
+                <Td className="font-mono text-xs">
+                  {r.path} {r.managedBy && <EnvLock env="MANGARR_ROOT_FOLDERS" />}
+                </Td>
                 <Td>{r.language || "—"}</Td>
                 <Td>{r.seriesCount}</Td>
                 <Td>{r.accessible ? bytes(r.freeSpace) : <Badge tone="err">{r.error}</Badge>}</Td>
                 <Td className="text-right">
-                  <IconButton title="Remove" onClick={() => remove(r.id)} disabled={r.seriesCount > 0}>
+                  <IconButton title={r.managedBy ? "Set by MANGARR_ROOT_FOLDERS" : "Remove"} onClick={() => remove(r.id)} disabled={r.seriesCount > 0 || !!r.managedBy}>
                     <Trash2 className="size-4" />
                   </IconButton>
                 </Td>

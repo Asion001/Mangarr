@@ -1295,6 +1295,22 @@
         ],
         "type": "object"
       },
+      "Lock": {
+        "additionalProperties": false,
+        "properties": {
+          "env": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "env"
+        ],
+        "type": "object"
+      },
       "LookupResult": {
         "additionalProperties": false,
         "properties": {
@@ -1479,6 +1495,28 @@
         ],
         "type": "object"
       },
+      "ModuleEnvLock": {
+        "additionalProperties": false,
+        "properties": {
+          "fields": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "meta": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "fields",
+          "meta"
+        ],
+        "type": "object"
+      },
       "ModuleField": {
         "additionalProperties": false,
         "properties": {
@@ -1612,6 +1650,9 @@
           "enabled": {
             "type": "boolean"
           },
+          "envLock": {
+            "$ref": "#/components/schemas/ModuleEnvLock"
+          },
           "error": {
             "type": "string"
           },
@@ -1629,6 +1670,9 @@
             "type": "string"
           },
           "kind": {
+            "type": "string"
+          },
+          "managedBy": {
             "type": "string"
           },
           "name": {
@@ -2173,6 +2217,9 @@
           "language": {
             "type": "string"
           },
+          "managedBy": {
+            "type": "string"
+          },
           "path": {
             "type": "string"
           }
@@ -2208,6 +2255,9 @@
             "type": "integer"
           },
           "language": {
+            "type": "string"
+          },
+          "managedBy": {
             "type": "string"
           },
           "path": {
@@ -3020,6 +3070,28 @@
         ],
         "type": "object"
       },
+      "System-envResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "unknown": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "vars": {
+            "items": {
+              "$ref": "#/components/schemas/Var"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "vars",
+          "unknown"
+        ],
+        "type": "object"
+      },
       "SystemStatus": {
         "additionalProperties": false,
         "properties": {
@@ -3291,6 +3363,55 @@
         ],
         "type": "object"
       },
+      "Var": {
+        "additionalProperties": false,
+        "properties": {
+          "default": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "core",
+              "settings",
+              "rootfolders",
+              "module"
+            ],
+            "type": "string"
+          },
+          "secret": {
+            "type": "boolean"
+          },
+          "set": {
+            "type": "boolean"
+          },
+          "target": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "scope",
+          "target",
+          "type",
+          "default",
+          "description",
+          "secret",
+          "set"
+        ],
+        "type": "object"
+      },
       "WantedItem": {
         "additionalProperties": false,
         "properties": {
@@ -3407,7 +3528,7 @@
   "info": {
     "description": "Sonarr-style PVR for manga. All endpoints accept an X-Api-Key header.",
     "title": "mangarr",
-    "version": "dev"
+    "version": "252ee06-dirty"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -6375,6 +6496,43 @@
         ]
       }
     },
+    "/api/v1/settings/locks": {
+      "get": {
+        "operationId": "settings-locks",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "items": {
+                      "$ref": "#/components/schemas/Lock"
+                    },
+                    "type": "array"
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Settings fields pinned by environment variables, per document",
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
     "/api/v1/settings/media": {
       "get": {
         "operationId": "settings-get-media",
@@ -7128,6 +7286,37 @@
             "description": "Error"
           }
         },
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/api/v1/system/env": {
+      "get": {
+        "operationId": "system-env",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/System-envResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Supported environment variables and which are set",
         "tags": [
           "System"
         ]

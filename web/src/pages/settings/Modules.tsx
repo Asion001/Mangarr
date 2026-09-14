@@ -36,6 +36,8 @@ type Draft = {
   priority: number;
   events: string[];
   settings: Record<string, unknown>;
+  /** fields and meta pinned by environment variables */
+  lock?: { fields: Record<string, string>; meta: Record<string, string> };
 };
 
 export function ModulesPage({ kind }: { kind: string }) {
@@ -61,7 +63,16 @@ export function ModulesPage({ kind }: { kind: string }) {
     });
   };
   const startEdit = (m: ModuleResource) =>
-    setDraft({ id: m.id, implementation: m.implementation, name: m.name, enabled: m.enabled, priority: m.priority, events: m.events ?? [], settings: { ...m.settings } });
+    setDraft({
+      id: m.id,
+      implementation: m.implementation,
+      name: m.name,
+      enabled: m.enabled,
+      priority: m.priority,
+      events: m.events ?? [],
+      settings: { ...m.settings },
+      lock: m.envLock ? { fields: m.envLock.fields ?? {}, meta: m.envLock.meta ?? {} } : undefined,
+    });
 
   const remove = async () => {
     if (!deleting) return;
@@ -100,13 +111,18 @@ export function ModulesPage({ kind }: { kind: string }) {
                 <IconButton title="Edit" onClick={() => startEdit(m)}>
                   <Pencil className="size-4" />
                 </IconButton>
-                <IconButton title="Delete" onClick={() => setDeleting(m)}>
+                <IconButton title={m.managedBy ? "Defined by environment variables" : "Delete"} disabled={!!m.managedBy} onClick={() => setDeleting(m)}>
                   <Trash2 className="size-4" />
                 </IconButton>
               </div>
             </div>
             <div className="flex flex-wrap gap-1">
               {m.enabled ? <Badge tone="ok">enabled</Badge> : <Badge>disabled</Badge>}
+              {m.managedBy && (
+                <Badge tone="warn" title={`Defined by MANGARR_MODULE_${m.managedBy.replace(/^env:/, "")}_* variables`}>
+                  env
+                </Badge>
+              )}
               <Badge>priority {m.priority}</Badge>
               {m.capabilities.map((c) => (
                 <Badge key={c} tone="info">
@@ -197,17 +213,17 @@ function ModuleEditor({ kind, draft: initial, impl, onClose }: { kind: string; d
       <div className="flex flex-col gap-4">
         {impl?.description && <p className="text-sm text-muted">{impl.description}</p>}
         <div className="grid gap-4 md:grid-cols-[1fr_120px]">
-          <Field label="Name">
+          <Field label="Name" env={d.lock?.meta.name}>
             <Input value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} />
           </Field>
-          <Field label="Priority" help="Lower first">
+          <Field label="Priority" help="Lower first" env={d.lock?.meta.priority}>
             <Input type="number" value={d.priority} onChange={(e) => setD({ ...d, priority: Number(e.target.value) })} />
           </Field>
         </div>
-        <Switch checked={d.enabled} onChange={(v) => setD({ ...d, enabled: v })} label="Enabled" />
-        {impl && <DynamicForm fields={impl.fields} values={d.settings} onChange={(settings) => setD({ ...d, settings })} />}
+        <Switch checked={d.enabled} onChange={(v) => setD({ ...d, enabled: v })} label="Enabled" env={d.lock?.meta.enabled} />
+        {impl && <DynamicForm fields={impl.fields} values={d.settings} locks={d.lock?.fields} onChange={(settings) => setD({ ...d, settings })} />}
         {kind === "notify" && impl?.events && (
-          <Field label="Send on">
+          <Field label="Send on" env={d.lock?.meta.events}>
             <div className="grid gap-1.5 sm:grid-cols-2">
               {impl.events.map((ev) => (
                 <label key={ev} className="flex items-center gap-2 text-sm">

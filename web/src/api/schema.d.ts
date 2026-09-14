@@ -899,6 +899,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/settings/locks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Settings fields pinned by environment variables, per document */
+        get: operations["settings-locks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/settings/media": {
         parameters: {
             query?: never;
@@ -1075,6 +1092,23 @@ export interface paths {
         put?: never;
         post?: never;
         delete: operations["backups-delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/env": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Supported environment variables and which are set */
+        get: operations["system-env"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1604,6 +1638,10 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        Lock: {
+            env: string;
+            path: string;
+        };
         LookupResult: {
             adult?: boolean;
             also?: components["schemas"]["MetadataRef"][];
@@ -1658,6 +1696,14 @@ export interface components {
             moduleId: number;
             provider: string;
         };
+        ModuleEnvLock: {
+            fields: {
+                [key: string]: string;
+            };
+            meta: {
+                [key: string]: string;
+            };
+        };
         ModuleField: {
             advanced?: boolean;
             default?: unknown;
@@ -1695,12 +1741,14 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             enabled: boolean;
+            envLock?: components["schemas"]["ModuleEnvLock"];
             error?: string;
             events: string[];
             /** Format: int64 */
             id: number;
             implementation: string;
             kind: string;
+            managedBy?: string;
             name: string;
             /** Format: int64 */
             priority: number;
@@ -1864,6 +1912,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             language: string;
+            managedBy?: string;
             path: string;
         };
         RootFolderResource: {
@@ -1876,6 +1925,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             language: string;
+            managedBy?: string;
             path: string;
             /** Format: int64 */
             seriesCount: number;
@@ -2112,6 +2162,10 @@ export interface components {
         "Stores-addRequest": {
             url: string;
         };
+        "System-envResponse": {
+            unknown: string[];
+            vars: components["schemas"]["Var"][];
+        };
         SystemStatus: {
             arch: string;
             commit: string;
@@ -2184,6 +2238,18 @@ export interface components {
             name: string;
             noiseLevels?: number[];
             scales: number[];
+        };
+        Var: {
+            default: string;
+            description: string;
+            name: string;
+            /** @enum {string} */
+            scope: "core" | "settings" | "rootfolders" | "module";
+            secret: boolean;
+            set: boolean;
+            target: string;
+            type: string;
+            value?: string;
         };
         WantedItem: {
             /** Format: date-time */
@@ -4491,6 +4557,37 @@ export interface operations {
             };
         };
     };
+    "settings-locks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: components["schemas"]["Lock"][];
+                    };
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "settings-get-media": {
         parameters: {
             query?: never;
@@ -4990,6 +5087,35 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "system-env": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["System-envResponse"];
+                };
             };
             /** @description Error */
             default: {

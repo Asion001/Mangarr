@@ -33,10 +33,12 @@ type Tag struct {
 
 type RootFolder struct {
 	bun.BaseModel `bun:"table:root_folders"`
-	ID            int64     `bun:"id,pk,autoincrement" json:"id"`
-	Path          string    `bun:"path,notnull" json:"path"`
-	Language      string    `bun:"language,notnull" json:"language"`
-	CreatedAt     time.Time `bun:"created_at,notnull" json:"createdAt"`
+	ID            int64  `bun:"id,pk,autoincrement" json:"id"`
+	Path          string `bun:"path,notnull" json:"path"`
+	Language      string `bun:"language,notnull" json:"language"`
+	// ManagedBy is "env" when the folder comes from MANGARR_ROOT_FOLDERS.
+	ManagedBy string    `bun:"managed_by,notnull" json:"managedBy,omitempty"`
+	CreatedAt time.Time `bun:"created_at,notnull" json:"createdAt"`
 }
 
 // ---- Profiles ---------------------------------------------------------------
@@ -102,8 +104,10 @@ type ProviderDefinition struct {
 	Tags           []int64        `bun:"tags,notnull" json:"tags"`
 	Events         []string       `bun:"events,notnull" json:"events"`
 	Settings       map[string]any `bun:"settings,notnull" json:"settings"`
-	CreatedAt      time.Time      `bun:"created_at,notnull" json:"createdAt"`
-	UpdatedAt      time.Time      `bun:"updated_at,notnull" json:"updatedAt"`
+	// ManagedBy is "env:<NAME>" for instances defined by MANGARR_MODULE_<NAME>_* variables.
+	ManagedBy string    `bun:"managed_by,notnull" json:"managedBy,omitempty"`
+	CreatedAt time.Time `bun:"created_at,notnull" json:"createdAt"`
+	UpdatedAt time.Time `bun:"updated_at,notnull" json:"updatedAt"`
 }
 
 // ---- Series -----------------------------------------------------------------

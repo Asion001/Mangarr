@@ -3,14 +3,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Copy, KeyRound, Plus, Trash2 } from "lucide-react";
 import { api, unwrap, type S } from "../../api/client";
 import { useTags } from "../../api/queries";
-import { Badge, Button, Card, ErrorBox, Field, IconButton, Input, Loading, PageHeader } from "../../components/ui";
+import { Badge, Button, Card, EnvLock, ErrorBox, Field, IconButton, Input, Loading, PageHeader } from "../../components/ui";
 import { useToast } from "../../lib/toast";
 import { useSettingsDoc } from "./useSettingsDoc";
 
 type General = S["GeneralSettingsResource"];
 
 export function GeneralPage() {
-  const { value: g, patch, save, saving, isLoading, error, setValue } = useSettingsDoc<General>("general");
+  const { value: g, patch, save, saving, isLoading, error, setValue, lock } = useSettingsDoc<General>("general");
   const toast = useToast();
   const regen = async () => {
     try {
@@ -36,22 +36,29 @@ export function GeneralPage() {
       {g && (
         <Card title="Server" className="mb-6">
           <div className="grid gap-4 md:grid-cols-2">
-            <Field label="Instance name">
+            <Field env={lock("instanceName")} label="Instance name">
               <Input value={g.instanceName} onChange={(e) => patch({ instanceName: e.target.value })} />
             </Field>
-            <Field label="Public URL" help="Used for links in notifications, e.g. https://mangarr.example.com">
+            <Field env={lock("publicUrl")} label="Public URL" help="Used for links in notifications, e.g. https://mangarr.example.com">
               <Input value={g.publicUrl} onChange={(e) => patch({ publicUrl: e.target.value })} />
             </Field>
-            <Field label="Keep scheduled backups">
+            <Field env={lock("backupRetention")} label="Keep scheduled backups">
               <Input type="number" min={1} value={g.backupRetention} onChange={(e) => patch({ backupRetention: Number(e.target.value) })} />
             </Field>
-            <Field label="API key" help="Send as X-Api-Key header. API docs: /api/docs">
+            <Field
+              label={
+                <>
+                  API key <EnvLock env={lock("apiKey")} />
+                </>
+              }
+              help="Send as X-Api-Key header. API docs: /api/docs"
+            >
               <div className="flex gap-2">
                 <Input readOnly value={g.apiKey} className="font-mono text-xs" />
                 <IconButton title="Copy" onClick={() => (navigator.clipboard.writeText(g.apiKey), toast.info("Copied"))}>
                   <Copy className="size-4" />
                 </IconButton>
-                <Button onClick={regen} icon={<KeyRound className="size-4" />}>
+                <Button onClick={regen} disabled={!!lock("apiKey")} icon={<KeyRound className="size-4" />}>
                   Regenerate
                 </Button>
               </div>

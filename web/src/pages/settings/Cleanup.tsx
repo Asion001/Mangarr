@@ -10,7 +10,7 @@ import { useSettingsDoc } from "./useSettingsDoc";
 type CleanupSettings = S["Cleanup"];
 
 export function CleanupPage() {
-  const { value: c, patch, save, saving, isLoading, error } = useSettingsDoc<CleanupSettings>("cleanup");
+  const { value: c, patch, save, saving, isLoading, error, lock } = useSettingsDoc<CleanupSettings>("cleanup");
   const { data: readers } = useReaders();
   const { data: tags } = useTags();
   const push = usePushCommand();
@@ -44,23 +44,23 @@ export function CleanupPage() {
         <Card title="Rules" className="mb-6">
           <div className="grid gap-5 md:grid-cols-2">
             <div className="flex flex-col gap-3">
-              <Switch checked={c.enabled} onChange={(v) => patch({ enabled: v })} label={<b>Enable cleanup</b>} />
-              <Switch checked={c.dryRun} onChange={(v) => patch({ dryRun: v })} label="Dry run (only preview, never delete)" />
-              <Switch checked={c.ignoreReadersNotStarted} onChange={(v) => patch({ ignoreReadersNotStarted: v })} label="Ignore readers who never started a series" />
-              <Switch checked={c.useRecycleBin} onChange={(v) => patch({ useRecycleBin: v })} label="Move to recycle bin instead of deleting" />
+              <Switch env={lock("enabled")} checked={c.enabled} onChange={(v) => patch({ enabled: v })} label={<b>Enable cleanup</b>} />
+              <Switch env={lock("dryRun")} checked={c.dryRun} onChange={(v) => patch({ dryRun: v })} label="Dry run (only preview, never delete)" />
+              <Switch env={lock("ignoreReadersNotStarted")} checked={c.ignoreReadersNotStarted} onChange={(v) => patch({ ignoreReadersNotStarted: v })} label="Ignore readers who never started a series" />
+              <Switch env={lock("useRecycleBin")} checked={c.useRecycleBin} onChange={(v) => patch({ useRecycleBin: v })} label="Move to recycle bin instead of deleting" />
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Keep last read chapters" help="Keeps apps' progress anchored">
+              <Field env={lock("keepLastRead")} label="Keep last read chapters" help="Keeps apps' progress anchored">
                 <Input type="number" min={0} value={c.keepLastRead} onChange={(e) => patch({ keepLastRead: Number(e.target.value) })} />
               </Field>
-              <Field label="Grace period (days)" help="After the last reader finished">
+              <Field env={lock("graceDays")} label="Grace period (days)" help="After the last reader finished">
                 <Input type="number" min={0} value={c.graceDays} onChange={(e) => patch({ graceDays: Number(e.target.value) })} />
               </Field>
-              <Field label="Only when free space below (GB)" help="0 = always">
+              <Field env={lock("minFreeSpaceGb")} label="Only when free space below (GB)" help="0 = always">
                 <Input type="number" min={0} value={c.minFreeSpaceGb} onChange={(e) => patch({ minFreeSpaceGb: Number(e.target.value) })} />
               </Field>
             </div>
-            <Field label="Series status in scope">
+            <Field env={lock("statuses")} label="Series status in scope">
               <div className="flex flex-wrap gap-3">
                 {["ongoing", "completed", "hiatus", "cancelled", "unknown"].map((s) => (
                   <label key={s} className="flex items-center gap-1.5 text-sm">
@@ -69,7 +69,7 @@ export function CleanupPage() {
                 ))}
               </div>
             </Field>
-            <Field label="Required readers" help="None selected = every reader counting for cleanup.">
+            <Field env={lock("readerIds")} label="Required readers" help="None selected = every reader counting for cleanup.">
               <div className="flex flex-wrap gap-3">
                 {readers?.map((r) => (
                   <label key={r.id} className="flex items-center gap-1.5 text-sm">
@@ -83,7 +83,7 @@ export function CleanupPage() {
                 )}
               </div>
             </Field>
-            <Field label="Excluded tags" help="Series with any of these tags are never cleaned.">
+            <Field env={lock("excludeTags")} label="Excluded tags" help="Series with any of these tags are never cleaned.">
               <div className="flex flex-wrap gap-3">
                 {Array.from(new Set([...(c.excludeTags ?? []), ...(tags ?? []).map((t) => t.label)])).map((t) => (
                   <label key={t} className="flex items-center gap-1.5 text-sm">

@@ -8,6 +8,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
+	"github.com/Asion001/mangarr/internal/envcfg"
 	"github.com/Asion001/mangarr/internal/logging"
 	"github.com/Asion001/mangarr/internal/model"
 	"github.com/Asion001/mangarr/internal/version"
@@ -47,6 +48,28 @@ func (s *Server) registerSystem() {
 				Version: version.Version, Commit: version.Commit, GoVersion: runtime.Version(), OS: runtime.GOOS, Arch: runtime.GOARCH,
 				Database: string(s.app.DB.Kind), DataDir: s.app.Cfg.DataDir, StartedAt: s.app.StartedAt, URLBase: s.app.Cfg.URLBase,
 			}}, nil
+		})
+
+	huma.Register(s.api, huma.Operation{OperationID: "system-env", Method: http.MethodGet, Path: "/api/v1/system/env", Tags: tags,
+		Summary: "Supported environment variables and which are set"},
+		func(ctx context.Context, _ *struct{}) (*struct {
+			Body struct {
+				Vars    []envcfg.Var `json:"vars"`
+				Unknown []string     `json:"unknown"`
+			}
+		}, error) {
+			out := &struct {
+				Body struct {
+					Vars    []envcfg.Var `json:"vars"`
+					Unknown []string     `json:"unknown"`
+				}
+			}{}
+			out.Body.Vars = envcfg.All(s.app.Cfg.Env)
+			out.Body.Unknown = envcfg.Unknown(s.app.Cfg.Env)
+			if out.Body.Unknown == nil {
+				out.Body.Unknown = []string{}
+			}
+			return out, nil
 		})
 
 	huma.Register(s.api, huma.Operation{OperationID: "system-logs", Method: http.MethodGet, Path: "/api/v1/system/logs", Tags: tags},

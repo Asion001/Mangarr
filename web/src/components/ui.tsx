@@ -1,6 +1,6 @@
 import { useEffect, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import clsx from "clsx";
-import { Loader2, X, Plus, Trash2 } from "lucide-react";
+import { Loader2, Lock, X, Plus, Trash2 } from "lucide-react";
 
 type Variant = "primary" | "secondary" | "danger" | "ghost";
 
@@ -68,7 +68,21 @@ export function Select({ children, ...props }: SelectHTMLAttributes<HTMLSelectEl
   );
 }
 
-export function Switch({ checked, onChange, label, disabled }: { checked: boolean; onChange: (v: boolean) => void; label?: ReactNode; disabled?: boolean }) {
+export function Switch({
+  checked,
+  onChange,
+  label,
+  disabled,
+  env,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label?: ReactNode;
+  disabled?: boolean;
+  /** Environment variable that pins this value (renders it locked). */
+  env?: string;
+}) {
+  disabled = disabled || !!env;
   return (
     <label className={clsx("inline-flex cursor-pointer select-none items-center gap-2 text-sm", disabled && "opacity-50")}>
       <button
@@ -82,15 +96,57 @@ export function Switch({ checked, onChange, label, disabled }: { checked: boolea
         <span className={clsx("absolute top-0.5 size-4 rounded-full bg-white transition-all", checked ? "left-4.5" : "left-0.5")} />
       </button>
       {label}
+      <EnvLock env={env} />
     </label>
   );
 }
 
-export function Field({ label, help, children, className }: { label: ReactNode; help?: ReactNode; children: ReactNode; className?: string }) {
+/** EnvLock marks a value pinned by an environment variable. */
+export function EnvLock({ env }: { env?: string }) {
+  if (!env) return null;
+  return (
+    <span className="inline-flex items-center gap-1 text-xs font-normal text-warn" title={`Set by environment variable ${env}; change it in your container config.`}>
+      <Lock size={12} aria-label="Locked" />
+      env
+    </span>
+  );
+}
+
+/** Locked disables every control inside when env is set. */
+export function Locked({ env, children }: { env?: string; children: ReactNode }) {
+  return (
+    <fieldset disabled={!!env} className="contents">
+      {children}
+    </fieldset>
+  );
+}
+
+export function Field({
+  label,
+  help,
+  children,
+  className,
+  env,
+}: {
+  label: ReactNode;
+  help?: ReactNode;
+  children: ReactNode;
+  className?: string;
+  /** Environment variable that pins this field (renders it locked). */
+  env?: string;
+}) {
   return (
     <div className={clsx("flex flex-col gap-1.5", className)}>
-      <label className="text-sm font-medium text-fg">{label}</label>
-      {children}
+      <label className="flex flex-wrap items-center gap-2 text-sm font-medium text-fg">
+        {label}
+        <EnvLock env={env} />
+      </label>
+      <Locked env={env}>{children}</Locked>
+      {env && (
+        <p className="text-xs break-all text-warn">
+          Set by <code>{env}</code>
+        </p>
+      )}
       {help && <p className="text-xs text-muted">{help}</p>}
     </div>
   );

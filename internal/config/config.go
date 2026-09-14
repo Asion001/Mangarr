@@ -25,6 +25,23 @@ type Config struct {
 	URLBase string
 	// WebDir overrides the embedded UI with files from disk (development).
 	WebDir string
+	// Env is the MANGARR_* environment used to pin settings, root folders and
+	// modules (see internal/envcfg). Nil in tests unless set explicitly.
+	Env map[string]string
+}
+
+// VarDoc documents a process-level variable.
+type VarDoc struct{ Name, Default, Description string }
+
+// Vars lists the process-level variables read by Load.
+var Vars = []VarDoc{
+	{"MANGARR_LISTEN", ":8787", "HTTP listen address."},
+	{"MANGARR_DATA_DIR", "./config (/config in Docker)", "Database, staging, backups, recycle bin and caches."},
+	{"MANGARR_DB", "sqlite://$MANGARR_DATA_DIR/mangarr.db", "Database DSN: sqlite://… or postgres://user:pass@host:5432/db."},
+	{"MANGARR_LOG_LEVEL", "info", "debug, info, warn or error."},
+	{"MANGARR_URL_BASE", "", "Serve under a sub path, e.g. /mangarr."},
+	{"MANGARR_AUTH_DISABLED", "false", "Disable login and API key checks (only behind an auth proxy)."},
+	{"MANGARR_WEB_DIR", "", "Serve the UI from this directory instead of the embedded copy (development)."},
 }
 
 func Load() (*Config, error) {
@@ -34,6 +51,7 @@ func Load() (*Config, error) {
 		LogLevel: env("MANGARR_LOG_LEVEL", "info"),
 		URLBase:  strings.TrimRight(env("MANGARR_URL_BASE", ""), "/"),
 		WebDir:   env("MANGARR_WEB_DIR", ""),
+		Env:      Environ(),
 	}
 	var err error
 	if c.AuthDisabled, err = envBool("MANGARR_AUTH_DISABLED", false); err != nil {
@@ -49,6 +67,18 @@ func Load() (*Config, error) {
 		c.URLBase = "/" + c.URLBase
 	}
 	return c, nil
+}
+
+// Environ returns the MANGARR_* variables of the process.
+func Environ() map[string]string {
+	out := map[string]string{}
+	for _, kv := range os.Environ() {
+		k, v, ok := strings.Cut(kv, "=")
+		if ok && strings.HasPrefix(k, "MANGARR_") {
+			out[k] = v
+		}
+	}
+	return out
 }
 
 // Dir returns a subdirectory of DataDir, creating it if needed.

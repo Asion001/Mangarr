@@ -16,6 +16,20 @@ services:
       TZ: Europe/Madrid
       # SQLite by default; optional Postgres:
       # MANGARR_DB: postgres://mangarr:secret@db:5432/mangarr?sslmode=disable
+      #
+      # Optional: pin configuration so it can't drift (shown locked in the UI).
+      # Every variable is listed in docs/configuration.md.
+      # MANGARR_ROOT_FOLDERS: /data/manga/en
+      # MANGARR_DOWNLOADS_MAX_PER_SOURCE: "1"
+      # MANGARR_MODULE_SUWAYOMI_IMPL: source/suwayomi
+      # MANGARR_MODULE_SUWAYOMI_URL: http://suwayomi:4567
+      # MANGARR_MODULE_SUWAYOMI_FLARE_SOLVERR_ENABLED: "true"
+      # MANGARR_MODULE_SUWAYOMI_FLARE_SOLVERR_URL: http://flaresolverr:8191
+      # MANGARR_MODULE_ANILIST_IMPL: metadata/anilist
+      # MANGARR_MODULE_KOMGA_IMPL: library/komga
+      # MANGARR_MODULE_KOMGA_URL: http://komga:25600
+      # MANGARR_MODULE_KOMGA_API_KEY: ${KOMGA_API_KEY}
+      # MANGARR_MODULE_KOMGA_PATH_MAPPINGS: /data/manga=/data/manga
     volumes:
       - ./mangarr:/config
       - /data/storage/manga:/data/manga

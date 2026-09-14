@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,75 +19,75 @@ import (
 
 // General holds server-wide settings.
 type General struct {
-	APIKey        string `json:"apiKey"`
-	SessionSecret string `json:"sessionSecret"`
+	APIKey        string `json:"apiKey" env:"=API_KEY" secret:"true" desc:"API key for X-Api-Key (generated on first start)."`
+	SessionSecret string `json:"sessionSecret" env:"-"`
 	// InstanceName is shown in the UI and notifications.
-	InstanceName string `json:"instanceName"`
+	InstanceName string `json:"instanceName" desc:"Name shown in the UI and notifications."`
 	// PublicURL is used in notification links (e.g. https://mangarr.example.com).
-	PublicURL string `json:"publicUrl"`
+	PublicURL string `json:"publicUrl" desc:"External URL used in notification links."`
 	// BackupRetention is the number of scheduled backups to keep.
-	BackupRetention int `json:"backupRetention"`
+	BackupRetention int `json:"backupRetention" desc:"Number of scheduled backups to keep."`
 }
 
 // MediaManagement controls file naming and import behavior.
 type MediaManagement struct {
 	// ChapterFormat is the file name template (without extension).
-	ChapterFormat string `json:"chapterFormat"`
+	ChapterFormat string `json:"chapterFormat" desc:"Chapter file name template (without extension)."`
 	// SeriesFolderFormat is the folder name template for new series.
-	SeriesFolderFormat string `json:"seriesFolderFormat"`
+	SeriesFolderFormat string `json:"seriesFolderFormat" desc:"Folder name template for new series."`
 	// RecycleBinPath receives replaced/cleaned files; empty = <dataDir>/recycle.
-	RecycleBinPath string `json:"recycleBinPath"`
+	RecycleBinPath string `json:"recycleBinPath" desc:"Where replaced and cleaned files go (empty = <data dir>/recycle)."`
 	// RecycleBinDays purges recycled files older than N days (0 = never).
-	RecycleBinDays int `json:"recycleBinDays"`
+	RecycleBinDays int `json:"recycleBinDays" desc:"Purge recycled files older than N days (0 = never)."`
 	// MinFreeSpaceMB aborts downloads when a root folder has less free space.
-	MinFreeSpaceMB int `json:"minFreeSpaceMb"`
+	MinFreeSpaceMB int `json:"minFreeSpaceMb" desc:"Stop downloading when a root folder has less free space (MB)."`
 	// WriteSeriesJSON writes a Mylar-style series.json (read by Komga).
-	WriteSeriesJSON bool `json:"writeSeriesJson"`
+	WriteSeriesJSON bool `json:"writeSeriesJson" desc:"Write a Mylar series.json (read by Komga)."`
 	// WriteCover writes cover.jpg into series folders.
-	WriteCover bool `json:"writeCover"`
+	WriteCover bool `json:"writeCover" desc:"Write cover.jpg into series folders."`
 	// WriteVolume writes <Volume> into ComicInfo.xml. Off by default: volume
 	// numbers change Kavita's grouping and Komga's default series titles.
-	WriteVolume bool `json:"writeVolume"`
+	WriteVolume bool `json:"writeVolume" desc:"Write <Volume> into ComicInfo.xml."`
 	// FileMode / DirMode for created files (octal strings like "0664").
-	FileMode string `json:"fileMode"`
-	DirMode  string `json:"dirMode"`
+	FileMode string `json:"fileMode" desc:"Mode of created files (octal, e.g. 0664)."`
+	DirMode  string `json:"dirMode" desc:"Mode of created directories (octal, e.g. 0775)."`
 }
 
 // Downloads controls queue behavior.
 type Downloads struct {
 	// MaxConcurrent is the number of chapters downloaded in parallel (global).
-	MaxConcurrent int `json:"maxConcurrent"`
+	MaxConcurrent int `json:"maxConcurrent" desc:"Chapters downloaded in parallel (all sources)."`
 	// MaxPerSource is the number of chapters downloaded in parallel per source.
-	MaxPerSource int `json:"maxPerSource"`
+	MaxPerSource int `json:"maxPerSource" desc:"Chapters downloaded in parallel per source."`
 	// PageConcurrency is the number of pages fetched in parallel within a chapter.
-	PageConcurrency int `json:"pageConcurrency"`
+	PageConcurrency int `json:"pageConcurrency" desc:"Pages fetched in parallel within a chapter."`
 	// PageRetries per page before the chapter attempt fails.
-	PageRetries int `json:"pageRetries"`
+	PageRetries int `json:"pageRetries" desc:"Retries per page before the attempt fails."`
 	// MaxAttempts per release before it is blocklisted and the next source is tried.
-	MaxAttempts int `json:"maxAttempts"`
+	MaxAttempts int `json:"maxAttempts" desc:"Attempts per release before it is blocklisted."`
 	// DefaultCheckIntervalMinutes for ongoing series.
-	DefaultCheckIntervalMinutes int `json:"defaultCheckIntervalMinutes"`
+	DefaultCheckIntervalMinutes int `json:"defaultCheckIntervalMinutes" desc:"Minutes between checks of ongoing series."`
 }
 
 // Cleanup holds global read-based cleanup rules (off by default).
 type Cleanup struct {
-	Enabled bool `json:"enabled"`
-	DryRun  bool `json:"dryRun"`
+	Enabled bool `json:"enabled" desc:"Delete chapters every reader has finished."`
+	DryRun  bool `json:"dryRun" desc:"Only report what cleanup would delete."`
 	// Statuses the rule applies to ("ongoing" by default).
-	Statuses []string `json:"statuses"`
+	Statuses []string `json:"statuses" desc:"Series statuses cleanup applies to (comma-separated)."`
 	// ReaderIDs restricts the required readers (empty = all readers counting for cleanup).
-	ReaderIDs               []int64  `json:"readerIds"`
-	IgnoreReadersNotStarted bool     `json:"ignoreReadersNotStarted"`
-	KeepLastRead            int      `json:"keepLastRead"`
-	GraceDays               int      `json:"graceDays"`
-	MinFreeSpaceGB          int      `json:"minFreeSpaceGb"`
-	ExcludeTags             []string `json:"excludeTags"`
-	UseRecycleBin           bool     `json:"useRecycleBin"`
+	ReaderIDs               []int64  `json:"readerIds" desc:"Required reader IDs (empty = all)."`
+	IgnoreReadersNotStarted bool     `json:"ignoreReadersNotStarted" desc:"Readers who never opened a series don't block its cleanup."`
+	KeepLastRead            int      `json:"keepLastRead" desc:"Keep the last N read chapters."`
+	GraceDays               int      `json:"graceDays" desc:"Days to wait after the last reader finished a chapter."`
+	MinFreeSpaceGB          int      `json:"minFreeSpaceGb" desc:"Only clean up when free space is below this (GB, 0 = always)."`
+	ExcludeTags             []string `json:"excludeTags" desc:"Series with these tags are never cleaned up."`
+	UseRecycleBin           bool     `json:"useRecycleBin" desc:"Move cleaned files to the recycle bin."`
 }
 
 // ReadSync controls progress polling from library servers.
 type ReadSync struct {
-	IntervalMinutes int `json:"intervalMinutes"`
+	IntervalMinutes int `json:"intervalMinutes" desc:"Minutes between reader progress syncs."`
 }
 
 func DefaultGeneral() General {
@@ -126,9 +127,62 @@ type Store struct {
 	mu     sync.RWMutex
 	cache  map[string]json.RawMessage
 	warmed bool
+	// overlays hold values pinned by environment variables per document.
+	overlays map[string]overlay
 }
 
-func NewStore(d *db.DB) *Store { return &Store{db: d, cache: map[string]json.RawMessage{}} }
+type overlay struct {
+	raw   json.RawMessage
+	locks []Lock
+}
+
+// Lock is a settings field pinned by an environment variable.
+type Lock struct {
+	// Path is the JSON field path inside the document ("maxConcurrent", "quickSearch.threshold").
+	Path string `json:"path"`
+	Env  string `json:"env"`
+}
+
+func NewStore(d *db.DB) *Store {
+	return &Store{db: d, cache: map[string]json.RawMessage{}, overlays: map[string]overlay{}}
+}
+
+// DocInfo describes a settings document.
+type DocInfo struct {
+	// Key is the database key, Name the API path segment, EnvPrefix the
+	// variable prefix (MANGARR_<EnvPrefix>_<FIELD>).
+	Key, Name, EnvPrefix string
+	// Default returns a pointer to the document with defaults.
+	Default func() any
+}
+
+// Docs lists every settings document.
+var Docs = []DocInfo{
+	{KeyGeneral, "general", "GENERAL", func() any { v := DefaultGeneral(); return &v }},
+	{KeyMediaManagement, "media", "MEDIA", func() any { v := DefaultMediaManagement(); return &v }},
+	{KeyDownloads, "downloads", "DOWNLOADS", func() any { v := DefaultDownloads(); return &v }},
+	{KeyCleanup, "cleanup", "CLEANUP", func() any { v := DefaultCleanup(); return &v }},
+	{KeyReadSync, "readsync", "READSYNC", func() any { v := DefaultReadSync(); return &v }},
+}
+
+// SetOverlay pins fields of document key: raw is a partial JSON object that
+// is applied on top of the stored document on every read.
+func (s *Store) SetOverlay(key string, raw json.RawMessage, locks []Lock) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(locks) == 0 {
+		delete(s.overlays, key)
+		return
+	}
+	s.overlays[key] = overlay{raw: raw, locks: locks}
+}
+
+// Locks returns the fields of document key pinned by the environment.
+func (s *Store) Locks(key string) []Lock {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return append([]Lock(nil), s.overlays[key].locks...)
+}
 
 const (
 	KeyGeneral         = "general"
@@ -161,8 +215,11 @@ func (s *Store) Get(ctx context.Context, key string, out any) error {
 	raw, ok := s.cache[key]
 	warmed := s.warmed
 	s.mu.RUnlock()
+	s.mu.RLock()
+	ov := s.overlays[key]
+	s.mu.RUnlock()
 	if !ok && warmed {
-		return nil // not stored: keep defaults
+		return applyOverlay(ov, out) // not stored: keep defaults
 	}
 	if !ok {
 		var row model.Setting
@@ -182,14 +239,33 @@ func (s *Store) Get(ctx context.Context, key string, out any) error {
 		s.cache[key] = raw
 		s.mu.Unlock()
 	}
-	return json.Unmarshal(raw, out)
+	if err := json.Unmarshal(raw, out); err != nil {
+		return err
+	}
+	return applyOverlay(ov, out)
 }
 
-// Set stores v at key.
+func applyOverlay(ov overlay, out any) error {
+	if len(ov.raw) == 0 {
+		return nil
+	}
+	return json.Unmarshal(ov.raw, out)
+}
+
+// Set stores v at key. Fields pinned by the environment keep their stored
+// value, so removing the variable later restores what was saved before.
 func (s *Store) Set(ctx context.Context, key string, v any) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
+	}
+	if locks := s.Locks(key); len(locks) > 0 {
+		s.mu.RLock()
+		old := s.cache[key]
+		s.mu.RUnlock()
+		if b, err = keepLocked(b, old, locks); err != nil {
+			return err
+		}
 	}
 	row := &model.Setting{Key: key, Value: string(b), UpdatedAt: time.Now().UTC()}
 	_, err = s.db.NewInsert().Model(row).
@@ -258,4 +334,64 @@ func RandomHex(n int) string {
 		panic(err)
 	}
 	return hex.EncodeToString(b)
+}
+
+// keepLocked copies the locked paths of old into doc (removing them when old
+// doesn't have them).
+func keepLocked(doc, old json.RawMessage, locks []Lock) (json.RawMessage, error) {
+	var d, o map[string]any
+	if err := json.Unmarshal(doc, &d); err != nil {
+		return nil, err
+	}
+	if len(old) > 0 {
+		_ = json.Unmarshal(old, &o)
+	}
+	for _, l := range locks {
+		parts := strings.Split(l.Path, ".")
+		if v, ok := getPath(o, parts); ok {
+			setPath(d, parts, v)
+		} else {
+			deletePath(d, parts)
+		}
+	}
+	return json.Marshal(d)
+}
+
+func getPath(m map[string]any, parts []string) (any, bool) {
+	for i, p := range parts {
+		v, ok := m[p]
+		if !ok {
+			return nil, false
+		}
+		if i == len(parts)-1 {
+			return v, true
+		}
+		if m, ok = v.(map[string]any); !ok {
+			return nil, false
+		}
+	}
+	return nil, false
+}
+
+func setPath(m map[string]any, parts []string, v any) {
+	for _, p := range parts[:len(parts)-1] {
+		next, ok := m[p].(map[string]any)
+		if !ok {
+			next = map[string]any{}
+			m[p] = next
+		}
+		m = next
+	}
+	m[parts[len(parts)-1]] = v
+}
+
+func deletePath(m map[string]any, parts []string) {
+	for _, p := range parts[:len(parts)-1] {
+		next, ok := m[p].(map[string]any)
+		if !ok {
+			return
+		}
+		m = next
+	}
+	delete(m, parts[len(parts)-1])
 }

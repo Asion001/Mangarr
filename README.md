@@ -85,8 +85,14 @@ See [docker/compose.example.yml](docker/compose.example.yml) and the full
 | `MANGARR_URL_BASE` | | serve under a sub path, e.g. `/mangarr` |
 | `MANGARR_AUTH_DISABLED` | `false` | disable login (only behind an auth proxy) |
 
-Everything else is configured in the UI. The API accepts the `X-Api-Key`
-header (Settings → General).
+Everything else is configured in the UI, or pinned with environment
+variables: every settings field (`MANGARR_DOWNLOADS_MAX_CONCURRENT=2`), the API
+key (`MANGARR_API_KEY`), root folders (`MANGARR_ROOT_FOLDERS`) and whole module
+instances (`MANGARR_MODULE_KOMGA_IMPL=library/komga`,
+`MANGARR_MODULE_KOMGA_URL=…`). Pinned values show a lock in the UI. See
+[docs/configuration.md](docs/configuration.md) or run `mangarr env`.
+
+The API accepts the `X-Api-Key` header (Settings → General).
 
 ## Development
 

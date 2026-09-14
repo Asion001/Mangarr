@@ -12,6 +12,7 @@ import (
 	"github.com/Asion001/mangarr/internal/auth"
 	"github.com/Asion001/mangarr/internal/catalogs"
 	"github.com/Asion001/mangarr/internal/config"
+	"github.com/Asion001/mangarr/internal/envcfg"
 	"github.com/Asion001/mangarr/internal/db"
 	"github.com/Asion001/mangarr/internal/events"
 	"github.com/Asion001/mangarr/internal/jobs"
@@ -55,9 +56,19 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger, ring *loggin
 	if err := d.Migrate(ctx); err != nil {
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
+	st := settings.NewStore(d)
+	if err := envcfg.ApplySettings(cfg.Env, st); err != nil {
+		return nil, fmt.Errorf("environment: %w", err)
+	}
+	if err := envcfg.SyncRootFolders(ctx, d, cfg.Env); err != nil {
+		return nil, fmt.Errorf("environment: %w", err)
+	}
+	if unknown := envcfg.Unknown(cfg.Env); len(unknown) > 0 {
+		log.Warn("ignoring unknown MANGARR_ variables", "vars", unknown)
+	}
 	a := &App{
 		Cfg: cfg, Log: log, LogRing: ring, DB: d,
-		Settings:  settings.NewStore(d),
+		Settings:  st,
 		Bus:       events.NewBus(),
 		HTTP:      &http.Client{Timeout: 5 * time.Minute},
 		StartedAt: time.Now().UTC(),
@@ -74,6 +85,9 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger, ring *loggin
 	a.Auth = auth.NewService(d, a.Settings, cfg.AuthDisabled)
 	a.Modules = modules.NewManager(d, a.HTTP, log, cfg.DataDir)
 	a.Catalogs = catalogs.New(a.Modules, a.Bus)
+	if err := envcfg.SyncModules(ctx, d, a.Modules, cfg.Env); err != nil {
+		return nil, fmt.Errorf("environment: %w", err)
+	}
 	a.Queue = jobs.NewQueue(d, a.Bus, log.With("component", "commands"), 3)
 	a.Scheduler = jobs.NewScheduler(d, a.Queue, log.With("component", "scheduler"))
 	if err := a.Modules.Reload(ctx); err != nil {

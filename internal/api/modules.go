@@ -29,6 +29,8 @@ type ModuleResource struct {
 	model.ProviderDefinition
 	Error        string   `json:"error,omitempty"`
 	Capabilities []string `json:"capabilities"`
+	// EnvLock lists fields pinned by environment variables (managed instances only).
+	EnvLock *modules.EnvLock `json:"envLock,omitempty"`
 }
 
 type ModuleInput struct {
@@ -63,8 +65,8 @@ func capabilitiesOf(inst modules.Instance) []string {
 	return out
 }
 
-func toModuleResource(l *modules.Loaded) ModuleResource {
-	res := ModuleResource{ProviderDefinition: l.Def, Capabilities: capabilitiesOf(l.Instance)}
+func (s *Server) toModuleResource(l *modules.Loaded) ModuleResource {
+	res := ModuleResource{ProviderDefinition: l.Def, Capabilities: capabilitiesOf(l.Instance), EnvLock: s.app.Modules.EnvLockFor(l.Def)}
 	if l.Impl != nil {
 		res.Settings = modules.MaskSecrets(l.Impl, l.Def.Settings)
 	}
@@ -110,7 +112,7 @@ func (s *Server) registerModules() {
 		}) (*struct{ Body []ModuleResource }, error) {
 			out := []ModuleResource{}
 			for _, l := range s.app.Modules.All(modules.Kind(in.Kind)) {
-				out = append(out, toModuleResource(l))
+				out = append(out, s.toModuleResource(l))
 			}
 			return &struct{ Body []ModuleResource }{out}, nil
 		})
@@ -122,7 +124,7 @@ func (s *Server) registerModules() {
 				return nil, huma.Error400BadRequest(err.Error())
 			}
 			l, _ := s.app.Modules.Get(def.ID)
-			return &struct{ Body ModuleResource }{toModuleResource(l)}, nil
+			return &struct{ Body ModuleResource }{s.toModuleResource(l)}, nil
 		})
 
 	huma.Register(s.api, huma.Operation{OperationID: "modules-update", Method: http.MethodPut, Path: "/api/v1/modules/{id}", Tags: tags},
@@ -138,7 +140,7 @@ func (s *Server) registerModules() {
 				return nil, huma.Error400BadRequest(err.Error())
 			}
 			l, _ := s.app.Modules.Get(def.ID)
-			return &struct{ Body ModuleResource }{toModuleResource(l)}, nil
+			return &struct{ Body ModuleResource }{s.toModuleResource(l)}, nil
 		})
 
 	huma.Register(s.api, huma.Operation{OperationID: "modules-delete", Method: http.MethodDelete, Path: "/api/v1/modules/{id}", Tags: tags},
@@ -151,6 +153,9 @@ func (s *Server) registerModules() {
 			if err := s.app.Modules.Delete(ctx, in.ID); err != nil {
 				if errors.Is(err, modules.ErrNotFound) {
 					return nil, huma.Error404NotFound("module not found")
+				}
+				if errors.Is(err, modules.ErrManaged) {
+					return nil, huma.Error409Conflict(err.Error())
 				}
 				return nil, toHTTPError(err)
 			}
