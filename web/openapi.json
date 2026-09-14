@@ -4868,7 +4868,7 @@
   "info": {
     "description": "Sonarr-style PVR for manga. All endpoints accept an X-Api-Key header.",
     "title": "mangarr",
-    "version": "de614b7-dirty"
+    "version": "a6980ce-dirty"
   },
   "openapi": "3.1.0",
   "paths": {

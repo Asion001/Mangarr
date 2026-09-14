@@ -24,6 +24,7 @@ import (
 	"github.com/Asion001/mangarr/internal/processing"
 	"github.com/Asion001/mangarr/internal/settings"
 	"github.com/Asion001/mangarr/internal/sourcecache"
+	"github.com/Asion001/mangarr/internal/sourcesearch"
 )
 
 type App struct {
@@ -38,6 +39,8 @@ type App struct {
 	Catalogs *catalogs.Service
 	// SourceCache caches catalog responses (keys include the catalogs generation).
 	SourceCache *sourcecache.Cache
+	// Search searches catalogs through SourceCache.
+	Search *sourcesearch.Service
 	// Encoder re-encodes pages (set before New to override engine detection in tests).
 	Encoder    *imageenc.Encoder
 	Processing *processing.Processor
@@ -97,6 +100,7 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger, ring *loggin
 	a.Modules = modules.NewManager(d, a.HTTP, log, cfg.DataDir)
 	a.Catalogs = catalogs.New(d, a.Modules, a.Bus, a.Settings, log.With("component", "catalogs"))
 	a.SourceCache = sourcecache.New(32 << 20)
+	a.Search = &sourcesearch.Service{Catalogs: a.Catalogs, Cache: a.SourceCache, Modules: a.Modules, Settings: a.Settings}
 	if err := a.Catalogs.Load(ctx); err != nil {
 		return nil, err
 	}

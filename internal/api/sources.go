@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -23,6 +22,7 @@ import (
 	"github.com/Asion001/mangarr/internal/modules/source"
 	"github.com/Asion001/mangarr/internal/sourcecache"
 	"github.com/Asion001/mangarr/internal/sourcegov"
+	"github.com/Asion001/mangarr/internal/sourcesearch"
 )
 
 func init() {
@@ -49,17 +49,8 @@ func capIf(ok bool, name string) string {
 // SourceResource is a catalog as returned by the API.
 type SourceResource = catalogs.Catalog
 
-type SearchResultGroup struct {
-	ModuleID   int64          `json:"moduleId"`
-	SourceID   string         `json:"sourceId"`
-	SourceName string         `json:"sourceName"`
-	Lang       string         `json:"lang"`
-	Results    []source.Manga `json:"results"`
-	HasNext    bool           `json:"hasNext"`
-	Error      string         `json:"error,omitempty"`
-	// Cached is true when the results came from the cache.
-	Cached bool `json:"cached"`
-}
+// SearchResultGroup holds one catalog's results.
+type SearchResultGroup = sourcesearch.SearchResultGroup
 
 type imageOutput struct {
 	ContentType  string `header:"Content-Type"`
@@ -68,44 +59,16 @@ type imageOutput struct {
 }
 
 // Cache TTLs for catalog responses.
-const (
-	searchTTL  = 15 * time.Minute
-	browseTTL  = 30 * time.Minute
-	detailsTTL = 60 * time.Minute
-)
+const browseTTL = 30 * time.Minute
 
 // searchCatalog searches one catalog through the cache.
 func (s *Server) searchCatalog(ctx context.Context, moduleID int64, sourceID, query string, page int) (*source.MangaPage, bool, error) {
-	key := sourcecache.SearchKey(s.app.Catalogs.Generation(), moduleID, sourceID, query, page)
-	return sourcecache.Do(s.app.SourceCache, key, searchTTL, func() (*source.MangaPage, error) {
-		mod, _, err := modules.GetAs[source.Module](s.app.Modules, moduleID)
-		if err != nil {
-			return nil, err
-		}
-		return mod.Search(ctx, sourceID, query, page)
-	})
+	return s.app.Search.Search(ctx, moduleID, sourceID, query, page)
 }
 
 // mangaDetails fetches details and chapters through the cache.
 func (s *Server) mangaDetails(ctx context.Context, moduleID int64, ref source.MangaRef, fresh bool) (*sourcecache.Details, bool, error) {
-	key := sourcecache.DetailsKey(s.app.Catalogs.Generation(), moduleID, ref.SourceID, ref.URL)
-	if fresh {
-		s.app.SourceCache.DeletePrefix(key)
-	}
-	return sourcecache.Do(s.app.SourceCache, key, detailsTTL, func() (*sourcecache.Details, error) {
-		mod, _, err := modules.GetAs[source.Module](s.app.Modules, moduleID)
-		if err != nil {
-			return nil, err
-		}
-		det, chs, err := mod.Manga(ctx, ref, true)
-		if err != nil {
-			return nil, err
-		}
-		if chs == nil {
-			chs = []source.Chapter{}
-		}
-		return &sourcecache.Details{Details: det, Chapters: chs, FetchedAt: time.Now()}, nil
-	})
+	return s.app.Search.Details(ctx, moduleID, ref, fresh)
 }
 
 type MangaDetailsResult struct {
@@ -116,29 +79,7 @@ type MangaDetailsResult struct {
 
 // SearchSources runs a query against many catalogs in parallel.
 func (s *Server) SearchSources(ctx context.Context, query string, targets []catalogs.Catalog, page int) []SearchResultGroup {
-	results := make([]SearchResultGroup, len(targets))
-	sem := make(chan struct{}, 6)
-	var wg sync.WaitGroup
-	for i, t := range targets {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
-			g := SearchResultGroup{ModuleID: t.ModuleID, SourceID: t.ID, SourceName: t.DisplayName, Lang: t.Lang, Results: []source.Manga{}}
-			sctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-			res, cached, err := s.searchCatalog(sctx, t.ModuleID, t.ID, query, page)
-			cancel()
-			if err == nil {
-				g.Results, g.HasNext, g.Cached = res.Mangas, res.HasNext, cached
-			} else {
-				g.Error = err.Error()
-			}
-			results[i] = g
-		}()
-	}
-	wg.Wait()
-	return results
+	return s.app.Search.SearchMany(ctx, query, targets, page)
 }
 
 // allowedCatalog returns a 404 for hidden catalogs.

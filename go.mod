@@ -17,6 +17,7 @@ require (
 	golang.org/x/sync v0.23.0
 	golang.org/x/sys v0.48.0
 	golang.org/x/text v0.42.0
+	howett.net/plist v1.0.1
 	modernc.org/sqlite v1.58.0
 )
 
