@@ -54,6 +54,8 @@ type Scenario struct {
 	Searches    int
 	SearchDelay time.Duration
 	SearchErr   map[string]error
+	// PageDelay slows down every page fetch (honoring cancellation).
+	PageDelay time.Duration
 	// ThumbErr makes thumbnail requests fail; Thumbs counts them.
 	ThumbErr error
 	Thumbs   int
@@ -188,7 +190,15 @@ func (m *Module) FetchPage(ctx context.Context, p source.Page) (io.ReadCloser, s
 	m.sc.mu.Lock()
 	m.sc.Fetches++
 	w := m.sc.PageWidth
+	delay := m.sc.PageDelay
 	m.sc.mu.Unlock()
+	if delay > 0 {
+		select {
+		case <-ctx.Done():
+			return nil, "", ctx.Err()
+		case <-time.After(delay):
+		}
+	}
 	img := image.NewRGBA(image.Rect(0, 0, w, w*3/2))
 	img.Set(0, 0, color.Black)
 	var buf bytes.Buffer

@@ -9,6 +9,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -113,6 +115,76 @@ type QuickSearch struct {
 	BudgetSeconds int    `json:"budgetSeconds" desc:"Time limit for the one-by-one search (seconds)."`
 }
 
+// Schedule holds time windows that pause work or tighten throttling
+// (e.g. "upscale only at night", "gentle during the day").
+type Schedule struct {
+	// Timezone is an IANA name ("Europe/Madrid"); empty = the server's local time (TZ).
+	Timezone string           `json:"timezone" desc:"IANA time zone for the windows (empty = server time, TZ)."`
+	Windows  []ScheduleWindow `json:"windows" desc:"Time windows as JSON: [{\"name\":\"Night\",\"days\":[\"mon\"],\"start\":\"01:00\",\"end\":\"07:00\",\"pauseDownloads\":true}]"`
+}
+
+// ScheduleWindow applies its effects between Start and End on Days.
+type ScheduleWindow struct {
+	Name string `json:"name"`
+	// Days are mon…sun; empty = every day. A window crossing midnight
+	// belongs to the day it starts.
+	Days []string `json:"days"`
+	// Start/End are "HH:MM"; End before Start crosses midnight.
+	Start string `json:"start"`
+	End   string `json:"end"`
+	// PauseDownloads stops new chapter downloads; PauseProcessing stops
+	// upscaling/re-encoding; Throttle applies a throttle preset.
+	PauseDownloads  bool   `json:"pauseDownloads"`
+	PauseProcessing bool   `json:"pauseProcessing"`
+	Throttle        string `json:"throttle,omitempty" enum:",gentle,normal,fast"`
+}
+
+// ParseClock parses "HH:MM" into minutes after midnight.
+func ParseClock(s string) (int, error) {
+	var h, m int
+	if _, err := fmt.Sscanf(strings.TrimSpace(s), "%d:%d", &h, &m); err != nil || h < 0 || h > 24 || m < 0 || m > 59 || (h == 24 && m != 0) {
+		return 0, fmt.Errorf("invalid time %q (want HH:MM)", s)
+	}
+	return h*60 + m, nil
+}
+
+var weekdays = []string{"sun", "mon", "tue", "wed", "thu", "fri", "sat"}
+
+// Validate checks times, days and the time zone.
+func (s Schedule) Validate() error {
+	if s.Timezone != "" {
+		if _, err := time.LoadLocation(s.Timezone); err != nil {
+			return fmt.Errorf("unknown time zone %q", s.Timezone)
+		}
+	}
+	for i, w := range s.Windows {
+		if _, err := ParseClock(w.Start); err != nil {
+			return fmt.Errorf("window %d: %w", i+1, err)
+		}
+		if _, err := ParseClock(w.End); err != nil {
+			return fmt.Errorf("window %d: %w", i+1, err)
+		}
+		for _, d := range w.Days {
+			if !slices.Contains(weekdays, strings.ToLower(d)) {
+				return fmt.Errorf("window %d: unknown day %q (use mon…sun)", i+1, d)
+			}
+		}
+	}
+	return nil
+}
+
+// QueueState is the download queue's global pause (not a user settings
+// document; changed through the queue API).
+type QueueState struct {
+	Paused      bool       `json:"paused"`
+	PausedUntil *time.Time `json:"pausedUntil,omitempty"`
+}
+
+// Active reports whether the queue is paused at now.
+func (q QueueState) Active(now time.Time) bool {
+	return q.Paused && (q.PausedUntil == nil || now.Before(*q.PausedUntil))
+}
+
 func DefaultSources() Sources {
 	return Sources{
 		HideNSFW: true, DefaultLanguages: []string{},
@@ -195,6 +267,7 @@ var Docs = []DocInfo{
 	{KeyCleanup, "cleanup", "CLEANUP", func() any { v := DefaultCleanup(); return &v }},
 	{KeyReadSync, "readsync", "READSYNC", func() any { v := DefaultReadSync(); return &v }},
 	{KeySources, "sources", "SOURCES", func() any { v := DefaultSources(); return &v }},
+	{KeySchedule, "schedule", "SCHEDULE", func() any { v := Schedule{Windows: []ScheduleWindow{}}; return &v }},
 }
 
 // SetOverlay pins fields of document key: raw is a partial JSON object that
@@ -223,6 +296,8 @@ const (
 	KeyCleanup         = "cleanup"
 	KeyReadSync        = "read_sync"
 	KeySources         = "sources"
+	KeySchedule        = "schedule"
+	KeyQueueState      = "queue_state"
 )
 
 // Warm loads every stored document into the cache. Afterwards Get never
@@ -338,6 +413,16 @@ func (s *Store) Cleanup(ctx context.Context) (Cleanup, error) {
 func (s *Store) Sources(ctx context.Context) (Sources, error) {
 	v := DefaultSources()
 	return v, s.Get(ctx, KeySources, &v)
+}
+
+func (s *Store) Schedule(ctx context.Context) (Schedule, error) {
+	v := Schedule{Windows: []ScheduleWindow{}}
+	return v, s.Get(ctx, KeySchedule, &v)
+}
+
+func (s *Store) QueueState(ctx context.Context) (QueueState, error) {
+	var v QueueState
+	return v, s.Get(ctx, KeyQueueState, &v)
 }
 
 func (s *Store) ReadSync(ctx context.Context) (ReadSync, error) {

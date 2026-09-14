@@ -26,6 +26,7 @@ import (
 	"github.com/Asion001/mangarr/internal/model"
 	"github.com/Asion001/mangarr/internal/modules"
 	"github.com/Asion001/mangarr/internal/modules/source"
+	"github.com/Asion001/mangarr/internal/quiet"
 	"github.com/Asion001/mangarr/internal/settings"
 	"github.com/Asion001/mangarr/internal/sourcegov"
 )
@@ -156,7 +157,14 @@ func (s *Service) throttle(k sourcegov.Key) model.ThrottleConfig {
 	s.mu.Lock()
 	p := s.prefs[prefKey{k.ModuleID, k.SourceID}]
 	s.mu.Unlock()
-	return sourcegov.Resolve(s.sourceSettings().Throttle, p.Throttle)
+	layers := []model.ThrottleConfig{s.sourceSettings().Throttle, p.Throttle}
+	// quiet hours can switch to a gentler preset
+	if sched, err := s.settings.Schedule(context.Background()); err == nil {
+		if q := quiet.Evaluate(sched, time.Now()); q.Throttle != "" {
+			layers = append(layers, model.ThrottleConfig{Preset: q.Throttle})
+		}
+	}
+	return sourcegov.Resolve(layers...)
 }
 
 // EffectiveThrottle returns the throttle applied to a catalog.

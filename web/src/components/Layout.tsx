@@ -24,7 +24,8 @@ type NavItem = { to: string; label: string; icon: ReactNode; children?: { to: st
 export function Layout() {
   const [open, setOpen] = useState(false);
   const loc = useLocation();
-  const { data: queue } = useQueue(false);
+  const { data: queue } = useQueue({ pageSize: 1 });
+  const queued = queue?.total ?? 0;
   const { data: health } = useHealth();
   const qc = useQueryClient();
   const issues = (health?.checks ?? []).filter((c) => c.type === "error" || c.type === "warning").length;
@@ -60,6 +61,7 @@ export function Layout() {
         { to: "/settings/upscalers", label: "Upscalers" },
         { to: "/settings/readers", label: "Readers" },
         { to: "/settings/downloads", label: "Downloads" },
+        { to: "/settings/schedule", label: "Schedule" },
         { to: "/settings/general", label: "General" },
       ],
     },
@@ -102,8 +104,8 @@ export function Layout() {
             >
               {item.icon}
               <span className="flex-1">{item.label}</span>
-              {item.to === "/activity" && (queue?.length ?? 0) > 0 && (
-                <span className="rounded-full bg-accent px-1.5 text-xs text-white">{queue?.length}</span>
+              {item.to === "/activity" && queued > 0 && (
+                <span className={`rounded-full px-1.5 text-xs text-white ${queue?.state.paused ? "bg-warn" : "bg-accent"}`}>{queued}</span>
               )}
               {item.to === "/system" && issues > 0 && <span className="rounded-full bg-warn px-1.5 text-xs text-black">{issues}</span>}
             </NavLink>
@@ -128,7 +130,7 @@ export function Layout() {
       })}
       <div className="mt-auto flex items-center justify-between px-2 pt-4 text-xs text-muted">
         <span className="flex items-center gap-1">
-          <Activity className="size-3.5" /> {queue?.length ?? 0} in queue
+          <Activity className="size-3.5" /> {queued} in queue{queue?.state.paused ? " (paused)" : ""}
         </span>
         <button className="flex items-center gap-1 hover:text-fg" onClick={logout}>
           <LogOut className="size-3.5" /> Log out

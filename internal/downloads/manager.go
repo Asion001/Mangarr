@@ -2,6 +2,7 @@ package downloads
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"io"
@@ -27,6 +28,7 @@ import (
 	"github.com/Asion001/mangarr/internal/model"
 	"github.com/Asion001/mangarr/internal/modules"
 	"github.com/Asion001/mangarr/internal/modules/source"
+	"github.com/Asion001/mangarr/internal/quiet"
 	"github.com/Asion001/mangarr/internal/settings"
 	"github.com/Asion001/mangarr/internal/sourcegov"
 )
@@ -72,6 +74,7 @@ type Manager struct {
 
 	mu          sync.Mutex
 	running     map[int64]context.CancelFunc
+	runningKind map[int64]string
 	runningSrc  map[string]int
 	lastMaint   time.Time
 	wasBusy     bool
@@ -81,7 +84,7 @@ type Manager struct {
 
 func NewManager(d *db.DB, bus *events.Bus, mods *modules.Manager, st *settings.Store, lib *library.Library, q *Queue, s *Searcher, log *slog.Logger, dataDir string) *Manager {
 	return &Manager{db: d, bus: bus, mods: mods, settings: st, lib: lib, queue: q, searcher: s, log: log, dataDir: dataDir,
-		running: map[int64]context.CancelFunc{}, runningSrc: map[string]int{}, lastPersist: map[int64]time.Time{}}
+		running: map[int64]context.CancelFunc{}, runningKind: map[int64]string{}, runningSrc: map[string]int{}, lastPersist: map[int64]time.Time{}}
 }
 
 // Start recovers interrupted jobs and starts the scheduling loop.
@@ -142,12 +145,18 @@ func (m *Manager) dispatch(ctx context.Context) {
 	if dl.MaxPerSource <= 0 {
 		dl.MaxPerSource = 1
 	}
+	now := time.Now()
+	if qs, _ := m.settings.QueueState(ctx); qs.Active(now) {
+		return // the whole queue is paused
+	}
+	sched, _ := m.settings.Schedule(ctx)
+	quietNow := quiet.Evaluate(sched, now)
 	var jobs []queuedJob
 	err := m.db.NewSelect().TableExpr("download_jobs AS j").ColumnExpr("j.*, COALESCE(ss.module_id, 0) AS module_id, COALESCE(ss.source_id, '') AS source_id").
 		Join("LEFT JOIN chapter_releases AS r ON r.id = j.release_id").
 		Join("LEFT JOIN series_sources AS ss ON ss.id = r.series_source_id").
 		Where("j.status = ? AND j.not_before <= ?", model.JobQueued, time.Now().UTC()).
-		OrderExpr("j.id").Limit(100).Scan(ctx, &jobs)
+		OrderExpr("j.priority DESC, j.id").Limit(100).Scan(ctx, &jobs)
 	if err != nil {
 		if ctx.Err() == nil {
 			m.log.Error("download queue", "err", err)
@@ -164,6 +173,12 @@ func (m *Manager) dispatch(ctx context.Context) {
 		if _, ok := m.running[j.ID]; ok {
 			continue
 		}
+		if (j.Kind == model.JobKindDownload && quietNow.PauseDownloads) || (j.Kind == model.JobKindReprocess && quietNow.PauseProcessing) {
+			continue // quiet hours
+		}
+		if j.Kind == model.JobKindReprocess && m.runningOfKind(model.JobKindReprocess) >= MaxReprocess {
+			continue // processing is GPU/CPU heavy: one at a time
+		}
 		src := srcKey(j.ModuleID, j.SourceID)
 		if src != "" && m.runningSrc[src] >= dl.MaxPerSource {
 			continue
@@ -175,6 +190,7 @@ func (m *Manager) dispatch(ctx context.Context) {
 		}
 		jctx, cancel := context.WithCancel(ctx)
 		m.running[j.ID] = cancel
+		m.runningKind[j.ID] = j.Kind
 		m.runningSrc[src]++
 		busy = true
 		go func(job model.DownloadJob, src string) {
@@ -182,6 +198,7 @@ func (m *Manager) dispatch(ctx context.Context) {
 				cancel()
 				m.mu.Lock()
 				delete(m.running, job.ID)
+				delete(m.runningKind, job.ID)
 				m.runningSrc[src]--
 				m.mu.Unlock()
 				m.progressMu.Lock()
@@ -257,7 +274,14 @@ func (m *Manager) setStatus(ctx context.Context, job *model.DownloadJob, status 
 		job.StartedAt = &now
 		cols = append(cols, "started_at")
 	}
-	_, _ = m.db.NewUpdate().Model(job).Column(cols...).WherePK().Exec(ctx)
+	// compare-and-set: a job paused meanwhile keeps its paused status
+	res, err := m.db.NewUpdate().Model(job).Column(cols...).WherePK().Where("status <> ?", model.JobPaused).Exec(ctx)
+	if err != nil {
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return
+	}
 	if chapterState != "" && !job.IsUpgrade && job.Kind == model.JobKindDownload {
 		_, _ = m.db.NewUpdate().Model((*model.Chapter)(nil)).Set("state = ?", chapterState).Set("updated_at = ?", now).Where("id = ?", job.ChapterID).Exec(ctx)
 		m.bus.Changed("chapter", "updated", job.ChapterID)
@@ -352,7 +376,12 @@ func (m *Manager) run(ctx context.Context, job model.DownloadJob) {
 			sizeBefore += st.Size()
 		}
 	}
-	if m.Processor != nil && jc.profile.Config.Upscale.Enabled {
+	processingPaused := false
+	if job.Kind == model.JobKindDownload {
+		sched, _ := m.settings.Schedule(ctx)
+		processingPaused = quiet.Evaluate(sched, time.Now()).PauseProcessing
+	}
+	if m.Processor != nil && jc.profile.Config.Upscale.Enabled && !processingPaused {
 		m.setStatus(ctx, &job, model.JobProcessing, model.ChapterProcessing)
 		out, applied, mdl, perr := m.Processor.Process(ctx, jc.profile.Config.Upscale, pages, workDir)
 		switch {
@@ -387,11 +416,94 @@ func (m *Manager) run(ctx context.Context, job model.DownloadJob) {
 	log.Info("chapter imported", "series", jc.series.Title, "chapter", jc.chapter.NumberKey, "pages", len(pages), "upscaled", upscaled)
 }
 
+// MaxReprocess is the number of reprocess (upscale/re-encode) jobs run at once.
+const MaxReprocess = 1
+
+func (m *Manager) runningOfKind(kind string) int {
+	n := 0
+	for _, k := range m.runningKind {
+		if k == kind {
+			n++
+		}
+	}
+	return n
+}
+
+// Bulk applies an action to queue entries and returns how many changed.
+// Actions: pause, resume, retry, remove, blocklist, top, bottom.
+func (m *Manager) Bulk(ctx context.Context, ids []int64, action string) (int, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	now := time.Now().UTC()
+	affected := 0
+	exec := func(q *bun.UpdateQuery) error {
+		res, err := q.Where("id IN (?)", bun.In(ids)).Exec(ctx)
+		if err == nil {
+			n, _ := res.RowsAffected()
+			affected = int(n)
+		}
+		return err
+	}
+	var err error
+	switch action {
+	case "pause":
+		err = exec(m.db.NewUpdate().Model((*model.DownloadJob)(nil)).Set("status = ?", model.JobPaused).Set("updated_at = ?", now).
+			Where("status IN (?)", bun.In([]string{model.JobQueued, model.JobDownloading, model.JobProcessing})))
+		if err == nil {
+			for _, id := range ids {
+				m.Cancel(id) // stops running ones; their status stays paused
+			}
+			// chapters of paused downloads show as queued again
+			_, err = m.db.NewUpdate().Model((*model.Chapter)(nil)).Set("state = ?", model.ChapterQueued).Set("updated_at = ?", now).
+				Where("id IN (SELECT chapter_id FROM download_jobs WHERE id IN (?) AND status = ? AND kind = ? AND is_upgrade = ?)", bun.In(ids), model.JobPaused, model.JobKindDownload, false).
+				Where("state IN (?)", bun.In([]string{model.ChapterDownloading, model.ChapterProcessing})).Exec(ctx)
+		}
+	case "resume":
+		err = exec(m.db.NewUpdate().Model((*model.DownloadJob)(nil)).Set("status = ?", model.JobQueued).Set("not_before = ?", now).Set("updated_at = ?", now).
+			Where("status = ?", model.JobPaused))
+	case "retry":
+		err = exec(m.db.NewUpdate().Model((*model.DownloadJob)(nil)).Set("status = ?", model.JobQueued).Set("error = ''").Set("attempt = 0").
+			Set("not_before = ?", now).Set("updated_at = ?", now).Where("status = ?", model.JobFailed))
+	case "remove", "blocklist":
+		for _, id := range ids {
+			m.Cancel(id)
+			if e := m.queue.Remove(ctx, id, action == "blocklist"); e == nil {
+				affected++
+			} else if !errors.Is(e, sql.ErrNoRows) {
+				err = e
+			}
+		}
+	case "top", "bottom":
+		var edge int
+		agg := "MAX(priority)"
+		if action == "bottom" {
+			agg = "MIN(priority)"
+		}
+		if e := m.db.NewSelect().Model((*model.DownloadJob)(nil)).ColumnExpr("COALESCE("+agg+", 0)").
+			Where("status IN (?)", bun.In(activeStatuses)).Scan(ctx, &edge); e != nil {
+			return 0, e
+		}
+		p := edge + 1
+		if action == "bottom" {
+			p = edge - 1
+		}
+		err = exec(m.db.NewUpdate().Model((*model.DownloadJob)(nil)).Set("priority = ?", p).Set("updated_at = ?", now).
+			Where("status IN (?)", bun.In(activeStatuses)))
+	default:
+		return 0, fmt.Errorf("unknown action %q", action)
+	}
+	m.queue.signal()
+	m.bus.Changed("queue", "sync", 0)
+	m.bus.Changed("chapter", "updated", 0)
+	return affected, err
+}
+
 // completeUnchanged finishes a reprocess job that had nothing to do, leaving
 // the chapter file untouched.
 func (m *Manager) completeUnchanged(ctx context.Context, job *model.DownloadJob, reason string) {
 	job.Status, job.Progress, job.Error, job.UpdatedAt = model.JobCompleted, 100, "", time.Now().UTC()
-	_, _ = m.db.NewUpdate().Model(job).Column("status", "progress", "error", "updated_at").WherePK().Exec(ctx)
+	_, _ = m.db.NewUpdate().Model(job).Column("status", "progress", "error", "updated_at").WherePK().Where("status <> ?", model.JobPaused).Exec(ctx)
 	m.log.Info("reprocess skipped", "job", job.ID, "chapter", job.ChapterID, "reason", reason)
 	m.bus.Changed("queue", "updated", job.ID)
 }
@@ -736,7 +848,7 @@ func (m *Manager) fail(ctx context.Context, job *model.DownloadJob, jc *jobCtx, 
 	// counting it against the release
 	if until := m.cooldownUntil(err, jc); !until.IsZero() {
 		job.Status, job.NotBefore = model.JobQueued, until
-		_, _ = m.db.NewUpdate().Model(job).Column("status", "error", "not_before", "updated_at", "release_id").WherePK().Exec(bg)
+		_, _ = m.db.NewUpdate().Model(job).Column("status", "error", "not_before", "updated_at", "release_id").WherePK().Where("status <> ?", model.JobPaused).Exec(bg)
 		m.log.Info("source is cooling down, download postponed", "job", job.ID, "until", until.Local().Format(time.TimeOnly))
 		m.bus.Changed("queue", "updated", job.ID)
 		return
@@ -750,7 +862,7 @@ func (m *Manager) fail(ctx context.Context, job *model.DownloadJob, jc *jobCtx, 
 
 	requeue := func(delay time.Duration) {
 		job.Status, job.NotBefore = model.JobQueued, now.Add(delay)
-		_, _ = m.db.NewUpdate().Model(job).Column("status", "attempt", "error", "not_before", "updated_at", "release_id").WherePK().Exec(bg)
+		_, _ = m.db.NewUpdate().Model(job).Column("status", "attempt", "error", "not_before", "updated_at", "release_id").WherePK().Where("status <> ?", model.JobPaused).Exec(bg)
 		m.bus.Changed("queue", "updated", job.ID)
 	}
 	switch {
@@ -782,7 +894,7 @@ func (m *Manager) fail(ctx context.Context, job *model.DownloadJob, jc *jobCtx, 
 		}
 	}
 	job.Status = model.JobFailed
-	_, _ = m.db.NewUpdate().Model(job).Column("status", "attempt", "error", "updated_at").WherePK().Exec(bg)
+	_, _ = m.db.NewUpdate().Model(job).Column("status", "attempt", "error", "updated_at").WherePK().Where("status <> ?", model.JobPaused).Exec(bg)
 	if job.Kind == model.JobKindDownload {
 		_ = resetChapterState(bg, m.db, job.ChapterID)
 		var ch model.Chapter

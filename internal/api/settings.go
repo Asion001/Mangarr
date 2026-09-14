@@ -34,6 +34,11 @@ func settingsDoc[T any](s *Server, name, key string, get func(context.Context) (
 		})
 	huma.Register(s.api, huma.Operation{OperationID: "settings-put-" + name, Method: http.MethodPut, Path: "/api/v1/settings/" + name, Tags: tags},
 		func(ctx context.Context, in *struct{ Body T }) (*struct{ Body T }, error) {
+			if v, ok := any(in.Body).(interface{ Validate() error }); ok {
+				if err := v.Validate(); err != nil {
+					return nil, huma.Error400BadRequest(err.Error())
+				}
+			}
 			if err := s.app.Settings.Set(ctx, key, in.Body); err != nil {
 				return nil, toHTTPError(err)
 			}
@@ -120,6 +125,10 @@ func (s *Server) registerSettings() {
 		})
 
 	settingsDoc(s, "media", settings.KeyMediaManagement, s.app.Settings.MediaManagement, nil)
+	settingsDoc(s, "schedule", settings.KeySchedule, s.app.Settings.Schedule, func(ctx context.Context, v settings.Schedule) error {
+		s.app.DLQueue.Wake()
+		return nil
+	})
 	settingsDoc(s, "sources", settings.KeySources, s.app.Settings.Sources, func(ctx context.Context, v settings.Sources) error {
 		s.app.Catalogs.Bump() // hidden/default catalogs may have changed
 		return nil

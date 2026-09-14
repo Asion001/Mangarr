@@ -318,6 +318,7 @@ type ChapterFile struct {
 
 const (
 	JobQueued      = "queued"
+	JobPaused      = "paused"
 	JobDownloading = "downloading"
 	JobProcessing  = "processing"
 	JobImporting   = "importing"
@@ -330,22 +331,24 @@ const (
 
 type DownloadJob struct {
 	bun.BaseModel `bun:"table:download_jobs"`
-	ID            int64      `bun:"id,pk,autoincrement" json:"id"`
-	Kind          string     `bun:"kind,notnull" json:"kind"`
-	SeriesID      int64      `bun:"series_id,notnull" json:"seriesId"`
-	ChapterID     int64      `bun:"chapter_id,notnull" json:"chapterId"`
-	ReleaseID     *int64     `bun:"release_id" json:"releaseId,omitempty"`
-	Status        string     `bun:"status,notnull" json:"status"`
-	Progress      int        `bun:"progress,notnull" json:"progress"`
-	PagesDone     int        `bun:"pages_done,notnull" json:"pagesDone"`
-	PagesTotal    int        `bun:"pages_total,notnull" json:"pagesTotal"`
-	Attempt       int        `bun:"attempt,notnull" json:"attempt"`
-	IsUpgrade     bool       `bun:"is_upgrade,notnull" json:"isUpgrade"`
-	Error         string     `bun:"error,notnull" json:"error"`
-	NotBefore     time.Time  `bun:"not_before,notnull" json:"notBefore"`
-	CreatedAt     time.Time  `bun:"created_at,notnull" json:"createdAt"`
-	UpdatedAt     time.Time  `bun:"updated_at,notnull" json:"updatedAt"`
-	StartedAt     *time.Time `bun:"started_at" json:"startedAt,omitempty"`
+	ID            int64  `bun:"id,pk,autoincrement" json:"id"`
+	Kind          string `bun:"kind,notnull" json:"kind"`
+	SeriesID      int64  `bun:"series_id,notnull" json:"seriesId"`
+	ChapterID     int64  `bun:"chapter_id,notnull" json:"chapterId"`
+	ReleaseID     *int64 `bun:"release_id" json:"releaseId,omitempty"`
+	Status        string `bun:"status,notnull" json:"status"`
+	// Priority orders the queue: higher first (backlog work is negative).
+	Priority   int        `bun:"priority,notnull" json:"priority"`
+	Progress   int        `bun:"progress,notnull" json:"progress"`
+	PagesDone  int        `bun:"pages_done,notnull" json:"pagesDone"`
+	PagesTotal int        `bun:"pages_total,notnull" json:"pagesTotal"`
+	Attempt    int        `bun:"attempt,notnull" json:"attempt"`
+	IsUpgrade  bool       `bun:"is_upgrade,notnull" json:"isUpgrade"`
+	Error      string     `bun:"error,notnull" json:"error"`
+	NotBefore  time.Time  `bun:"not_before,notnull" json:"notBefore"`
+	CreatedAt  time.Time  `bun:"created_at,notnull" json:"createdAt"`
+	UpdatedAt  time.Time  `bun:"updated_at,notnull" json:"updatedAt"`
+	StartedAt  *time.Time `bun:"started_at" json:"startedAt,omitempty"`
 }
 
 const (

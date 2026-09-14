@@ -18,7 +18,11 @@ import (
 	"github.com/Asion001/mangarr/internal/model"
 )
 
-var activeStatuses = []string{model.JobQueued, model.JobDownloading, model.JobProcessing, model.JobImporting}
+// activeStatuses are jobs that still hold their chapter (one per chapter).
+var activeStatuses = []string{model.JobQueued, model.JobPaused, model.JobDownloading, model.JobProcessing, model.JobImporting}
+
+// ActiveStatuses returns the statuses of unfinished jobs.
+func ActiveStatuses() []string { return append([]string(nil), activeStatuses...) }
 
 type Queue struct {
 	db   *db.DB
@@ -29,6 +33,9 @@ type Queue struct {
 func NewQueue(d *db.DB, bus *events.Bus) *Queue {
 	return &Queue{db: d, bus: bus, wake: make(chan struct{}, 1)}
 }
+
+// Wake makes the manager look at the queue now.
+func (q *Queue) Wake() { q.signal() }
 
 func (q *Queue) signal() {
 	select {
@@ -86,27 +93,100 @@ type JobView struct {
 	Scanlator   string  `json:"scanlator"`
 }
 
-// List returns active jobs (plus recently failed/completed when includeDone).
-func (q *Queue) List(ctx context.Context, includeDone bool) ([]JobView, error) {
-	var out []JobView
+// ListFilter selects queue entries.
+type ListFilter struct {
+	// Statuses limits to these statuses (empty = active ones, plus recently
+	// finished ones when IncludeDone).
+	Statuses []string `json:"statuses,omitempty"`
+	Kind     string   `json:"kind,omitempty" enum:",download,reprocess"`
+	SeriesID int64    `json:"seriesId,omitempty"`
+	// Query matches the series title.
+	Query       string `json:"q,omitempty"`
+	IncludeDone bool   `json:"includeDone,omitempty"`
+}
+
+func (q *Queue) base(f ListFilter, withStatus bool) *bun.SelectQuery {
 	sel := q.db.NewSelect().TableExpr("download_jobs AS j").
-		ColumnExpr("j.*").
-		ColumnExpr("s.title AS series_title, c.number_key AS chapter, c.number_sort AS number_sort").
-		ColumnExpr("COALESCE(ss.source_name, '') AS source_name, COALESCE(r.scanlator, '') AS scanlator").
 		Join("JOIN series AS s ON s.id = j.series_id").
 		Join("JOIN chapters AS c ON c.id = j.chapter_id").
 		Join("LEFT JOIN chapter_releases AS r ON r.id = j.release_id").
 		Join("LEFT JOIN series_sources AS ss ON ss.id = r.series_source_id")
-	if includeDone {
-		sel = sel.Where("j.status IN (?) OR j.updated_at > ?", bun.In(activeStatuses), time.Now().UTC().Add(-24*time.Hour))
-	} else {
+	if f.Kind != "" {
+		sel = sel.Where("j.kind = ?", f.Kind)
+	}
+	if f.SeriesID > 0 {
+		sel = sel.Where("j.series_id = ?", f.SeriesID)
+	}
+	if qs := strings.TrimSpace(f.Query); qs != "" {
+		sel = sel.Where("LOWER(s.title) LIKE ?", "%"+strings.ToLower(qs)+"%")
+	}
+	switch {
+	case withStatus && len(f.Statuses) > 0:
+		sel = sel.Where("j.status IN (?)", bun.In(f.Statuses))
+	case f.IncludeDone:
+		sel = sel.Where("(j.status IN (?) OR j.updated_at > ?)", bun.In(activeStatuses), time.Now().UTC().Add(-24*time.Hour))
+	default:
 		sel = sel.Where("j.status IN (?)", bun.In(activeStatuses))
 	}
-	err := sel.OrderExpr("j.id").Scan(ctx, &out)
-	if out == nil {
-		out = []JobView{}
+	return sel
+}
+
+// QueuePage is one page of the queue.
+type QueuePage struct {
+	Items    []JobView `json:"items"`
+	Total    int       `json:"total"`
+	Page     int       `json:"page"`
+	PageSize int       `json:"pageSize"`
+	// Counts are per status for the filter without its status part.
+	Counts map[string]int `json:"counts"`
+}
+
+// ListPage returns a page of the queue: running jobs first, then by priority.
+func (q *Queue) ListPage(ctx context.Context, f ListFilter, page, pageSize int) (*QueuePage, error) {
+	page, pageSize = max(page, 1), min(max(pageSize, 1), 500)
+	out := &QueuePage{Items: []JobView{}, Page: page, PageSize: pageSize, Counts: map[string]int{}}
+	total, err := q.base(f, true).Count(ctx)
+	if err != nil {
+		return nil, err
 	}
-	return out, err
+	out.Total = total
+	err = q.base(f, true).
+		ColumnExpr("j.*").
+		ColumnExpr("s.title AS series_title, c.number_key AS chapter, c.number_sort AS number_sort").
+		ColumnExpr("COALESCE(ss.source_name, '') AS source_name, COALESCE(r.scanlator, '') AS scanlator").
+		OrderExpr("CASE j.status WHEN 'importing' THEN 0 WHEN 'processing' THEN 1 WHEN 'downloading' THEN 2 WHEN 'queued' THEN 3 WHEN 'paused' THEN 4 WHEN 'failed' THEN 5 ELSE 6 END").
+		OrderExpr("j.priority DESC, j.id").
+		Limit(pageSize).Offset((page-1)*pageSize).Scan(ctx, &out.Items)
+	if err != nil {
+		return nil, err
+	}
+	var counts []struct {
+		Status string `bun:"status"`
+		N      int    `bun:"n"`
+	}
+	if err := q.base(f, false).ColumnExpr("j.status AS status, COUNT(*) AS n").GroupExpr("j.status").Scan(ctx, &counts); err != nil {
+		return nil, err
+	}
+	for _, c := range counts {
+		out.Counts[c.Status] = c.N
+	}
+	return out, nil
+}
+
+// List returns active jobs (plus recently failed/completed when includeDone).
+func (q *Queue) List(ctx context.Context, includeDone bool) ([]JobView, error) {
+	p, err := q.ListPage(ctx, ListFilter{IncludeDone: includeDone}, 1, 500)
+	if err != nil {
+		return nil, err
+	}
+	return p.Items, nil
+}
+
+// IDs returns the ids of the jobs matching f.
+func (q *Queue) IDs(ctx context.Context, f ListFilter) ([]int64, error) {
+	var ids []int64
+	err := q.base(f, true).ColumnExpr("j.id").OrderExpr("j.id").Scan(ctx, &ids)
+	return ids, err
 }
 
 // ActiveChapters returns chapter ids with active jobs for a series.

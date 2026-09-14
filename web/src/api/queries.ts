@@ -30,8 +30,10 @@ export const useSchema = (kind?: string) =>
     staleTime: 5 * 60_000,
   });
 
-export const useQueue = (includeDone = true) =>
-  useQuery({ queryKey: ["queue", includeDone], queryFn: () => unwrap(api.GET("/api/v1/queue", { params: { query: { includeDone } } })) });
+export type QueueFilter = { status?: string[]; kind?: "" | "download" | "reprocess"; q?: string; seriesId?: number; includeDone?: boolean; page?: number; pageSize?: number };
+
+export const useQueue = (f: QueueFilter = {}) =>
+  useQuery({ queryKey: ["queue", f], queryFn: () => unwrap(api.GET("/api/v1/queue", { params: { query: f } })), placeholderData: (prev) => prev });
 
 export const useHealth = () => useQuery({ queryKey: ["health"], queryFn: () => unwrap(api.GET("/api/v1/health")) });
 export const useCommands = () => useQuery({ queryKey: ["commands"], queryFn: () => unwrap(api.GET("/api/v1/commands", { params: { query: { limit: 50 } } })) });

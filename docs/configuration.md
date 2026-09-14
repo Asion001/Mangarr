@@ -100,6 +100,13 @@ Lists are comma-separated (`a,b,c`) or JSON; key/value settings use `key=value,k
 | `MANGARR_SOURCES_THROTTLE_REFRESH_GAP_MIN_SEC` | int | `0` | Minimum random pause between series checks on a catalog (s). |
 | `MANGARR_SOURCES_THROTTLE_REFRESH_GAP_MAX_SEC` | int | `0` | Maximum random pause between series checks on a catalog (s). |
 
+### schedule
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `MANGARR_SCHEDULE_TIMEZONE` | string | `` | IANA time zone for the windows (empty = server time, TZ). |
+| `MANGARR_SCHEDULE_WINDOWS` | json | `` | Time windows as JSON: [{"name":"Night","days":["mon"],"start":"01:00","end":"07:00","pauseDownloads":true}] |
+
 ## Modules
 
 Module instances are declared with `MANGARR_MODULE_<NAME>_IMPL=<kind>/<implementation>`; `<NAME>` is any identifier you choose (it keeps the instance's identity, so don't rename it). Then set fields with `MANGARR_MODULE_<NAME>_<FIELD>` and optionally:

@@ -503,9 +503,27 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Queue entries: running first, then by priority; filter by status, kind, series or title */
         get: operations["queue-list"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/queue/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply an action to selected entries (ids) or to every entry matching a filter */
+        post: operations["queue-bulk"];
         delete?: never;
         options?: never;
         head?: never;
@@ -522,6 +540,39 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["queue-clear"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/queue/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pause the whole queue (optionally for some minutes) */
+        post: operations["queue-pause"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/queue/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["queue-resume"];
         delete?: never;
         options?: never;
         head?: never;
@@ -993,6 +1044,22 @@ export interface paths {
         };
         get: operations["settings-get-readsync"];
         put: operations["settings-put-readsync"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["settings-get-schedule"];
+        put: operations["settings-put-schedule"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1642,6 +1709,8 @@ export interface components {
             /** Format: int64 */
             pagesTotal: number;
             /** Format: int64 */
+            priority: number;
+            /** Format: int64 */
             progress: number;
             /** Format: int64 */
             releaseId?: number;
@@ -1666,6 +1735,12 @@ export interface components {
             pageConcurrency: number;
             /** Format: int64 */
             pageRetries: number;
+        };
+        Effects: {
+            pauseDownloads: boolean;
+            pauseProcessing: boolean;
+            throttle?: string;
+            windows?: string[];
         };
         Entry: {
             attrs?: {
@@ -1784,6 +1859,8 @@ export interface components {
             /** Format: int64 */
             pagesTotal: number;
             /** Format: int64 */
+            priority: number;
+            /** Format: int64 */
             progress: number;
             /** Format: int64 */
             releaseId?: number;
@@ -1797,6 +1874,15 @@ export interface components {
             status: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        ListFilter: {
+            includeDone?: boolean;
+            /** @enum {string} */
+            kind?: "" | "download" | "reprocess";
+            q?: string;
+            /** Format: int64 */
+            seriesId?: number;
+            statuses?: string[];
         };
         Lock: {
             env: string;
@@ -1983,6 +2069,43 @@ export interface components {
             preferredScanlators: string[];
             upscale: components["schemas"]["UpscaleConfig"];
         };
+        "Queue-bulkResponse": {
+            /** Format: int64 */
+            affected: number;
+        };
+        "Queue-pauseRequest": {
+            /**
+             * Format: int64
+             * @description 0 = until resumed
+             */
+            minutes?: number;
+        };
+        QueueBulkInput: {
+            /** @enum {string} */
+            action: "pause" | "resume" | "retry" | "remove" | "blocklist" | "top" | "bottom";
+            /** @description Select every entry matching this filter instead of ids */
+            filter?: components["schemas"]["ListFilter"];
+            ids?: number[];
+        };
+        QueueResponse: {
+            counts: {
+                [key: string]: number;
+            };
+            items: components["schemas"]["JobView"][];
+            /** Format: int64 */
+            page: number;
+            /** Format: int64 */
+            pageSize: number;
+            state: components["schemas"]["QueueState"];
+            /** Format: int64 */
+            total: number;
+        };
+        QueueState: {
+            paused: boolean;
+            /** Format: date-time */
+            pausedUntil?: string;
+            quiet: components["schemas"]["Effects"];
+        };
         QuickCandidate: {
             chapters?: components["schemas"]["ChapterSummary"];
             lang: string;
@@ -2156,6 +2279,20 @@ export interface components {
         "Rootfolders-createRequest": {
             language: string;
             path: string;
+        };
+        Schedule: {
+            timezone: string;
+            windows: components["schemas"]["ScheduleWindow"][];
+        };
+        ScheduleWindow: {
+            days: string[];
+            end: string;
+            name: string;
+            pauseDownloads: boolean;
+            pauseProcessing: boolean;
+            start: string;
+            /** @enum {string} */
+            throttle?: "" | "gentle" | "normal" | "fast";
         };
         SearchResultGroup: {
             cached: boolean;
@@ -3736,7 +3873,14 @@ export interface operations {
     "queue-list": {
         parameters: {
             query?: {
+                /** @description Statuses (repeatable); empty = active (plus recent when includeDone) */
+                status?: string[];
+                kind?: "" | "download" | "reprocess";
+                seriesId?: number;
+                q?: string;
                 includeDone?: boolean;
+                page?: number;
+                pageSize?: number;
             };
             header?: never;
             path?: never;
@@ -3750,7 +3894,40 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JobView"][];
+                    "application/json": components["schemas"]["QueueResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "queue-bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QueueBulkInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Queue-bulkResponse"];
                 };
             };
             /** @description Error */
@@ -3779,6 +3956,68 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "queue-pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Queue-pauseRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueState"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "queue-resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueState"];
+                };
             };
             /** @description Error */
             default: {
@@ -5073,6 +5312,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReadSync"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "settings-get-schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Schedule"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "settings-put-schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Schedule"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Schedule"];
                 };
             };
             /** @description Error */
