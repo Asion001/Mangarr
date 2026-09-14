@@ -93,9 +93,9 @@ type seriesDTO struct {
 
 type volumeDTO struct {
 	Chapters []struct {
-		Pages                  int       `json:"pages"`
-		PagesRead              int       `json:"pagesRead"`
-		LastReadingProgressUtc time.Time `json:"lastReadingProgressUtc"`
+		Pages                  int    `json:"pages"`
+		PagesRead              int    `json:"pagesRead"`
+		LastReadingProgressUtc string `json:"lastReadingProgressUtc"`
 		Files                  []struct {
 			FilePath string `json:"filePath"`
 		} `json:"files"`
@@ -139,11 +139,7 @@ func (m *Module) ReadProgress(ctx context.Context, acc library.Account, localRoo
 					if c.PagesRead == 0 {
 						continue
 					}
-					var readAt *time.Time
-					if !c.LastReadingProgressUtc.IsZero() && c.LastReadingProgressUtc.Year() > 1 {
-						t := c.LastReadingProgressUtc
-						readAt = &t
-					}
+					readAt := parseDotNetTime(c.LastReadingProgressUtc)
 					for _, f := range c.Files {
 						out = append(out, library.BookProgress{LocalPath: m.pm.ToLocal(f.FilePath),
 							Completed: c.Pages > 0 && c.PagesRead >= c.Pages, Page: c.PagesRead, ReadAt: readAt})
@@ -159,3 +155,21 @@ func (m *Module) ReadProgress(ctx context.Context, acc library.Account, localRoo
 }
 
 var _ library.ProgressReader = (*Module)(nil)
+
+// parseDotNetTime parses .NET DateTime JSON, which may lack a time zone
+// ("2026-01-02T03:04:05.1234567"); such values are UTC in Kavita's *Utc fields.
+func parseDotNetTime(s string) *time.Time {
+	if s == "" {
+		return nil
+	}
+	for _, layout := range []string{time.RFC3339Nano, "2006-01-02T15:04:05.9999999", "2006-01-02T15:04:05"} {
+		if t, err := time.Parse(layout, s); err == nil {
+			if t.Year() <= 1 {
+				return nil
+			}
+			t = t.UTC()
+			return &t
+		}
+	}
+	return nil
+}
