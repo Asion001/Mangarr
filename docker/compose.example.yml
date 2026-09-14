@@ -1,6 +1,10 @@
 # Example stack: mangarr + Suwayomi (extension engine) + FlareSolverr +
-# Komga (serves the library to Mihon, Paperback, Panels, KOReader...) and
-# the optional upscaler worker.
+# Komga (serves the library to Mihon, Paperback, Panels, KOReader...).
+#
+# ghcr.io/asion001/mangarr:latest is one image for every role: the server
+# (with a built-in upscaler when it gets a GPU) and processing nodes
+# (MANGARR_MODE=upscaler, e.g. on a desktop with a better GPU).
+# ghcr.io/asion001/mangarr:slim is the server only (~40 MB).
 #
 #   docker compose -f docker/compose.example.yml up -d
 #
@@ -12,6 +16,11 @@ services:
     image: ghcr.io/asion001/mangarr:latest
     container_name: mangarr
     user: "1000:1000"
+    # Optional: upscale on the Intel/AMD iGPU with the built-in upscaler.
+    # devices:
+    #   - /dev/dri:/dev/dri
+    # group_add:
+    #   - "993" # the host's render group id: getent group render
     environment:
       TZ: Europe/Madrid
       # SQLite by default; optional Postgres:
@@ -73,15 +82,17 @@ services:
       - "25600:25600"
     restart: unless-stopped
 
-  # Optional: page upscaling. Pass the iGPU (Intel/AMD) through /dev/dri.
-  # Remove this service to disable, or run the image on a machine with a
-  # better GPU and point mangarr's upscaler module at it.
-  mangarr-upscaler:
-    image: ghcr.io/asion001/mangarr-upscaler:latest
-    container_name: mangarr-upscaler
-    platform: linux/amd64
-    environment:
-      UPSCALER_TOKEN: change-me
-    devices:
-      - /dev/dri:/dev/dri
-    restart: unless-stopped
+  # Optional: a processing node on another machine (or here, for a second GPU).
+  # It registers itself with mangarr and is used while it's online.
+  # mangarr-node:
+  #   image: ghcr.io/asion001/mangarr:latest
+  #   hostname: gaming-pc            # how mangarr reaches the node
+  #   environment:
+  #     MANGARR_MODE: upscaler
+  #     MANGARR_SERVER_URL: http://mangarr:8787
+  #     MANGARR_API_KEY: ${MANGARR_API_KEY}   # Settings → General on the server
+  #   devices:
+  #     - /dev/dri:/dev/dri
+  #   ports:
+  #     - "8788:8788"                # when mangarr runs on another host
+  #   restart: unless-stopped

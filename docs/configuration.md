@@ -10,6 +10,7 @@ Lists are comma-separated (`a,b,c`) or JSON; key/value settings use `key=value,k
 
 | Variable | Default | Description |
 |---|---|---|
+| `MANGARR_MODE` | `integrated` | integrated (server, plus a built-in upscaler when the image has the tools), server, or upscaler (processing node only). |
 | `MANGARR_LISTEN` | `:8787` | HTTP listen address. |
 | `MANGARR_DATA_DIR` | `./config (/config in Docker)` | Database, staging, backups, recycle bin and caches. |
 | `MANGARR_DB` | `sqlite://$MANGARR_DATA_DIR/mangarr.db` | Database DSN: sqlite://… or postgres://user:pass@host:5432/db. |
@@ -18,6 +19,24 @@ Lists are comma-separated (`a,b,c`) or JSON; key/value settings use `key=value,k
 | `MANGARR_AUTH_DISABLED` | `false` | Disable login and API key checks (only behind an auth proxy). |
 | `MANGARR_WEB_DIR` | `` | Serve the UI from this directory instead of the embedded copy (development). |
 | `MANGARR_ROOT_FOLDERS` | `` | Root folders to create and lock, comma-separated; append \|lang to set a language (/data/manga/ja\|ja). |
+
+## Processing nodes (`MANGARR_MODE=upscaler`)
+
+| Variable | Old name | Default | Description |
+|---|---|---|---|
+| `MANGARR_UPSCALER_LISTEN` | UPSCALER_LISTEN | `:8788` | Worker listen address. |
+| `MANGARR_UPSCALER_TOOLS_DIR` | UPSCALER_TOOLS_DIR | `/opt/upscalers` | Folder with the ncnn upscalers. |
+| `MANGARR_UPSCALER_GPU` | UPSCALER_GPU | `auto` | Vulkan device (auto or index). |
+| `MANGARR_UPSCALER_THREADS` | UPSCALER_THREADS | `` | ncnn load:proc:save threads. |
+| `MANGARR_UPSCALER_TILE` | UPSCALER_TILE | `0` | Tile size (0 = auto; lower on small GPUs). |
+| `MANGARR_UPSCALER_TOKEN` | UPSCALER_TOKEN | `` | Bearer token required by the worker (generated when registering). |
+| `MANGARR_UPSCALER_TIMEOUT` | UPSCALER_TIMEOUT | `30m` | Maximum time per batch. |
+| `MANGARR_UPSCALER_TMP_DIR` | UPSCALER_TMP_DIR | `` | Scratch folder. |
+| `MANGARR_UPSCALER_CWEBP` | UPSCALER_CWEBP | `` | Path to cwebp. |
+| `MANGARR_SERVER_URL` |  | `` | mangarr server to register with (optional). |
+| `MANGARR_API_KEY` |  | `` | The server's API key (for registration). |
+| `MANGARR_NODE_NAME` |  | `` | Name shown in mangarr (default: host name). |
+| `MANGARR_NODE_URL` |  | `` | How the server reaches this node (default http://&lt;name&gt;:8788). |
 
 ## Settings
 
@@ -230,6 +249,15 @@ MANGARR_MODULE_KOMGA_API_KEY=...
 | `_HEADERS` | key=value list | Headers |
 | `_METHOD` | string | Method |
 | `_URL` | string | URL |
+
+### `upscale/local` — Built-in (this server)
+
+| Suffix | Type | Description |
+|---|---|---|
+| `_GPU` | string | GPU. auto, or the Vulkan device index (pass /dev/dri to the container for Intel/AMD) |
+| `_THREADS` | string | Threads. load:proc:save threads (ncnn -j) |
+| `_TILE` | int | Tile size. 0 = automatic; lower it when the GPU runs out of memory |
+| `_TOOLS_DIR` | string | Tools folder. Where the waifu2x/Real-CUGAN/Real-ESRGAN ncnn binaries are (included in the full image) |
 
 ### `upscale/ncnn-worker` — mangarr-upscaler (ncnn/Vulkan)
 

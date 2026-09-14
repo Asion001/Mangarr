@@ -1237,6 +1237,37 @@
         ],
         "type": "object"
       },
+      "Engine": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "noiseLevels": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "scales": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "scales"
+        ],
+        "type": "object"
+      },
       "EngineInfo": {
         "additionalProperties": false,
         "properties": {
@@ -1427,6 +1458,34 @@
         ],
         "type": "object"
       },
+      "Heartbeat": {
+        "additionalProperties": false,
+        "properties": {
+          "info": {
+            "$ref": "#/components/schemas/Info"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nodeId": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "nodeId",
+          "name",
+          "url",
+          "token",
+          "info"
+        ],
+        "type": "object"
+      },
       "History": {
         "additionalProperties": false,
         "properties": {
@@ -1512,6 +1571,44 @@
           "displayName",
           "description",
           "fields"
+        ],
+        "type": "object"
+      },
+      "Info": {
+        "additionalProperties": false,
+        "properties": {
+          "devices": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "formats": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/Engine"
+            },
+            "type": "array"
+          },
+          "queued": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "devices",
+          "models",
+          "formats",
+          "queued"
         ],
         "type": "object"
       },
@@ -2178,6 +2275,44 @@
           "decimal",
           "volume",
           "examples"
+        ],
+        "type": "object"
+      },
+      "NodeStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "info": {
+            "$ref": "#/components/schemas/Info"
+          },
+          "lastSeen": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "moduleId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nodeId": {
+            "type": "string"
+          },
+          "online": {
+            "type": "boolean"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "nodeId",
+          "name",
+          "url",
+          "moduleId",
+          "lastSeen",
+          "online",
+          "info"
         ],
         "type": "object"
       },
@@ -4536,7 +4671,7 @@
   "info": {
     "description": "Sonarr-style PVR for manga. All endpoints accept an X-Api-Key header.",
     "title": "mangarr",
-    "version": "a685740-dirty"
+    "version": "0493c8b-dirty"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -9399,6 +9534,81 @@
         },
         "tags": [
           "Tags"
+        ]
+      }
+    },
+    "/api/v1/upscaler-nodes": {
+      "get": {
+        "operationId": "upscaler-nodes-list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/NodeStatus"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Self-registered processing nodes and whether they're online",
+        "tags": [
+          "Processing"
+        ]
+      }
+    },
+    "/api/v1/upscaler-nodes/heartbeat": {
+      "post": {
+        "operationId": "upscaler-nodes-heartbeat",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Heartbeat"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NodeStatus"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Processing nodes (MANGARR_MODE=upscaler with MANGARR_SERVER_URL) register themselves here every 30 s",
+        "tags": [
+          "Processing"
         ]
       }
     },

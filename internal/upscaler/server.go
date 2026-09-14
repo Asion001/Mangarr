@@ -109,6 +109,9 @@ func (s *Server) handleInfo(w http.ResponseWriter, _ *http.Request) {
 	_ = json.NewEncoder(w).Encode(s.Info())
 }
 
+// Devices lists the Vulkan devices (via vulkaninfo, when installed).
+func Devices() []string { return devices() }
+
 // devices lists Vulkan devices via vulkaninfo when available.
 func devices() []string {
 	out := []string{}
@@ -173,65 +176,84 @@ func (s *Server) handleUpscale(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	eng, ok := findEngine(p.Model)
-	if !ok || !s.runner.Available(eng) {
-		http.Error(w, "model not available: "+p.Model, http.StatusBadRequest)
-		return
-	}
-	if !contains(eng.Scales, p.Scale) {
-		http.Error(w, fmt.Sprintf("model %s supports scales %v", eng.Name, eng.Scales), http.StatusBadRequest)
-		return
-	}
 	body, err := io.ReadAll(io.LimitReader(r.Body, s.cfg.MaxBody))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	// one GPU job at a time
+	images, err := unzipImages(body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	start := time.Now()
+	out, err := s.Process(r.Context(), p, images)
+	if err != nil {
+		var bad badRequest
+		if errors.As(err, &bad) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if r.Context().Err() == nil {
+			s.log.Warn("upscale failed", "model", p.Model, "err", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+	data, err := zipImages(out)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("X-Upscale-Duration-Ms", strconv.FormatInt(time.Since(start).Milliseconds(), 10))
+	_, _ = w.Write(data)
+}
+
+// Image is a page in memory.
+type Image struct {
+	Name string
+	Data []byte
+}
+
+type badRequest struct{ error }
+
+// Process upscales images with one engine run, waiting for the GPU slot
+// (one job at a time). It is used by the HTTP handler and in-process by the
+// server's built-in upscaler.
+func (s *Server) Process(ctx context.Context, p Params, images []Image) ([]Image, error) {
+	eng, ok := findEngine(p.Model)
+	if !ok || !s.runner.Available(eng) {
+		return nil, badRequest{fmt.Errorf("model not available: %s", p.Model)}
+	}
+	if !contains(eng.Scales, p.Scale) {
+		return nil, badRequest{fmt.Errorf("model %s supports scales %v", eng.Name, eng.Scales)}
+	}
 	s.queued.Add(1)
 	select {
 	case s.slot <- struct{}{}:
 		s.queued.Add(-1)
-	case <-r.Context().Done():
+	case <-ctx.Done():
 		s.queued.Add(-1)
-		return
+		return nil, ctx.Err()
 	}
 	defer func() { <-s.slot }()
-
-	ctx, cancel := context.WithTimeout(r.Context(), s.cfg.Timeout)
+	ctx, cancel := context.WithTimeout(ctx, s.cfg.Timeout)
 	defer cancel()
 	start := time.Now()
-	out, n, err := s.process(ctx, eng, p, body)
-	if err != nil {
-		s.log.Warn("upscale failed", "model", p.Model, "err", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+	out, err := s.process(ctx, eng, p, images)
+	if err == nil {
+		s.log.Info("upscaled batch", "model", p.Model, "scale", p.Scale, "pages", len(out), "duration", time.Since(start).Round(time.Millisecond))
 	}
-	s.log.Info("upscaled batch", "model", p.Model, "scale", p.Scale, "pages", n, "duration", time.Since(start).Round(time.Millisecond))
-	w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("X-Upscale-Duration-Ms", strconv.FormatInt(time.Since(start).Milliseconds(), 10))
-	_, _ = w.Write(out)
+	return out, err
 }
 
-// process unpacks a zip of images, runs the engine and packs the results.
-func (s *Server) process(ctx context.Context, eng Engine, p Params, body []byte) ([]byte, int, error) {
-	work, err := os.MkdirTemp(s.cfg.TmpDir, "upscale-*")
-	if err != nil {
-		return nil, 0, err
-	}
-	defer os.RemoveAll(work)
-	in, outDir := filepath.Join(work, "in"), filepath.Join(work, "out")
-	if err := os.MkdirAll(in, 0o755); err != nil {
-		return nil, 0, err
-	}
-	if err := os.MkdirAll(outDir, 0o755); err != nil {
-		return nil, 0, err
-	}
+func unzipImages(body []byte) ([]Image, error) {
 	zr, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
 	if err != nil {
-		return nil, 0, fmt.Errorf("invalid zip: %w", err)
+		return nil, fmt.Errorf("invalid zip: %w", err)
 	}
-	var names []string
+	var out []Image
 	for _, f := range zr.File {
 		name := filepath.Base(f.Name)
 		if f.FileInfo().IsDir() || name == "." || strings.HasPrefix(name, ".") {
@@ -239,64 +261,91 @@ func (s *Server) process(ctx context.Context, eng Engine, p Params, body []byte)
 		}
 		rc, err := f.Open()
 		if err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 		data, err := io.ReadAll(rc)
 		rc.Close()
 		if err != nil {
-			return nil, 0, err
+			return nil, err
 		}
+		out = append(out, Image{Name: name, Data: data})
+	}
+	return out, nil
+}
+
+func zipImages(images []Image) ([]byte, error) {
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for _, img := range images {
+		w, err := zw.CreateHeader(&zip.FileHeader{Name: img.Name, Method: zip.Store})
+		if err != nil {
+			return nil, err
+		}
+		if _, err := w.Write(img.Data); err != nil {
+			return nil, err
+		}
+	}
+	err := zw.Close()
+	return buf.Bytes(), err
+}
+
+// process writes the images to disk, runs the engine and reads the results.
+func (s *Server) process(ctx context.Context, eng Engine, p Params, images []Image) ([]Image, error) {
+	work, err := os.MkdirTemp(s.cfg.TmpDir, "upscale-*")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(work)
+	in, outDir := filepath.Join(work, "in"), filepath.Join(work, "out")
+	if err := os.MkdirAll(in, 0o755); err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, img := range images {
+		name := filepath.Base(img.Name)
 		ext := strings.ToLower(filepath.Ext(name))
 		base := strings.TrimSuffix(name, filepath.Ext(name))
 		switch ext {
 		case ".png", ".jpg", ".jpeg", ".webp":
-			if err := os.WriteFile(filepath.Join(in, name), data, 0o644); err != nil {
-				return nil, 0, err
+			if err := os.WriteFile(filepath.Join(in, name), img.Data, 0o644); err != nil {
+				return nil, err
 			}
 		default:
-			// normalize other formats (e.g. gif) to png for the engines
-			img, _, err := image.Decode(bytes.NewReader(data))
+			// normalize other formats (e.g. gif, avif) to png for the engines
+			decoded, _, err := image.Decode(bytes.NewReader(img.Data))
 			if err != nil {
-				return nil, 0, fmt.Errorf("%s: %w", name, err)
+				return nil, fmt.Errorf("%s: %w", name, err)
 			}
 			f, err := os.Create(filepath.Join(in, base+".png"))
 			if err != nil {
-				return nil, 0, err
+				return nil, err
 			}
-			err = png.Encode(f, img)
+			err = png.Encode(f, decoded)
 			f.Close()
 			if err != nil {
-				return nil, 0, err
+				return nil, err
 			}
 		}
 		names = append(names, base)
 	}
 	if len(names) == 0 {
-		return nil, 0, errors.New("no images in request")
+		return nil, badRequest{errors.New("no images in request")}
 	}
 	if err := s.runner.Run(ctx, eng, in, outDir, p.Scale, p.Noise); err != nil {
-		return nil, 0, err
+		return nil, err
 	}
-	var buf bytes.Buffer
-	zw := zip.NewWriter(&buf)
+	out := make([]Image, 0, len(names))
 	for _, base := range names {
-		src := filepath.Join(outDir, base+".png")
-		data, ext, err := s.finish(ctx, src, p)
+		data, ext, err := s.finish(ctx, filepath.Join(outDir, base+".png"), p)
 		if err != nil {
-			return nil, 0, fmt.Errorf("%s: %w", base, err)
+			return nil, fmt.Errorf("%s: %w", base, err)
 		}
-		w, err := zw.CreateHeader(&zip.FileHeader{Name: base + ext, Method: zip.Store})
-		if err != nil {
-			return nil, 0, err
-		}
-		if _, err := w.Write(data); err != nil {
-			return nil, 0, err
-		}
+		out = append(out, Image{Name: base + ext, Data: data})
 	}
-	if err := zw.Close(); err != nil {
-		return nil, 0, err
-	}
-	return buf.Bytes(), len(names), nil
+	return out, nil
 }
 
 // finish downsizes to MaxWidth and encodes to the requested format.

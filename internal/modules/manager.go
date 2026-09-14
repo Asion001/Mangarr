@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -275,8 +276,8 @@ func (m *Manager) Update(ctx context.Context, def *model.ProviderDefinition) err
 }
 
 func (m *Manager) Delete(ctx context.Context, id int64) error {
-	if l, ok := m.Get(id); ok && l.Def.ManagedBy != "" {
-		return ErrManaged
+	if l, ok := m.Get(id); ok && strings.HasPrefix(l.Def.ManagedBy, "env:") {
+		return ErrManaged // nodes may be deleted: they re-register while running
 	}
 	res, err := m.db.NewDelete().Model((*model.ProviderDefinition)(nil)).Where("id = ?", id).Exec(ctx)
 	if err != nil {

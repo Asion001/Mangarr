@@ -22,10 +22,14 @@ import (
 	"github.com/Asion001/mangarr/internal/imageenc"
 	"github.com/Asion001/mangarr/internal/logging"
 	_ "github.com/Asion001/mangarr/internal/modules/all"
+	"github.com/Asion001/mangarr/internal/upscaler"
 	"github.com/Asion001/mangarr/internal/version"
 )
 
 func main() {
+	if mode, err := config.ModeFromEnv(); err == nil && mode == config.ModeUpscaler {
+		os.Exit(runNode())
+	}
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "version":
@@ -188,6 +192,36 @@ func bench(args []string) int {
 	}
 	if err := enc.Bench(context.Background(), args[1], formats, maxPages, os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	return 0
+}
+
+// runNode runs a processing node (MANGARR_MODE=upscaler).
+func runNode() int {
+	cfg, err := upscaler.LoadNodeConfig(os.Getenv)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "healthcheck":
+			resp, err := http.Get("http://127.0.0.1" + cfg.Listen + "/healthz")
+			if err != nil || resp.StatusCode != 200 {
+				return 1
+			}
+			return 0
+		case "version":
+			fmt.Println(version.Version, version.Commit)
+			return 0
+		}
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	log, _ := logging.Setup(os.Getenv("MANGARR_LOG_LEVEL"), os.Stdout)
+	if err := upscaler.RunNode(ctx, cfg, log); err != nil {
+		fmt.Fprintln(os.Stderr, "fatal:", err)
 		return 1
 	}
 	return 0

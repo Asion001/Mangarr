@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, Pencil, PlugZap } from "lucide-react";
 import { api, unwrap, type Implementation, type ModuleResource } from "../../api/client";
 import { useModules, useSchema } from "../../api/queries";
@@ -43,6 +43,12 @@ type Draft = {
 export function ModulesPage({ kind }: { kind: string }) {
   const { data: mods, isLoading, error } = useModules(kind);
   const { data: impls } = useSchema(kind);
+  const { data: nodes } = useQuery({
+    queryKey: ["upscaler-nodes"],
+    queryFn: () => unwrap(api.GET("/api/v1/upscaler-nodes")),
+    enabled: kind === "upscale",
+    refetchInterval: 30_000,
+  });
   const qc = useQueryClient();
   const toast = useToast();
   const [picking, setPicking] = useState(false);
@@ -111,18 +117,30 @@ export function ModulesPage({ kind }: { kind: string }) {
                 <IconButton title="Edit" onClick={() => startEdit(m)}>
                   <Pencil className="size-4" />
                 </IconButton>
-                <IconButton title={m.managedBy ? "Defined by environment variables" : "Delete"} disabled={!!m.managedBy} onClick={() => setDeleting(m)}>
+                <IconButton
+                  title={m.managedBy?.startsWith("env:") ? "Defined by environment variables" : "Delete"}
+                  disabled={!!m.managedBy?.startsWith("env:")}
+                  onClick={() => setDeleting(m)}
+                >
                   <Trash2 className="size-4" />
                 </IconButton>
               </div>
             </div>
             <div className="flex flex-wrap gap-1">
               {m.enabled ? <Badge tone="ok">enabled</Badge> : <Badge>disabled</Badge>}
-              {m.managedBy && (
+              {m.managedBy?.startsWith("env:") && (
                 <Badge tone="warn" title={`Defined by MANGARR_MODULE_${m.managedBy.replace(/^env:/, "")}_* variables`}>
                   env
                 </Badge>
               )}
+              {m.managedBy?.startsWith("node:") &&
+                (nodes?.find((n) => n.moduleId === m.id)?.online ? (
+                  <Badge tone="ok" title="Processing node that registered itself">
+                    node online
+                  </Badge>
+                ) : (
+                  <Badge title="Processing node that registered itself; chapters wait while it's off">node offline</Badge>
+                ))}
               <Badge>priority {m.priority}</Badge>
               {m.capabilities.map((c) => (
                 <Badge key={c} tone="info">

@@ -93,10 +93,20 @@ for a profile, mangarr asks whether to process chapters you already have.
 Small pages look soft on an iPad. Profiles can upscale pages narrower than a
 threshold (default 1400 px) with waifu2x / Real-CUGAN / Real-ESRGAN.
 
-1. Run `mangarr-upscaler`:
-   - On the N100: pass `/dev/dri` (Intel iGPU via Mesa ANV).
-   - Or on a desktop with a GPU: run the image there (NVIDIA needs the
-     container toolkit) and expose port 8788 on your LAN. Set `UPSCALER_TOKEN`.
+1. Give it a GPU. The full image (`:latest`, amd64) contains the upscalers:
+   - **On the server itself** (e.g. the N100's iGPU): pass `/dev/dri` and the
+     render group (`group_add`, see the compose example). mangarr then adds a
+     *Built-in (this server)* upscaler automatically (enabled when a real GPU
+     is visible).
+   - **On another machine** (a desktop GPU): run the same image with
+     `MANGARR_MODE=upscaler`, `MANGARR_SERVER_URL=http://<server>:8787` and
+     `MANGARR_API_KEY`. It registers itself and shows up under Settings →
+     Upscalers; it's preferred over the built-in one while online, and
+     chapters simply wait while it's off. Set `MANGARR_NODE_URL` if the server
+     can't reach it by host name (default `http://<hostname>:8788`). NVIDIA
+     needs the container toolkit.
+   - Without registration you can still add a *mangarr-upscaler* module by hand
+     (URL + `MANGARR_UPSCALER_TOKEN`).
 2. Benchmark your hardware and pick a model:
    ```bash
    scripts/upscale-bench.sh http://host:8788 <token> "/data/manga/en/Series/Series Ch.0001.cbz" 4
@@ -104,8 +114,7 @@ threshold (default 1400 px) with waifu2x / Real-CUGAN / Real-ESRGAN.
    Rough guidance: `realesr-animevideov3` is fastest (good for color
    webtoons), `waifu2x-cunet` cleans black & white manga well, `realcugan`
    is sharper and slower.
-3. Settings → Upscalers → add *mangarr-upscaler* with URL and token.
-4. Settings → Profiles → enable upscaling, choose model and widths. If the
+3. Settings → Profiles → enable upscaling, choose model and widths. If the
    upscaler is offline, chapters wait and are upscaled when it's back.
 
 ### Re-encoding (AVIF / JPEG XL)

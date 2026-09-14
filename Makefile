@@ -3,13 +3,13 @@ COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 LDFLAGS := -s -w -X github.com/Asion001/mangarr/internal/version.Version=$(VERSION) -X github.com/Asion001/mangarr/internal/version.Commit=$(COMMIT)
 NODE_IMAGE ?= node:24-alpine
 
-.PHONY: build build-upscaler run test test-pg test-integration vet web web-types lint docker docker-upscaler clean
+.PHONY: build build-upscaler run test test-pg test-integration vet web web-types lint docker docker-slim clean
 
 build:
-	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o bin/mangarr ./cmd/mangarr
+	CGO_ENABLED=0 go build -tags nodynamic -ldflags "$(LDFLAGS)" -o bin/mangarr ./cmd/mangarr
 
 build-upscaler:
-	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o bin/mangarr-upscaler ./cmd/mangarr-upscaler
+	CGO_ENABLED=0 go build -tags nodynamic -ldflags "$(LDFLAGS)" -o bin/mangarr-upscaler ./cmd/mangarr-upscaler
 
 run: build
 	MANGARR_DATA_DIR=./config ./bin/mangarr
@@ -39,10 +39,11 @@ web-types: build
 	else docker run --rm -v "$(CURDIR)/web:/app" -w /app $(NODE_IMAGE) npx openapi-typescript openapi.json -o src/api/schema.d.ts; fi
 
 docker:
-	docker build -f docker/Dockerfile -t ghcr.io/asion001/mangarr:dev --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) .
+	docker build -f docker/Dockerfile --target full -t ghcr.io/asion001/mangarr:dev --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) .
 
-docker-upscaler:
-	docker build -f docker/Dockerfile.upscaler -t ghcr.io/asion001/mangarr-upscaler:dev .
+docker-slim:
+	docker build -f docker/Dockerfile --target slim -t ghcr.io/asion001/mangarr:dev-slim --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) .
+
 
 clean:
 	rm -rf bin web/dist/assets web/dist/index.html

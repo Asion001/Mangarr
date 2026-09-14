@@ -1464,6 +1464,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/upscaler-nodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Self-registered processing nodes and whether they're online */
+        get: operations["upscaler-nodes-list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/upscaler-nodes/heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Processing nodes (MANGARR_MODE=upscaler with MANGARR_SERVER_URL) register themselves here every 30 s */
+        post: operations["upscaler-nodes-heartbeat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/wanted/missing": {
         parameters: {
             query?: never;
@@ -1868,6 +1902,12 @@ export interface components {
             /** Format: int64 */
             speed: number;
         };
+        Engine: {
+            description: string;
+            name: string;
+            noiseLevels?: number[];
+            scales: number[];
+        };
         EngineInfo: {
             format: string;
             name: string;
@@ -1943,6 +1983,13 @@ export interface components {
             checkedAt: string;
             checks: components["schemas"]["HealthCheck"][];
         };
+        Heartbeat: {
+            info: components["schemas"]["Info"];
+            name: string;
+            nodeId: string;
+            token: string;
+            url: string;
+        };
         History: {
             /** Format: int64 */
             chapterId?: number;
@@ -1967,6 +2014,14 @@ export interface components {
             infoUrl?: string;
             kind: string;
             name: string;
+        };
+        Info: {
+            devices: string[];
+            formats: string[];
+            models: components["schemas"]["Engine"][];
+            /** Format: int64 */
+            queued: number;
+            version: string;
         };
         JobView: {
             /** Format: int64 */
@@ -2163,6 +2218,17 @@ export interface components {
             examples: string;
             folder: string;
             volume: string;
+        };
+        NodeStatus: {
+            info: components["schemas"]["Info"];
+            /** Format: date-time */
+            lastSeen: string;
+            /** Format: int64 */
+            moduleId: number;
+            name: string;
+            nodeId: string;
+            online: boolean;
+            url: string;
         };
         Page: {
             items: components["schemas"]["History"][];
@@ -6478,6 +6544,68 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "upscaler-nodes-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NodeStatus"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "upscaler-nodes-heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Heartbeat"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NodeStatus"];
+                };
             };
             /** @description Error */
             default: {

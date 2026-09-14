@@ -9,6 +9,7 @@ import (
 
 	"github.com/Asion001/mangarr/internal/modules"
 	"github.com/Asion001/mangarr/internal/settings"
+	"github.com/Asion001/mangarr/internal/upscaler"
 )
 
 // WriteText prints the variables as a table, marking the ones that are set.
@@ -44,6 +45,20 @@ func WriteMarkdown(w io.Writer) {
 	p("## Process\n\n| Variable | Default | Description |\n|---|---|---|\n")
 	for _, v := range CoreVars(nil) {
 		p("| `%s` | `%s` | %s |\n", v.Name, mdEscape(v.Default), mdEscape(v.Description))
+	}
+
+	p("\n## Processing nodes (`MANGARR_MODE=upscaler`)\n\n")
+	p("| Variable | Old name | Default | Description |\n|---|---|---|---|\n")
+	nodeDesc := map[string]string{
+		"MANGARR_UPSCALER_LISTEN": "Worker listen address.", "MANGARR_UPSCALER_TOOLS_DIR": "Folder with the ncnn upscalers.",
+		"MANGARR_UPSCALER_GPU": "Vulkan device (auto or index).", "MANGARR_UPSCALER_THREADS": "ncnn load:proc:save threads.",
+		"MANGARR_UPSCALER_TILE": "Tile size (0 = auto; lower on small GPUs).", "MANGARR_UPSCALER_TOKEN": "Bearer token required by the worker (generated when registering).",
+		"MANGARR_UPSCALER_TIMEOUT": "Maximum time per batch.", "MANGARR_UPSCALER_TMP_DIR": "Scratch folder.", "MANGARR_UPSCALER_CWEBP": "Path to cwebp.",
+		"MANGARR_SERVER_URL": "mangarr server to register with (optional).", "MANGARR_API_KEY": "The server's API key (for registration).",
+		"MANGARR_NODE_NAME": "Name shown in mangarr (default: host name).", "MANGARR_NODE_URL": "How the server reaches this node (default http://<name>:8788).",
+	}
+	for _, v := range upscaler.NodeVars {
+		p("| `%s` | %s | `%s` | %s |\n", v[0], mdEscape(v[1]), mdEscape(v[2]), mdEscape(nodeDesc[v[0]]))
 	}
 
 	p("\n## Settings\n\n")

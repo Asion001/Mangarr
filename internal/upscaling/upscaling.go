@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/Asion001/mangarr/internal/downloads"
 	"github.com/Asion001/mangarr/internal/imagecheck"
@@ -21,20 +22,45 @@ import (
 
 type Processor struct {
 	mods *modules.Manager
+	// Online (optional) reports whether an upscaler instance is reachable
+	// (e.g. a desktop GPU node that may be switched off).
+	Online func(def model.ProviderDefinition) bool
 }
 
 func New(m *modules.Manager) *Processor { return &Processor{mods: m} }
 
-func (p *Processor) upscaler(cfg model.UpscaleConfig) (upscale.Module, error) {
+// upscaler returns the configured upscaler, or the first reachable one by priority.
+func (p *Processor) upscaler(ctx context.Context, cfg model.UpscaleConfig) (upscale.Module, *upscale.Info, error) {
 	if cfg.UpscalerID > 0 {
 		m, _, err := modules.GetAs[upscale.Module](p.mods, cfg.UpscalerID)
-		return m, err
+		if err != nil {
+			return nil, nil, err
+		}
+		info, err := m.Info(ctx)
+		return m, info, err
 	}
 	list := modules.ActiveAs[upscale.Module](p.mods, modules.KindUpscale)
 	if len(list) == 0 {
-		return nil, errors.New("no upscaler module is configured")
+		return nil, nil, errors.New("no upscaler module is configured")
 	}
-	return list[0].Instance, nil
+	var errs []string
+	for _, t := range list {
+		if p.Online != nil && !p.Online(t.Def) {
+			errs = append(errs, t.Def.Name+": offline")
+			continue
+		}
+		ictx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		info, err := t.Instance.Info(ictx)
+		cancel()
+		if err == nil && len(info.Models) > 0 {
+			return t.Instance, info, nil
+		}
+		if err == nil {
+			err = errors.New("no models")
+		}
+		errs = append(errs, t.Def.Name+": "+err.Error())
+	}
+	return nil, nil, fmt.Errorf("no upscaler available (%s)", strings.Join(errs, "; "))
 }
 
 // ChooseScale picks the smallest supported scale that brings width to at
@@ -77,11 +103,7 @@ func (p *Processor) Process(ctx context.Context, cfg model.UpscaleConfig, pages 
 	if len(todo) == 0 {
 		return pages, false, "", nil
 	}
-	up, err := p.upscaler(cfg)
-	if err != nil {
-		return nil, false, "", err
-	}
-	info, err := up.Info(ctx)
+	up, info, err := p.upscaler(ctx, cfg)
 	if err != nil {
 		return nil, false, "", err
 	}

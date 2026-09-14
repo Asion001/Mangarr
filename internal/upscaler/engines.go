@@ -104,3 +104,14 @@ func (r CLIRunner) Run(ctx context.Context, e Engine, inDir, outDir string, scal
 	}
 	return nil
 }
+
+// ToolsAvailable reports whether any upscaler tool is installed in dir.
+func ToolsAvailable(dir string) bool {
+	r := CLIRunner{ToolsDir: dir}
+	for _, e := range Catalog {
+		if r.Available(e) {
+			return true
+		}
+	}
+	return false
+}

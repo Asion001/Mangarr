@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Starts real services in Docker and runs the integration tests against them:
 #   - Suwayomi (pinned) + Keiyoushi MangaDex extension (needs internet)
-#   - mangarr-upscaler (built locally, lavapipe CPU Vulkan, amd64)
+#   - the full mangarr image in MANGARR_MODE=upscaler (built locally, lavapipe CPU Vulkan, amd64)
 #   - Komga (claimed with a throwaway admin)
 #
 #   scripts/integration.sh            # all
@@ -20,8 +20,8 @@ docker run -d --name mangarr-it-suwayomi -p 14567:4567 -e WEB_UI_ENABLED=false -
 export MANGARR_IT_SUWAYOMI=http://localhost:14567
 
 if [ -z "${SKIP_UPSCALER:-}" ]; then
-  docker build --platform linux/amd64 -q -f docker/Dockerfile.upscaler -t mangarr-upscaler:it . >/dev/null
-  docker run -d --platform linux/amd64 --name mangarr-it-upscaler -p 18788:8788 -e UPSCALER_TOKEN=it mangarr-upscaler:it >/dev/null
+  docker build --platform linux/amd64 -q -f docker/Dockerfile --target full -t mangarr-full:it . >/dev/null
+  docker run -d --platform linux/amd64 --name mangarr-it-upscaler -p 18788:8788 -e MANGARR_MODE=upscaler -e MANGARR_UPSCALER_TOKEN=it mangarr-full:it >/dev/null
   export MANGARR_IT_UPSCALER=http://localhost:18788 MANGARR_IT_UPSCALER_TOKEN=it
 fi
 

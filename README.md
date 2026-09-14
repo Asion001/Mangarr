@@ -34,8 +34,9 @@ mangarr tells to rescan after every change.
     read progress).
   - `notify` — **Telegram, Discord, ntfy, Gotify, Apprise, Webhook**, with
     per-series digests ("One Piece: 3 new chapters (1120–1122)").
-  - `upscale` — **mangarr-upscaler** worker (waifu2x / Real-CUGAN /
-    Real-ESRGAN via ncnn + Vulkan, iGPU or any GPU machine).
+  - `upscale` — waifu2x / Real-CUGAN / Real-ESRGAN via ncnn + Vulkan, built
+    into the server or on processing nodes that register themselves (e.g. a
+    desktop GPU used whenever it's on).
 - **Library that works on its own** — flat series folders, stable file names,
   `ComicInfo.xml` (validated against the v2.1 schema), `series.json` for
   Komga, `cover.jpg`. Files are written atomically.
@@ -75,8 +76,11 @@ See [docker/compose.example.yml](docker/compose.example.yml) and the full
 
 | Image | Arch | Notes |
 |---|---|---|
-| `ghcr.io/asion001/mangarr` | amd64, arm64 | distroless, runs as nonroot (use `user:` in compose) |
-| `ghcr.io/asion001/mangarr-upscaler` | amd64 | Mesa Vulkan (Intel/AMD via `/dev/dri`, lavapipe CPU fallback), cwebp |
+| `ghcr.io/asion001/mangarr:latest` | amd64, arm64 | Every role (`MANGARR_MODE=integrated`, `server`, `upscaler`): Mesa Vulkan, avifenc/cjxl and — on amd64 — the ncnn upscalers |
+| `ghcr.io/asion001/mangarr:slim` | amd64, arm64 | Distroless server only (~40 MB); re-encodes with the slower built-in AVIF encoder |
+
+The old `mangarr-upscaler` image is replaced by `mangarr:latest` with
+`MANGARR_MODE=upscaler` (the `UPSCALER_*` variables still work).
 
 ## Configuration
 

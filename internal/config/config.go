@@ -11,6 +11,9 @@ import (
 )
 
 type Config struct {
+	// Mode: integrated (server + built-in upscaler when the image has the
+	// tools), server (no local upscaling) or upscaler (processing node only).
+	Mode string
 	// Listen address, e.g. ":8787".
 	Listen string
 	// DataDir holds the SQLite database, staging area, backups, logs and caches.
@@ -35,6 +38,7 @@ type VarDoc struct{ Name, Default, Description string }
 
 // Vars lists the process-level variables read by Load.
 var Vars = []VarDoc{
+	{"MANGARR_MODE", "integrated", "integrated (server, plus a built-in upscaler when the image has the tools), server, or upscaler (processing node only)."},
 	{"MANGARR_LISTEN", ":8787", "HTTP listen address."},
 	{"MANGARR_DATA_DIR", "./config (/config in Docker)", "Database, staging, backups, recycle bin and caches."},
 	{"MANGARR_DB", "sqlite://$MANGARR_DATA_DIR/mangarr.db", "Database DSN: sqlite://… or postgres://user:pass@host:5432/db."},
@@ -44,8 +48,33 @@ var Vars = []VarDoc{
 	{"MANGARR_WEB_DIR", "", "Serve the UI from this directory instead of the embedded copy (development)."},
 }
 
+// Modes.
+const (
+	ModeIntegrated = "integrated"
+	ModeServer     = "server"
+	ModeUpscaler   = "upscaler"
+)
+
+// ModeFromEnv returns the process mode; a binary named mangarr-upscaler is a node.
+func ModeFromEnv() (string, error) {
+	if strings.HasPrefix(filepath.Base(os.Args[0]), "mangarr-upscaler") && os.Getenv("MANGARR_MODE") == "" {
+		return ModeUpscaler, nil
+	}
+	switch m := strings.ToLower(env("MANGARR_MODE", ModeIntegrated)); m {
+	case ModeIntegrated, ModeServer, ModeUpscaler:
+		return m, nil
+	default:
+		return "", fmt.Errorf("MANGARR_MODE must be integrated, server or upscaler (got %q)", m)
+	}
+}
+
 func Load() (*Config, error) {
+	mode, err := ModeFromEnv()
+	if err != nil {
+		return nil, err
+	}
 	c := &Config{
+		Mode:     mode,
 		Listen:   env("MANGARR_LISTEN", ":8787"),
 		DataDir:  env("MANGARR_DATA_DIR", "./config"),
 		LogLevel: env("MANGARR_LOG_LEVEL", "info"),
@@ -53,7 +82,6 @@ func Load() (*Config, error) {
 		WebDir:   env("MANGARR_WEB_DIR", ""),
 		Env:      Environ(),
 	}
-	var err error
 	if c.AuthDisabled, err = envBool("MANGARR_AUTH_DISABLED", false); err != nil {
 		return nil, err
 	}

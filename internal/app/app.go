@@ -40,6 +40,7 @@ type App struct {
 	// Encoder re-encodes pages (set before New to override engine detection in tests).
 	Encoder    *imageenc.Encoder
 	Processing *processing.Processor
+	Nodes      *Nodes
 	Queue      *jobs.Queue
 	Scheduler  *jobs.Scheduler
 	HTTP       *http.Client

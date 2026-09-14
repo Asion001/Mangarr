@@ -304,7 +304,11 @@ func Unknown(env map[string]string) []string {
 }
 
 // extraKnown lists variables read elsewhere (e.g. by other process modes).
-var extraKnown = map[string]bool{}
+var extraKnown = map[string]bool{
+	"MANGARR_UPSCALER_LISTEN": true, "MANGARR_UPSCALER_TOOLS_DIR": true, "MANGARR_UPSCALER_GPU": true, "MANGARR_UPSCALER_THREADS": true,
+	"MANGARR_UPSCALER_TILE": true, "MANGARR_UPSCALER_TOKEN": true, "MANGARR_UPSCALER_TIMEOUT": true, "MANGARR_UPSCALER_TMP_DIR": true,
+	"MANGARR_UPSCALER_CWEBP": true, "MANGARR_SERVER_URL": true, "MANGARR_NODE_NAME": true, "MANGARR_NODE_URL": true,
+}
 
 // RegisterKnown marks variables read outside this package as known.
 func RegisterKnown(names ...string) {
