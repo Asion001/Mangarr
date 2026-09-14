@@ -42,6 +42,9 @@ export function GeneralPage() {
             <Field env={lock("publicUrl")} label="Public URL" help="Used for links in notifications, e.g. https://mangarr.example.com">
               <Input value={g.publicUrl} onChange={(e) => patch({ publicUrl: e.target.value })} />
             </Field>
+            <Field env={lock("imageCacheMaxMb")} label="Image cache limit (MB)" help="Thumbnails and covers; oldest files are removed first. 0 = unlimited.">
+              <Input type="number" min={0} value={g.imageCacheMaxMb} onChange={(e) => patch({ imageCacheMaxMb: Number(e.target.value) })} />
+            </Field>
             <Field env={lock("backupRetention")} label="Keep scheduled backups">
               <Input type="number" min={1} value={g.backupRetention} onChange={(e) => patch({ backupRetention: Number(e.target.value) })} />
             </Field>

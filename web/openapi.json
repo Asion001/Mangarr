@@ -240,6 +240,156 @@
         ],
         "type": "object"
       },
+      "BucketStats": {
+        "additionalProperties": false,
+        "properties": {
+          "bytes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "files": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "files",
+          "bytes"
+        ],
+        "type": "object"
+      },
+      "CacheStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "bytes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "entries": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "images": {
+            "items": {
+              "$ref": "#/components/schemas/BucketStats"
+            },
+            "type": "array"
+          },
+          "maxBytes": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "entries",
+          "bytes",
+          "maxBytes",
+          "images"
+        ],
+        "type": "object"
+      },
+      "Catalog": {
+        "additionalProperties": false,
+        "properties": {
+          "cooldownReason": {
+            "type": "string"
+          },
+          "cooldownUntil": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "extension": {
+            "type": "string"
+          },
+          "hidden": {
+            "type": "boolean"
+          },
+          "iconUrl": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "lang": {
+            "type": "string"
+          },
+          "moduleId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "moduleName": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nsfw": {
+            "type": "boolean"
+          },
+          "priority": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "supportsLatest": {
+            "type": "boolean"
+          },
+          "throttle": {
+            "$ref": "#/components/schemas/ThrottleConfig"
+          }
+        },
+        "required": [
+          "moduleId",
+          "moduleName",
+          "enabled",
+          "priority",
+          "hidden",
+          "throttle",
+          "id",
+          "name",
+          "lang",
+          "displayName",
+          "supportsLatest",
+          "nsfw"
+        ],
+        "type": "object"
+      },
+      "CatalogList": {
+        "additionalProperties": false,
+        "properties": {
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "generation": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Catalog"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "generation",
+          "items",
+          "errors"
+        ],
+        "type": "object"
+      },
       "Chapter": {
         "additionalProperties": false,
         "properties": {
@@ -1046,6 +1196,10 @@
             "format": "int64",
             "type": "integer"
           },
+          "imageCacheMaxMb": {
+            "format": "int64",
+            "type": "integer"
+          },
           "instanceName": {
             "type": "string"
           },
@@ -1057,7 +1211,8 @@
           "apiKey",
           "instanceName",
           "publicUrl",
-          "backupRetention"
+          "backupRetention",
+          "imageCacheMaxMb"
         ],
         "type": "object"
       },
@@ -1421,6 +1576,29 @@
           "provider",
           "id",
           "title"
+        ],
+        "type": "object"
+      },
+      "MangaDetailsResult": {
+        "additionalProperties": false,
+        "properties": {
+          "cached": {
+            "type": "boolean"
+          },
+          "chapters": {
+            "items": {
+              "$ref": "#/components/schemas/SourceChapter"
+            },
+            "type": "array"
+          },
+          "details": {
+            "$ref": "#/components/schemas/SourceMangaDetails"
+          }
+        },
+        "required": [
+          "details",
+          "chapters",
+          "cached"
         ],
         "type": "object"
       },
@@ -1830,6 +2008,25 @@
         ],
         "type": "object"
       },
+      "Patch": {
+        "additionalProperties": false,
+        "properties": {
+          "clearCooldown": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "priority": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "throttle": {
+            "$ref": "#/components/schemas/ThrottleConfig"
+          }
+        },
+        "type": "object"
+      },
       "Profile": {
         "additionalProperties": false,
         "properties": {
@@ -1901,6 +2098,42 @@
           "minPages",
           "upscale",
           "cleanup"
+        ],
+        "type": "object"
+      },
+      "QuickSearch": {
+        "additionalProperties": false,
+        "properties": {
+          "budgetSeconds": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "details": {
+            "enum": [
+              "none",
+              "best",
+              "top"
+            ],
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "threshold": {
+            "format": "double",
+            "type": "number"
+          },
+          "topN": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "enabled",
+          "threshold",
+          "details",
+          "topN",
+          "budgetSeconds"
         ],
         "type": "object"
       },
@@ -2299,6 +2532,9 @@
       "SearchResultGroup": {
         "additionalProperties": false,
         "properties": {
+          "cached": {
+            "type": "boolean"
+          },
           "error": {
             "type": "string"
           },
@@ -2331,7 +2567,8 @@
           "sourceName",
           "lang",
           "results",
-          "hasNext"
+          "hasNext",
+          "cached"
         ],
         "type": "object"
       },
@@ -2970,53 +3207,6 @@
         ],
         "type": "object"
       },
-      "SourceResource": {
-        "additionalProperties": false,
-        "properties": {
-          "displayName": {
-            "type": "string"
-          },
-          "extension": {
-            "type": "string"
-          },
-          "iconUrl": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "lang": {
-            "type": "string"
-          },
-          "moduleId": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "moduleName": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "nsfw": {
-            "type": "boolean"
-          },
-          "supportsLatest": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "moduleId",
-          "moduleName",
-          "id",
-          "name",
-          "lang",
-          "displayName",
-          "supportsLatest",
-          "nsfw"
-        ],
-        "type": "object"
-      },
       "SourceUpdate": {
         "additionalProperties": false,
         "properties": {
@@ -3038,22 +3228,30 @@
         },
         "type": "object"
       },
-      "Sources-mangaResponse": {
+      "Sources": {
         "additionalProperties": false,
         "properties": {
-          "chapters": {
+          "defaultLanguages": {
             "items": {
-              "$ref": "#/components/schemas/SourceChapter"
+              "type": "string"
             },
             "type": "array"
           },
-          "details": {
-            "$ref": "#/components/schemas/SourceMangaDetails"
+          "hideNsfw": {
+            "type": "boolean"
+          },
+          "quickSearch": {
+            "$ref": "#/components/schemas/QuickSearch"
+          },
+          "throttle": {
+            "$ref": "#/components/schemas/ThrottleConfig"
           }
         },
         "required": [
-          "details",
-          "chapters"
+          "hideNsfw",
+          "defaultLanguages",
+          "quickSearch",
+          "throttle"
         ],
         "type": "object"
       },
@@ -3067,6 +3265,25 @@
         },
         "required": [
           "url"
+        ],
+        "type": "object"
+      },
+      "System-cache-clearRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "catalogs": {
+            "type": "boolean"
+          },
+          "images": {
+            "description": "Image buckets to clear (thumbs, assets, covers); empty = none",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "catalogs"
         ],
         "type": "object"
       },
@@ -3198,6 +3415,57 @@
           "intervalMinutes",
           "scheduled"
         ],
+        "type": "object"
+      },
+      "ThrottleConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "burst": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "chapterGapMaxSec": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "chapterGapMinSec": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "jitterMs": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "maxConcurrent": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "minDelayMs": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "preset": {
+            "enum": [
+              "",
+              "gentle",
+              "normal",
+              "fast"
+            ],
+            "type": "string"
+          },
+          "refreshGapMaxSec": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "refreshGapMinSec": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "requestsPerMinute": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
         "type": "object"
       },
       "UpdateRequest": {
@@ -3528,7 +3796,7 @@
   "info": {
     "description": "Sonarr-style PVR for manga. All endpoints accept an X-Api-Key header.",
     "title": "mangarr",
-    "version": "252ee06-dirty"
+    "version": "10e9363-dirty"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -3852,6 +4120,89 @@
         "summary": "Chapters released in a date range (by source upload date)",
         "tags": [
           "Activity"
+        ]
+      }
+    },
+    "/api/v1/catalogs": {
+      "get": {
+        "operationId": "catalogs-list",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "refresh",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogList"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Every catalog with its preferences, throttling state and the catalogs generation",
+        "tags": [
+          "Catalogs"
+        ]
+      },
+      "put": {
+        "operationId": "catalogs-update",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/Patch"
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogList"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Change preferences of several catalogs, keyed by moduleId:sourceId",
+        "tags": [
+          "Catalogs"
         ]
       }
     },
@@ -6718,6 +7069,74 @@
         ]
       }
     },
+    "/api/v1/settings/sources": {
+      "get": {
+        "operationId": "settings-get-sources",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Sources"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Settings"
+        ]
+      },
+      "put": {
+        "operationId": "settings-put-sources",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Sources"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Sources"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
     "/api/v1/sources": {
       "get": {
         "operationId": "sources-list",
@@ -6737,7 +7156,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/SourceResource"
+                    "$ref": "#/components/schemas/Catalog"
                   },
                   "type": "array"
                 }
@@ -6756,7 +7175,7 @@
             "description": "Error"
           }
         },
-        "summary": "List catalogs of all active source modules",
+        "summary": "List usable catalogs of all active source modules (hidden NSFW catalogs excluded)",
         "tags": [
           "Sources"
         ]
@@ -6772,6 +7191,19 @@
             "name": "q",
             "schema": {
               "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "scope",
+            "schema": {
+              "default": "active",
+              "enum": [
+                "active",
+                "all"
+              ],
               "type": "string"
             }
           },
@@ -6830,7 +7262,7 @@
             "description": "Error"
           }
         },
-        "summary": "Search several catalogs at once. Select catalogs with source=moduleId:sourceId (repeatable) or lang.",
+        "summary": "Search several catalogs at once: scope=active (enabled, default languages), all, or source=moduleId:sourceId (repeatable)",
         "tags": [
           "Sources"
         ]
@@ -6954,6 +7386,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "fresh",
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -6961,7 +7401,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Sources-mangaResponse"
+                  "$ref": "#/components/schemas/MangaDetailsResult"
                 }
               }
             },
@@ -6978,7 +7418,7 @@
             "description": "Error"
           }
         },
-        "summary": "Fetch details and chapters of a manga at a source (preview before adding)",
+        "summary": "Fetch details and chapters of a manga at a source (preview before adding); cached for an hour unless fresh=true",
         "tags": [
           "Sources"
         ]
@@ -7286,6 +7726,78 @@
             "description": "Error"
           }
         },
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/api/v1/system/cache": {
+      "get": {
+        "operationId": "system-cache",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CacheStatus"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Sizes of the in-memory catalog cache and the on-disk image cache",
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/api/v1/system/cache/clear": {
+      "post": {
+        "operationId": "system-cache-clear",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/System-cache-clearRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CacheStatus"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Clear caches: catalogs (search/details) and image buckets",
         "tags": [
           "System"
         ]

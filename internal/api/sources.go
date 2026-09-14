@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/hex"
+	"errors"
 	"io"
 	"net/http"
 	"os"
@@ -15,10 +16,13 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
+	"github.com/Asion001/mangarr/internal/catalogs"
 	"github.com/Asion001/mangarr/internal/modules"
 	"github.com/Asion001/mangarr/internal/modules/library"
 	"github.com/Asion001/mangarr/internal/modules/metadata"
 	"github.com/Asion001/mangarr/internal/modules/source"
+	"github.com/Asion001/mangarr/internal/sourcecache"
+	"github.com/Asion001/mangarr/internal/sourcegov"
 )
 
 func init() {
@@ -42,11 +46,8 @@ func capIf(ok bool, name string) string {
 	return ""
 }
 
-type SourceResource struct {
-	ModuleID   int64  `json:"moduleId"`
-	ModuleName string `json:"moduleName"`
-	source.SourceInfo
-}
+// SourceResource is a catalog as returned by the API.
+type SourceResource = catalogs.Catalog
 
 type SearchResultGroup struct {
 	ModuleID   int64          `json:"moduleId"`
@@ -56,6 +57,8 @@ type SearchResultGroup struct {
 	Results    []source.Manga `json:"results"`
 	HasNext    bool           `json:"hasNext"`
 	Error      string         `json:"error,omitempty"`
+	// Cached is true when the results came from the cache.
+	Cached bool `json:"cached"`
 }
 
 type imageOutput struct {
@@ -64,17 +67,59 @@ type imageOutput struct {
 	Body         []byte
 }
 
-func (s *Server) listSources(ctx context.Context, fresh bool) ([]SourceResource, []string) {
-	list, errs := s.app.Catalogs.List(ctx, fresh)
-	out := make([]SourceResource, len(list))
-	for i, c := range list {
-		out[i] = SourceResource(c)
+// Cache TTLs for catalog responses.
+const (
+	searchTTL  = 15 * time.Minute
+	browseTTL  = 30 * time.Minute
+	detailsTTL = 60 * time.Minute
+)
+
+func (s *Server) cacheKey(parts ...string) string {
+	return strconv.FormatInt(s.app.Catalogs.Generation(), 10) + "|" + strings.Join(parts, "|")
+}
+
+// searchCatalog searches one catalog through the cache.
+func (s *Server) searchCatalog(ctx context.Context, moduleID int64, sourceID, query string, page int) (*source.MangaPage, bool, error) {
+	key := s.cacheKey("search", strconv.FormatInt(moduleID, 10), sourceID, strings.ToLower(strings.TrimSpace(query)), strconv.Itoa(page))
+	return sourcecache.Do(s.app.SourceCache, key, searchTTL, func() (*source.MangaPage, error) {
+		mod, _, err := modules.GetAs[source.Module](s.app.Modules, moduleID)
+		if err != nil {
+			return nil, err
+		}
+		return mod.Search(ctx, sourceID, query, page)
+	})
+}
+
+// mangaDetails fetches details and chapters through the cache.
+func (s *Server) mangaDetails(ctx context.Context, moduleID int64, ref source.MangaRef, fresh bool) (*MangaDetailsResult, bool, error) {
+	key := s.cacheKey("manga", strconv.FormatInt(moduleID, 10), ref.SourceID, ref.URL)
+	if fresh {
+		s.app.SourceCache.DeletePrefix(key)
 	}
-	return out, errs
+	return sourcecache.Do(s.app.SourceCache, key, detailsTTL, func() (*MangaDetailsResult, error) {
+		mod, _, err := modules.GetAs[source.Module](s.app.Modules, moduleID)
+		if err != nil {
+			return nil, err
+		}
+		det, chs, err := mod.Manga(ctx, ref, true)
+		if err != nil {
+			return nil, err
+		}
+		if chs == nil {
+			chs = []source.Chapter{}
+		}
+		return &MangaDetailsResult{Details: det, Chapters: chs}, nil
+	})
+}
+
+type MangaDetailsResult struct {
+	Details  *source.MangaDetails `json:"details"`
+	Chapters []source.Chapter     `json:"chapters"`
+	Cached   bool                 `json:"cached"`
 }
 
 // SearchSources runs a query against many catalogs in parallel.
-func (s *Server) SearchSources(ctx context.Context, query string, targets []SourceResource, page int) []SearchResultGroup {
+func (s *Server) SearchSources(ctx context.Context, query string, targets []catalogs.Catalog, page int) []SearchResultGroup {
 	results := make([]SearchResultGroup, len(targets))
 	sem := make(chan struct{}, 6)
 	var wg sync.WaitGroup
@@ -85,17 +130,12 @@ func (s *Server) SearchSources(ctx context.Context, query string, targets []Sour
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			g := SearchResultGroup{ModuleID: t.ModuleID, SourceID: t.ID, SourceName: t.DisplayName, Lang: t.Lang, Results: []source.Manga{}}
-			mod, _, err := modules.GetAs[source.Module](s.app.Modules, t.ModuleID)
+			sctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+			res, cached, err := s.searchCatalog(sctx, t.ModuleID, t.ID, query, page)
+			cancel()
 			if err == nil {
-				sctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-				var res *source.MangaPage
-				res, err = mod.Search(sctx, t.ID, query, page)
-				cancel()
-				if err == nil {
-					g.Results, g.HasNext = res.Mangas, res.HasNext
-				}
-			}
-			if err != nil {
+				g.Results, g.HasNext, g.Cached = res.Mangas, res.HasNext, cached
+			} else {
 				g.Error = err.Error()
 			}
 			results[i] = g
@@ -105,16 +145,41 @@ func (s *Server) SearchSources(ctx context.Context, query string, targets []Sour
 	return results
 }
 
+// allowedCatalog returns a 404 for hidden catalogs.
+func (s *Server) allowedCatalog(ctx context.Context, moduleID int64, sourceID string) error {
+	if err := s.app.Catalogs.Allowed(ctx, moduleID, sourceID); err != nil {
+		return huma.Error404NotFound(err.Error())
+	}
+	return nil
+}
+
+func sourceError(err error) error {
+	if cd, ok := sourcegov.CoolingDown(err); ok {
+		return huma.Error503ServiceUnavailable(cd.Error())
+	}
+	return huma.Error502BadGateway(err.Error())
+}
+
+type CatalogList struct {
+	// Generation changes whenever the usable catalogs change; include it in cache keys.
+	Generation int64              `json:"generation"`
+	Items      []catalogs.Catalog `json:"items"`
+	Errors     []string           `json:"errors"`
+}
+
 func (s *Server) registerSources() {
 	tags := []string{"Sources"}
 	huma.Register(s.api, huma.Operation{OperationID: "sources-list", Method: http.MethodGet, Path: "/api/v1/sources", Tags: tags,
-		Summary: "List catalogs of all active source modules"},
+		Summary: "List usable catalogs of all active source modules (hidden NSFW catalogs excluded)"},
 		func(ctx context.Context, in *struct {
 			Refresh bool `query:"refresh"`
 		}) (*struct{ Body []SourceResource }, error) {
-			out, errs := s.listSources(ctx, in.Refresh)
-			if out == nil {
-				out = []SourceResource{}
+			all, errs := s.app.Catalogs.List(ctx, in.Refresh)
+			out := []SourceResource{}
+			for _, c := range all {
+				if !c.Hidden {
+					out = append(out, c)
+				}
 			}
 			if len(out) == 0 && len(errs) > 0 {
 				return nil, huma.Error502BadGateway(strings.Join(errs, "; "))
@@ -122,32 +187,46 @@ func (s *Server) registerSources() {
 			return &struct{ Body []SourceResource }{out}, nil
 		})
 
+	ctags := []string{"Catalogs"}
+	huma.Register(s.api, huma.Operation{OperationID: "catalogs-list", Method: http.MethodGet, Path: "/api/v1/catalogs", Tags: ctags,
+		Summary: "Every catalog with its preferences, throttling state and the catalogs generation"},
+		func(ctx context.Context, in *struct {
+			Refresh bool `query:"refresh"`
+		}) (*struct{ Body CatalogList }, error) {
+			all, errs := s.app.Catalogs.List(ctx, in.Refresh)
+			if all == nil {
+				all = []catalogs.Catalog{}
+			}
+			if errs == nil {
+				errs = []string{}
+			}
+			return &struct{ Body CatalogList }{CatalogList{Generation: s.app.Catalogs.Generation(), Items: all, Errors: errs}}, nil
+		})
+	huma.Register(s.api, huma.Operation{OperationID: "catalogs-update", Method: http.MethodPut, Path: "/api/v1/catalogs", Tags: ctags,
+		Summary: "Change preferences of several catalogs, keyed by moduleId:sourceId"},
+		func(ctx context.Context, in *struct{ Body map[string]catalogs.Patch }) (*struct{ Body CatalogList }, error) {
+			if err := s.app.Catalogs.Update(ctx, in.Body); err != nil {
+				return nil, huma.Error400BadRequest(err.Error())
+			}
+			all, errs := s.app.Catalogs.List(ctx, false)
+			if errs == nil {
+				errs = []string{}
+			}
+			return &struct{ Body CatalogList }{CatalogList{Generation: s.app.Catalogs.Generation(), Items: all, Errors: errs}}, nil
+		})
+
 	huma.Register(s.api, huma.Operation{OperationID: "sources-search", Method: http.MethodGet, Path: "/api/v1/sources/search", Tags: tags,
-		Summary: "Search several catalogs at once. Select catalogs with source=moduleId:sourceId (repeatable) or lang."},
+		Summary: "Search several catalogs at once: scope=active (enabled, default languages), all, or source=moduleId:sourceId (repeatable)"},
 		func(ctx context.Context, in *struct {
 			Query   string   `query:"q" minLength:"1"`
+			Scope   string   `query:"scope" enum:"active,all" default:"active"`
 			Sources []string `query:"source"`
 			Lang    string   `query:"lang"`
 			Page    int      `query:"page" default:"1"`
 		}) (*struct{ Body []SearchResultGroup }, error) {
-			all, _ := s.listSources(ctx, false)
-			want := map[string]bool{}
-			for _, x := range in.Sources {
-				want[x] = true
-			}
-			var targets []SourceResource
-			for _, sr := range all {
-				key := strconv.FormatInt(sr.ModuleID, 10) + ":" + sr.ID
-				if len(want) > 0 && !want[key] {
-					continue
-				}
-				if in.Lang != "" && sr.Lang != in.Lang && sr.Lang != "all" {
-					continue
-				}
-				targets = append(targets, sr)
-			}
+			targets, _ := s.app.Catalogs.Select(ctx, catalogs.Filter{Scope: catalogs.Scope(in.Scope), Lang: in.Lang, Keys: in.Sources})
 			if len(targets) > 40 {
-				return nil, huma.Error400BadRequest("too many sources selected (max 40); pick sources or a language")
+				return nil, huma.Error400BadRequest("too many catalogs selected (max 40); pick catalogs or a language")
 			}
 			return &struct{ Body []SearchResultGroup }{s.SearchSources(ctx, in.Query, targets, in.Page)}, nil
 		})
@@ -160,60 +239,51 @@ func (s *Server) registerSources() {
 			Query    string `query:"q"`
 			Page     int    `query:"page" default:"1"`
 		}) (*struct{ Body *source.MangaPage }, error) {
-			mod, _, err := modules.GetAs[source.Module](s.app.Modules, in.ModuleID)
-			if err != nil {
-				return nil, huma.Error404NotFound(err.Error())
+			if err := s.allowedCatalog(ctx, in.ModuleID, in.SourceID); err != nil {
+				return nil, err
 			}
 			var res *source.MangaPage
-			switch in.Type {
-			case "search":
-				res, err = mod.Search(ctx, in.SourceID, in.Query, in.Page)
-			default:
-				l, ok := mod.(source.Latest)
-				if !ok {
-					return nil, huma.Error400BadRequest(source.ErrUnsupported.Error())
-				}
-				if in.Type == "latest" {
-					res, err = l.Latest(ctx, in.SourceID, in.Page)
-				} else {
-					res, err = l.Popular(ctx, in.SourceID, in.Page)
-				}
+			var err error
+			if in.Type == "search" {
+				res, _, err = s.searchCatalog(ctx, in.ModuleID, in.SourceID, in.Query, in.Page)
+			} else {
+				key := s.cacheKey(in.Type, strconv.FormatInt(in.ModuleID, 10), in.SourceID, strconv.Itoa(in.Page))
+				res, _, err = sourcecache.Do(s.app.SourceCache, key, browseTTL, func() (*source.MangaPage, error) {
+					l, _, err := modules.GetAs[source.Latest](s.app.Modules, in.ModuleID)
+					if err != nil {
+						return nil, err
+					}
+					if in.Type == "latest" {
+						return l.Latest(ctx, in.SourceID, in.Page)
+					}
+					return l.Popular(ctx, in.SourceID, in.Page)
+				})
 			}
 			if err != nil {
-				return nil, huma.Error502BadGateway(err.Error())
+				return nil, sourceError(err)
 			}
 			return &struct{ Body *source.MangaPage }{res}, nil
 		})
 
 	huma.Register(s.api, huma.Operation{OperationID: "sources-manga", Method: http.MethodGet, Path: "/api/v1/sources/{moduleId}/{sourceId}/manga", Tags: tags,
-		Summary: "Fetch details and chapters of a manga at a source (preview before adding)"},
+		Summary: "Fetch details and chapters of a manga at a source (preview before adding); cached for an hour unless fresh=true"},
 		func(ctx context.Context, in *struct {
 			ModuleID  int64  `path:"moduleId"`
 			SourceID  string `path:"sourceId"`
 			URL       string `query:"url" minLength:"1"`
 			EngineRef string `query:"engineRef"`
-		}) (*struct {
-			Body struct {
-				Details  *source.MangaDetails `json:"details"`
-				Chapters []source.Chapter     `json:"chapters"`
+			Fresh     bool   `query:"fresh"`
+		}) (*struct{ Body *MangaDetailsResult }, error) {
+			if err := s.allowedCatalog(ctx, in.ModuleID, in.SourceID); err != nil {
+				return nil, err
 			}
-		}, error) {
-			mod, _, err := modules.GetAs[source.Module](s.app.Modules, in.ModuleID)
+			res, cached, err := s.mangaDetails(ctx, in.ModuleID, source.MangaRef{SourceID: in.SourceID, URL: in.URL, EngineRef: in.EngineRef}, in.Fresh)
 			if err != nil {
-				return nil, huma.Error404NotFound(err.Error())
+				return nil, sourceError(err)
 			}
-			det, chs, err := mod.Manga(ctx, source.MangaRef{SourceID: in.SourceID, URL: in.URL, EngineRef: in.EngineRef}, true)
-			if err != nil {
-				return nil, huma.Error502BadGateway(err.Error())
-			}
-			out := &struct {
-				Body struct {
-					Details  *source.MangaDetails `json:"details"`
-					Chapters []source.Chapter     `json:"chapters"`
-				}
-			}{}
-			out.Body.Details, out.Body.Chapters = det, chs
-			return out, nil
+			out := *res
+			out.Cached = cached
+			return &struct{ Body *MangaDetailsResult }{&out}, nil
 		})
 
 	huma.Register(s.api, huma.Operation{OperationID: "sources-thumbnail", Method: http.MethodGet, Path: "/api/v1/sources/{moduleId}/{sourceId}/thumbnail", Tags: tags,
@@ -224,8 +294,11 @@ func (s *Server) registerSources() {
 			URL       string `query:"url" minLength:"1"`
 			EngineRef string `query:"engineRef"`
 		}) (*imageOutput, error) {
+			if err := s.allowedCatalog(ctx, in.ModuleID, in.SourceID); err != nil {
+				return nil, err
+			}
 			key := strconv.FormatInt(in.ModuleID, 10) + "|" + in.SourceID + "|" + in.URL
-			data, ct, err := s.cachedImage(ctx, "thumbs", key, 7*24*time.Hour, func(ctx context.Context) (io.ReadCloser, string, error) {
+			data, ct, stale, err := s.cachedImageStale(ctx, "thumbs", key, 7*24*time.Hour, func(ctx context.Context) (io.ReadCloser, string, error) {
 				mod, _, err := modules.GetAs[source.Thumbnails](s.app.Modules, in.ModuleID)
 				if err != nil {
 					return nil, "", err
@@ -235,7 +308,11 @@ func (s *Server) registerSources() {
 			if err != nil {
 				return nil, huma.Error404NotFound(err.Error())
 			}
-			return &imageOutput{ContentType: ct, CacheControl: "public, max-age=86400", Body: data}, nil
+			cc := "public, max-age=86400"
+			if stale {
+				cc = "public, max-age=300"
+			}
+			return &imageOutput{ContentType: ct, CacheControl: cc, Body: data}, nil
 		})
 
 	huma.Register(s.api, huma.Operation{OperationID: "modules-asset", Method: http.MethodGet, Path: "/api/v1/modules/{id}/asset", Tags: tags,
@@ -382,18 +459,50 @@ func (s *Server) registerSources() {
 		})
 }
 
-// cachedImage serves an image from <data>/cache/<bucket>, fetching when stale.
-func (s *Server) cachedImage(ctx context.Context, bucket, key string, ttl time.Duration, fetch func(context.Context) (io.ReadCloser, string, error)) ([]byte, string, error) {
+// cachedImage serves an image from <data>/cache/<bucket>, fetching when the
+// cached copy is older than ttl. When fetching fails, a stale copy is served
+// (stale=true) so covers survive a source being down.
+func (s *Server) cachedImage(ctx context.Context, bucket, key string, ttl time.Duration, fetch func(context.Context) (io.ReadCloser, string, error)) (data []byte, ct string, err error) {
+	data, ct, _, err = s.cachedImageStale(ctx, bucket, key, ttl, fetch)
+	return data, ct, err
+}
+
+func (s *Server) cachedImageStale(ctx context.Context, bucket, key string, ttl time.Duration, fetch func(context.Context) (io.ReadCloser, string, error)) ([]byte, string, bool, error) {
 	sum := sha1.Sum([]byte(key))
 	name := hex.EncodeToString(sum[:])
 	dir := filepath.Join(s.app.Cfg.DataDir, "cache", bucket, name[:2])
 	p := filepath.Join(dir, name)
-	if st, err := os.Stat(p); err == nil && time.Since(st.ModTime()) < ttl {
-		if data, err := os.ReadFile(p); err == nil {
-			ct, _ := os.ReadFile(p + ".type")
-			return data, string(ct), nil
+	readCached := func() ([]byte, string, bool) {
+		data, err := os.ReadFile(p)
+		if err != nil {
+			return nil, "", false
+		}
+		ct, _ := os.ReadFile(p + ".type")
+		return data, string(ct), true
+	}
+	st, statErr := os.Stat(p)
+	if statErr == nil && time.Since(st.ModTime()) < ttl {
+		if data, ct, ok := readCached(); ok {
+			return data, ct, false, nil
 		}
 	}
+	data, ct, err := fetchImage(ctx, fetch)
+	if err != nil {
+		if statErr == nil {
+			if data, ct, ok := readCached(); ok {
+				return data, ct, true, nil
+			}
+		}
+		return nil, "", false, err
+	}
+	if err := os.MkdirAll(dir, 0o775); err == nil {
+		_ = writeAtomic(p+".type", []byte(ct))
+		_ = writeAtomic(p, data)
+	}
+	return data, ct, false, nil
+}
+
+func fetchImage(ctx context.Context, fetch func(context.Context) (io.ReadCloser, string, error)) ([]byte, string, error) {
 	body, ct, err := fetch(ctx)
 	if err != nil {
 		return nil, "", err
@@ -403,12 +512,30 @@ func (s *Server) cachedImage(ctx context.Context, bucket, key string, ttl time.D
 	if err != nil {
 		return nil, "", err
 	}
+	if len(data) == 0 {
+		return nil, "", errors.New("empty image")
+	}
 	if ct == "" {
 		ct = http.DetectContentType(data)
 	}
-	if err := os.MkdirAll(dir, 0o775); err == nil {
-		_ = os.WriteFile(p, data, 0o664)
-		_ = os.WriteFile(p+".type", []byte(ct), 0o664)
-	}
 	return data, ct, nil
+}
+
+// writeAtomic writes via a temporary file so readers never see partial files.
+func writeAtomic(p string, data []byte) error {
+	f, err := os.CreateTemp(filepath.Dir(p), ".tmp-*")
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		os.Remove(f.Name())
+		return err
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(f.Name())
+		return err
+	}
+	_ = os.Chmod(f.Name(), 0o664)
+	return os.Rename(f.Name(), p)
 }

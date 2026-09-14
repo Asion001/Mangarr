@@ -3,12 +3,12 @@ package app
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/Asion001/mangarr/internal/backup"
+	"github.com/Asion001/mangarr/internal/diskcache"
 	"github.com/Asion001/mangarr/internal/events"
 	"github.com/Asion001/mangarr/internal/health"
 	"github.com/Asion001/mangarr/internal/jobs"
@@ -45,6 +45,17 @@ func (a *App) wireMore(ctx context.Context) error {
 		return out
 	})
 	a.Health.AddStatus("Library servers", a.Rescanner.Status)
+	a.Health.AddCheck(func(ctx context.Context) []health.Check {
+		var out []health.Check
+		list, _ := a.Catalogs.List(ctx, false)
+		for _, c := range list {
+			if c.CooldownUntil != nil {
+				out = append(out, health.Check{Source: "Sources", Type: health.Warning, Link: "/sources/catalogs",
+					Message: fmt.Sprintf("%s is paused until %s after %s", c.DisplayName, c.CooldownUntil.Local().Format("15:04"), c.CooldownReason)})
+			}
+		}
+		return out
+	})
 
 	a.Queue.Register(jobs.Definition{Name: "HealthCheck", Description: "Run health checks",
 		Handler: func(ctx context.Context, r *jobs.Run) error {
@@ -138,18 +149,8 @@ func (a *App) housekeeping(ctx context.Context, r *jobs.Run) error {
 	_ = a.DLQueue.ClearFinished(ctx, 7*24*time.Hour)
 	_, _ = a.DB.NewDelete().Model((*model.Command)(nil)).Where("queued_at < ?", time.Now().UTC().Add(-30*24*time.Hour)).
 		Where("status NOT IN (?, ?)", model.CommandQueued, model.CommandStarted).Exec(ctx)
-	cleaned := 0
-	cutoff := time.Now().Add(-30 * 24 * time.Hour)
-	_ = filepath.WalkDir(filepath.Join(a.Cfg.DataDir, "cache"), func(p string, d os.DirEntry, err error) error {
-		if err == nil && !d.IsDir() {
-			if info, err := d.Info(); err == nil && info.ModTime().Before(cutoff) {
-				if os.Remove(p) == nil {
-					cleaned++
-				}
-			}
-		}
-		return nil
-	})
+	g, _ := a.Settings.General(ctx)
+	cleaned := diskcache.Trim(filepath.Join(a.Cfg.DataDir, "cache"), 30*24*time.Hour, int64(g.ImageCacheMaxMB)<<20)
 	r.Progress("purged %d recycled files, %d cached images", purged, cleaned)
 	return nil
 }

@@ -84,6 +84,8 @@ type ChapterRef struct {
 type Page struct {
 	Index int    `json:"index"`
 	URL   string `json:"url"`
+	// SourceID is the catalog the page belongs to (set by the core).
+	SourceID string `json:"sourceId,omitempty"`
 }
 
 // Module is the required interface of source modules.

@@ -134,6 +134,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/catalogs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every catalog with its preferences, throttling state and the catalogs generation */
+        get: operations["catalogs-list"];
+        /** Change preferences of several catalogs, keyed by moduleId:sourceId */
+        put: operations["catalogs-update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chapters/monitor": {
         parameters: {
             query?: never;
@@ -965,6 +983,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/settings/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["settings-get-sources"];
+        put: operations["settings-put-sources"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sources": {
         parameters: {
             query?: never;
@@ -972,7 +1006,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List catalogs of all active source modules */
+        /** List usable catalogs of all active source modules (hidden NSFW catalogs excluded) */
         get: operations["sources-list"];
         put?: never;
         post?: never;
@@ -989,7 +1023,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Search several catalogs at once. Select catalogs with source=moduleId:sourceId (repeatable) or lang. */
+        /** Search several catalogs at once: scope=active (enabled, default languages), all, or source=moduleId:sourceId (repeatable) */
         get: operations["sources-search"];
         put?: never;
         post?: never;
@@ -1022,7 +1056,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Fetch details and chapters of a manga at a source (preview before adding) */
+        /** Fetch details and chapters of a manga at a source (preview before adding); cached for an hour unless fresh=true */
         get: operations["sources-manga"];
         put?: never;
         post?: never;
@@ -1092,6 +1126,40 @@ export interface paths {
         put?: never;
         post?: never;
         delete: operations["backups-delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/cache": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sizes of the in-memory catalog cache and the on-disk image cache */
+        get: operations["system-cache"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/cache/clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Clear caches: catalogs (search/details) and image buckets */
+        post: operations["system-cache-clear"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1286,6 +1354,49 @@ export interface components {
             seriesSourceId: number;
             seriesTitle: string;
             sourceName: string;
+        };
+        BucketStats: {
+            /** Format: int64 */
+            bytes: number;
+            /** Format: int64 */
+            files: number;
+            name: string;
+        };
+        CacheStatus: {
+            /** Format: int64 */
+            bytes: number;
+            /** Format: int64 */
+            entries: number;
+            images: components["schemas"]["BucketStats"][];
+            /** Format: int64 */
+            maxBytes: number;
+        };
+        Catalog: {
+            cooldownReason?: string;
+            /** Format: date-time */
+            cooldownUntil?: string;
+            displayName: string;
+            enabled: boolean;
+            extension?: string;
+            hidden: boolean;
+            iconUrl?: string;
+            id: string;
+            lang: string;
+            /** Format: int64 */
+            moduleId: number;
+            moduleName: string;
+            name: string;
+            nsfw: boolean;
+            /** Format: int64 */
+            priority: number;
+            supportsLatest: boolean;
+            throttle: components["schemas"]["ThrottleConfig"];
+        };
+        CatalogList: {
+            errors: string[];
+            /** Format: int64 */
+            generation: number;
+            items: components["schemas"]["Catalog"][];
         };
         Chapter: {
             /** Format: date-time */
@@ -1563,6 +1674,8 @@ export interface components {
             readonly apiKey: string;
             /** Format: int64 */
             backupRetention: number;
+            /** Format: int64 */
+            imageCacheMaxMb: number;
             instanceName: string;
             publicUrl: string;
         };
@@ -1675,6 +1788,11 @@ export interface components {
             url?: string;
             /** Format: int64 */
             year?: number;
+        };
+        MangaDetailsResult: {
+            cached: boolean;
+            chapters: components["schemas"]["SourceChapter"][];
+            details: components["schemas"]["SourceMangaDetails"];
         };
         MediaManagement: {
             chapterFormat: string;
@@ -1791,6 +1909,13 @@ export interface components {
             /** Format: int64 */
             total: number;
         };
+        Patch: {
+            clearCooldown?: boolean;
+            enabled?: boolean;
+            /** Format: int64 */
+            priority?: number;
+            throttle?: components["schemas"]["ThrottleConfig"];
+        };
         Profile: {
             config: components["schemas"]["ProfileConfig"];
             /** Format: date-time */
@@ -1810,6 +1935,17 @@ export interface components {
             minPages: number;
             preferredScanlators: string[];
             upscale: components["schemas"]["UpscaleConfig"];
+        };
+        QuickSearch: {
+            /** Format: int64 */
+            budgetSeconds: number;
+            /** @enum {string} */
+            details: "none" | "best" | "top";
+            enabled: boolean;
+            /** Format: double */
+            threshold: number;
+            /** Format: int64 */
+            topN: number;
         };
         ReadStateView: {
             completed: boolean;
@@ -1935,6 +2071,7 @@ export interface components {
             path: string;
         };
         SearchResultGroup: {
+            cached: boolean;
             error?: string;
             hasNext: boolean;
             lang: string;
@@ -2133,19 +2270,6 @@ export interface components {
             value: unknown;
             visible: boolean;
         };
-        SourceResource: {
-            displayName: string;
-            extension?: string;
-            iconUrl?: string;
-            id: string;
-            lang: string;
-            /** Format: int64 */
-            moduleId: number;
-            moduleName: string;
-            name: string;
-            nsfw: boolean;
-            supportsLatest: boolean;
-        };
         SourceUpdate: {
             /** Format: int64 */
             checkIntervalMinutes?: number;
@@ -2155,12 +2279,19 @@ export interface components {
             /** Format: int64 */
             priority?: number;
         };
-        "Sources-mangaResponse": {
-            chapters: components["schemas"]["SourceChapter"][];
-            details: components["schemas"]["SourceMangaDetails"];
+        Sources: {
+            defaultLanguages: string[];
+            hideNsfw: boolean;
+            quickSearch: components["schemas"]["QuickSearch"];
+            throttle: components["schemas"]["ThrottleConfig"];
         };
         "Stores-addRequest": {
             url: string;
+        };
+        "System-cache-clearRequest": {
+            catalogs: boolean;
+            /** @description Image buckets to clear (thumbs, assets, covers); empty = none */
+            images?: string[];
         };
         "System-envResponse": {
             unknown: string[];
@@ -2196,6 +2327,28 @@ export interface components {
             /** Format: date-time */
             nextExecution?: string;
             scheduled: boolean;
+        };
+        ThrottleConfig: {
+            /** Format: int64 */
+            burst?: number;
+            /** Format: int64 */
+            chapterGapMaxSec?: number;
+            /** Format: int64 */
+            chapterGapMinSec?: number;
+            /** Format: int64 */
+            jitterMs?: number;
+            /** Format: int64 */
+            maxConcurrent?: number;
+            /** Format: int64 */
+            minDelayMs?: number;
+            /** @enum {string} */
+            preset?: "" | "gentle" | "normal" | "fast";
+            /** Format: int64 */
+            refreshGapMaxSec?: number;
+            /** Format: int64 */
+            refreshGapMinSec?: number;
+            /** Format: int64 */
+            requestsPerMinute?: number;
         };
         UpdateRequest: {
             description?: string;
@@ -2530,6 +2683,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WantedItem"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "catalogs-list": {
+        parameters: {
+            query?: {
+                refresh?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "catalogs-update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: components["schemas"]["Patch"];
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogList"];
                 };
             };
             /** @description Error */
@@ -4744,6 +4963,68 @@ export interface operations {
             };
         };
     };
+    "settings-get-sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sources"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "settings-put-sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Sources"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sources"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "sources-list": {
         parameters: {
             query?: {
@@ -4761,7 +5042,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SourceResource"][];
+                    "application/json": components["schemas"]["Catalog"][];
                 };
             };
             /** @description Error */
@@ -4779,6 +5060,7 @@ export interface operations {
         parameters: {
             query?: {
                 q?: string;
+                scope?: "active" | "all";
                 source?: string[];
                 lang?: string;
                 page?: number;
@@ -4850,6 +5132,7 @@ export interface operations {
             query?: {
                 url?: string;
                 engineRef?: string;
+                fresh?: boolean;
             };
             header?: never;
             path: {
@@ -4866,7 +5149,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Sources-mangaResponse"];
+                    "application/json": components["schemas"]["MangaDetailsResult"];
                 };
             };
             /** @description Error */
@@ -5087,6 +5370,68 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "system-cache": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CacheStatus"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "system-cache-clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["System-cache-clearRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CacheStatus"];
+                };
             };
             /** @description Error */
             default: {

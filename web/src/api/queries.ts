@@ -37,6 +37,9 @@ export const useHealth = () => useQuery({ queryKey: ["health"], queryFn: () => u
 export const useCommands = () => useQuery({ queryKey: ["commands"], queryFn: () => unwrap(api.GET("/api/v1/commands", { params: { query: { limit: 50 } } })) });
 export const useTasks = () => useQuery({ queryKey: ["tasks"], queryFn: () => unwrap(api.GET("/api/v1/system/tasks")) });
 export const useReaders = () => useQuery({ queryKey: ["readers"], queryFn: () => unwrap(api.GET("/api/v1/readers")) });
+/** useCatalogs lists every catalog with preferences and the catalogs generation. */
+export const useCatalogs = () => useQuery({ queryKey: ["catalogs"], queryFn: () => unwrap(api.GET("/api/v1/catalogs")), staleTime: 30_000 });
+
 export const useSources = () => useQuery({ queryKey: ["sources"], queryFn: () => unwrap(api.GET("/api/v1/sources")), staleTime: 60_000 });
 
 /** usePushCommand queues a server command and toasts the result. */

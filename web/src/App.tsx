@@ -15,6 +15,7 @@ import { HistoryPage } from "./pages/activity/History";
 import { BlocklistPage } from "./pages/activity/Blocklist";
 import { WantedPage } from "./pages/activity/Wanted";
 import { SourcesPage } from "./pages/sources/Sources";
+import { SearchSettingsPage } from "./pages/settings/SearchSettings";
 import { CleanupPage } from "./pages/settings/Cleanup";
 import { ModulesPage } from "./pages/settings/Modules";
 import { ProfilesPage } from "./pages/settings/Profiles";
@@ -68,11 +69,13 @@ export function App() {
         <Route path="activity/blocklist" element={<BlocklistPage />} />
         <Route path="wanted" element={<WantedPage />} />
         <Route path="sources" element={<SourcesPage />} />
+        <Route path="sources/:tab" element={<SourcesPage />} />
         <Route path="cleanup" element={<CleanupPage />} />
         <Route path="settings" element={<Navigate to="/settings/media" replace />} />
         <Route path="settings/media" element={<MediaPage />} />
         <Route path="settings/profiles" element={<ProfilesPage />} />
         <Route path="settings/sources" element={<ModulesPage kind="source" />} />
+        <Route path="settings/search" element={<SearchSettingsPage />} />
         <Route path="settings/metadata" element={<ModulesPage kind="metadata" />} />
         <Route path="settings/library" element={<ModulesPage kind="library" />} />
         <Route path="settings/notifications" element={<ModulesPage kind="notify" />} />

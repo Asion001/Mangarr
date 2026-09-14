@@ -28,6 +28,7 @@ import (
 	"github.com/Asion001/mangarr/internal/modules"
 	"github.com/Asion001/mangarr/internal/modules/source"
 	"github.com/Asion001/mangarr/internal/settings"
+	"github.com/Asion001/mangarr/internal/sourcegov"
 )
 
 // PageFile is a validated page on disk.
@@ -66,6 +67,8 @@ type Manager struct {
 	dataDir  string
 
 	Processor Processor
+	// Gov (optional) paces chapters per catalog and defers throttled catalogs.
+	Gov *sourcegov.Governor
 
 	mu          sync.Mutex
 	running     map[int64]context.CancelFunc
@@ -119,7 +122,16 @@ func (m *Manager) loop(ctx context.Context) {
 
 type queuedJob struct {
 	model.DownloadJob
+	ModuleID int64  `bun:"module_id"`
 	SourceID string `bun:"source_id"`
+}
+
+// srcKey identifies the catalog of a job for per-source limits.
+func srcKey(moduleID int64, sourceID string) string {
+	if sourceID == "" {
+		return ""
+	}
+	return strconv.FormatInt(moduleID, 10) + ":" + sourceID
 }
 
 func (m *Manager) dispatch(ctx context.Context) {
@@ -131,7 +143,7 @@ func (m *Manager) dispatch(ctx context.Context) {
 		dl.MaxPerSource = 1
 	}
 	var jobs []queuedJob
-	err := m.db.NewSelect().TableExpr("download_jobs AS j").ColumnExpr("j.*, COALESCE(ss.source_id, '') AS source_id").
+	err := m.db.NewSelect().TableExpr("download_jobs AS j").ColumnExpr("j.*, COALESCE(ss.module_id, 0) AS module_id, COALESCE(ss.source_id, '') AS source_id").
 		Join("LEFT JOIN chapter_releases AS r ON r.id = j.release_id").
 		Join("LEFT JOIN series_sources AS ss ON ss.id = r.series_source_id").
 		Where("j.status = ? AND j.not_before <= ?", model.JobQueued, time.Now().UTC()).
@@ -152,12 +164,18 @@ func (m *Manager) dispatch(ctx context.Context) {
 		if _, ok := m.running[j.ID]; ok {
 			continue
 		}
-		if j.SourceID != "" && m.runningSrc[j.SourceID] >= dl.MaxPerSource {
+		src := srcKey(j.ModuleID, j.SourceID)
+		if src != "" && m.runningSrc[src] >= dl.MaxPerSource {
 			continue
+		}
+		if m.Gov != nil && src != "" {
+			if until, _ := m.Gov.Cooldown(sourcegov.Key{ModuleID: j.ModuleID, SourceID: j.SourceID}); !until.IsZero() {
+				continue // throttled catalog: wait for the cooldown
+			}
 		}
 		jctx, cancel := context.WithCancel(ctx)
 		m.running[j.ID] = cancel
-		m.runningSrc[j.SourceID]++
+		m.runningSrc[src]++
 		busy = true
 		go func(job model.DownloadJob, src string) {
 			defer func() {
@@ -172,7 +190,7 @@ func (m *Manager) dispatch(ctx context.Context) {
 				m.queue.signal()
 			}()
 			m.run(jctx, job)
-		}(j.DownloadJob, j.SourceID)
+		}(j.DownloadJob, src)
 	}
 	// Queue drained: run module housekeeping (e.g. clear engine page caches).
 	if !busy && m.wasBusy && time.Since(m.lastMaint) > 10*time.Minute {
@@ -312,6 +330,13 @@ func (m *Manager) run(ctx context.Context, job model.DownloadJob) {
 			_, _ = m.db.NewUpdate().Model(&job).Column("release_id", "is_upgrade").WherePK().Exec(ctx)
 		}
 		m.setStatus(ctx, &job, model.JobDownloading, model.ChapterDownloading)
+		if m.Gov != nil {
+			// random pause between chapters of the same catalog
+			if err := m.Gov.Pace(ctx, sourcegov.Key{ModuleID: jc.link.ModuleID, SourceID: jc.link.SourceID}, "chapter"); err != nil {
+				m.fail(ctx, &job, jc, err)
+				return
+			}
+		}
 		pages, err = m.fetchPages(ctx, jc, workDir)
 	}
 	if err != nil {
@@ -705,9 +730,18 @@ func (m *Manager) fail(ctx context.Context, job *model.DownloadJob, jc *jobCtx, 
 		maxAttempts = 3
 	}
 	now := time.Now().UTC()
-	job.Attempt++
 	job.Error = err.Error()
 	job.UpdatedAt = now
+	// the site throttled us: retry when the catalog's cooldown ends, without
+	// counting it against the release
+	if until := m.cooldownUntil(err, jc); !until.IsZero() {
+		job.Status, job.NotBefore = model.JobQueued, until
+		_, _ = m.db.NewUpdate().Model(job).Column("status", "error", "not_before", "updated_at", "release_id").WherePK().Exec(bg)
+		m.log.Info("source is cooling down, download postponed", "job", job.ID, "until", until.Local().Format(time.TimeOnly))
+		m.bus.Changed("queue", "updated", job.ID)
+		return
+	}
+	job.Attempt++
 	var perm permanentError
 	var infra infraError
 	isPerm := errors.As(err, &perm)
@@ -765,6 +799,22 @@ func (m *Manager) fail(ctx context.Context, job *model.DownloadJob, jc *jobCtx, 
 	}
 	m.bus.Changed("queue", "updated", job.ID)
 	m.bus.Changed("chapter", "updated", job.ChapterID)
+}
+
+// cooldownUntil returns when a throttled catalog may be used again (zero
+// when err isn't about throttling).
+func (m *Manager) cooldownUntil(err error, jc *jobCtx) time.Time {
+	if cd, ok := sourcegov.CoolingDown(err); ok {
+		return cd.Until
+	}
+	if m.Gov == nil || jc == nil || jc.link == nil {
+		return time.Time{}
+	}
+	if _, throttled := sourcegov.Classify(err); !throttled {
+		return time.Time{}
+	}
+	until, _ := m.Gov.Cooldown(sourcegov.Key{ModuleID: jc.link.ModuleID, SourceID: jc.link.SourceID})
+	return until
 }
 
 func firstNonEmpty(xs ...string) string {

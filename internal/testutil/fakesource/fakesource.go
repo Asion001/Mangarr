@@ -49,6 +49,14 @@ type Scenario struct {
 	Mangas    map[string]*Manga // key: sourceID|url
 	PageWidth int
 	Fetches   int
+	// Searches counts Search calls; SearchDelay slows them down; SearchErr
+	// makes searches of a catalog fail.
+	Searches    int
+	SearchDelay time.Duration
+	SearchErr   map[string]error
+	// ThumbErr makes thumbnail requests fail; Thumbs counts them.
+	ThumbErr error
+	Thumbs   int
 }
 
 var (
@@ -105,7 +113,17 @@ func (m *Module) Sources(ctx context.Context) ([]source.SourceInfo, error) {
 
 func (m *Module) Search(ctx context.Context, sourceID, query string, page int) (*source.MangaPage, error) {
 	m.sc.mu.Lock()
+	m.sc.Searches++
+	delay := m.sc.SearchDelay
+	m.sc.mu.Unlock()
+	if delay > 0 {
+		time.Sleep(delay)
+	}
+	m.sc.mu.Lock()
 	defer m.sc.mu.Unlock()
+	if err := m.sc.SearchErr[sourceID]; err != nil {
+		return nil, err
+	}
 	res := &source.MangaPage{Mangas: []source.Manga{}}
 	for _, mg := range m.sc.Mangas {
 		if mg.SourceID == sourceID && strings.Contains(strings.ToLower(mg.Title), strings.ToLower(query)) {
@@ -182,3 +200,18 @@ func (m *Module) FetchPage(ctx context.Context, p source.Page) (io.ReadCloser, s
 
 // ErrForbidden is a convenient page failure.
 var ErrForbidden = errors.New("HTTP 403 from source")
+
+// Thumbnail serves a tiny PNG.
+func (m *Module) Thumbnail(ctx context.Context, ref source.MangaRef) (io.ReadCloser, string, error) {
+	m.sc.mu.Lock()
+	defer m.sc.mu.Unlock()
+	m.sc.Thumbs++
+	if m.sc.ThumbErr != nil {
+		return nil, "", m.sc.ThumbErr
+	}
+	var buf bytes.Buffer
+	_ = png.Encode(&buf, image.NewGray(image.Rect(0, 0, 2, 3)))
+	return io.NopCloser(&buf), "image/png", nil
+}
+
+var _ source.Thumbnails = (*Module)(nil)

@@ -599,8 +599,46 @@ func (m *Module) Extensions(ctx context.Context, refresh bool) ([]source.Extensi
 	return res, nil
 }
 
+// patchExtension installs/updates/uninstalls an extension. Suwayomi silently
+// ignores packages it doesn't know yet (the store index wasn't fetched since
+// it started), so unknown packages trigger a store refresh and one retry, and
+// the resulting state is verified.
 func (m *Module) patchExtension(ctx context.Context, pkg, action string) error {
-	return m.c.do(ctx, opUpdateExtension, map[string]any{"id": pkg, action: true}, nil)
+	patch := func() (*struct {
+		PkgName     string `json:"pkgName"`
+		IsInstalled bool   `json:"isInstalled"`
+		HasUpdate   bool   `json:"hasUpdate"`
+	}, error) {
+		var out struct {
+			UpdateExtension struct {
+				Extension *struct {
+					PkgName     string `json:"pkgName"`
+					IsInstalled bool   `json:"isInstalled"`
+					HasUpdate   bool   `json:"hasUpdate"`
+				} `json:"extension"`
+			} `json:"updateExtension"`
+		}
+		err := m.c.do(ctx, opUpdateExtension, map[string]any{"id": pkg, action: true}, &out)
+		return out.UpdateExtension.Extension, err
+	}
+	ext, err := patch()
+	if err == nil && ext == nil {
+		if _, err = m.Extensions(ctx, true); err == nil {
+			ext, err = patch()
+		}
+	}
+	if err != nil {
+		return err
+	}
+	switch {
+	case ext == nil:
+		return fmt.Errorf("extension %s is not in the store index yet (Suwayomi may still be loading it; try again in a minute)", pkg)
+	case action == "install" && !ext.IsInstalled, action == "update" && !ext.IsInstalled:
+		return fmt.Errorf("Suwayomi did not install %s", pkg)
+	case action == "uninstall" && ext.IsInstalled:
+		return fmt.Errorf("Suwayomi did not uninstall %s", pkg)
+	}
+	return nil
 }
 
 func (m *Module) InstallExtension(ctx context.Context, pkg string) error {

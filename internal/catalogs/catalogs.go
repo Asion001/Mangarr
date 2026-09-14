@@ -1,12 +1,19 @@
 // Package catalogs tracks the catalogs (individual sources such as
-// "MangaDex (EN)") offered by the active source modules. It caches the
-// catalog lists and keeps a generation counter that changes whenever the set
-// of usable catalogs may have changed, so caches keyed by it never serve
-// results from catalogs that were disabled or removed.
+// "MangaDex (EN)") offered by the active source modules, with per-catalog
+// preferences (enabled, priority, throttling) and the global source settings
+// (hidden NSFW catalogs, default languages).
+//
+// It keeps a generation counter that changes whenever the set of usable
+// catalogs may have changed (module reloads, extension changes, preference or
+// settings edits), so caches keyed by it never serve results from catalogs
+// that were disabled, hidden or removed.
 package catalogs
 
 import (
 	"context"
+	"errors"
+	"log/slog"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -14,19 +21,34 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Asion001/mangarr/internal/db"
 	"github.com/Asion001/mangarr/internal/events"
+	"github.com/Asion001/mangarr/internal/model"
 	"github.com/Asion001/mangarr/internal/modules"
 	"github.com/Asion001/mangarr/internal/modules/source"
+	"github.com/Asion001/mangarr/internal/settings"
+	"github.com/Asion001/mangarr/internal/sourcegov"
 )
 
 // ListTTL is how long a module's catalog list is reused.
 const ListTTL = time.Minute
 
-// Catalog is one source catalog of a module instance.
+// DefaultPriority is the priority of catalogs without preferences.
+const DefaultPriority = 100
+
+// Catalog is one source catalog of a module instance with its preferences.
 type Catalog struct {
 	ModuleID   int64  `json:"moduleId"`
 	ModuleName string `json:"moduleName"`
 	source.SourceInfo
+	Enabled  bool `json:"enabled"`
+	Priority int  `json:"priority"`
+	// Hidden is true for NSFW catalogs while NSFW catalogs are hidden.
+	Hidden bool `json:"hidden"`
+	// Throttle is this catalog's override (empty = global settings).
+	Throttle       model.ThrottleConfig `json:"throttle"`
+	CooldownUntil  *time.Time           `json:"cooldownUntil,omitempty"`
+	CooldownReason string               `json:"cooldownReason,omitempty"`
 }
 
 // Key identifies a catalog across modules.
@@ -37,33 +59,79 @@ func Key(moduleID int64, sourceID string) string {
 	return strconv.FormatInt(moduleID, 10) + ":" + sourceID
 }
 
+// ParseKey splits a "moduleId:sourceId" key.
+func ParseKey(k string) (int64, string, bool) {
+	m, s, ok := strings.Cut(k, ":")
+	id, err := strconv.ParseInt(m, 10, 64)
+	return id, s, ok && err == nil && s != ""
+}
+
 type entry struct {
 	at   time.Time
 	list []source.SourceInfo
 }
 
-// Service caches catalog lists per module.
+type prefKey struct {
+	module int64
+	source string
+}
+
+// Service caches catalog lists and preferences.
 type Service struct {
-	mods *modules.Manager
-	bus  *events.Bus
+	db       *db.DB
+	mods     *modules.Manager
+	bus      *events.Bus
+	settings *settings.Store
+	log      *slog.Logger
+	// Gov throttles requests to catalogs.
+	Gov *sourcegov.Governor
 
 	mu    sync.Mutex
 	lists map[int64]entry
+	prefs map[prefKey]model.CatalogPref
 	gen   atomic.Int64
 }
 
-func New(mods *modules.Manager, bus *events.Bus) *Service {
-	s := &Service{mods: mods, bus: bus, lists: map[int64]entry{}}
+func New(d *db.DB, mods *modules.Manager, bus *events.Bus, st *settings.Store, log *slog.Logger) *Service {
+	s := &Service{db: d, mods: mods, bus: bus, settings: st, log: log, lists: map[int64]entry{}, prefs: map[prefKey]model.CatalogPref{}}
 	s.gen.Store(time.Now().UnixMilli()) // distinct across restarts
+	s.Gov = sourcegov.New(s.throttle, s.persistCooldown)
 	mods.OnChange(func() { s.Invalidate(0) })
+	mods.Decorate(modules.KindSource, sourcegov.Decorator(s.Gov))
 	return s
+}
+
+// Load reads preferences and persisted cooldowns (call once at startup).
+func (s *Service) Load(ctx context.Context) error {
+	var rows []model.CatalogPref
+	if err := s.db.NewSelect().Model(&rows).Scan(ctx); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	for _, r := range rows {
+		s.prefs[prefKey{r.ModuleID, r.SourceID}] = r
+	}
+	s.mu.Unlock()
+	for _, r := range rows {
+		if r.CooldownUntil != nil && r.CooldownUntil.After(time.Now()) {
+			s.Gov.Restore(sourcegov.Key{ModuleID: r.ModuleID, SourceID: r.SourceID}, *r.CooldownUntil, r.CooldownStrikes, r.LastThrottle)
+		}
+	}
+	return nil
 }
 
 // Generation changes whenever the usable catalog set may have changed.
 func (s *Service) Generation() int64 { return s.gen.Load() }
 
-// Invalidate drops the cached list of a module (0 = all) and bumps the
-// generation.
+// Bump changes the generation (e.g. after settings edits) and notifies clients.
+func (s *Service) Bump() {
+	g := s.gen.Add(1)
+	if s.bus != nil {
+		s.bus.Changed("catalogs", "updated", g)
+	}
+}
+
+// Invalidate drops the cached list of a module (0 = all) and bumps the generation.
 func (s *Service) Invalidate(moduleID int64) {
 	s.mu.Lock()
 	if moduleID == 0 {
@@ -72,15 +140,71 @@ func (s *Service) Invalidate(moduleID int64) {
 		delete(s.lists, moduleID)
 	}
 	s.mu.Unlock()
-	g := s.gen.Add(1)
-	if s.bus != nil {
-		s.bus.Changed("catalogs", "updated", g)
-	}
+	s.Bump()
 }
 
-// List returns the catalogs of all active source modules, sorted by language
-// and name. Modules that fail to list are reported in errs.
+func (s *Service) sourceSettings() settings.Sources {
+	v, err := s.settings.Sources(context.Background())
+	if err != nil {
+		return settings.DefaultSources()
+	}
+	return v
+}
+
+// throttle resolves the effective throttle of a catalog.
+func (s *Service) throttle(k sourcegov.Key) model.ThrottleConfig {
+	s.mu.Lock()
+	p := s.prefs[prefKey{k.ModuleID, k.SourceID}]
+	s.mu.Unlock()
+	return sourcegov.Resolve(s.sourceSettings().Throttle, p.Throttle)
+}
+
+// EffectiveThrottle returns the throttle applied to a catalog.
+func (s *Service) EffectiveThrottle(moduleID int64, sourceID string) model.ThrottleConfig {
+	return s.throttle(sourcegov.Key{ModuleID: moduleID, SourceID: sourceID})
+}
+
+// persistCooldown stores cooldown changes without blocking the request path.
+func (s *Service) persistCooldown(ev sourcegov.CooldownEvent) {
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if _, err := s.updatePref(ctx, ev.Key.ModuleID, ev.Key.SourceID, func(p *model.CatalogPref) {
+			p.CooldownUntil, p.CooldownStrikes, p.LastThrottle = ev.Until, ev.Strikes, ev.Reason
+		}); err != nil && s.log != nil {
+			s.log.Warn("persist catalog cooldown", "catalog", ev.Key.String(), "err", err)
+		}
+		if ev.Until != nil && s.log != nil {
+			s.log.Warn("source throttled us, pausing it", "catalog", ev.Key.String(), "until", ev.Until.Local().Format(time.TimeOnly), "reason", ev.Reason)
+		}
+		if s.bus != nil {
+			s.bus.Changed("catalogs", "cooldown", s.gen.Load())
+		}
+	}()
+}
+
+func (s *Service) pref(moduleID int64, sourceID string) (model.CatalogPref, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.prefs[prefKey{moduleID, sourceID}]
+	return p, ok
+}
+
+func (s *Service) decorate(moduleID int64, moduleName string, si source.SourceInfo, hideNSFW bool) Catalog {
+	c := Catalog{ModuleID: moduleID, ModuleName: moduleName, SourceInfo: si, Enabled: true, Priority: DefaultPriority, Hidden: hideNSFW && si.NSFW}
+	if p, ok := s.pref(moduleID, si.ID); ok {
+		c.Enabled, c.Priority, c.Throttle = p.Enabled, p.Priority, p.Throttle
+	}
+	if until, reason := s.Gov.Cooldown(sourcegov.Key{ModuleID: moduleID, SourceID: si.ID}); !until.IsZero() {
+		c.CooldownUntil, c.CooldownReason = &until, reason
+	}
+	return c
+}
+
+// List returns every catalog of the active source modules (including hidden
+// and disabled ones), sorted by language and name.
 func (s *Service) List(ctx context.Context, fresh bool) (out []Catalog, errs []string) {
+	hide := s.sourceSettings().HideNSFW
 	for _, m := range modules.ActiveAs[source.Module](s.mods, modules.KindSource) {
 		s.mu.Lock()
 		e, ok := s.lists[m.Def.ID]
@@ -97,7 +221,7 @@ func (s *Service) List(ctx context.Context, fresh bool) (out []Catalog, errs []s
 			s.mu.Unlock()
 		}
 		for _, si := range e.list {
-			out = append(out, Catalog{ModuleID: m.Def.ID, ModuleName: m.Def.Name, SourceInfo: si})
+			out = append(out, s.decorate(m.Def.ID, m.Def.Name, si, hide))
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool {
@@ -107,4 +231,156 @@ func (s *Service) List(ctx context.Context, fresh bool) (out []Catalog, errs []s
 		return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
 	})
 	return out, errs
+}
+
+// Scope selects catalogs for searches.
+type Scope string
+
+const (
+	// ScopeActive: enabled catalogs in the default languages.
+	ScopeActive Scope = "active"
+	// ScopeAll: every catalog that isn't hidden.
+	ScopeAll Scope = "all"
+)
+
+// Filter narrows Select.
+type Filter struct {
+	Scope Scope
+	// Lang overrides the default languages ("" = defaults for active scope).
+	Lang string
+	// Keys selects exact catalogs ("moduleId:sourceId"); disabled ones are allowed.
+	Keys []string
+}
+
+func langMatch(catalogLang string, langs []string) bool {
+	if len(langs) == 0 || catalogLang == "all" || catalogLang == "multi" {
+		return true
+	}
+	return slices.Contains(langs, catalogLang)
+}
+
+// Select returns the catalogs to search, ordered by priority. Hidden (NSFW)
+// catalogs are never returned.
+func (s *Service) Select(ctx context.Context, f Filter) ([]Catalog, []string) {
+	all, errs := s.List(ctx, false)
+	st := s.sourceSettings()
+	var langs []string
+	switch {
+	case f.Lang != "":
+		langs = []string{f.Lang}
+	case f.Scope != ScopeAll && len(f.Keys) == 0:
+		langs = st.DefaultLanguages
+	}
+	var out []Catalog
+	for _, c := range all {
+		if c.Hidden {
+			continue
+		}
+		if len(f.Keys) > 0 {
+			if slices.Contains(f.Keys, c.Key()) {
+				out = append(out, c)
+			}
+			continue
+		}
+		if !langMatch(c.Lang, langs) || (f.Scope != ScopeAll && !c.Enabled) {
+			continue
+		}
+		out = append(out, c)
+	}
+	SortByPriority(out)
+	return out, errs
+}
+
+// SortByPriority orders catalogs by priority, then language and name.
+func SortByPriority(cs []Catalog) {
+	sort.SliceStable(cs, func(i, j int) bool {
+		if cs[i].Priority != cs[j].Priority {
+			return cs[i].Priority < cs[j].Priority
+		}
+		if cs[i].Lang != cs[j].Lang {
+			return cs[i].Lang < cs[j].Lang
+		}
+		return strings.ToLower(cs[i].Name) < strings.ToLower(cs[j].Name)
+	})
+}
+
+// ErrHidden is returned for catalogs hidden by the NSFW setting.
+var ErrHidden = errors.New("this catalog is hidden (NSFW catalogs are hidden in Settings → Sources)")
+
+// Allowed checks that a catalog may be used for browsing and searching.
+// Unknown catalogs (e.g. an extension that was uninstalled) are allowed.
+func (s *Service) Allowed(ctx context.Context, moduleID int64, sourceID string) error {
+	if !s.sourceSettings().HideNSFW {
+		return nil
+	}
+	all, _ := s.List(ctx, false)
+	for _, c := range all {
+		if c.ModuleID == moduleID && c.ID == sourceID && c.Hidden {
+			return ErrHidden
+		}
+	}
+	return nil
+}
+
+// Patch changes the preferences of one catalog; nil fields are kept.
+type Patch struct {
+	Enabled  *bool                 `json:"enabled,omitempty"`
+	Priority *int                  `json:"priority,omitempty"`
+	Throttle *model.ThrottleConfig `json:"throttle,omitempty"`
+	// ClearCooldown ends a running cooldown.
+	ClearCooldown bool `json:"clearCooldown,omitempty"`
+}
+
+// Update applies patches keyed by "moduleId:sourceId".
+func (s *Service) Update(ctx context.Context, patches map[string]Patch) error {
+	for key, p := range patches {
+		mid, sid, ok := ParseKey(key)
+		if !ok {
+			return errors.New("invalid catalog key " + key)
+		}
+		if _, err := s.updatePref(ctx, mid, sid, func(pref *model.CatalogPref) {
+			if p.Enabled != nil {
+				pref.Enabled = *p.Enabled
+			}
+			if p.Priority != nil {
+				pref.Priority = *p.Priority
+			}
+			if p.Throttle != nil {
+				pref.Throttle = *p.Throttle
+			}
+			if p.ClearCooldown {
+				pref.CooldownUntil, pref.CooldownStrikes, pref.LastThrottle = nil, 0, ""
+			}
+		}); err != nil {
+			return err
+		}
+		if p.ClearCooldown {
+			s.Gov.ClearCooldown(sourcegov.Key{ModuleID: mid, SourceID: sid})
+		}
+	}
+	s.Bump()
+	return nil
+}
+
+// updatePref loads (or creates) a preference row, applies fn and saves it.
+func (s *Service) updatePref(ctx context.Context, moduleID int64, sourceID string, fn func(*model.CatalogPref)) (model.CatalogPref, error) {
+	p, ok := s.pref(moduleID, sourceID)
+	if !ok {
+		p = model.CatalogPref{ModuleID: moduleID, SourceID: sourceID, Enabled: true, Priority: DefaultPriority}
+	}
+	fn(&p)
+	p.UpdatedAt = time.Now().UTC()
+	_, err := s.db.NewInsert().Model(&p).
+		On("CONFLICT (module_id, source_id) DO UPDATE").
+		Set("enabled = EXCLUDED.enabled").Set("priority = EXCLUDED.priority").Set("throttle = EXCLUDED.throttle").
+		Set("cooldown_until = EXCLUDED.cooldown_until").Set("cooldown_strikes = EXCLUDED.cooldown_strikes").
+		Set("last_throttle = EXCLUDED.last_throttle").Set("updated_at = EXCLUDED.updated_at").
+		Returning("id").Exec(ctx)
+	if err != nil {
+		return p, err
+	}
+	s.mu.Lock()
+	s.prefs[prefKey{moduleID, sourceID}] = p
+	s.mu.Unlock()
+	return p, nil
 }

@@ -110,6 +110,40 @@ type ProviderDefinition struct {
 	UpdatedAt time.Time `bun:"updated_at,notnull" json:"updatedAt"`
 }
 
+// CatalogPref holds per-catalog preferences and throttling state.
+type CatalogPref struct {
+	bun.BaseModel   `bun:"table:catalog_prefs"`
+	ID              int64          `bun:"id,pk,autoincrement" json:"-"`
+	ModuleID        int64          `bun:"module_id,notnull" json:"moduleId"`
+	SourceID        string         `bun:"source_id,notnull" json:"sourceId"`
+	Enabled         bool           `bun:"enabled,notnull" json:"enabled"`
+	Priority        int            `bun:"priority,notnull" json:"priority"`
+	Throttle        ThrottleConfig `bun:"throttle,notnull" json:"throttle"`
+	CooldownUntil   *time.Time     `bun:"cooldown_until" json:"cooldownUntil,omitempty"`
+	CooldownStrikes int            `bun:"cooldown_strikes,notnull" json:"cooldownStrikes"`
+	LastThrottle    string         `bun:"last_throttle,notnull" json:"lastThrottle,omitempty"`
+	UpdatedAt       time.Time      `bun:"updated_at,notnull" json:"updatedAt"`
+}
+
+// ThrottleConfig limits requests to one catalog. Zero values in an override
+// inherit the preset; Preset selects gentle, normal or fast.
+type ThrottleConfig struct {
+	Preset string `json:"preset,omitempty" enum:",gentle,normal,fast" desc:"gentle, normal or fast (fast = like Mihon: no extra delays)."`
+	// RequestsPerMinute caps requests (0 = no cap); Burst allows short bursts.
+	RequestsPerMinute int `json:"requestsPerMinute,omitempty" desc:"Maximum requests per minute per catalog (0 = preset)."`
+	Burst             int `json:"burst,omitempty" desc:"Requests allowed in a short burst."`
+	// MinDelayMs is the minimum gap between requests; JitterMs adds a random 0..JitterMs.
+	MinDelayMs int `json:"minDelayMs,omitempty" desc:"Minimum gap between requests (ms)."`
+	JitterMs   int `json:"jitterMs,omitempty" desc:"Random extra delay per request, 0..N ms."`
+	// MaxConcurrent caps simultaneous requests.
+	MaxConcurrent int `json:"maxConcurrent,omitempty" desc:"Simultaneous requests per catalog."`
+	// Random pause between chapters / between series refreshes of this catalog (seconds).
+	ChapterGapMinSec int `json:"chapterGapMinSec,omitempty" desc:"Minimum random pause between chapters of a catalog (s)."`
+	ChapterGapMaxSec int `json:"chapterGapMaxSec,omitempty" desc:"Maximum random pause between chapters of a catalog (s)."`
+	RefreshGapMinSec int `json:"refreshGapMinSec,omitempty" desc:"Minimum random pause between series checks on a catalog (s)."`
+	RefreshGapMaxSec int `json:"refreshGapMaxSec,omitempty" desc:"Maximum random pause between series checks on a catalog (s)."`
+}
+
 // ---- Series -----------------------------------------------------------------
 
 const (

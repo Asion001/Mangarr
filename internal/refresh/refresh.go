@@ -30,6 +30,7 @@ import (
 	"github.com/Asion001/mangarr/internal/modules/metadata"
 	"github.com/Asion001/mangarr/internal/modules/source"
 	"github.com/Asion001/mangarr/internal/settings"
+	"github.com/Asion001/mangarr/internal/sourcegov"
 )
 
 type Refresher struct {
@@ -43,6 +44,9 @@ type Refresher struct {
 
 	sourceLocks sync.Map // sourceID -> *sync.Mutex
 	seriesLocks sync.Map // seriesID -> *sync.Mutex
+
+	// Gov (optional) paces checks per catalog and reports cooldowns.
+	Gov *sourcegov.Governor
 }
 
 func New(d *db.DB, bus *events.Bus, mods *modules.Manager, st *settings.Store, searcher *downloads.Searcher, lib *library.Library, log *slog.Logger) *Refresher {
@@ -206,6 +210,23 @@ func (r *Refresher) syncSource(ctx context.Context, s *model.Series, ss *model.S
 		r.bus.Changed("seriessource", "updated", ss.ID)
 		return nil, 0, 0, err
 	}
+	// a throttled catalog is checked again when its cooldown ends; that isn't
+	// a failure of this series
+	postpone := func(until time.Time, err error) (*source.MangaDetails, int, int, error) {
+		ss.NextCheckAt, ss.LastError = until, err.Error()
+		_, _ = r.db.NewUpdate().Model(ss).Column("next_check_at", "last_error").WherePK().Exec(ctx)
+		r.bus.Changed("seriessource", "updated", ss.ID)
+		return nil, 0, 0, err
+	}
+	key := sourcegov.Key{ModuleID: ss.ModuleID, SourceID: ss.SourceID}
+	if r.Gov != nil {
+		if until, reason := r.Gov.Cooldown(key); !until.IsZero() {
+			return postpone(until, &sourcegov.ErrCoolingDown{Key: key, Until: until, Reason: reason})
+		}
+		if err := r.Gov.Pace(ctx, key, "refresh"); err != nil {
+			return nil, 0, 0, err
+		}
+	}
 	mod, _, err := modules.GetAs[source.Module](r.mods, ss.ModuleID)
 	if err != nil {
 		return fail(err)
@@ -219,6 +240,14 @@ func (r *Refresher) syncSource(ctx context.Context, s *model.Series, ss *model.S
 	det, chs, err := mod.Manga(sctx, ref, true)
 	cancel()
 	if err != nil {
+		if cd, ok := sourcegov.CoolingDown(err); ok {
+			return postpone(cd.Until, err)
+		}
+		if r.Gov != nil {
+			if until, _ := r.Gov.Cooldown(key); !until.IsZero() { // this request triggered it
+				return postpone(until, err)
+			}
+		}
 		return fail(err)
 	}
 	if det.Title != "" {

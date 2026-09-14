@@ -17,11 +17,27 @@ import (
 
 // Loaded is a provider definition plus its built instance (or build error).
 type Loaded struct {
-	Def      model.ProviderDefinition
-	Impl     *Implementation
+	Def  model.ProviderDefinition
+	Impl *Implementation
+	// Instance is the instance as used by the core, possibly wrapped by a
+	// decorator (e.g. request throttling); Raw is the module's own instance.
 	Instance Instance
+	Raw      Instance
 	Err      error
 }
+
+// As returns the loaded instance as T, trying the decorated instance first
+// and then the raw one (decorators don't forward optional capabilities).
+func As[T any](l *Loaded) (T, bool) {
+	if t, ok := l.Instance.(T); ok {
+		return t, true
+	}
+	t, ok := l.Raw.(T)
+	return t, ok
+}
+
+// Decorator wraps instances of one kind as they are built.
+type Decorator func(def model.ProviderDefinition, inst Instance) Instance
 
 // Manager builds and caches instances of all provider definitions.
 type Manager struct {
@@ -33,8 +49,9 @@ type Manager struct {
 	mu     sync.RWMutex
 	loaded map[int64]*Loaded
 	// onChange is called after definitions change (e.g. to refresh health).
-	onChange []func()
-	envLocks map[string]*EnvLock
+	onChange   []func()
+	envLocks   map[string]*EnvLock
+	decorators map[Kind][]Decorator
 }
 
 func NewManager(d *db.DB, httpClient *http.Client, log *slog.Logger, dataDir string) *Manager {
@@ -42,6 +59,17 @@ func NewManager(d *db.DB, httpClient *http.Client, log *slog.Logger, dataDir str
 }
 
 func (m *Manager) OnChange(fn func()) { m.onChange = append(m.onChange, fn) }
+
+// Decorate registers a wrapper for instances of kind. Register decorators
+// before the first Reload.
+func (m *Manager) Decorate(kind Kind, fn Decorator) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.decorators == nil {
+		m.decorators = map[Kind][]Decorator{}
+	}
+	m.decorators[kind] = append(m.decorators[kind], fn)
+}
 
 // Reload rebuilds every instance from the database.
 func (m *Manager) Reload(ctx context.Context) error {
@@ -58,7 +86,7 @@ func (m *Manager) Reload(ctx context.Context) error {
 	m.loaded = next
 	m.mu.Unlock()
 	for _, l := range old {
-		if c, ok := l.Instance.(Closer); ok {
+		if c, ok := l.Raw.(Closer); ok {
 			_ = c.Close()
 		}
 	}
@@ -90,7 +118,13 @@ func (m *Manager) build(d model.ProviderDefinition) *Loaded {
 		l.Err = err
 		return l
 	}
-	l.Instance = inst
+	l.Instance, l.Raw = inst, inst
+	m.mu.RLock()
+	decs := m.decorators[Kind(d.Kind)]
+	m.mu.RUnlock()
+	for _, dec := range decs {
+		l.Instance = dec(d, l.Instance)
+	}
 	return l
 }
 
@@ -145,7 +179,7 @@ type Typed[T any] struct {
 func ActiveAs[T any](m *Manager, kind Kind) []Typed[T] {
 	var out []Typed[T]
 	for _, l := range m.Active(kind) {
-		if t, ok := l.Instance.(T); ok {
+		if t, ok := As[T](l); ok {
 			out = append(out, Typed[T]{Def: l.Def, Instance: t})
 		}
 	}
@@ -165,7 +199,7 @@ func GetAs[T any](m *Manager, id int64) (T, model.ProviderDefinition, error) {
 	if !l.Def.Enabled {
 		return zero, l.Def, fmt.Errorf("module %q is disabled", l.Def.Name)
 	}
-	t, ok := l.Instance.(T)
+	t, ok := As[T](l)
 	if !ok {
 		return zero, l.Def, fmt.Errorf("module %q does not support this operation", l.Def.Name)
 	}
@@ -270,7 +304,7 @@ func (m *Manager) TestDefinition(ctx context.Context, def model.ProviderDefiniti
 		return l.Err
 	}
 	defer func() {
-		if c, ok := l.Instance.(Closer); ok {
+		if c, ok := l.Raw.(Closer); ok {
 			_ = c.Close()
 		}
 	}()

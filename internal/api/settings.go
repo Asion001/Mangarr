@@ -57,6 +57,11 @@ type GeneralSettingsResource struct {
 	InstanceName    string `json:"instanceName"`
 	PublicURL       string `json:"publicUrl"`
 	BackupRetention int    `json:"backupRetention"`
+	ImageCacheMaxMB int    `json:"imageCacheMaxMb"`
+}
+
+func generalResource(g settings.General) GeneralSettingsResource {
+	return GeneralSettingsResource{g.APIKey, g.InstanceName, g.PublicURL, g.BackupRetention, g.ImageCacheMaxMB}
 }
 
 func (s *Server) registerSettings() {
@@ -66,7 +71,7 @@ func (s *Server) registerSettings() {
 	huma.Register(s.api, huma.Operation{OperationID: "settings-get-general", Method: http.MethodGet, Path: "/api/v1/settings/general", Tags: tags},
 		func(ctx context.Context, _ *struct{}) (*struct{ Body GeneralSettingsResource }, error) {
 			g, err := s.app.Settings.General(ctx)
-			return &struct{ Body GeneralSettingsResource }{GeneralSettingsResource{g.APIKey, g.InstanceName, g.PublicURL, g.BackupRetention}}, toHTTPError(err)
+			return &struct{ Body GeneralSettingsResource }{generalResource(g)}, toHTTPError(err)
 		})
 	huma.Register(s.api, huma.Operation{OperationID: "settings-put-general", Method: http.MethodPut, Path: "/api/v1/settings/general", Tags: tags},
 		func(ctx context.Context, in *struct{ Body GeneralSettingsResource }) (*struct{ Body GeneralSettingsResource }, error) {
@@ -75,10 +80,12 @@ func (s *Server) registerSettings() {
 				return nil, toHTTPError(err)
 			}
 			g.InstanceName, g.PublicURL, g.BackupRetention = in.Body.InstanceName, strings.TrimRight(in.Body.PublicURL, "/"), in.Body.BackupRetention
+			g.ImageCacheMaxMB = max(in.Body.ImageCacheMaxMB, 0)
 			if err := s.app.Settings.Set(ctx, settings.KeyGeneral, g); err != nil {
 				return nil, toHTTPError(err)
 			}
-			return &struct{ Body GeneralSettingsResource }{GeneralSettingsResource{g.APIKey, g.InstanceName, g.PublicURL, g.BackupRetention}}, nil
+			g, _ = s.app.Settings.General(ctx) // effective values (env-pinned fields win)
+			return &struct{ Body GeneralSettingsResource }{generalResource(g)}, nil
 		})
 	huma.Register(s.api, huma.Operation{OperationID: "settings-regenerate-apikey", Method: http.MethodPost, Path: "/api/v1/settings/general/apikey", Tags: tags},
 		func(ctx context.Context, _ *struct{}) (*struct{ Body GeneralSettingsResource }, error) {
@@ -95,7 +102,7 @@ func (s *Server) registerSettings() {
 			if err := s.app.Settings.Set(ctx, settings.KeyGeneral, g); err != nil {
 				return nil, toHTTPError(err)
 			}
-			return &struct{ Body GeneralSettingsResource }{GeneralSettingsResource{g.APIKey, g.InstanceName, g.PublicURL, g.BackupRetention}}, nil
+			return &struct{ Body GeneralSettingsResource }{generalResource(g)}, nil
 		})
 
 	huma.Register(s.api, huma.Operation{OperationID: "settings-locks", Method: http.MethodGet, Path: "/api/v1/settings/locks", Tags: tags,
@@ -113,6 +120,10 @@ func (s *Server) registerSettings() {
 		})
 
 	settingsDoc(s, "media", settings.KeyMediaManagement, s.app.Settings.MediaManagement, nil)
+	settingsDoc(s, "sources", settings.KeySources, s.app.Settings.Sources, func(ctx context.Context, v settings.Sources) error {
+		s.app.Catalogs.Bump() // hidden/default catalogs may have changed
+		return nil
+	})
 	settingsDoc(s, "downloads", settings.KeyDownloads, s.app.Settings.Downloads, nil)
 	settingsDoc(s, "cleanup", settings.KeyCleanup, s.app.Settings.Cleanup, nil)
 	settingsDoc(s, "readsync", settings.KeyReadSync, s.app.Settings.ReadSync, func(ctx context.Context, v settings.ReadSync) error {

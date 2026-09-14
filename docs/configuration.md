@@ -29,6 +29,7 @@ Lists are comma-separated (`a,b,c`) or JSON; key/value settings use `key=value,k
 | `MANGARR_GENERAL_INSTANCE_NAME` | string | `mangarr` | Name shown in the UI and notifications. |
 | `MANGARR_GENERAL_PUBLIC_URL` | string | `` | External URL used in notification links. |
 | `MANGARR_GENERAL_BACKUP_RETENTION` | int | `7` | Number of scheduled backups to keep. |
+| `MANGARR_GENERAL_IMAGE_CACHE_MAX_MB` | int | `1024` | Maximum size of the image cache (MB, 0 = unlimited). |
 
 ### media
 
@@ -76,6 +77,28 @@ Lists are comma-separated (`a,b,c`) or JSON; key/value settings use `key=value,k
 | Variable | Type | Default | Description |
 |---|---|---|---|
 | `MANGARR_READSYNC_INTERVAL_MINUTES` | int | `30` | Minutes between reader progress syncs. |
+
+### sources
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `MANGARR_SOURCES_HIDE_NSFW` | bool | `true` | Hide NSFW catalogs in search and browse. |
+| `MANGARR_SOURCES_DEFAULT_LANGUAGES` | list | `` | Catalog languages searched by default (empty = all). |
+| `MANGARR_SOURCES_QUICK_SEARCH_ENABLED` | bool | `true` | Search catalogs one by one and stop at the first confident match. |
+| `MANGARR_SOURCES_QUICK_SEARCH_THRESHOLD` | number | `0.88` | Title similarity (0-1) that counts as a confident match. |
+| `MANGARR_SOURCES_QUICK_SEARCH_DETAILS` | string | `best` | Fetch chapter counts for: none, the best match, or the top N results. |
+| `MANGARR_SOURCES_QUICK_SEARCH_TOP_N` | int | `3` | Results to fetch chapter counts for when details=top (1-5). |
+| `MANGARR_SOURCES_QUICK_SEARCH_BUDGET_SECONDS` | int | `45` | Time limit for the one-by-one search (seconds). |
+| `MANGARR_SOURCES_THROTTLE_PRESET` | string | `normal` | gentle, normal or fast (fast = like Mihon: no extra delays). |
+| `MANGARR_SOURCES_THROTTLE_REQUESTS_PER_MINUTE` | int | `0` | Maximum requests per minute per catalog (0 = preset). |
+| `MANGARR_SOURCES_THROTTLE_BURST` | int | `0` | Requests allowed in a short burst. |
+| `MANGARR_SOURCES_THROTTLE_MIN_DELAY_MS` | int | `0` | Minimum gap between requests (ms). |
+| `MANGARR_SOURCES_THROTTLE_JITTER_MS` | int | `0` | Random extra delay per request, 0..N ms. |
+| `MANGARR_SOURCES_THROTTLE_MAX_CONCURRENT` | int | `0` | Simultaneous requests per catalog. |
+| `MANGARR_SOURCES_THROTTLE_CHAPTER_GAP_MIN_SEC` | int | `0` | Minimum random pause between chapters of a catalog (s). |
+| `MANGARR_SOURCES_THROTTLE_CHAPTER_GAP_MAX_SEC` | int | `0` | Maximum random pause between chapters of a catalog (s). |
+| `MANGARR_SOURCES_THROTTLE_REFRESH_GAP_MIN_SEC` | int | `0` | Minimum random pause between series checks on a catalog (s). |
+| `MANGARR_SOURCES_THROTTLE_REFRESH_GAP_MAX_SEC` | int | `0` | Maximum random pause between series checks on a catalog (s). |
 
 ## Modules
 

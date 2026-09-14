@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Search } from "lucide-react";
 import { api, apiUrl, unwrap, type SearchGroup, type SourceManga } from "../../api/client";
-import { useSources } from "../../api/queries";
+import { useCatalogs, useSources } from "../../api/queries";
 import { Cover } from "../../components/Cover";
 import { Badge, Button, ErrorBox, Input, Loading, Modal, Select } from "../../components/ui";
 
@@ -20,10 +20,14 @@ export function SourceResults({
   selected?: Picked[];
   onPick: (m: SourceManga, g: SearchGroup) => void;
 }) {
+  // the catalogs generation changes when catalogs are enabled/hidden/removed,
+  // so cached results never include catalogs that are no longer searched
+  const { data: catalogs } = useCatalogs();
+  const gen = catalogs?.generation;
   const { data, isFetching, error } = useQuery({
-    queryKey: ["source-search", query, lang],
+    queryKey: ["source-search", gen, query, lang],
     queryFn: () => unwrap(api.GET("/api/v1/sources/search", { params: { query: { q: query, lang: lang || undefined } } })),
-    enabled: query.trim().length > 0,
+    enabled: query.trim().length > 0 && gen !== undefined,
     staleTime: 5 * 60_000,
   });
   const isSelected = (m: SourceManga, g: SearchGroup) => selected?.some((p) => p.group.moduleId === g.moduleId && p.group.sourceId === g.sourceId && p.manga.url === m.url);

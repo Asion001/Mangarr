@@ -27,6 +27,8 @@ type General struct {
 	PublicURL string `json:"publicUrl" desc:"External URL used in notification links."`
 	// BackupRetention is the number of scheduled backups to keep.
 	BackupRetention int `json:"backupRetention" desc:"Number of scheduled backups to keep."`
+	// ImageCacheMaxMB caps the thumbnail/cover cache (oldest files go first).
+	ImageCacheMaxMB int `json:"imageCacheMaxMb" desc:"Maximum size of the image cache (MB, 0 = unlimited)."`
 }
 
 // MediaManagement controls file naming and import behavior.
@@ -90,8 +92,37 @@ type ReadSync struct {
 	IntervalMinutes int `json:"intervalMinutes" desc:"Minutes between reader progress syncs."`
 }
 
+// Sources controls which catalogs are used, quick search and throttling.
+type Sources struct {
+	HideNSFW bool `json:"hideNsfw" desc:"Hide NSFW catalogs in search and browse."`
+	// DefaultLanguages limits searches to these catalog languages (empty = all).
+	DefaultLanguages []string    `json:"defaultLanguages" desc:"Catalog languages searched by default (empty = all)."`
+	QuickSearch      QuickSearch `json:"quickSearch"`
+	// Throttle is the default request throttling for every catalog.
+	Throttle model.ThrottleConfig `json:"throttle"`
+}
+
+// QuickSearch searches catalogs one by one by priority and stops at the
+// first confident title match.
+type QuickSearch struct {
+	Enabled   bool    `json:"enabled" desc:"Search catalogs one by one and stop at the first confident match."`
+	Threshold float64 `json:"threshold" desc:"Title similarity (0-1) that counts as a confident match."`
+	// Details fetches chapter counts (one extra request per result): none, best or top.
+	Details       string `json:"details" enum:"none,best,top" desc:"Fetch chapter counts for: none, the best match, or the top N results."`
+	TopN          int    `json:"topN" desc:"Results to fetch chapter counts for when details=top (1-5)."`
+	BudgetSeconds int    `json:"budgetSeconds" desc:"Time limit for the one-by-one search (seconds)."`
+}
+
+func DefaultSources() Sources {
+	return Sources{
+		HideNSFW: true, DefaultLanguages: []string{},
+		QuickSearch: QuickSearch{Enabled: true, Threshold: 0.88, Details: "best", TopN: 3, BudgetSeconds: 45},
+		Throttle:    model.ThrottleConfig{Preset: "normal"},
+	}
+}
+
 func DefaultGeneral() General {
-	return General{InstanceName: "mangarr", BackupRetention: 7}
+	return General{InstanceName: "mangarr", BackupRetention: 7, ImageCacheMaxMB: 1024}
 }
 
 func DefaultMediaManagement() MediaManagement {
@@ -163,6 +194,7 @@ var Docs = []DocInfo{
 	{KeyDownloads, "downloads", "DOWNLOADS", func() any { v := DefaultDownloads(); return &v }},
 	{KeyCleanup, "cleanup", "CLEANUP", func() any { v := DefaultCleanup(); return &v }},
 	{KeyReadSync, "readsync", "READSYNC", func() any { v := DefaultReadSync(); return &v }},
+	{KeySources, "sources", "SOURCES", func() any { v := DefaultSources(); return &v }},
 }
 
 // SetOverlay pins fields of document key: raw is a partial JSON object that
@@ -190,6 +222,7 @@ const (
 	KeyDownloads       = "downloads"
 	KeyCleanup         = "cleanup"
 	KeyReadSync        = "read_sync"
+	KeySources         = "sources"
 )
 
 // Warm loads every stored document into the cache. Afterwards Get never
@@ -300,6 +333,11 @@ func (s *Store) Downloads(ctx context.Context) (Downloads, error) {
 func (s *Store) Cleanup(ctx context.Context) (Cleanup, error) {
 	v := DefaultCleanup()
 	return v, s.Get(ctx, KeyCleanup, &v)
+}
+
+func (s *Store) Sources(ctx context.Context) (Sources, error) {
+	v := DefaultSources()
+	return v, s.Get(ctx, KeySources, &v)
 }
 
 func (s *Store) ReadSync(ctx context.Context) (ReadSync, error) {

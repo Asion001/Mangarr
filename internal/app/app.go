@@ -20,22 +20,25 @@ import (
 	"github.com/Asion001/mangarr/internal/model"
 	"github.com/Asion001/mangarr/internal/modules"
 	"github.com/Asion001/mangarr/internal/settings"
+	"github.com/Asion001/mangarr/internal/sourcecache"
 )
 
 type App struct {
-	Cfg       *config.Config
-	Log       *slog.Logger
-	LogRing   *logging.Ring
-	DB        *db.DB
-	Settings  *settings.Store
-	Bus       *events.Bus
-	Auth      *auth.Service
-	Modules   *modules.Manager
-	Catalogs  *catalogs.Service
-	Queue     *jobs.Queue
-	Scheduler *jobs.Scheduler
-	HTTP      *http.Client
-	StartedAt time.Time
+	Cfg      *config.Config
+	Log      *slog.Logger
+	LogRing  *logging.Ring
+	DB       *db.DB
+	Settings *settings.Store
+	Bus      *events.Bus
+	Auth     *auth.Service
+	Modules  *modules.Manager
+	Catalogs *catalogs.Service
+	// SourceCache caches catalog responses (keys include the catalogs generation).
+	SourceCache *sourcecache.Cache
+	Queue       *jobs.Queue
+	Scheduler   *jobs.Scheduler
+	HTTP        *http.Client
+	StartedAt   time.Time
 	Services
 	MoreServices
 	ReaderServices
@@ -84,7 +87,11 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger, ring *loggin
 	}
 	a.Auth = auth.NewService(d, a.Settings, cfg.AuthDisabled)
 	a.Modules = modules.NewManager(d, a.HTTP, log, cfg.DataDir)
-	a.Catalogs = catalogs.New(a.Modules, a.Bus)
+	a.Catalogs = catalogs.New(d, a.Modules, a.Bus, a.Settings, log.With("component", "catalogs"))
+	a.SourceCache = sourcecache.New(32 << 20)
+	if err := a.Catalogs.Load(ctx); err != nil {
+		return nil, err
+	}
 	if err := envcfg.SyncModules(ctx, d, a.Modules, cfg.Env); err != nil {
 		return nil, fmt.Errorf("environment: %w", err)
 	}

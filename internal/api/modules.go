@@ -66,7 +66,7 @@ func capabilitiesOf(inst modules.Instance) []string {
 }
 
 func (s *Server) toModuleResource(l *modules.Loaded) ModuleResource {
-	res := ModuleResource{ProviderDefinition: l.Def, Capabilities: capabilitiesOf(l.Instance), EnvLock: s.app.Modules.EnvLockFor(l.Def)}
+	res := ModuleResource{ProviderDefinition: l.Def, Capabilities: capabilitiesOf(l.Raw), EnvLock: s.app.Modules.EnvLockFor(l.Def)}
 	if l.Impl != nil {
 		res.Settings = modules.MaskSecrets(l.Impl, l.Def.Settings)
 	}

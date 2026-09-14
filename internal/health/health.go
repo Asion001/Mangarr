@@ -47,6 +47,8 @@ type Checker struct {
 	log      *slog.Logger
 	// Extra status sources, keyed by label.
 	statuses map[string]func() map[int64]string
+	// Extra checks registered by other packages.
+	checks []func(ctx context.Context) []Check
 
 	mu      sync.Mutex
 	results []Check
@@ -57,6 +59,9 @@ type Checker struct {
 func New(d *db.DB, bus *events.Bus, mods *modules.Manager, st *settings.Store, log *slog.Logger) *Checker {
 	return &Checker{db: d, bus: bus, mods: mods, settings: st, log: log, statuses: map[string]func() map[int64]string{}, last: map[string]Check{}}
 }
+
+// AddCheck registers an extra check.
+func (c *Checker) AddCheck(fn func(ctx context.Context) []Check) { c.checks = append(c.checks, fn) }
 
 // AddStatus registers a subsystem whose failing instances become warnings.
 func (c *Checker) AddStatus(label string, fn func() map[int64]string) { c.statuses[label] = fn }
@@ -79,6 +84,11 @@ func (c *Checker) Run(ctx context.Context) []Check {
 	c.checkQueue(ctx, add)
 	c.checkReaders(ctx, add)
 	c.checkUpscale(ctx, add)
+	for _, fn := range c.checks {
+		for _, ch := range fn(ctx) {
+			add(ch)
+		}
+	}
 	for label, fn := range c.statuses {
 		for id, msg := range fn() {
 			name := fmt.Sprintf("#%d", id)
@@ -148,7 +158,7 @@ func (c *Checker) checkModules(ctx context.Context, add func(Check)) {
 		cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		var warn string
 		var err error
-		if hc, ok := l.Instance.(modules.HealthChecker); ok {
+		if hc, ok := modules.As[modules.HealthChecker](l); ok {
 			warn, err = hc.HealthCheck(cctx)
 		} else {
 			err = l.Instance.Test(cctx)

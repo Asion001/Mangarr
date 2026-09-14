@@ -53,6 +53,7 @@ export function Layout() {
         { to: "/settings/media", label: "Media management" },
         { to: "/settings/profiles", label: "Profiles" },
         { to: "/settings/sources", label: "Source modules" },
+        { to: "/settings/search", label: "Search & throttling" },
         { to: "/settings/metadata", label: "Metadata" },
         { to: "/settings/library", label: "Library servers" },
         { to: "/settings/notifications", label: "Notifications" },

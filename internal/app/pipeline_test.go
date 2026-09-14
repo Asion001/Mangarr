@@ -47,6 +47,11 @@ func newTestApp(t *testing.T, dsn string) *testEnv {
 	if err := a.Settings.Set(ctx, settings.KeyDownloads, dl); err != nil {
 		t.Fatal(err)
 	}
+	src := settings.DefaultSources()
+	src.Throttle = model.ThrottleConfig{Preset: "fast"} // no pauses between chapters in tests
+	if err := a.Settings.Set(ctx, settings.KeySources, src); err != nil {
+		t.Fatal(err)
+	}
 	a.Rescanner.Quiet = 100 * time.Millisecond // fast debounce in tests
 	if err := a.Start(ctx); err != nil {
 		t.Fatal(err)

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, RefreshCw, Settings2, Trash2, ArrowUpCircle, Plus } from "lucide-react";
 import { api, apiUrl, unwrap, type Extension, type ModuleResource, type SourceInfo } from "../../api/client";
@@ -7,12 +7,17 @@ import { useModules, useSources } from "../../api/queries";
 import { Cover } from "../../components/Cover";
 import { Badge, Button, Card, EmptyState, ErrorBox, IconButton, Input, Loading, Modal, PageHeader, Select, Switch, Tabs } from "../../components/ui";
 import { useToast } from "../../lib/toast";
+import { Catalogs } from "./Catalogs";
+
+type Tab = "extensions" | "catalogs" | "browse" | "stores";
 
 export function SourcesPage() {
   const { data: modules, isLoading } = useModules("source");
-  const [tab, setTab] = useState<"extensions" | "browse" | "stores">("extensions");
-  const [moduleId, setModuleId] = useState<number>(0);
+  const { tab: tabParam } = useParams();
+  const [params, setParams] = useSearchParams();
+  const nav = useNavigate();
   const mods = modules ?? [];
+  const moduleId = Number(params.get("module") ?? 0);
   const current = mods.find((m) => m.id === moduleId) ?? mods[0];
 
   if (isLoading) return <Loading />;
@@ -26,13 +31,21 @@ export function SourcesPage() {
       </>
     );
   const caps = current?.capabilities ?? [];
+  const tabs: { value: Tab; label: string }[] = [
+    ...(caps.includes("extensions") ? [{ value: "extensions" as const, label: "Extensions" }] : []),
+    { value: "catalogs", label: "Catalogs" },
+    { value: "browse", label: "Browse" },
+    ...(caps.includes("extensions") ? [{ value: "stores" as const, label: "Stores" }] : []),
+  ];
+  const tab: Tab = tabs.some((t) => t.value === tabParam) ? (tabParam as Tab) : tabs[0].value;
+  const go = (t: Tab) => nav({ pathname: `/sources/${t}`, search: current && mods.length > 1 ? `?module=${current.id}` : "" });
   return (
     <>
       <PageHeader
         title="Sources"
         actions={
           mods.length > 1 && (
-            <Select value={current?.id} onChange={(e) => setModuleId(Number(e.target.value))}>
+            <Select value={current?.id} onChange={(e) => setParams({ module: e.target.value })}>
               {mods.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.name}
@@ -42,16 +55,9 @@ export function SourcesPage() {
           )
         }
       />
-      <Tabs
-        value={tab}
-        onChange={setTab}
-        tabs={[
-          ...(caps.includes("extensions") ? [{ value: "extensions" as const, label: "Extensions" }] : []),
-          { value: "browse" as const, label: "Browse" },
-          ...(caps.includes("extensions") ? [{ value: "stores" as const, label: "Stores" }] : []),
-        ]}
-      />
-      {current && tab === "extensions" && caps.includes("extensions") && <Extensions module={current} />}
+      <Tabs value={tab} onChange={go} tabs={tabs} />
+      {current && tab === "extensions" && <Extensions module={current} />}
+      {current && tab === "catalogs" && <Catalogs module={current} />}
       {current && tab === "browse" && <Browse module={current} />}
       {current && tab === "stores" && <Stores module={current} />}
     </>
@@ -112,7 +118,7 @@ function Extensions({ module }: { module: ModuleResource }) {
           <option value="installed">Installed</option>
           <option value="updates">Updates</option>
         </Select>
-        <Switch checked={nsfw} onChange={setNsfw} label="Show NSFW" />
+        <Switch checked={nsfw} onChange={setNsfw} label="Show NSFW extensions" />
         <Button className="ml-auto" icon={<RefreshCw className="size-4" />} loading={isFetching && refresh} onClick={() => (setRefresh(true), qc.invalidateQueries({ queryKey: ["extensions"] }))}>
           Refresh from stores
         </Button>

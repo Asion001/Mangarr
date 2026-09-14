@@ -3,11 +3,14 @@ package api
 import (
 	"context"
 	"net/http"
+	"path/filepath"
 	"runtime"
+	"slices"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 
+	"github.com/Asion001/mangarr/internal/diskcache"
 	"github.com/Asion001/mangarr/internal/envcfg"
 	"github.com/Asion001/mangarr/internal/logging"
 	"github.com/Asion001/mangarr/internal/model"
@@ -24,6 +27,14 @@ type SystemStatus struct {
 	DataDir   string    `json:"dataDir"`
 	StartedAt time.Time `json:"startedAt"`
 	URLBase   string    `json:"urlBase"`
+}
+
+type CacheStatus struct {
+	// Entries/Bytes of the in-memory catalog cache (search results, details).
+	Entries  int                     `json:"entries"`
+	Bytes    int64                   `json:"bytes"`
+	MaxBytes int64                   `json:"maxBytes"`
+	Images   []diskcache.BucketStats `json:"images"`
 }
 
 type TaskInfo struct {
@@ -70,6 +81,41 @@ func (s *Server) registerSystem() {
 				out.Body.Unknown = []string{}
 			}
 			return out, nil
+		})
+
+	huma.Register(s.api, huma.Operation{OperationID: "system-cache", Method: http.MethodGet, Path: "/api/v1/system/cache", Tags: tags,
+		Summary: "Sizes of the in-memory catalog cache and the on-disk image cache"},
+		func(ctx context.Context, _ *struct{}) (*struct{ Body CacheStatus }, error) {
+			n, b, max := s.app.SourceCache.Stats()
+			return &struct{ Body CacheStatus }{CacheStatus{Entries: n, Bytes: b, MaxBytes: max,
+				Images: diskcache.Stats(filepath.Join(s.app.Cfg.DataDir, "cache"))}}, nil
+		})
+	huma.Register(s.api, huma.Operation{OperationID: "system-cache-clear", Method: http.MethodPost, Path: "/api/v1/system/cache/clear", Tags: tags,
+		Summary: "Clear caches: catalogs (search/details) and image buckets"},
+		func(ctx context.Context, in *struct {
+			Body struct {
+				Catalogs bool     `json:"catalogs"`
+				Images   []string `json:"images,omitempty" doc:"Image buckets to clear (thumbs, assets, covers); empty = none"`
+			}
+		}) (*struct{ Body CacheStatus }, error) {
+			if in.Body.Catalogs {
+				s.app.SourceCache.Clear()
+				s.app.Catalogs.Invalidate(0)
+			}
+			for _, b := range in.Body.Images {
+				if !slices.Contains(diskcache.Buckets, b) {
+					return nil, huma.Error400BadRequest("unknown image bucket " + b)
+				}
+			}
+			if len(in.Body.Images) > 0 {
+				if err := diskcache.Clear(filepath.Join(s.app.Cfg.DataDir, "cache"), in.Body.Images); err != nil {
+					return nil, toHTTPError(err)
+				}
+			}
+			s.app.Bus.Changed("cache", "cleared", 0)
+			n, b, max := s.app.SourceCache.Stats()
+			return &struct{ Body CacheStatus }{CacheStatus{Entries: n, Bytes: b, MaxBytes: max,
+				Images: diskcache.Stats(filepath.Join(s.app.Cfg.DataDir, "cache"))}}, nil
 		})
 
 	huma.Register(s.api, huma.Operation{OperationID: "system-logs", Method: http.MethodGet, Path: "/api/v1/system/logs", Tags: tags},

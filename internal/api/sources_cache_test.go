@@ -1,0 +1,247 @@
+package api_test
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/Asion001/mangarr/internal/api"
+	"github.com/Asion001/mangarr/internal/app"
+	"github.com/Asion001/mangarr/internal/model"
+	"github.com/Asion001/mangarr/internal/modules/source"
+	"github.com/Asion001/mangarr/internal/settings"
+	"github.com/Asion001/mangarr/internal/testutil/fakesource"
+)
+
+type cacheEnv struct {
+	t   *testing.T
+	url string
+	app *app.App
+	sc  *fakesource.Scenario
+	mod int64
+}
+
+func newCacheEnv(t *testing.T, scenario string) *cacheEnv {
+	srv, a := newServer(t, true)
+	sc := fakesource.NewScenario(scenario)
+	sc.Sources = []source.SourceInfo{
+		{ID: "A", Name: "Safe", DisplayName: "Safe (EN)", Lang: "en"},
+		{ID: "N", Name: "Spicy", DisplayName: "Spicy (EN)", Lang: "en", NSFW: true},
+		{ID: "J", Name: "Japanese", DisplayName: "Japanese (JA)", Lang: "ja"},
+	}
+	for _, sid := range []string{"A", "N", "J"} {
+		sc.AddManga(&fakesource.Manga{SourceID: sid, URL: "/tower", Title: "Tower of God"})
+	}
+	def := &model.ProviderDefinition{Kind: "source", Implementation: "fake", Name: "Fake", Enabled: true, Settings: map[string]any{"scenario": scenario}}
+	if err := a.Modules.Create(context.Background(), def); err != nil {
+		t.Fatal(err)
+	}
+	e := &cacheEnv{t: t, url: srv.URL, app: a, sc: sc, mod: def.ID}
+	e.setSources(func(s *settings.Sources) { s.HideNSFW = false; s.Throttle.Preset = "fast" })
+	return e
+}
+
+func (e *cacheEnv) setSources(fn func(*settings.Sources)) {
+	e.t.Helper()
+	var cur settings.Sources
+	doJSON(e.t, http.MethodGet, e.url+"/api/v1/settings/sources", "", &cur)
+	fn(&cur)
+	b, _ := json.Marshal(cur)
+	if code := doJSON(e.t, http.MethodPut, e.url+"/api/v1/settings/sources", string(b), nil); code != 200 {
+		e.t.Fatalf("put sources settings: %d", code)
+	}
+}
+
+func (e *cacheEnv) search(query string) map[string]api.SearchResultGroup {
+	e.t.Helper()
+	var groups []api.SearchResultGroup
+	if code := doJSON(e.t, http.MethodGet, e.url+"/api/v1/sources/search?"+query, "", &groups); code != 200 {
+		e.t.Fatalf("search %s: %d", query, code)
+	}
+	out := map[string]api.SearchResultGroup{}
+	for _, g := range groups {
+		out[g.SourceID] = g
+	}
+	return out
+}
+
+func (e *cacheEnv) searches() int {
+	var n int
+	e.sc.Update(func() { n = e.sc.Searches })
+	return n
+}
+
+func (e *cacheEnv) key(sid string) string { return fmt.Sprintf("%d:%s", e.mod, sid) }
+
+// Hiding NSFW catalogs must take effect for searches that were cached before.
+func TestSearchCacheRespectsHiddenCatalogs(t *testing.T) {
+	e := newCacheEnv(t, "cache-nsfw")
+	got := e.search("q=tower&scope=all")
+	if len(got) != 3 || len(got["N"].Results) != 1 {
+		t.Fatalf("want 3 catalogs incl. NSFW, got %v", got)
+	}
+	before := e.searches()
+	if again := e.search("q=tower&scope=all"); !again["A"].Cached || e.searches() != before {
+		t.Fatal("identical search should be served from the cache")
+	}
+	e.setSources(func(s *settings.Sources) { s.HideNSFW = true })
+	got = e.search("q=tower&scope=all")
+	if _, ok := got["N"]; ok || len(got) != 2 {
+		t.Fatalf("NSFW catalog still searched after hiding it: %v", got)
+	}
+	if got["A"].Cached {
+		t.Fatal("the settings change must invalidate cached results")
+	}
+	// hidden catalogs are unreachable through browse, manga and thumbnails
+	for _, p := range []string{"/browse?type=search&q=tower", "/manga?url=%2Ftower", "/thumbnail?url=%2Ftower"} {
+		resp, err := http.Get(e.url + fmt.Sprintf("/api/v1/sources/%d/N", e.mod) + p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Errorf("%s on hidden catalog: %d", p, resp.StatusCode)
+		}
+	}
+	var list []api.SourceResource
+	doJSON(t, http.MethodGet, e.url+"/api/v1/sources", "", &list)
+	for _, c := range list {
+		if c.ID == "N" {
+			t.Fatal("hidden catalog listed in /sources")
+		}
+	}
+}
+
+func TestDisabledCatalogsAndScopes(t *testing.T) {
+	e := newCacheEnv(t, "cache-scope")
+	if code := doJSON(t, http.MethodPut, e.url+"/api/v1/catalogs", fmt.Sprintf(`{%q:{"enabled":false},%q:{"priority":5}}`, e.key("A"), e.key("J")), nil); code != 200 {
+		t.Fatalf("update catalogs: %d", code)
+	}
+	active := e.search("q=tower")
+	if _, ok := active["A"]; ok {
+		t.Fatal("disabled catalog searched in active scope")
+	}
+	if all := e.search("q=tower&scope=all"); len(all["A"].Results) != 1 {
+		t.Fatal("disabled catalog missing from scope=all")
+	}
+	if one := e.search("q=tower&source=" + url.QueryEscape(e.key("A"))); len(one) != 1 {
+		t.Fatal("explicitly picked catalogs are searched even when disabled")
+	}
+	// default languages narrow the active scope; priority orders results
+	e.setSources(func(s *settings.Sources) { s.DefaultLanguages = []string{"ja"} })
+	if active := e.search("q=tower"); len(active) != 1 || active["J"].SourceID != "J" {
+		t.Fatalf("default languages: %v", active)
+	}
+	var cl api.CatalogList
+	doJSON(t, http.MethodGet, e.url+"/api/v1/catalogs", "", &cl)
+	if len(cl.Items) != 3 || cl.Generation == 0 {
+		t.Fatalf("catalog list: %+v", cl)
+	}
+}
+
+func TestCatalogListRefreshesOnModuleReload(t *testing.T) {
+	e := newCacheEnv(t, "cache-reload")
+	var list []api.SourceResource
+	doJSON(t, http.MethodGet, e.url+"/api/v1/sources", "", &list)
+	n := len(list)
+	e.sc.Update(func() { e.sc.Sources = append(e.sc.Sources, source.SourceInfo{ID: "B", Name: "New", Lang: "en"}) })
+	l, _ := e.app.Modules.Get(e.mod)
+	def := l.Def
+	if err := e.app.Modules.Update(context.Background(), &def); err != nil { // reload
+		t.Fatal(err)
+	}
+	list = nil
+	doJSON(t, http.MethodGet, e.url+"/api/v1/sources", "", &list)
+	if len(list) != n+1 {
+		t.Fatalf("catalog list not refreshed after module reload: %d -> %d", n, len(list))
+	}
+}
+
+func TestConcurrentSearchesShareOneRequest(t *testing.T) {
+	e := newCacheEnv(t, "cache-flight")
+	e.sc.Update(func() { e.sc.SearchDelay = 150 * time.Millisecond })
+	before := e.searches()
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			e.search("q=tower&source=" + url.QueryEscape(e.key("A")))
+		}()
+	}
+	wg.Wait()
+	if n := e.searches() - before; n != 1 {
+		t.Fatalf("want 1 upstream search, got %d", n)
+	}
+	// clearing the cache forces a new request
+	doJSON(t, http.MethodPost, e.url+"/api/v1/system/cache/clear", `{"catalogs":true}`, nil)
+	e.search("q=tower&source=" + url.QueryEscape(e.key("A")))
+	if n := e.searches() - before; n != 2 {
+		t.Fatalf("want a new upstream search after clearing, got %d", n)
+	}
+}
+
+func TestThumbnailServedStaleWhenSourceFails(t *testing.T) {
+	e := newCacheEnv(t, "cache-thumb")
+	thumb := fmt.Sprintf("%s/api/v1/sources/%d/A/thumbnail?url=%%2Ftower", e.url, e.mod)
+	resp, err := http.Get(thumb)
+	if err != nil || resp.StatusCode != 200 {
+		t.Fatalf("thumbnail: %v %v", err, resp.StatusCode)
+	}
+	resp.Body.Close()
+	// age the cached file past its TTL and break the source
+	root := filepath.Join(e.app.Cfg.DataDir, "cache", "thumbs")
+	old := time.Now().Add(-30 * 24 * time.Hour)
+	_ = filepath.Walk(root, func(p string, info os.FileInfo, err error) error {
+		if err == nil && !info.IsDir() {
+			_ = os.Chtimes(p, old, old)
+		}
+		return nil
+	})
+	e.sc.Update(func() { e.sc.ThumbErr = errors.New("site down") })
+	resp, err = http.Get(thumb)
+	if err != nil || resp.StatusCode != 200 || resp.Header.Get("Cache-Control") != "public, max-age=300" {
+		t.Fatalf("stale thumbnail: %v %v %q", err, resp.StatusCode, resp.Header.Get("Cache-Control"))
+	}
+	resp.Body.Close()
+	var st api.CacheStatus
+	doJSON(t, http.MethodGet, e.url+"/api/v1/system/cache", "", &st)
+	if st.Images[0].Name != "thumbs" || st.Images[0].Files != 1 {
+		t.Fatalf("cache status: %+v", st)
+	}
+}
+
+func TestThrottledCatalogCoolsDown(t *testing.T) {
+	e := newCacheEnv(t, "cache-throttle")
+	e.sc.Update(func() { e.sc.SearchErr = map[string]error{"A": errors.New("HTTP error 429")} })
+	got := e.search("q=tower&source=" + url.QueryEscape(e.key("A")))
+	if got["A"].Error == "" {
+		t.Fatal("expected an error group")
+	}
+	before := e.searches()
+	got = e.search("q=towers&source=" + url.QueryEscape(e.key("A")))
+	if e.searches() != before || got["A"].Error == "" {
+		t.Fatal("a cooling-down catalog must not be queried")
+	}
+	var cl api.CatalogList
+	doJSON(t, http.MethodGet, e.url+"/api/v1/catalogs", "", &cl)
+	for _, c := range cl.Items {
+		if c.ID == "A" && c.CooldownUntil == nil {
+			t.Fatal("cooldown not reported")
+		}
+	}
+	// clearing the cooldown makes the catalog usable again
+	e.sc.Update(func() { e.sc.SearchErr = nil })
+	doJSON(t, http.MethodPut, e.url+"/api/v1/catalogs", fmt.Sprintf(`{%q:{"clearCooldown":true}}`, e.key("A")), nil)
+	if got := e.search("q=towers&source=" + url.QueryEscape(e.key("A"))); got["A"].Error != "" {
+		t.Fatalf("still failing after clearing the cooldown: %v", got["A"].Error)
+	}
+}
