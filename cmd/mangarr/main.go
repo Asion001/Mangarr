@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -63,7 +64,10 @@ func run() error {
 		return err
 	}
 
-	srv := &http.Server{Addr: cfg.Listen, Handler: api.New(a), ReadHeaderTimeout: 10 * time.Second}
+	// Request contexts derive from ctx so long-lived SSE streams end on SIGTERM
+	// instead of holding Shutdown until its timeout.
+	srv := &http.Server{Addr: cfg.Listen, Handler: api.New(a), ReadHeaderTimeout: 10 * time.Second,
+		BaseContext: func(net.Listener) context.Context { return ctx }}
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.ListenAndServe() }()
 	log.Info("http server listening", "addr", cfg.Listen)
