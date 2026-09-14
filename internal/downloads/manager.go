@@ -716,6 +716,18 @@ func (m *Manager) extractExisting(jc *jobCtx, workDir string) ([]PageFile, error
 }
 
 func (m *Manager) importChapter(ctx context.Context, jc *jobCtx, proc ProcessResult, params string, sizeBefore int64) error {
+	defer library.RLockSeries(jc.series.ID)() // a move/rename waits for the import
+	// the series may have moved while pages were downloading
+	var loc model.Series
+	if err := m.db.NewSelect().Model(&loc).Column("root_folder_id", "path").Where("id = ?", jc.series.ID).Scan(ctx); err == nil {
+		jc.series.RootFolderID, jc.series.Path = loc.RootFolderID, loc.Path
+	}
+	if jc.file != nil { // and its file may have been renamed
+		var f model.ChapterFile
+		if err := m.db.NewSelect().Model(&f).Column("relative_path").Where("id = ?", jc.file.ID).Scan(ctx); err == nil {
+			jc.file.RelativePath = f.RelativePath
+		}
+	}
 	pages, upscaled, upscaleModel := proc.Pages, proc.Upscaled, proc.UpscaleModel
 	mm, _ := m.settings.MediaManagement(ctx)
 	dir, err := m.lib.EnsureSeriesDir(ctx, &jc.series)

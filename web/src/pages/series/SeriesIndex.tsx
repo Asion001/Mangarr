@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
-import { LayoutGrid, List, PlusCircle, RefreshCw, Search } from "lucide-react";
+import { CheckSquare, LayoutGrid, List, PlusCircle, RefreshCw, Search } from "lucide-react";
 import { apiUrl, type Series } from "../../api/client";
 import { usePushCommand, useSeriesList } from "../../api/queries";
 import { Cover } from "../../components/Cover";
 import { Badge, Button, EmptyState, ErrorBox, Input, Loading, PageHeader, Progress, Select, Table, Td, Th } from "../../components/ui";
 import { bytes, date } from "../../lib/format";
+import { useQueryParam } from "../../lib/urlState";
+import { MassEditBar } from "./Organize";
 
 type Filter = "all" | "monitored" | "missing" | "ongoing" | "completed";
 type Sort = "title" | "added" | "latest" | "missing" | "size";
@@ -24,9 +26,20 @@ function progressOf(s: Series) {
 export function SeriesIndex() {
   const { data, isLoading, error } = useSeriesList();
   const push = usePushCommand();
-  const [q, setQ] = useState("");
-  const [filter, setFilter] = useState<Filter>("all");
-  const [sort, setSort] = useState<Sort>("title");
+  const [q, setQ] = useQueryParam("q");
+  const [filterParam, setFilter] = useQueryParam("filter", "all");
+  const [sortParam, setSort] = useQueryParam("sort", "title");
+  const filter = filterParam as Filter;
+  const sort = sortParam as Sort;
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const toggle = (id: number) =>
+    setSelected((cur) => {
+      const n = new Set(cur);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
   const [view, setView] = useState<"posters" | "table">(() => (localStorage.getItem("seriesView") as "posters" | "table") || "posters");
 
   const list = useMemo(() => {
@@ -73,7 +86,7 @@ export function SeriesIndex() {
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="relative w-full max-w-xs">
           <Search className="absolute left-2.5 top-2.5 size-4 text-muted" />
-          <Input className="pl-8" placeholder="Filter series…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <Input className="pl-8" placeholder="Filter series…" defaultValue={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         <Select className="w-auto" value={filter} onChange={(e) => setFilter(e.target.value as Filter)}>
           <option value="all">All</option>
@@ -90,6 +103,19 @@ export function SeriesIndex() {
           <option value="size">Sort: size</option>
         </Select>
         <div className="ml-auto flex gap-1">
+          <Button
+            size="sm"
+            variant={selecting ? "primary" : "secondary"}
+            icon={<CheckSquare className="size-3.5" />}
+            onClick={() => (setSelecting(!selecting), setSelected(new Set()))}
+          >
+            Select
+          </Button>
+          {selecting && (
+            <Button size="sm" onClick={() => setSelected(new Set(list.map((s) => s.id)))}>
+              All shown
+            </Button>
+          )}
           <Button variant={view === "posters" ? "primary" : "secondary"} size="sm" onClick={() => setViewPersist("posters")} icon={<LayoutGrid className="size-3.5" />} />
           <Button variant={view === "table" ? "primary" : "secondary"} size="sm" onClick={() => setViewPersist("table")} icon={<List className="size-3.5" />} />
         </div>
@@ -106,7 +132,17 @@ export function SeriesIndex() {
           {list.map((s) => {
             const p = progressOf(s);
             return (
-              <Link key={s.id} to={`/series/${s.id}`} className="group flex flex-col gap-2">
+              <Link
+                key={s.id}
+                to={`/series/${s.id}`}
+                onClick={(e) => {
+                  if (selecting) {
+                    e.preventDefault();
+                    toggle(s.id);
+                  }
+                }}
+                className={`group flex flex-col gap-2 ${selecting && selected.has(s.id) ? "rounded-md ring-2 ring-accent ring-offset-2 ring-offset-bg" : ""}`}
+              >
                 <div className="relative">
                   <Cover src={apiUrl(s.coverUrl)} alt={s.title} className="aspect-[2/3] w-full ring-accent/60 transition group-hover:ring-2" />
                   {!s.monitored && <div className="absolute left-1.5 top-1.5"><Badge>unmonitored</Badge></div>}
@@ -129,6 +165,7 @@ export function SeriesIndex() {
         <Table>
           <thead>
             <tr>
+              {selecting && <Th className="w-8" />}
               <Th>Title</Th>
               <Th>Status</Th>
               <Th>Chapters</Th>
@@ -140,6 +177,11 @@ export function SeriesIndex() {
           <tbody>
             {list.map((s) => (
               <tr key={s.id} className="hover:bg-panel-2/60">
+                {selecting && (
+                  <Td className="w-8">
+                    <input type="checkbox" aria-label={`Select ${s.title}`} checked={selected.has(s.id)} onChange={() => toggle(s.id)} />
+                  </Td>
+                )}
                 <Td>
                   <Link to={`/series/${s.id}`} className="font-medium hover:text-accent-2">
                     {s.title}
@@ -164,6 +206,12 @@ export function SeriesIndex() {
             ))}
           </tbody>
         </Table>
+      )}
+      {selecting && selected.size > 0 && (
+        <>
+          <div className="h-20" />
+          <MassEditBar ids={[...selected]} onClear={() => setSelected(new Set())} />
+        </>
       )}
     </>
   );

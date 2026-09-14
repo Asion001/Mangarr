@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, HardDrive, Pencil, RefreshCw, Search, Sparkles, Trash2, FileSearch, BookText } from "lucide-react";
+import { ExternalLink, FilePen, HardDrive, Pencil, RefreshCw, Search, Sparkles, Trash2, FileSearch, BookText } from "lucide-react";
 import { api, apiUrl, unwrap } from "../../api/client";
 import { usePushCommand, useSeries } from "../../api/queries";
 import { Cover } from "../../components/Cover";
@@ -12,6 +12,7 @@ import { statusTone } from "./SeriesIndex";
 import { SourcesPanel } from "./SourcesPanel";
 import { ChaptersTable } from "./ChaptersTable";
 import { EditSeriesModal } from "./EditSeriesModal";
+import { RenameModal } from "./Organize";
 
 export function SeriesDetail() {
   const id = Number(useParams().id);
@@ -21,6 +22,7 @@ export function SeriesDetail() {
   const toast = useToast();
   const nav = useNavigate();
   const [edit, setEdit] = useState(false);
+  const [renaming, setRenaming] = useState(false);
   const [del, setDel] = useState(false);
   const [deleteFiles, setDeleteFiles] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -119,6 +121,9 @@ export function SeriesDetail() {
             <Button icon={<Sparkles className="size-4" />} onClick={() => push.mutate({ name: "ProcessExisting", body: { seriesId: id }, label: "Downloaded chapters will be processed in the background" })}>
               Process existing
             </Button>
+            <Button icon={<FilePen className="size-4" />} onClick={() => setRenaming(true)}>
+              Rename files
+            </Button>
             <Button icon={<FileSearch className="size-4" />} onClick={() => push.mutate({ name: "DiskScan", body: { seriesId: id }, label: "Scanning files" })}>
               Rescan disk
             </Button>
@@ -136,6 +141,7 @@ export function SeriesDetail() {
       <ChaptersTable seriesId={id} />
 
       {edit && <EditSeriesModal series={s} onClose={() => setEdit(false)} />}
+      {renaming && <RenameModal seriesIds={[id]} onClose={() => setRenaming(false)} />}
       <Confirm
         open={del}
         title="Delete series"

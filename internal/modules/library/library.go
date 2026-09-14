@@ -59,3 +59,12 @@ type BookCheck struct {
 type Verifier interface {
 	VerifyBook(ctx context.Context, localPath string) (BookCheck, error)
 }
+
+// ProgressWriter is implemented by servers that accept read progress
+// updates (used to restore progress after files moved, e.g. to another
+// library, which resets it on the server).
+type ProgressWriter interface {
+	// WriteProgress sets a reader's progress on files (by local path).
+	// Missing lists paths the server doesn't know (yet).
+	WriteProgress(ctx context.Context, acc Account, items []BookProgress) (written int, missing []string, err error)
+}

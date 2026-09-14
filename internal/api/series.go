@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -19,6 +20,8 @@ import (
 	"github.com/Asion001/mangarr/internal/modules"
 	"github.com/Asion001/mangarr/internal/modules/metadata"
 	"github.com/Asion001/mangarr/internal/modules/source"
+	"github.com/Asion001/mangarr/internal/naming"
+	"github.com/Asion001/mangarr/internal/organize"
 	"github.com/Asion001/mangarr/internal/series"
 )
 
@@ -223,6 +226,40 @@ type LookupResult struct {
 	ExistingSeriesID int64 `json:"existingSeriesId,omitempty"`
 }
 
+// moveAfterUpdate queues a MoveSeries command when the root folder or folder
+// changed, or when the title changed and folders follow titles.
+func (s *Server) moveAfterUpdate(ctx context.Context, before, after model.Series, req series.UpdateRequest) error {
+	move := organize.MoveRequest{SeriesID: after.ID, MoveFiles: req.MoveFiles == nil || *req.MoveFiles}
+	if req.RootFolderID != nil && *req.RootFolderID != before.RootFolderID {
+		if _, err := s.app.Library.RootFolder(ctx, *req.RootFolderID); err != nil {
+			return huma.Error400BadRequest("unknown root folder")
+		}
+		move.RootFolderID = *req.RootFolderID
+	}
+	if req.Path != nil && strings.TrimSpace(*req.Path) != "" && *req.Path != before.Path {
+		move.Path = *req.Path
+	} else if before.Title != after.Title {
+		if mm, _ := s.app.Settings.MediaManagement(ctx); mm.RenameFolderOnTitleChange {
+			if name := naming.Sanitize(s.app.Library.FolderName(ctx, after.Title, after.Metadata.Year)); name != "" && name != before.Path {
+				move.Path = name
+			}
+		}
+	}
+	if move.RootFolderID == 0 && move.Path == "" {
+		return nil
+	}
+	_, err := s.app.Queue.Push(ctx, "MoveSeries", toBody(move), "series-edit")
+	return toHTTPError(err)
+}
+
+// toBody converts a request struct to a command body.
+func toBody(v any) map[string]any {
+	b, _ := json.Marshal(v)
+	var m map[string]any
+	_ = json.Unmarshal(b, &m)
+	return m
+}
+
 // existingByExternalID returns a matcher from external ids to series in the library.
 func (s *Server) existingByExternalID(ctx context.Context) func(ids map[string]string) int64 {
 	var existing []model.Series
@@ -331,12 +368,19 @@ func (s *Server) registerSeries() {
 			ID   int64 `path:"id"`
 			Body series.UpdateRequest
 		}) (*struct{ Body SeriesResource }, error) {
+			var before model.Series
+			if err := s.app.DB.NewSelect().Model(&before).Where("id = ?", in.ID).Scan(ctx); err != nil {
+				return nil, huma.Error404NotFound("series not found")
+			}
 			ser, err := s.app.Series.Update(ctx, in.ID, in.Body)
 			if err != nil {
 				return nil, seriesError(err)
 			}
 			if in.Body.ProfileID != nil {
 				s.app.PushProcessBacklog("series-profile") // the new profile may process differently
+			}
+			if err := s.moveAfterUpdate(ctx, before, *ser, in.Body); err != nil {
+				return nil, err
 			}
 			stats, _ := s.seriesStats(ctx, in.ID)
 			return &struct{ Body SeriesResource }{s.seriesResource(ctx, *ser, stats, true)}, nil

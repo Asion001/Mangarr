@@ -88,7 +88,8 @@ func CopyFile(src, dst string) error {
 	return out.Close()
 }
 
-// Move renames src to dst, copying across devices when needed.
+// Move renames src (a file or a directory) to dst, copying across devices
+// when needed.
 func Move(src, dst string) error {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o775); err != nil {
 		return err
@@ -96,8 +97,49 @@ func Move(src, dst string) error {
 	if err := os.Rename(src, dst); err == nil {
 		return nil
 	}
+	st, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	if st.IsDir() {
+		if err := CopyTree(src, dst); err != nil {
+			_ = os.RemoveAll(dst)
+			return err
+		}
+		return os.RemoveAll(src)
+	}
 	if err := CopyFile(src, dst); err != nil {
 		return err
 	}
 	return os.Remove(src)
+}
+
+// CopyTree copies the directory src to dst (which must not exist), keeping
+// file modes and modification times.
+func CopyTree(src, dst string) error {
+	return filepath.WalkDir(src, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, p)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, rel)
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		switch {
+		case d.IsDir():
+			return os.MkdirAll(target, info.Mode().Perm()|0o700)
+		case info.Mode().IsRegular():
+			if err := CopyFile(p, target); err != nil {
+				return err
+			}
+			_ = os.Chmod(target, info.Mode().Perm())
+			return os.Chtimes(target, info.ModTime(), info.ModTime())
+		}
+		return nil // skip symlinks and special files
+	})
 }

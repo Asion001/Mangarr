@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Lock, Unlock } from "lucide-react";
 import { api, unwrap, type Series, type UpdateRequest } from "../../api/client";
-import { useProfiles, useTags } from "../../api/queries";
+import { useProfiles, useRootFolders, useTags } from "../../api/queries";
 import { Button, Field, Input, Modal, Select, Switch, Textarea } from "../../components/ui";
 import { useToast } from "../../lib/toast";
 import { MetadataSearch } from "./AddSeries";
@@ -23,6 +23,11 @@ export function EditSeriesModal({ series, onClose }: { series: Series; onClose: 
   const [tagIds, setTagIds] = useState<number[]>(series.tags ?? []);
   const [locks, setLocks] = useState<string[]>(series.metadata.locks ?? []);
   const [relink, setRelink] = useState(false);
+  const { data: roots } = useRootFolders();
+  const [rootId, setRootId] = useState(series.rootFolderId);
+  const [folder, setFolder] = useState(series.path);
+  const [moveFiles, setMoveFiles] = useState(true);
+  const moving = rootId !== series.rootFolderId || folder.trim() !== series.path;
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
@@ -42,11 +47,14 @@ export function EditSeriesModal({ series, onClose }: { series: Series; onClose: 
             description: description !== (series.metadata.description ?? "") ? description : undefined,
             tags: tagIds,
             locks,
+            rootFolderId: rootId !== series.rootFolderId ? rootId : undefined,
+            path: folder.trim() !== series.path ? folder.trim() : undefined,
+            moveFiles: moving ? moveFiles : undefined,
           },
         }),
       );
       qc.invalidateQueries({ queryKey: ["series"] });
-      toast.success("Series saved");
+      toast.success("Series saved", moving ? (moveFiles ? "Moving the files in the background" : "Location updated") : undefined);
       onClose();
     } catch (e) {
       toast.fromError(e);
@@ -143,6 +151,24 @@ export function EditSeriesModal({ series, onClose }: { series: Series; onClose: 
             {!tags?.length && <span className="text-xs text-muted">Create tags in Settings → General.</span>}
           </div>
         </Field>
+        <Field label="Root folder">
+          <Select value={rootId} onChange={(e) => setRootId(Number(e.target.value))}>
+            {roots?.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.path}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Folder">
+          <Input value={folder} onChange={(e) => setFolder(e.target.value)} />
+        </Field>
+        {moving && (
+          <div className="md:col-span-2">
+            <Switch checked={moveFiles} onChange={setMoveFiles} label="Move the files (off: they were already moved by hand)" />
+            <p className="mt-1 text-xs text-muted">Reader progress on Komga/Kavita is restored after the move.</p>
+          </div>
+        )}
         <Field label="Description" className="md:col-span-2">
           <Textarea rows={5} value={description} onChange={(e) => setDescription(e.target.value)} />
         </Field>

@@ -141,13 +141,31 @@ resume it (System → Status).
 - Originals go to the recycle bin unless you turn that off (to free the space
   immediately).
 
-## 7. PostgreSQL (optional)
+## 7. Moving and renaming
+
+- **Move a series** to another root folder or folder name: Edit on the series
+  page, or select several on the Series page (*Select* → *Move…*). Files move
+  in the background (copied, verified and then deleted when the destination is
+  on another disk); downloads for that series wait meanwhile. Turn off *Move
+  the files* when you already moved them by hand.
+- **Move a whole root folder**: Settings → Media management → the folder icon
+  on a root folder. Update library server path mappings afterwards.
+- **Rename files** after changing the naming format: series page → *Rename
+  files* (or several at once from the Series page), with a preview. Folders can
+  follow title changes (Media management → *Rename a series folder when its
+  title changes*).
+- **Read progress**: moving files to another Komga/Kavita library (or renaming
+  them) can reset progress there. mangarr keeps each reader's progress and
+  writes it back once the server has scanned the new files (readers need linked
+  accounts, see section 5). It never lowers progress on the server.
+
+## 8. PostgreSQL (optional)
 
 For large libraries set `MANGARR_DB=postgres://mangarr:…@db:5432/mangarr?sslmode=disable`
 (e.g. your existing Postgres 16). Built-in backups then contain settings and
 modules only — back up the database with `pg_dump`.
 
-## 8. Backups & upgrades
+## 9. Backups & upgrades
 
 Daily backups (SQLite snapshot + manifest) go to `/config/backups`
 (System → Backups). Suwayomi's own data is disposable: mangarr keeps the

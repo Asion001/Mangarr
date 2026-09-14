@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"path"
 	"time"
 
 	"github.com/Asion001/mangarr/internal/modules"
@@ -87,12 +88,15 @@ func (m *Module) TestAccount(ctx context.Context, acc library.Account) (string, 
 
 type seriesDTO struct {
 	ID         int    `json:"id"`
+	LibraryID  int    `json:"libraryId"`
 	PagesRead  int    `json:"pagesRead"`
 	FolderPath string `json:"folderPath"`
 }
 
 type volumeDTO struct {
+	ID       int `json:"id"`
 	Chapters []struct {
+		ID                     int    `json:"id"`
 		Pages                  int    `json:"pages"`
 		PagesRead              int    `json:"pagesRead"`
 		LastReadingProgressUtc string `json:"lastReadingProgressUtc"`
@@ -173,3 +177,66 @@ func parseDotNetTime(s string) *time.Time {
 	}
 	return nil
 }
+
+// WriteProgress sets the reader's progress through Kavita's reader API.
+func (m *Module) WriteProgress(ctx context.Context, acc library.Account, items []library.BookProgress) (int, []string, error) {
+	u, err := m.authenticate(ctx, acc.Credentials["apiKey"])
+	if err != nil {
+		return 0, nil, err
+	}
+	auth := map[string]string{"Authorization": "Bearer " + u.Token}
+	wantDir := map[string]bool{}
+	for _, it := range items {
+		wantDir[path.Dir(m.pm.ToRemote(it.LocalPath))] = true
+	}
+	type target struct{ series, library, volume, chapter, pages int }
+	files := map[string]target{}
+	for page := 1; page < 100; page++ {
+		var series []seriesDTO
+		q := fmt.Sprintf("/api/Series/all-v2?PageNumber=%d&PageSize=500", page)
+		filter := map[string]any{"statements": []any{}, "combination": 1, "limitTo": 0}
+		if err := httpx.Do(ctx, m.http, http.MethodPost, httpx.Join(m.s.URL, q), auth, filter, &series); err != nil {
+			return 0, nil, fmt.Errorf("list series: %w", err)
+		}
+		for _, s := range series {
+			if !wantDir[path.Clean(s.FolderPath)] {
+				continue
+			}
+			var vols []volumeDTO
+			if err := httpx.Do(ctx, m.http, http.MethodGet, httpx.Join(m.s.URL, fmt.Sprintf("/api/Series/volumes?seriesId=%d", s.ID)), auth, nil, &vols); err != nil {
+				return 0, nil, fmt.Errorf("series %d volumes: %w", s.ID, err)
+			}
+			for _, v := range vols {
+				for _, c := range v.Chapters {
+					for _, f := range c.Files {
+						files[path.Clean(f.FilePath)] = target{s.ID, s.LibraryID, v.ID, c.ID, c.Pages}
+					}
+				}
+			}
+		}
+		if len(series) < 500 {
+			break
+		}
+	}
+	written := 0
+	var missing []string
+	for _, it := range items {
+		t, ok := files[path.Clean(m.pm.ToRemote(it.LocalPath))]
+		if !ok {
+			missing = append(missing, it.LocalPath)
+			continue
+		}
+		pageNum := it.Page
+		if it.Completed {
+			pageNum = t.pages
+		}
+		body := map[string]any{"volumeId": t.volume, "chapterId": t.chapter, "pageNum": pageNum, "seriesId": t.series, "libraryId": t.library}
+		if err := httpx.Do(ctx, m.http, http.MethodPost, httpx.Join(m.s.URL, "/api/Reader/progress"), auth, body, nil); err != nil {
+			return written, missing, fmt.Errorf("set progress: %w", err)
+		}
+		written++
+	}
+	return written, missing, nil
+}
+
+var _ library.ProgressWriter = (*Module)(nil)

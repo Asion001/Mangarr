@@ -368,6 +368,7 @@ func (c *Cleaner) Run(ctx context.Context, force bool) (*Plan, int, error) {
 }
 
 func (c *Cleaner) remove(ctx context.Context, cd Candidate, recycle bool) error {
+	defer library.RLockSeries(cd.SeriesID)()
 	var s model.Series
 	if err := c.db.NewSelect().Model(&s).Where("id = ?", cd.SeriesID).Scan(ctx); err != nil {
 		return err

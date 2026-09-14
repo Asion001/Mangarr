@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FolderPlus, Trash2 } from "lucide-react";
+import { FolderInput, FolderPlus, Trash2 } from "lucide-react";
 import { api, unwrap, type S } from "../../api/client";
 import { useRootFolders } from "../../api/queries";
-import { Badge, Button, Card, EnvLock, ErrorBox, Field, IconButton, Input, Loading, PageHeader, Switch, Table, Td, Th } from "../../components/ui";
+import { Badge, Button, Card, EnvLock, ErrorBox, Field, IconButton, Input, Loading, Modal, PageHeader, Switch, Table, Td, Th } from "../../components/ui";
 import { bytes } from "../../lib/format";
 import { useToast } from "../../lib/toast";
 import { useSettingsDoc } from "./useSettingsDoc";
@@ -58,6 +58,12 @@ export function MediaPage() {
               <Switch env={lock("writeSeriesJson")} checked={m.writeSeriesJson} onChange={(v) => patch({ writeSeriesJson: v })} label="Write series.json (Komga series metadata)" />
               <Switch env={lock("writeCover")} checked={m.writeCover} onChange={(v) => patch({ writeCover: v })} label="Write cover.jpg" />
               <Switch env={lock("writeVolume")} checked={m.writeVolume} onChange={(v) => patch({ writeVolume: v })} label="Write volume numbers into ComicInfo.xml" />
+              <Switch
+                env={lock("renameFolderOnTitleChange")}
+                checked={m.renameFolderOnTitleChange}
+                onChange={(v) => patch({ renameFolderOnTitleChange: v })}
+                label="Rename a series folder when its title changes"
+              />
               <Field env={lock("minFreeSpaceMb")} label="Minimum free space (MB)" help="Downloads pause when a root folder has less.">
                 <Input type="number" value={m.minFreeSpaceMb} onChange={(e) => patch({ minFreeSpaceMb: Number(e.target.value) })} />
               </Field>
@@ -100,6 +106,18 @@ function RootFolders() {
       toast.fromError(e);
     }
   };
+  const [relocating, setRelocating] = useState<{ id: number; path: string; moveFiles: boolean } | null>(null);
+  const relocate = async () => {
+    if (!relocating) return;
+    try {
+      await unwrap(api.PUT("/api/v1/rootfolders/{id}", { params: { path: { id: relocating.id } }, body: { path: relocating.path, moveFiles: relocating.moveFiles } }));
+      toast.success(relocating.moveFiles ? "Moving the root folder in the background" : "Root folder location updated");
+      setRelocating(null);
+      qc.invalidateQueries({ queryKey: ["rootfolders"] });
+    } catch (e) {
+      toast.fromError(e);
+    }
+  };
   const remove = async (id: number) => {
     try {
       await unwrap(api.DELETE("/api/v1/rootfolders/{id}", { params: { path: { id } } }));
@@ -110,6 +128,33 @@ function RootFolders() {
   };
   return (
     <Card title="Root folders" className="mb-6">
+      {relocating && (
+        <Modal
+          open
+          onClose={() => setRelocating(null)}
+          title="Change root folder location"
+          footer={
+            <>
+              <Button onClick={() => setRelocating(null)}>Cancel</Button>
+              <Button variant="primary" onClick={relocate}>
+                {relocating.moveFiles ? "Move series" : "Update path"}
+              </Button>
+            </>
+          }
+        >
+          <Field label="New path">
+            <Input value={relocating.path} onChange={(e) => setRelocating({ ...relocating, path: e.target.value })} />
+          </Field>
+          <div className="mt-3">
+            <Switch
+              checked={relocating.moveFiles}
+              onChange={(v) => setRelocating({ ...relocating, moveFiles: v })}
+              label="Move the series folders there (off: they were already moved)"
+            />
+          </div>
+          <p className="mt-2 text-xs text-muted">Update library server path mappings if they point at the old location.</p>
+        </Modal>
+      )}
       {isLoading && <Loading />}
       {data && data.length > 0 && (
         <Table className="mb-4">
@@ -132,6 +177,9 @@ function RootFolders() {
                 <Td>{r.seriesCount}</Td>
                 <Td>{r.accessible ? bytes(r.freeSpace) : <Badge tone="err">{r.error}</Badge>}</Td>
                 <Td className="text-right">
+                  <IconButton title="Change location" disabled={!!r.managedBy} onClick={() => setRelocating({ id: r.id, path: r.path, moveFiles: true })}>
+                    <FolderInput className="size-4" />
+                  </IconButton>
                   <IconButton title={r.managedBy ? "Set by MANGARR_ROOT_FOLDERS" : "Remove"} onClick={() => remove(r.id)} disabled={r.seriesCount > 0 || !!r.managedBy}>
                     <Trash2 className="size-4" />
                   </IconButton>

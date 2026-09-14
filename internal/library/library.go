@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Asion001/mangarr/internal/comicinfo"
@@ -271,4 +272,27 @@ func removeEmptyDirs(root string) {
 	for i := len(dirs) - 1; i >= 0; i-- {
 		_ = os.Remove(dirs[i]) // only succeeds when empty
 	}
+}
+
+// seriesLocks serialize changes to a series folder: imports, sidecars and
+// cleanup take a read lock; moves and renames take the write lock.
+var seriesLocks sync.Map // series id -> *sync.RWMutex
+
+func seriesLock(id int64) *sync.RWMutex {
+	v, _ := seriesLocks.LoadOrStore(id, &sync.RWMutex{})
+	return v.(*sync.RWMutex)
+}
+
+// RLockSeries is held while writing files into a series folder.
+func RLockSeries(id int64) (unlock func()) {
+	l := seriesLock(id)
+	l.RLock()
+	return l.RUnlock
+}
+
+// LockSeries is held while moving or renaming a series folder.
+func LockSeries(id int64) (unlock func()) {
+	l := seriesLock(id)
+	l.Lock()
+	return l.Unlock
 }

@@ -117,3 +117,42 @@ func TestKomgaVerifyBook(t *testing.T) {
 		t.Fatal("unknown file must not be found")
 	}
 }
+
+func TestKomgaWriteProgress(t *testing.T) {
+	var patched []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		body, _ := io.ReadAll(r.Body)
+		switch {
+		case r.URL.Path == "/api/v1/libraries":
+			_, _ = io.WriteString(w, `[{"id":"L1","name":"Manga","root":"/books/manga"}]`)
+		case r.URL.Path == "/api/v1/series/list":
+			_, _ = io.WriteString(w, `{"content":[{"id":"S2","url":"/books/manga/One Piece"}]}`)
+		case r.URL.Path == "/api/v1/series/S2/books":
+			_, _ = io.WriteString(w, `{"content":[{"id":"B1","url":"/books/manga/One Piece/One Piece Ch.0001.cbz"},{"id":"B2","url":"/books/manga/One Piece/One Piece Ch.0002.cbz"}]}`)
+		case r.Method == http.MethodPatch && strings.HasSuffix(r.URL.Path, "/read-progress"):
+			if r.Header.Get("X-API-Key") != "reader" {
+				t.Errorf("progress must be written with the reader's key")
+			}
+			patched = append(patched, r.URL.Path+" "+string(body))
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+	impl, _ := modules.Lookup(modules.KindLibrary, "komga")
+	s, _ := modules.DecodeSettings(impl, map[string]any{"url": srv.URL, "apiKey": "admin", "pathMappings": map[string]any{"/data/manga": "/books/manga"}})
+	inst, _ := impl.New(modules.Deps{HTTP: srv.Client()}, s)
+	pw := inst.(library.ProgressWriter)
+	n, missing, err := pw.WriteProgress(context.Background(), library.Account{Credentials: map[string]string{"apiKey": "reader"}}, []library.BookProgress{
+		{LocalPath: "/data/manga/One Piece/One Piece Ch.0001.cbz", Completed: true},
+		{LocalPath: "/data/manga/One Piece/One Piece Ch.0002.cbz", Page: 7},
+		{LocalPath: "/data/manga/One Piece/One Piece Ch.0003.cbz", Completed: true},
+	})
+	if err != nil || n != 2 || len(missing) != 1 {
+		t.Fatalf("write: %d %v %v", n, missing, err)
+	}
+	if len(patched) != 2 || !strings.Contains(patched[0], `"completed":true`) || !strings.Contains(patched[1], `"page":7`) {
+		t.Fatalf("patches: %v", patched)
+	}
+}

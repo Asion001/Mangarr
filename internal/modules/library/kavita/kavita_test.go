@@ -75,3 +75,39 @@ func TestKavitaRescanAndProgress(t *testing.T) {
 		t.Fatalf("progress: %s", b)
 	}
 }
+
+func TestKavitaWriteProgress(t *testing.T) {
+	var posted []map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/Plugin/authenticate":
+			_, _ = io.WriteString(w, `{"username":"ann","token":"tok"}`)
+		case "/api/Series/all-v2":
+			_, _ = io.WriteString(w, `[{"id":5,"libraryId":2,"pagesRead":0,"folderPath":"/kavita/manga/One Piece"}]`)
+		case "/api/Series/volumes":
+			_, _ = io.WriteString(w, `[{"id":9,"chapters":[{"id":11,"pages":20,"pagesRead":0,"files":[{"filePath":"/kavita/manga/One Piece/One Piece Ch.0001.cbz"}]}]}]`)
+		case "/api/Reader/progress":
+			if r.Header.Get("Authorization") != "Bearer tok" {
+				t.Errorf("progress needs the reader's token")
+			}
+			var b map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&b)
+			posted = append(posted, b)
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+	impl, _ := modules.Lookup(modules.KindLibrary, "kavita")
+	s, _ := modules.DecodeSettings(impl, map[string]any{"url": srv.URL, "apiKey": "admin", "pathMappings": map[string]any{"/data/manga": "/kavita/manga"}})
+	inst, _ := impl.New(modules.Deps{HTTP: srv.Client()}, s)
+	n, missing, err := inst.(library.ProgressWriter).WriteProgress(context.Background(), library.Account{Credentials: map[string]string{"apiKey": "reader"}},
+		[]library.BookProgress{{LocalPath: "/data/manga/One Piece/One Piece Ch.0001.cbz", Completed: true}, {LocalPath: "/data/manga/One Piece/x.cbz"}})
+	if err != nil || n != 1 || len(missing) != 1 {
+		t.Fatalf("write: %d %v %v", n, missing, err)
+	}
+	if posted[0]["pageNum"] != float64(20) || posted[0]["chapterId"] != float64(11) || posted[0]["libraryId"] != float64(2) {
+		t.Fatalf("posted: %v", posted)
+	}
+}

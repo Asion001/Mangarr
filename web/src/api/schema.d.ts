@@ -801,7 +801,8 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put?: never;
+        /** Change a root folder's location: move its series there, or only update the path (files moved by hand) */
+        put: operations["rootfolders-move"];
         post?: never;
         delete: operations["rootfolders-delete"];
         options?: never;
@@ -819,6 +820,23 @@ export interface paths {
         get: operations["series-list"];
         put?: never;
         post: operations["series-add"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/editor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Edit many series at once (monitoring, profile, tags, root folder) */
+        post: operations["series-editor"];
         delete?: never;
         options?: never;
         head?: never;
@@ -853,6 +871,40 @@ export interface paths {
         get: operations["series-lookup-get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rename files (and folders) to the current naming format; read progress is restored afterwards */
+        post: operations["series-rename"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/rename/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Files (and folders) that don't match the current naming format */
+        post: operations["series-rename-preview"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1882,6 +1934,26 @@ export interface components {
             /** Format: int64 */
             pageRetries: number;
         };
+        EditorRequest: {
+            /** @enum {string} */
+            monitorNew?: "all" | "none";
+            monitored?: boolean;
+            moveFiles?: boolean;
+            /** Format: int64 */
+            profileId?: number;
+            /** Format: int64 */
+            rootFolderId?: number;
+            seriesIds: number[];
+            /** @enum {string} */
+            tagMode?: "" | "add" | "remove" | "replace";
+            tags?: number[];
+        };
+        EditorResult: {
+            /** Format: int64 */
+            moves: number;
+            /** Format: int64 */
+            updated: number;
+        };
         Effects: {
             pauseDownloads: boolean;
             pauseProcessing: boolean;
@@ -1962,6 +2034,12 @@ export interface components {
              * @example https://example.com/errors/example
              */
             type: string;
+        };
+        FileRename: {
+            /** Format: int64 */
+            chapterId: number;
+            from: string;
+            to: string;
         };
         GeneralSettingsResource: {
             readonly apiKey: string;
@@ -2122,6 +2200,7 @@ export interface components {
             /** Format: int64 */
             recycleBinDays: number;
             recycleBinPath: string;
+            renameFolderOnTitleChange: boolean;
             seriesFolderFormat: string;
             writeCover: boolean;
             writeSeriesJson: boolean;
@@ -2528,6 +2607,10 @@ export interface components {
             language: string;
             path: string;
         };
+        "Rootfolders-moveRequest": {
+            moveFiles: boolean;
+            path: string;
+        };
         Schedule: {
             timezone: string;
             windows: components["schemas"]["ScheduleWindow"][];
@@ -2557,6 +2640,14 @@ export interface components {
             errors: string[];
             results: components["schemas"]["LookupResult"][];
         };
+        "Series-rename-previewRequest": {
+            folders: boolean;
+            seriesIds: number[];
+        };
+        "Series-renameRequest": {
+            folders: boolean;
+            seriesIds: number[];
+        };
         "Series-searchRequest": {
             chapterIds?: number[];
         };
@@ -2585,6 +2676,14 @@ export interface components {
             totalChapters?: number;
             /** Format: int64 */
             year?: number;
+        };
+        SeriesRename: {
+            files: components["schemas"]["FileRename"][];
+            folderFrom: string;
+            folderTo?: string;
+            /** Format: int64 */
+            seriesId: number;
+            title: string;
         };
         SeriesResource: {
             addOptions: components["schemas"]["AddOptions"];
@@ -2842,10 +2941,14 @@ export interface components {
             /** @enum {string} */
             monitorNew?: "all" | "none";
             monitored?: boolean;
+            moveFiles?: boolean;
+            path?: string;
             /** Format: int64 */
             profileId?: number;
             /** @enum {string} */
             readingDirection?: "rtl" | "ltr" | "vertical" | "webtoon";
+            /** Format: int64 */
+            rootFolderId?: number;
             /** @enum {string} */
             status?: "unknown" | "ongoing" | "completed" | "hiatus" | "cancelled";
             tags?: number[];
@@ -4786,6 +4889,41 @@ export interface operations {
             };
         };
     };
+    "rootfolders-move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Rootfolders-moveRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Command"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "rootfolders-delete": {
         parameters: {
             query?: never;
@@ -4877,6 +5015,39 @@ export interface operations {
             };
         };
     };
+    "series-editor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditorRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EditorResult"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "series-lookup": {
         parameters: {
             query?: {
@@ -4927,6 +5098,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LookupResult"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "series-rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Series-renameRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Command"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "series-rename-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Series-rename-previewRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesRename"][];
                 };
             };
             /** @description Error */

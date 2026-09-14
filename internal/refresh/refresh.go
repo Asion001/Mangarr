@@ -433,6 +433,7 @@ func (r *Refresher) applyAddOptions(ctx context.Context, s *model.Series) error 
 // writeSidecars creates the folder, series.json and cover (with the first
 // source's thumbnail as cover fallback).
 func (r *Refresher) writeSidecars(ctx context.Context, s *model.Series, sources []model.SeriesSource) {
+	defer library.RLockSeries(s.ID)()
 	var fallback func(ctx context.Context) (io.ReadCloser, error)
 	if len(sources) > 0 {
 		ss := sources[0]

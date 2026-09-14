@@ -20,6 +20,7 @@ import (
 	"github.com/Asion001/mangarr/internal/logging"
 	"github.com/Asion001/mangarr/internal/model"
 	"github.com/Asion001/mangarr/internal/modules"
+	"github.com/Asion001/mangarr/internal/organize"
 	"github.com/Asion001/mangarr/internal/processing"
 	"github.com/Asion001/mangarr/internal/settings"
 	"github.com/Asion001/mangarr/internal/sourcecache"
@@ -41,6 +42,7 @@ type App struct {
 	Encoder    *imageenc.Encoder
 	Processing *processing.Processor
 	Nodes      *Nodes
+	Organize   *organize.Service
 	Queue      *jobs.Queue
 	Scheduler  *jobs.Scheduler
 	HTTP       *http.Client

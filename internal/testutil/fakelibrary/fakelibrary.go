@@ -23,6 +23,10 @@ type Scenario struct {
 	// Check is returned by VerifyBook; Verified records the paths asked about.
 	Check    library.BookCheck
 	Verified []string
+	// Written records WriteProgress calls (api key -> progress); Known, when
+	// set, limits which paths the server "has scanned" (others are missing).
+	Written map[string][]library.BookProgress
+	Known   map[string]bool
 }
 
 var (
@@ -119,3 +123,42 @@ func (m *Module) VerifyBook(_ context.Context, localPath string) (library.BookCh
 }
 
 var _ library.Verifier = (*Module)(nil)
+
+func (m *Module) WriteProgress(_ context.Context, acc library.Account, items []library.BookProgress) (int, []string, error) {
+	m.sc.mu.Lock()
+	defer m.sc.mu.Unlock()
+	if m.sc.Written == nil {
+		m.sc.Written = map[string][]library.BookProgress{}
+	}
+	key := acc.Credentials["apiKey"]
+	var missing []string
+	n := 0
+	for _, it := range items {
+		if m.sc.Known != nil && !m.sc.Known[it.LocalPath] {
+			missing = append(missing, it.LocalPath)
+			continue
+		}
+		m.sc.Written[key] = append(m.sc.Written[key], it)
+		n++
+	}
+	return n, missing, nil
+}
+
+// SetKnown limits the paths WriteProgress accepts.
+func (s *Scenario) SetKnown(paths ...string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Known = map[string]bool{}
+	for _, p := range paths {
+		s.Known[p] = true
+	}
+}
+
+// WrittenFor returns the progress written for an api key.
+func (s *Scenario) WrittenFor(key string) []library.BookProgress {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]library.BookProgress(nil), s.Written[key]...)
+}
+
+var _ library.ProgressWriter = (*Module)(nil)

@@ -62,6 +62,7 @@ Lists are comma-separated (`a,b,c`) or JSON; key/value settings use `key=value,k
 | `MANGARR_MEDIA_WRITE_SERIES_JSON` | bool | `true` | Write a Mylar series.json (read by Komga). |
 | `MANGARR_MEDIA_WRITE_COVER` | bool | `true` | Write cover.jpg into series folders. |
 | `MANGARR_MEDIA_WRITE_VOLUME` | bool | `false` | Write &lt;Volume&gt; into ComicInfo.xml. |
+| `MANGARR_MEDIA_RENAME_FOLDER_ON_TITLE_CHANGE` | bool | `false` | Rename the series folder when its title changes. |
 | `MANGARR_MEDIA_FILE_MODE` | string | `0664` | Mode of created files (octal, e.g. 0664). |
 | `MANGARR_MEDIA_DIR_MODE` | string | `0775` | Mode of created directories (octal, e.g. 0775). |
 

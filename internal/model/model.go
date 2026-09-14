@@ -446,6 +446,8 @@ const (
 	HistoryProcessed = "processed"
 	HistoryUnparsed  = "unparsed"
 	HistoryRetitled  = "renamed"
+	HistoryMoved     = "moved"
+	HistoryProgress  = "progressRestored"
 	HistoryBlocklist = "blocklisted"
 )
 

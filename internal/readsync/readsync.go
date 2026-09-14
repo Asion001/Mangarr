@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/uptrace/bun"
@@ -24,10 +25,36 @@ type Syncer struct {
 	mods *modules.Manager
 	bus  *events.Bus
 	log  *slog.Logger
+
+	mu sync.Mutex
+	// protected series keep their read states while progress is restored
+	// (right after a move the server reports them as unread)
+	protected map[int64]time.Time
 }
 
 func New(d *db.DB, mods *modules.Manager, bus *events.Bus, log *slog.Logger) *Syncer {
-	return &Syncer{db: d, mods: mods, bus: bus, log: log}
+	return &Syncer{db: d, mods: mods, bus: bus, log: log, protected: map[int64]time.Time{}}
+}
+
+// Protect keeps syncs from lowering or clearing read states of a series for d.
+func (s *Syncer) Protect(seriesID int64, d time.Duration) {
+	s.mu.Lock()
+	s.protected[seriesID] = time.Now().Add(d)
+	s.mu.Unlock()
+}
+
+// Unprotect ends Protect.
+func (s *Syncer) Unprotect(seriesID int64) {
+	s.mu.Lock()
+	delete(s.protected, seriesID)
+	s.mu.Unlock()
+}
+
+func (s *Syncer) isProtected(seriesID int64) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	until, ok := s.protected[seriesID]
+	return ok && time.Now().Before(until)
 }
 
 type Result struct {
@@ -153,6 +180,9 @@ func (s *Syncer) syncAccount(ctx context.Context, acc *model.ReaderAccount, idx 
 			if st.Completed == bp.Completed && st.Page == bp.Page && (readAt == nil || (st.ReadAt != nil && st.ReadAt.Equal(*readAt))) {
 				continue
 			}
+			if s.isProtected(ref.seriesID) && (st.Completed && !bp.Completed || st.Page > bp.Page) {
+				continue // don't lower progress that is being restored
+			}
 			if readAt == nil && bp.Completed && !st.Completed {
 				readAt = &now
 			}
@@ -173,6 +203,9 @@ func (s *Syncer) syncAccount(ctx context.Context, acc *model.ReaderAccount, idx 
 			}
 			if !withFile[chID] {
 				continue // cleaned/deleted files are not reported; keep their state
+			}
+			if s.isProtected(st.SeriesID) {
+				continue
 			}
 			if _, err := tx.NewDelete().Model(st).WherePK().Exec(ctx); err != nil {
 				return err
@@ -195,4 +228,85 @@ func (s *Syncer) TestAccount(ctx context.Context, moduleID int64, creds map[stri
 		return "", fmt.Errorf("%s: %w", def.Name, err)
 	}
 	return user, nil
+}
+
+// RestoreResult summarizes a progress restore.
+type RestoreResult struct {
+	Written int `json:"written"`
+	// Missing counts files the servers don't know yet (not scanned).
+	Missing int `json:"missing"`
+}
+
+// RestoreSeries writes the read states stored in mangarr back to library
+// servers that know less (e.g. after the series moved to another library).
+// Progress on the server is never lowered.
+func (s *Syncer) RestoreSeries(ctx context.Context, seriesID int64) (RestoreResult, error) {
+	var res RestoreResult
+	idx, _, err := s.index(ctx)
+	if err != nil {
+		return res, err
+	}
+	pathOf := map[int64]string{}
+	var seriesDir string
+	for p, ref := range idx {
+		if ref.seriesID == seriesID {
+			pathOf[ref.chapterID] = p
+			seriesDir = filepath.Dir(p)
+		}
+	}
+	if seriesDir == "" {
+		return res, nil
+	}
+	var accounts []model.ReaderAccount
+	if err := s.db.NewSelect().Model(&accounts).Scan(ctx); err != nil {
+		return res, err
+	}
+	var errs []error
+	for _, acc := range accounts {
+		pw, _, err := modules.GetAs[library.ProgressWriter](s.mods, acc.ModuleID)
+		if err != nil {
+			continue // server can't be written to
+		}
+		var states []model.ChapterReadState
+		if err := s.db.NewSelect().Model(&states).Where("reader_id = ? AND series_id = ?", acc.ReaderID, seriesID).Scan(ctx); err != nil {
+			return res, err
+		}
+		remote := map[string]library.BookProgress{}
+		if pr, _, err := modules.GetAs[library.ProgressReader](s.mods, acc.ModuleID); err == nil {
+			rctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+			list, err := pr.ReadProgress(rctx, library.Account{Credentials: acc.Credentials}, []string{seriesDir})
+			cancel()
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			for _, bp := range list {
+				remote[filepath.Clean(bp.LocalPath)] = bp
+			}
+		}
+		var items []library.BookProgress
+		for _, st := range states {
+			p, ok := pathOf[st.ChapterID]
+			if !ok || (!st.Completed && st.Page == 0) {
+				continue
+			}
+			r, has := remote[p]
+			if has && (r.Completed || (!st.Completed && r.Page >= st.Page)) {
+				continue // the server already knows as much
+			}
+			items = append(items, library.BookProgress{LocalPath: p, Completed: st.Completed, Page: st.Page})
+		}
+		if len(items) == 0 {
+			continue
+		}
+		wctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+		n, missing, err := pw.WriteProgress(wctx, library.Account{Credentials: acc.Credentials}, items)
+		cancel()
+		res.Written += n
+		res.Missing += len(missing)
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return res, errors.Join(errs...)
 }

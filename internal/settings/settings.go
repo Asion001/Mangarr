@@ -52,6 +52,8 @@ type MediaManagement struct {
 	// WriteVolume writes <Volume> into ComicInfo.xml. Off by default: volume
 	// numbers change Kavita's grouping and Komga's default series titles.
 	WriteVolume bool `json:"writeVolume" desc:"Write <Volume> into ComicInfo.xml."`
+	// RenameFolderOnTitleChange renames the series folder when its title changes.
+	RenameFolderOnTitleChange bool `json:"renameFolderOnTitleChange" desc:"Rename the series folder when its title changes."`
 	// FileMode / DirMode for created files (octal strings like "0664").
 	FileMode string `json:"fileMode" desc:"Mode of created files (octal, e.g. 0664)."`
 	DirMode  string `json:"dirMode" desc:"Mode of created directories (octal, e.g. 0775)."`

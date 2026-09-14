@@ -251,6 +251,12 @@ type UpdateRequest struct {
 	Status           *string   `json:"status,omitempty" enum:"unknown,ongoing,completed,hiatus,cancelled"`
 	Description      *string   `json:"description,omitempty"`
 	Locks            *[]string `json:"locks,omitempty"`
+	// Location changes are applied by a MoveSeries command (see the API).
+	RootFolderID *int64  `json:"rootFolderId,omitempty"`
+	Path         *string `json:"path,omitempty"`
+	// MoveFiles moves the folder on disk (default true); false only updates
+	// the location in mangarr (files moved by hand).
+	MoveFiles *bool `json:"moveFiles,omitempty"`
 }
 
 // Update edits a series. Editing a metadata field locks it against refreshes.
