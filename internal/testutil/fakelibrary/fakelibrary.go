@@ -20,6 +20,9 @@ type Scenario struct {
 	mu       sync.Mutex
 	Rescans  [][]string
 	Progress map[string][]library.BookProgress // api key -> progress
+	// Check is returned by VerifyBook; Verified records the paths asked about.
+	Check    library.BookCheck
+	Verified []string
 }
 
 var (
@@ -93,3 +96,26 @@ func (m *Module) ReadProgress(ctx context.Context, acc library.Account, roots []
 	defer m.sc.mu.Unlock()
 	return append([]library.BookProgress(nil), m.sc.Progress[acc.Credentials["apiKey"]]...), nil
 }
+
+// SetCheck sets the VerifyBook answer.
+func (s *Scenario) SetCheck(c library.BookCheck) {
+	s.mu.Lock()
+	s.Check = c
+	s.mu.Unlock()
+}
+
+// VerifyCount returns how often VerifyBook was called.
+func (s *Scenario) VerifyCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.Verified)
+}
+
+func (m *Module) VerifyBook(_ context.Context, localPath string) (library.BookCheck, error) {
+	m.sc.mu.Lock()
+	defer m.sc.mu.Unlock()
+	m.sc.Verified = append(m.sc.Verified, localPath)
+	return m.sc.Check, nil
+}
+
+var _ library.Verifier = (*Module)(nil)

@@ -46,6 +46,11 @@ func (q *Queue) signal() {
 
 // Enqueue creates a job unless the chapter already has an active one.
 func (q *Queue) Enqueue(ctx context.Context, seriesID, chapterID int64, releaseID *int64, kind string, isUpgrade bool) (*model.DownloadJob, bool, error) {
+	return q.EnqueuePriority(ctx, seriesID, chapterID, releaseID, kind, isUpgrade, 0)
+}
+
+// EnqueuePriority is Enqueue with a queue priority (higher runs first).
+func (q *Queue) EnqueuePriority(ctx context.Context, seriesID, chapterID int64, releaseID *int64, kind string, isUpgrade bool, priority int) (*model.DownloadJob, bool, error) {
 	var existing model.DownloadJob
 	err := q.db.NewSelect().Model(&existing).Where("chapter_id = ?", chapterID).Where("status IN (?)", bun.In(activeStatuses)).Limit(1).Scan(ctx)
 	if err == nil {
@@ -56,7 +61,7 @@ func (q *Queue) Enqueue(ctx context.Context, seriesID, chapterID int64, releaseI
 	}
 	now := time.Now().UTC()
 	job := &model.DownloadJob{Kind: kind, SeriesID: seriesID, ChapterID: chapterID, ReleaseID: releaseID, Status: model.JobQueued,
-		IsUpgrade: isUpgrade, NotBefore: now, CreatedAt: now, UpdatedAt: now}
+		IsUpgrade: isUpgrade, Priority: priority, NotBefore: now, CreatedAt: now, UpdatedAt: now}
 	err = q.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		if _, err := tx.NewInsert().Model(job).Exec(ctx); err != nil {
 			return err

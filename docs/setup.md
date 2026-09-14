@@ -79,7 +79,16 @@ Cleanup deletes chapters **every reader** has finished.
 4. Cleaned chapters are never downloaded again; use **Restore** on a chapter
    to get it back.
 
-## 6. Upscaling (optional)
+## 6. Processing: upscaling and re-encoding (optional)
+
+Processing is configured per profile (Settings → Profiles). By default it runs
+**in the background**: chapters are imported as downloaded (readable right
+away) and processed later, rewritten at the same path so Komga keeps read
+progress. Background work runs one chapter at a time behind downloads; use
+Settings → Schedule to pause it outside the night. When you turn processing on
+for a profile, mangarr asks whether to process chapters you already have.
+
+### Upscaling
 
 Small pages look soft on an iPad. Profiles can upscale pages narrower than a
 threshold (default 1400 px) with waifu2x / Real-CUGAN / Real-ESRGAN.
@@ -96,10 +105,32 @@ threshold (default 1400 px) with waifu2x / Real-CUGAN / Real-ESRGAN.
    webtoons), `waifu2x-cunet` cleans black & white manga well, `realcugan`
    is sharper and slower.
 3. Settings → Upscalers → add *mangarr-upscaler* with URL and token.
-4. Settings → Profiles → enable upscaling, choose model, min/max width,
-   WebP quality. New chapters are upscaled before import (original pages are
-   used if the worker fails). Existing chapters: series page → **Upscale
-   existing**.
+4. Settings → Profiles → enable upscaling, choose model and widths. If the
+   upscaler is offline, chapters wait and are upscaled when it's back.
+
+### Re-encoding (AVIF / JPEG XL)
+
+| Format | Saves | Readers that can't open it |
+|---|---|---|
+| AVIF (lossy) | typically 40–70% | KOReader; Chunky only through Komga's OPDS (Komga converts); 32-bit ARM Komga |
+| JPEG XL (lossless, JPEG pages only) | ~20%, reversible | Kavita, KOReader |
+
+Mihon 0.17+, Tachimanga, Panels (iOS 17+) and Komga's official amd64/arm64
+image read both. After the first re-encoded chapter mangarr asks Komga whether
+it could read it; if not, re-encoding pauses with a health error until you
+resume it (System → Status).
+
+- Encoders: the full image includes `avifenc` and `cjxl` (fast). The slim image
+  uses a built-in AVIF encoder that works everywhere but is much slower.
+- Pages are kept as they are unless re-encoding saves at least the configured
+  percentage; black-and-white pages are encoded without color.
+- Try settings on your own pages: Profile → *Preview on a chapter* (shows the
+  pages side by side and gives a sample CBZ to open on the iPad), or
+  ```bash
+  docker exec mangarr mangarr bench encode "/data/manga/en/Series/Series Ch.0001.cbz"
+  ```
+- Originals go to the recycle bin unless you turn that off (to free the space
+  immediately).
 
 ## 7. PostgreSQL (optional)
 

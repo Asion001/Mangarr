@@ -44,8 +44,19 @@ type PageFile struct {
 
 // Processor transforms pages before import (e.g. upscaling). applied=false
 // means pages were left untouched.
+// ProcessResult is the outcome of the processing stage.
+type ProcessResult struct {
+	Pages        []PageFile
+	Changed      bool // pages differ from the input
+	Upscaled     bool
+	UpscaleModel string
+	Encoded      int // pages re-encoded
+	Encoder      string
+}
+
+// Processor upscales and/or re-encodes pages according to a profile.
 type Processor interface {
-	Process(ctx context.Context, cfg model.UpscaleConfig, pages []PageFile, workDir string) (out []PageFile, applied bool, modelName string, err error)
+	Process(ctx context.Context, cfg model.ProfileConfig, pages []PageFile, workDir string) (ProcessResult, error)
 }
 
 // permanentError marks failures that should blocklist the release.
@@ -368,53 +379,109 @@ func (m *Manager) run(ctx context.Context, job model.DownloadJob) {
 		return
 	}
 
-	// processing (upscale)
-	upscaled, upscaleModel := false, ""
+	// processing (upscale / re-encode)
+	cfg := jc.profile.Config
+	params := cfg.ProcessParams()
 	var sizeBefore int64
 	for _, p := range pages {
 		if st, err := os.Stat(p.Path); err == nil {
 			sizeBefore += st.Size()
 		}
 	}
+	proc := ProcessResult{Pages: pages}
+	processed := false
+	if job.Kind == model.JobKindReprocess && params == "" {
+		m.markProcessed(ctx, jc.file, "")
+		m.completeUnchanged(ctx, &job, "processing is disabled for this series' profile")
+		return
+	}
 	processingPaused := false
 	if job.Kind == model.JobKindDownload {
 		sched, _ := m.settings.Schedule(ctx)
 		processingPaused = quiet.Evaluate(sched, time.Now()).PauseProcessing
 	}
-	if m.Processor != nil && jc.profile.Config.Upscale.Enabled && !processingPaused {
+	inline := job.Kind == model.JobKindReprocess || cfg.ProcessTiming == "inline"
+	if m.Processor != nil && params != "" && inline && !processingPaused {
 		m.setStatus(ctx, &job, model.JobProcessing, model.ChapterProcessing)
-		out, applied, mdl, perr := m.Processor.Process(ctx, jc.profile.Config.Upscale, pages, workDir)
+		res, perr := m.Processor.Process(ctx, cfg, pages, workDir)
+		var tmp interface{ Temporary() bool }
 		switch {
 		case perr != nil && ctx.Err() != nil:
 			m.fail(ctx, &job, jc, ctx.Err())
 			return
+		case perr != nil && job.Kind == model.JobKindReprocess && errors.As(perr, &tmp) && tmp.Temporary():
+			// the file on disk is fine; retry once the engine is back
+			m.markProcessRetry(ctx, jc.file, perr)
+			m.fail(ctx, &job, jc, infraError{perr})
+			return
 		case perr != nil && job.Kind == model.JobKindReprocess:
-			// the file on disk is fine; retry once the upscaler is back
-			m.fail(ctx, &job, jc, infraError{fmt.Errorf("upscaling: %w", perr)})
+			m.markProcessFailed(ctx, jc.file, perr)
+			m.fail(ctx, &job, jc, permanent(perr))
 			return
 		case perr != nil:
-			log.Warn("upscaling failed, importing original pages", "err", perr)
+			log.Warn("processing failed, importing original pages", "err", perr)
 			m.bus.Publish(events.Event{Type: events.HealthIssue, SeriesID: jc.series.ID, Payload: events.MessagePayload{
-				Title: "Upscaling failed", Message: fmt.Sprintf("%s ch. %s was imported without upscaling: %v", jc.series.Title, jc.chapter.NumberKey, perr)}})
-		case applied:
-			pages, upscaled, upscaleModel = out, true, mdl
-		case job.Kind == model.JobKindReprocess:
-			// every page is already wide enough: keep the file as it is
-			m.completeUnchanged(ctx, &job, "no page needed upscaling")
+				Title: "Processing failed", Message: fmt.Sprintf("%s ch. %s was imported without processing (it will be retried in the background): %v", jc.series.Title, jc.chapter.NumberKey, perr)}})
+		default:
+			proc, processed = res, true
+		}
+		if processed && job.Kind == model.JobKindReprocess && !proc.Changed {
+			// nothing to upscale and re-encoding wouldn't save space
+			m.markProcessed(ctx, jc.file, params)
+			m.completeUnchanged(ctx, &job, "nothing to change")
 			return
 		}
-	} else if job.Kind == model.JobKindReprocess {
-		m.completeUnchanged(ctx, &job, "upscaling is disabled for this series' profile")
-		return
+	}
+	if !processed {
+		params = "" // the background backlog will process it
 	}
 
 	m.setStatus(ctx, &job, model.JobImporting, "")
-	if err := m.importChapter(ctx, jc, pages, upscaled, upscaleModel, sizeBefore); err != nil {
+	if err := m.importChapter(ctx, jc, proc, params, sizeBefore); err != nil {
 		m.fail(ctx, &job, jc, err)
 		return
 	}
-	log.Info("chapter imported", "series", jc.series.Title, "chapter", jc.chapter.NumberKey, "pages", len(pages), "upscaled", upscaled)
+	log.Info("chapter imported", "series", jc.series.Title, "chapter", jc.chapter.NumberKey, "pages", len(proc.Pages),
+		"upscaled", proc.Upscaled, "encoded", proc.Encoded)
 }
+
+// markProcessed records that a file was processed with params (no rewrite).
+func (m *Manager) markProcessed(ctx context.Context, f *model.ChapterFile, params string) {
+	if f == nil {
+		return
+	}
+	now := time.Now().UTC()
+	_, _ = m.db.NewUpdate().Model((*model.ChapterFile)(nil)).Set("process_params = ?", params).Set("process_state = ?", model.ProcessDone).
+		Set("process_error = ''").Set("process_attempts = 0").Set("process_retry_at = NULL").Set("processed_at = ?", now).
+		Where("id = ?", f.ID).Exec(ctx)
+	m.bus.Changed("chapter", "updated", f.ChapterID)
+}
+
+// markProcessRetry postpones processing after a temporary failure.
+func (m *Manager) markProcessRetry(ctx context.Context, f *model.ChapterFile, err error) {
+	if f == nil {
+		return
+	}
+	at := time.Now().UTC().Add(30 * time.Minute)
+	_, _ = m.db.NewUpdate().Model((*model.ChapterFile)(nil)).Set("process_error = ?", err.Error()).Set("process_retry_at = ?", at).
+		Where("id = ?", f.ID).Exec(ctx)
+}
+
+// markProcessFailed counts a failed processing attempt; the backlog retries
+// with growing delays and gives up after MaxProcessAttempts.
+func (m *Manager) markProcessFailed(ctx context.Context, f *model.ChapterFile, err error) {
+	if f == nil {
+		return
+	}
+	delay := time.Duration(1<<min(f.ProcessAttempts, 5)) * time.Hour
+	at := time.Now().UTC().Add(delay)
+	_, _ = m.db.NewUpdate().Model((*model.ChapterFile)(nil)).Set("process_state = ?", model.ProcessFailed).Set("process_error = ?", err.Error()).
+		Set("process_attempts = process_attempts + 1").Set("process_retry_at = ?", at).Where("id = ?", f.ID).Exec(ctx)
+	m.bus.Changed("chapter", "updated", f.ChapterID)
+}
+
+// MaxProcessAttempts is how often the backlog retries a failing file.
+const MaxProcessAttempts = 5
 
 // MaxReprocess is the number of reprocess (upscale/re-encode) jobs run at once.
 const MaxReprocess = 1
@@ -648,7 +715,8 @@ func (m *Manager) extractExisting(jc *jobCtx, workDir string) ([]PageFile, error
 	return out, nil
 }
 
-func (m *Manager) importChapter(ctx context.Context, jc *jobCtx, pages []PageFile, upscaled bool, upscaleModel string, sizeBefore int64) error {
+func (m *Manager) importChapter(ctx context.Context, jc *jobCtx, proc ProcessResult, params string, sizeBefore int64) error {
+	pages, upscaled, upscaleModel := proc.Pages, proc.Upscaled, proc.UpscaleModel
 	mm, _ := m.settings.MediaManagement(ctx)
 	dir, err := m.lib.EnsureSeriesDir(ctx, &jc.series)
 	if err != nil {
@@ -672,7 +740,10 @@ func (m *Manager) importChapter(ctx context.Context, jc *jobCtx, pages []PageFil
 		rel = m.lib.ChapterFileName(ctx, &jc.series, &jc.chapter, jc.release, sourceName)
 	}
 	target := filepath.Join(dir, rel)
-	if _, err := os.Stat(target); err == nil {
+	// re-encoding to save space may skip the recycle bin (the whole point is
+	// to free the space); everything else keeps the replaced file around
+	recycle := !(jc.job.Kind == model.JobKindReprocess && proc.Encoded > 0 && !jc.profile.Config.Encode.RecycleOriginals)
+	if _, err := os.Stat(target); err == nil && recycle {
 		if _, err := m.lib.Recycle(ctx, target, jc.series.Path, true); err != nil {
 			m.log.Warn("recycle previous file", "path", target, "err", err)
 		}
@@ -711,6 +782,19 @@ func (m *Manager) importChapter(ctx context.Context, jc *jobCtx, pages []PageFil
 	if upscaled {
 		file.SizeBefore = sizeBefore
 	}
+	file.SizeOriginal = res.Size
+	if proc.Changed {
+		file.SizeOriginal = sizeBefore // pages as downloaded
+	}
+	if jc.job.Kind == model.JobKindReprocess && jc.file != nil {
+		file.SizeOriginal = jc.file.SizeOriginal
+		if file.SizeOriginal == 0 {
+			file.SizeOriginal = jc.file.Size
+		}
+	}
+	if params != "" {
+		file.ProcessParams, file.ProcessState, file.ProcessedAt = params, model.ProcessDone, &now
+	}
 	if jc.release != nil {
 		file.ReleaseID, file.Scanlator = &jc.release.ID, jc.release.Scanlator
 	}
@@ -727,7 +811,7 @@ func (m *Manager) importChapter(ctx context.Context, jc *jobCtx, pages []PageFil
 	if jc.file != nil {
 		event = model.HistoryUpgraded
 		if jc.job.Kind == model.JobKindReprocess {
-			event = model.HistoryUpscaled
+			event = model.HistoryProcessed
 		}
 	}
 	err = m.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
@@ -752,7 +836,8 @@ func (m *Manager) importChapter(ctx context.Context, jc *jobCtx, pages []PageFil
 		chID := jc.chapter.ID
 		return history.Record(ctx, tx, jc.series.ID, &chID, event, src, map[string]string{
 			"path": rel, "size": strconv.FormatInt(res.Size, 10), "pages": strconv.Itoa(len(pages)),
-			"source": file.SourceName, "scanlator": file.Scanlator, "upscaled": strconv.FormatBool(upscaled)})
+			"source": file.SourceName, "scanlator": file.Scanlator, "upscaled": strconv.FormatBool(upscaled),
+			"encoded": strconv.Itoa(proc.Encoded), "sizeOriginal": strconv.FormatInt(file.SizeOriginal, 10)})
 	})
 	if err != nil {
 		return err
@@ -761,13 +846,16 @@ func (m *Manager) importChapter(ctx context.Context, jc *jobCtx, pages []PageFil
 	if event == model.HistoryUpgraded {
 		evType = events.ChapterUpgraded
 	}
-	if event != model.HistoryUpscaled {
+	if event != model.HistoryUpscaled && event != model.HistoryProcessed {
 		m.bus.Publish(events.Event{Type: evType, SeriesID: jc.series.ID, Payload: events.ChapterImportedPayload{
 			SeriesTitle: jc.series.Title, Chapter: jc.chapter.NumberKey, NumberSort: jc.chapter.NumberSort, Title: jc.chapter.Title,
 			Source: file.SourceName, Scanlator: file.Scanlator, Upgrade: event == model.HistoryUpgraded, Upscaled: upscaled,
 			CoverURL: jc.series.Metadata.CoverURL}})
 	}
 	m.bus.Publish(events.Event{Type: EventFileWritten, SeriesID: jc.series.ID, Payload: target})
+	if proc.Encoded > 0 {
+		m.bus.Publish(events.Event{Type: EventFileEncoded, SeriesID: jc.series.ID, Payload: EncodedPayload{Path: target, Format: file.Format}})
+	}
 	m.bus.Changed("chapter", "updated", jc.chapter.ID)
 	m.bus.Changed("series", "updated", jc.series.ID)
 	m.bus.Changed("queue", "updated", jc.job.ID)
@@ -777,6 +865,14 @@ func (m *Manager) importChapter(ctx context.Context, jc *jobCtx, pages []PageFil
 // EventFileWritten is published (payload: absolute path) whenever a library
 // file is written or deleted, so library modules can rescan.
 const EventFileWritten = "library.file"
+
+// EventFileEncoded is published when pages were re-encoded (payload EncodedPayload).
+const EventFileEncoded = "library.encoded"
+
+type EncodedPayload struct {
+	Path   string `json:"path"`
+	Format string `json:"format"`
+}
 
 func (m *Manager) comicInfo(ctx context.Context, jc *jobCtx, pageCount int, writeVolume bool) comicinfo.ComicInfo {
 	s := jc.series

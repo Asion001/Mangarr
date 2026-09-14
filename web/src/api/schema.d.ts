@@ -464,6 +464,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/processing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Encoders, background backlog and space saved */
+        get: operations["processing-status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/processing/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Re-encode three pages of a chapter with the given settings to compare quality and size */
+        post: operations["processing-preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/processing/preview/{token}/sample.cbz": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The encoded preview pages as a CBZ, to check in a reader app */
+        get: operations["processing-preview-cbz"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/processing/preview/{token}/{index}/{variant}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["processing-preview-image"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/processing/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resume re-encoding after it was paused because a library server couldn't read the files */
+        post: operations["processing-resume"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/profiles": {
         parameters: {
             query?: never;
@@ -491,6 +575,23 @@ export interface paths {
         put: operations["profiles-update"];
         post?: never;
         delete: operations["profiles-delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/profiles/{id}/process-estimate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How many existing chapters of this profile's series would be processed */
+        get: operations["profiles-process-estimate"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1538,6 +1639,15 @@ export interface components {
             importedAt: string;
             /** Format: int64 */
             pageCount: number;
+            /** Format: int64 */
+            processAttempts: number;
+            processError?: string;
+            /** Format: date-time */
+            processRetryAt?: string;
+            /** @enum {string} */
+            processState?: "" | "done" | "failed";
+            /** Format: date-time */
+            processedAt?: string;
             relativePath: string;
             /** Format: int64 */
             releaseId?: number;
@@ -1549,6 +1659,8 @@ export interface components {
             size: number;
             /** Format: int64 */
             sizeBefore: number;
+            /** Format: int64 */
+            sizeOriginal: number;
             sourceName: string;
             upscaleModel: string;
             upscaled: boolean;
@@ -1741,6 +1853,25 @@ export interface components {
             pauseProcessing: boolean;
             throttle?: string;
             windows?: string[];
+        };
+        EncodeConfig: {
+            /** @enum {string} */
+            format: "keep" | "avif" | "jxl";
+            grayscale: boolean;
+            /** Format: int64 */
+            minSavingsPct: number;
+            /** @enum {string} */
+            preset: "max" | "balanced" | "fast";
+            /** Format: int64 */
+            quality: number;
+            recycleOriginals: boolean;
+            /** Format: int64 */
+            speed: number;
+        };
+        EngineInfo: {
+            format: string;
+            name: string;
+            slow: boolean;
         };
         Entry: {
             attrs?: {
@@ -2049,6 +2180,51 @@ export interface components {
             priority?: number;
             throttle?: components["schemas"]["ThrottleConfig"];
         };
+        PreviewPage: {
+            encodedFormat: string;
+            /** Format: int64 */
+            encodedSize: number;
+            /** Format: int64 */
+            height: number;
+            /** Format: int64 */
+            index: number;
+            name: string;
+            originalFormat: string;
+            /** Format: int64 */
+            originalSize: number;
+            /** Format: int64 */
+            width: number;
+        };
+        PreviewResult: {
+            engine: string;
+            pages: components["schemas"]["PreviewPage"][];
+            /** Format: double */
+            seconds: number;
+            token: string;
+        };
+        ProcessEstimate: {
+            /** Format: int64 */
+            bytes: number;
+            /** Format: int64 */
+            files: number;
+        };
+        "Processing-previewRequest": {
+            /** Format: int64 */
+            chapterId: number;
+            encode: components["schemas"]["EncodeConfig"];
+        };
+        ProcessingStatus: {
+            engines: components["schemas"]["EngineInfo"][];
+            /** Format: int64 */
+            failed: number;
+            /** Format: int64 */
+            pending: number;
+            /** Format: int64 */
+            processed: number;
+            /** Format: int64 */
+            spaceSaved: number;
+            state: components["schemas"]["State"];
+        };
         Profile: {
             config: components["schemas"]["ProfileConfig"];
             /** Format: date-time */
@@ -2064,9 +2240,15 @@ export interface components {
             allowUpgrades: boolean;
             blockedScanlators: string[];
             cleanup: components["schemas"]["CleanupOverride"];
+            encode: components["schemas"]["EncodeConfig"];
             /** Format: int64 */
             minPages: number;
             preferredScanlators: string[];
+            /** Format: date-time */
+            processChangedAt?: string;
+            processExisting: boolean;
+            /** @enum {string} */
+            processTiming?: "" | "background" | "inline";
             upscale: components["schemas"]["UpscaleConfig"];
         };
         "Queue-bulkResponse": {
@@ -2414,6 +2596,8 @@ export interface components {
             monitoredCount: number;
             /** Format: int64 */
             sizeOnDisk: number;
+            /** Format: int64 */
+            spaceSaved: number;
         };
         "Source-preferences-setRequest": {
             /** Format: int64 */
@@ -2512,6 +2696,13 @@ export interface components {
             hideNsfw: boolean;
             quickSearch: components["schemas"]["QuickSearch"];
             throttle: components["schemas"]["ThrottleConfig"];
+        };
+        State: {
+            encodeBlocked: boolean;
+            reason?: string;
+            verified?: {
+                [key: string]: string;
+            };
         };
         "Stores-addRequest": {
             url: string;
@@ -3744,6 +3935,163 @@ export interface operations {
             };
         };
     };
+    "processing-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessingStatus"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "processing-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Processing-previewRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreviewResult"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "processing-preview-cbz": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Content-Disposition"?: string;
+                    "Content-Type"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "processing-preview-image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+                index: number;
+                variant: "original" | "encoded";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    "Content-Type"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "processing-resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "profiles-list": {
         parameters: {
             query?: never;
@@ -3858,6 +4206,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "profiles-process-estimate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessEstimate"];
+                };
             };
             /** @description Error */
             default: {

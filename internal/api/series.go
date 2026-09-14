@@ -25,13 +25,15 @@ import (
 func init() { register((*Server).registerSeries) }
 
 type SeriesStats struct {
-	ChapterCount   int     `json:"chapterCount"`
-	MonitoredCount int     `json:"monitoredCount"`
-	FileCount      int     `json:"fileCount"`
-	MissingCount   int     `json:"missingCount"`
-	CleanedCount   int     `json:"cleanedCount"`
-	SizeOnDisk     int64   `json:"sizeOnDisk"`
-	LastChapter    float64 `json:"lastChapter"`
+	ChapterCount   int   `json:"chapterCount"`
+	MonitoredCount int   `json:"monitoredCount"`
+	FileCount      int   `json:"fileCount"`
+	MissingCount   int   `json:"missingCount"`
+	CleanedCount   int   `json:"cleanedCount"`
+	SizeOnDisk     int64 `json:"sizeOnDisk"`
+	// SpaceSaved is how much smaller processing (re-encoding) made the files.
+	SpaceSaved  int64   `json:"spaceSaved"`
+	LastChapter float64 `json:"lastChapter"`
 }
 
 type SeriesResource struct {
@@ -77,8 +79,10 @@ func (s *Server) seriesStats(ctx context.Context, seriesID int64) (map[int64]Ser
 	var sizes []struct {
 		SeriesID int64 `bun:"series_id"`
 		Size     int64 `bun:"size"`
+		Saved    int64 `bun:"saved"`
 	}
-	sq := s.app.DB.NewSelect().TableExpr("chapter_files").ColumnExpr("series_id, SUM(size) AS size").GroupExpr("series_id")
+	sq := s.app.DB.NewSelect().TableExpr("chapter_files").
+		ColumnExpr("series_id, SUM(size) AS size, SUM(CASE WHEN size_original > size THEN size_original - size ELSE 0 END) AS saved").GroupExpr("series_id")
 	if seriesID > 0 {
 		sq = sq.Where("series_id = ?", seriesID)
 	}
@@ -87,7 +91,7 @@ func (s *Server) seriesStats(ctx context.Context, seriesID int64) (map[int64]Ser
 	}
 	for _, sz := range sizes {
 		st := out[sz.SeriesID]
-		st.SizeOnDisk = sz.Size
+		st.SizeOnDisk, st.SpaceSaved = sz.Size, sz.Saved
 		out[sz.SeriesID] = st
 	}
 	return out, nil
@@ -330,6 +334,9 @@ func (s *Server) registerSeries() {
 			ser, err := s.app.Series.Update(ctx, in.ID, in.Body)
 			if err != nil {
 				return nil, seriesError(err)
+			}
+			if in.Body.ProfileID != nil {
+				s.app.PushProcessBacklog("series-profile") // the new profile may process differently
 			}
 			stats, _ := s.seriesStats(ctx, in.ID)
 			return &struct{ Body SeriesResource }{s.seriesResource(ctx, *ser, stats, true)}, nil

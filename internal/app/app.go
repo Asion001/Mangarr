@@ -15,10 +15,12 @@ import (
 	"github.com/Asion001/mangarr/internal/db"
 	"github.com/Asion001/mangarr/internal/envcfg"
 	"github.com/Asion001/mangarr/internal/events"
+	"github.com/Asion001/mangarr/internal/imageenc"
 	"github.com/Asion001/mangarr/internal/jobs"
 	"github.com/Asion001/mangarr/internal/logging"
 	"github.com/Asion001/mangarr/internal/model"
 	"github.com/Asion001/mangarr/internal/modules"
+	"github.com/Asion001/mangarr/internal/processing"
 	"github.com/Asion001/mangarr/internal/settings"
 	"github.com/Asion001/mangarr/internal/sourcecache"
 )
@@ -35,10 +37,13 @@ type App struct {
 	Catalogs *catalogs.Service
 	// SourceCache caches catalog responses (keys include the catalogs generation).
 	SourceCache *sourcecache.Cache
-	Queue       *jobs.Queue
-	Scheduler   *jobs.Scheduler
-	HTTP        *http.Client
-	StartedAt   time.Time
+	// Encoder re-encodes pages (set before New to override engine detection in tests).
+	Encoder    *imageenc.Encoder
+	Processing *processing.Processor
+	Queue      *jobs.Queue
+	Scheduler  *jobs.Scheduler
+	HTTP       *http.Client
+	StartedAt  time.Time
 	Services
 	MoreServices
 	ReaderServices
@@ -128,13 +133,27 @@ func (a *App) Close() error { return a.DB.Close() }
 
 // ensureDefaults creates the default profile on first start.
 func (a *App) ensureDefaults(ctx context.Context) error {
-	n, err := a.DB.NewSelect().Model((*model.Profile)(nil)).Count(ctx)
-	if err != nil || n > 0 {
+	var existing []model.Profile
+	if err := a.DB.NewSelect().Model(&existing).Scan(ctx); err != nil {
 		return err
+	}
+	// profiles saved before re-encoding existed get its defaults
+	for _, p := range existing {
+		if p.Config.Encode.Format != "" {
+			continue
+		}
+		d := DefaultProfileConfig()
+		p.Config.Encode, p.Config.ProcessTiming = d.Encode, d.ProcessTiming
+		if _, err := a.DB.NewUpdate().Model(&p).Column("config").WherePK().Exec(ctx); err != nil {
+			return err
+		}
+	}
+	if len(existing) > 0 {
+		return nil
 	}
 	now := time.Now().UTC()
 	p := &model.Profile{Name: "Default", IsDefault: true, CreatedAt: now, UpdatedAt: now, Config: DefaultProfileConfig()}
-	_, err = a.DB.NewInsert().Model(p).Exec(ctx)
+	_, err := a.DB.NewInsert().Model(p).Exec(ctx)
 	return err
 }
 
@@ -146,5 +165,7 @@ func DefaultProfileConfig() model.ProfileConfig {
 		Upscale: model.UpscaleConfig{
 			Enabled: false, MinWidth: 1400, MaxWidth: 2048, Model: "waifu2x-cunet", Noise: 1, Format: "webp", Quality: 90,
 		},
+		Encode:        model.EncodeConfig{Format: "keep", Preset: "balanced", Grayscale: true, MinSavingsPct: 10, RecycleOriginals: true},
+		ProcessTiming: "background",
 	}
 }

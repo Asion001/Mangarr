@@ -169,6 +169,17 @@ export function ChaptersTable({ seriesId }: { seriesId: number }) {
                                 <Sparkles className="size-3" /> upscaled
                               </Badge>
                             )}
+                            {(c.file.format === "avif" || c.file.format === "jxl") && (
+                              <Badge tone="info" title={c.file.sizeOriginal > c.file.size ? `was ${bytes(c.file.sizeOriginal)}` : undefined}>
+                                {c.file.format}
+                                {c.file.sizeOriginal > c.file.size && ` −${Math.round(100 - (100 * c.file.size) / c.file.sizeOriginal)}%`}
+                              </Badge>
+                            )}
+                            {c.file.processState === "failed" && (
+                              <Badge tone="err" title={c.file.processError}>
+                                processing failed
+                              </Badge>
+                            )}
                           </span>
                         </div>
                       ) : (

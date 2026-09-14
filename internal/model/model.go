@@ -3,6 +3,9 @@
 package model
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
+	"encoding/json"
 	"time"
 
 	"github.com/uptrace/bun"
@@ -64,8 +67,77 @@ type ProfileConfig struct {
 	MinPages int `json:"minPages"`
 	// Upscale settings applied to chapters downloaded with this profile.
 	Upscale UpscaleConfig `json:"upscale"`
+	// Encode re-encodes pages to save space (AVIF, lossless JPEG XL).
+	Encode EncodeConfig `json:"encode"`
+	// ProcessTiming: "background" (default) imports the original and
+	// processes it later; "inline" processes before import.
+	ProcessTiming string `json:"processTiming,omitempty" enum:",background,inline"`
+	// ProcessExisting also processes chapters imported before the processing
+	// settings last changed (otherwise only newer chapters are processed).
+	ProcessExisting bool `json:"processExisting"`
+	// ProcessChangedAt is set by the server when upscale/encode settings change.
+	ProcessChangedAt *time.Time `json:"processChangedAt,omitempty"`
 	// Cleanup overrides; nil fields inherit the global cleanup settings.
 	Cleanup CleanupOverride `json:"cleanup"`
+}
+
+// ProcessParams identifies the processing a chapter file needs under this
+// profile: a short hash of the upscale/encode settings that change the output,
+// or "" when the profile doesn't process files at all. Files are processed
+// again when their stored hash differs.
+func (c ProfileConfig) ProcessParams() string {
+	var parts struct {
+		Upscale *UpscaleConfig `json:"u,omitempty"`
+		Encode  *EncodeConfig  `json:"e,omitempty"`
+	}
+	encoding := c.Encode.Format != "" && c.Encode.Format != "keep"
+	if c.Upscale.Enabled {
+		u := c.Upscale
+		u.UpscalerID = 0 // which worker runs it doesn't change the result
+		if encoding {
+			u.Format, u.Quality = "", 0 // upscaled pages go to the encoder as PNG
+		}
+		parts.Upscale = &u
+	}
+	if encoding {
+		e := c.Encode
+		e.RecycleOriginals = false
+		parts.Encode = &e
+	}
+	if parts.Upscale == nil && parts.Encode == nil {
+		return ""
+	}
+	b, _ := json.Marshal(parts)
+	sum := sha1.Sum(b)
+	return hex.EncodeToString(sum[:8])
+}
+
+// ProcessForce marks a file to be processed again regardless of its hash.
+const ProcessForce = "force"
+
+// Chapter file processing states.
+const (
+	ProcessDone   = "done"
+	ProcessFailed = "failed"
+)
+
+// EncodeConfig re-encodes page images to save storage.
+type EncodeConfig struct {
+	// Format: keep, avif (lossy, much smaller) or jxl (lossless JPEG
+	// recompression, ~20% smaller and reversible).
+	Format string `json:"format" enum:"keep,avif,jxl"`
+	// Preset trades speed for size: max (smallest), balanced, fast.
+	Preset string `json:"preset" enum:"max,balanced,fast"`
+	// Quality overrides the preset (AVIF 1-100; 0 = preset).
+	Quality int `json:"quality"`
+	// Speed overrides the preset (avifenc -s 0-10, cjxl effort 1-9; 0 = preset).
+	Speed int `json:"speed"`
+	// Grayscale encodes black-and-white pages without color (smaller AVIF).
+	Grayscale bool `json:"grayscale"`
+	// MinSavingsPct keeps a page's original unless re-encoding saves at least this much.
+	MinSavingsPct int `json:"minSavingsPct"`
+	// RecycleOriginals moves replaced files to the recycle bin (else they're deleted).
+	RecycleOriginals bool `json:"recycleOriginals"`
 }
 
 type UpscaleConfig struct {
@@ -312,6 +384,16 @@ type ChapterFile struct {
 	UpscaleModel  string    `bun:"upscale_model,notnull" json:"upscaleModel"`
 	SizeBefore    int64     `bun:"size_before,notnull" json:"sizeBefore"`
 	ImportedAt    time.Time `bun:"imported_at,notnull" json:"importedAt"`
+
+	// Background processing state (see internal/processing).
+	ProcessParams   string     `bun:"process_params,notnull" json:"-"`
+	ProcessState    string     `bun:"process_state,notnull" json:"processState,omitempty" enum:",done,failed"`
+	ProcessAttempts int        `bun:"process_attempts,notnull" json:"processAttempts"`
+	ProcessRetryAt  *time.Time `bun:"process_retry_at" json:"processRetryAt,omitempty"`
+	ProcessError    string     `bun:"process_error,notnull" json:"processError,omitempty"`
+	ProcessedAt     *time.Time `bun:"processed_at" json:"processedAt,omitempty"`
+	// SizeOriginal is the size as downloaded, before any processing.
+	SizeOriginal int64 `bun:"size_original,notnull" json:"sizeOriginal"`
 }
 
 // ---- Queue / history / blocklist ---------------------------------------------
@@ -361,6 +443,7 @@ const (
 	HistoryCleaned   = "cleaned"
 	HistoryRestored  = "restored"
 	HistoryUpscaled  = "upscaled"
+	HistoryProcessed = "processed"
 	HistoryUnparsed  = "unparsed"
 	HistoryRetitled  = "renamed"
 	HistoryBlocklist = "blocklisted"

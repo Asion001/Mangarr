@@ -83,7 +83,7 @@ export function SeriesDetail() {
             <Stat label="Chapters" value={`${s.stats.fileCount} / ${s.stats.chapterCount}`} />
             <Stat label="Missing" value={String(s.stats.missingCount)} />
             <Stat label="Cleaned" value={String(s.stats.cleanedCount)} />
-            <Stat label="On disk" value={bytes(s.stats.sizeOnDisk)} />
+            <Stat label="On disk" value={s.stats.spaceSaved > 0 ? `${bytes(s.stats.sizeOnDisk)} (saved ${bytes(s.stats.spaceSaved)})` : bytes(s.stats.sizeOnDisk)} />
           </div>
           {(md.authors?.length || md.artists?.length) && (
             <p className="mt-3 text-sm text-muted">
@@ -116,8 +116,8 @@ export function SeriesDetail() {
             <Button icon={<BookText className="size-4" />} onClick={() => push.mutate({ name: "RefreshMetadata", body: { seriesId: id }, label: "Refreshing metadata" })}>
               Metadata
             </Button>
-            <Button icon={<Sparkles className="size-4" />} onClick={() => push.mutate({ name: "UpscaleExisting", body: { seriesId: id }, label: "Queued upscaling of downloaded chapters" })}>
-              Upscale existing
+            <Button icon={<Sparkles className="size-4" />} onClick={() => push.mutate({ name: "ProcessExisting", body: { seriesId: id }, label: "Downloaded chapters will be processed in the background" })}>
+              Process existing
             </Button>
             <Button icon={<FileSearch className="size-4" />} onClick={() => push.mutate({ name: "DiskScan", body: { seriesId: id }, label: "Scanning files" })}>
               Rescan disk

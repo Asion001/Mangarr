@@ -77,3 +77,43 @@ func TestKomgaRescanAndProgress(t *testing.T) {
 		t.Fatalf("progress: %s", b)
 	}
 }
+
+func TestKomgaVerifyBook(t *testing.T) {
+	status, width := "READY", 1200
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v1/libraries":
+			_, _ = io.WriteString(w, `[{"id":"L1","name":"Manga","root":"/books/manga"}]`)
+		case "/api/v1/series/list":
+			_, _ = io.WriteString(w, `{"content":[{"id":"S1","url":"/books/manga/Other"},{"id":"S2","url":"/books/manga/One Piece"}]}`)
+		case "/api/v1/series/S2/books":
+			_, _ = io.WriteString(w, `{"content":[{"id":"B1","url":"/books/manga/One Piece/One Piece Ch.0001.cbz","media":{"status":"`+status+`","pagesCount":20,"comment":"ERR_1234"}}]}`)
+		case "/api/v1/books/B1/pages":
+			_ = json.NewEncoder(w).Encode([]map[string]any{{"number": 1, "mediaType": "image/avif", "width": width, "height": 1800}})
+		default:
+			t.Errorf("unexpected %s", r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+	impl, _ := modules.Lookup(modules.KindLibrary, "komga")
+	s, _ := modules.DecodeSettings(impl, map[string]any{"url": srv.URL, "apiKey": "admin", "pathMappings": map[string]any{"/data/manga": "/books/manga"}})
+	inst, _ := impl.New(modules.Deps{HTTP: srv.Client()}, s)
+	v := inst.(library.Verifier)
+	ctx := context.Background()
+	bc, err := v.VerifyBook(ctx, "/data/manga/One Piece/One Piece Ch.0001.cbz")
+	if err != nil || !bc.Found || bc.Problem != "" || bc.PageWidth != 1200 || bc.Pages != 20 {
+		t.Fatalf("ready book: %+v %v", bc, err)
+	}
+	width = 0
+	if bc, _ = v.VerifyBook(ctx, "/data/manga/One Piece/One Piece Ch.0001.cbz"); bc.Problem == "" {
+		t.Fatal("pages without dimensions must be reported")
+	}
+	status = "ERROR"
+	if bc, _ = v.VerifyBook(ctx, "/data/manga/One Piece/One Piece Ch.0001.cbz"); !strings.Contains(bc.Problem, "ERR_1234") {
+		t.Fatalf("error status: %+v", bc)
+	}
+	if bc, _ = v.VerifyBook(ctx, "/data/manga/One Piece/missing.cbz"); bc.Found {
+		t.Fatal("unknown file must not be found")
+	}
+}

@@ -44,7 +44,11 @@ mangarr tells to rescan after every change.
   period, ignore readers who never opened a series, `keep` tag, dry run,
   recycle bin, restore.
 - **Page upscaling** (off by default) — pages narrower than a threshold are
-  upscaled 2×–4× and saved as WebP; existing chapters can be re-processed.
+  upscaled 2×–4×; works on already downloaded chapters too.
+- **Re-encoding to save space** (off by default) — AVIF (typically 40–70%
+  smaller) or lossless JPEG XL (~20%, reversible). Chapters are readable right
+  away and processed in the background, at the same path; mangarr checks that
+  Komga can read the new format before continuing.
 - SQLite by default, **PostgreSQL** optional. Single ~30 MB static binary
   (distroless image) with the web UI embedded. OpenAPI docs at `/api/docs`.
 

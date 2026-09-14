@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/Asion001/mangarr/internal/app"
 	"github.com/Asion001/mangarr/internal/config"
 	"github.com/Asion001/mangarr/internal/envcfg"
+	"github.com/Asion001/mangarr/internal/imageenc"
 	"github.com/Asion001/mangarr/internal/logging"
 	_ "github.com/Asion001/mangarr/internal/modules/all"
 	"github.com/Asion001/mangarr/internal/version"
@@ -37,6 +39,8 @@ func main() {
 			return
 		case "healthcheck":
 			os.Exit(healthcheck())
+		case "bench":
+			os.Exit(bench(os.Args[2:]))
 		case "env":
 			if len(os.Args) > 2 && os.Args[2] == "--markdown" {
 				envcfg.WriteMarkdown(os.Stdout)
@@ -160,6 +164,30 @@ func healthcheck() int {
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Get("http://127.0.0.1" + addr + base + "/ping")
 	if err != nil || resp.StatusCode != 200 {
+		return 1
+	}
+	return 0
+}
+
+// bench runs `mangarr bench encode <chapter.cbz> [pages]`.
+func bench(args []string) int {
+	if len(args) < 2 || args[0] != "encode" {
+		fmt.Fprintln(os.Stderr, "usage: mangarr bench encode <chapter.cbz> [max pages]")
+		return 2
+	}
+	maxPages := 10
+	if len(args) > 2 {
+		if n, err := strconv.Atoi(args[2]); err == nil {
+			maxPages = n
+		}
+	}
+	enc := imageenc.Detect()
+	formats := []string{"avif"}
+	if _, ok := enc.Engine("jxl"); ok {
+		formats = append(formats, "jxl")
+	}
+	if err := enc.Bench(context.Background(), args[1], formats, maxPages, os.Stdout); err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 	return 0

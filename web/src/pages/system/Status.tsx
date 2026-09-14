@@ -66,6 +66,7 @@ export function StatusPage() {
           </dl>
         </Card>
       )}
+      <ProcessingCard />
       <CacheCard />
       <Card title="Recent commands">
         <Table className="border-0">
@@ -157,3 +158,52 @@ function CacheCard() {
 }
 
 const imageLabels: Record<string, string> = { thumbs: "Search thumbnails (disk)", assets: "Extension icons (disk)", covers: "Series covers (disk)" };
+
+function ProcessingCard() {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const { data } = useQuery({ queryKey: ["processing"], queryFn: () => unwrap(api.GET("/api/v1/processing")) });
+  if (!data) return null;
+  const resume = async () => {
+    try {
+      await unwrap(api.POST("/api/v1/processing/resume"));
+      qc.invalidateQueries({ queryKey: ["processing"] });
+      toast.success("Re-encoding resumed");
+    } catch (e) {
+      toast.fromError(e);
+    }
+  };
+  return (
+    <Card title="Processing" className="mb-6">
+      {data.state.encodeBlocked && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-err/40 bg-err/10 p-2 text-sm">
+          <span className="flex-1">Re-encoding is paused: {data.state.reason}</span>
+          <Button size="sm" onClick={resume}>
+            Resume
+          </Button>
+        </div>
+      )}
+      <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+        <div>
+          <div className="text-muted">Space saved</div>
+          <div className="font-medium">{bytes(data.spaceSaved)}</div>
+        </div>
+        <div>
+          <div className="text-muted">Processed</div>
+          <div className="font-medium">{data.processed}</div>
+        </div>
+        <div>
+          <div className="text-muted">Waiting</div>
+          <div className="font-medium">{data.pending}</div>
+        </div>
+        <div>
+          <div className="text-muted">Gave up</div>
+          <div className="font-medium">{data.failed}</div>
+        </div>
+      </div>
+      <p className="mt-3 text-xs text-muted">
+        Encoders: {data.engines.map((e) => `${e.name} (${e.format}${e.slow ? ", slow" : ""})`).join(", ") || "none"}
+      </p>
+    </Card>
+  );
+}

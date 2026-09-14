@@ -6,6 +6,8 @@ import (
 	"image/color"
 	"image/jpeg"
 	"image/png"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -43,5 +45,23 @@ func TestDetect(t *testing.T) {
 	truncated := encode(t, "png", 40, 60)[:20]
 	if _, err := Detect(truncated); err == nil {
 		t.Fatal("expected error for truncated png")
+	}
+}
+
+func TestModernFormats(t *testing.T) {
+	for file, want := range map[string]Info{
+		"gray.avif":          {Format: "avif", Width: 300, Height: 450},
+		"color.avif":         {Format: "avif", Width: 300, Height: 450},
+		"page.jxl":           {Format: "jxl", Width: 300, Height: 450},
+		"page-from-jpeg.jxl": {Format: "jxl", Width: 300, Height: 450}, // container with jbrd + jxlc
+	} {
+		data, err := os.ReadFile(filepath.Join("testdata", file))
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := Detect(data)
+		if err != nil || got != want {
+			t.Errorf("%s: got %+v, %v; want %+v", file, got, err, want)
+		}
 	}
 }

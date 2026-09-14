@@ -15,6 +15,7 @@ const map: Record<string, string[][]> = {
   // catalog set changed: cached searches/browses may include removed catalogs
   catalogs: [["sources"], ["catalogs"], ["source-search"], ["browse"], ["source-manga"]],
   cache: [["cache"], ["source-search"], ["browse"], ["source-manga"]],
+  processing: [["processing"], ["health"]],
   settings: [["settings"]],
   readers: [["readers"], ["series"]],
   rootfolder: [["rootfolders"]],

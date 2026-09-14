@@ -54,6 +54,8 @@ type Scenario struct {
 	Searches    int
 	SearchDelay time.Duration
 	SearchErr   map[string]error
+	// PageNoise fills pages with gray noise (large PNGs, like real scans).
+	PageNoise bool
 	// PageDelay slows down every page fetch (honoring cancellation).
 	PageDelay time.Duration
 	// ThumbErr makes thumbnail requests fail; Thumbs counts them.
@@ -191,6 +193,7 @@ func (m *Module) FetchPage(ctx context.Context, p source.Page) (io.ReadCloser, s
 	m.sc.Fetches++
 	w := m.sc.PageWidth
 	delay := m.sc.PageDelay
+	noise := m.sc.PageNoise
 	m.sc.mu.Unlock()
 	if delay > 0 {
 		select {
@@ -201,6 +204,19 @@ func (m *Module) FetchPage(ctx context.Context, p source.Page) (io.ReadCloser, s
 	}
 	img := image.NewRGBA(image.Rect(0, 0, w, w*3/2))
 	img.Set(0, 0, color.Black)
+	if noise {
+		seed := uint32(p.Index*7919 + 17)
+		for y := 0; y < w*3/2; y++ {
+			for x := 0; x < w; x++ {
+				seed = seed*1664525 + 1013904223
+				v := uint8(128 + int(seed>>24)%64)
+				if (x/8+y/8)%5 == 0 {
+					v = 20
+				}
+				img.Set(x, y, color.RGBA{v, v, v, 255})
+			}
+		}
+	}
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, img); err != nil {
 		return nil, "", err

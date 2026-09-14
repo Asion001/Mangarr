@@ -248,6 +248,7 @@ func (s *Server) registerSettings() {
 			p.ID = 0
 			now := time.Now().UTC()
 			p.CreatedAt, p.UpdatedAt = now, now
+			p.Config.ProcessChangedAt = &now
 			if err := validateProfile(&p); err != nil {
 				return nil, huma.Error400BadRequest(err.Error())
 			}
@@ -274,6 +275,12 @@ func (s *Server) registerSettings() {
 			}
 			p := in.Body
 			p.ID, p.CreatedAt, p.UpdatedAt = in.ID, stored.CreatedAt, time.Now().UTC()
+			// remember when processing settings changed: by default only chapters
+			// imported afterwards are processed (unless processExisting)
+			p.Config.ProcessChangedAt = stored.Config.ProcessChangedAt
+			if p.Config.ProcessParams() != stored.Config.ProcessParams() {
+				p.Config.ProcessChangedAt = &p.UpdatedAt
+			}
 			if err := validateProfile(&p); err != nil {
 				return nil, huma.Error400BadRequest(err.Error())
 			}
@@ -290,8 +297,28 @@ func (s *Server) registerSettings() {
 				return nil, toHTTPError(err)
 			}
 			s.app.Bus.Changed("profile", "updated", p.ID)
+			s.app.PushProcessBacklog("profile-updated")
 			return &struct{ Body model.Profile }{p}, nil
 		})
+	huma.Register(s.api, huma.Operation{OperationID: "profiles-process-estimate", Method: http.MethodGet, Path: "/api/v1/profiles/{id}/process-estimate", Tags: ptags,
+		Summary: "How many existing chapters of this profile's series would be processed"},
+		func(ctx context.Context, in *IDPath) (*struct{ Body ProcessEstimate }, error) {
+			var p model.Profile
+			if err := s.app.DB.NewSelect().Model(&p).Where("id = ?", in.ID).Scan(ctx); err != nil {
+				return nil, huma.Error404NotFound("profile not found")
+			}
+			var est ProcessEstimate
+			params := p.Config.ProcessParams()
+			if params == "" {
+				return &struct{ Body ProcessEstimate }{est}, nil
+			}
+			err := s.app.DB.NewSelect().Model((*model.ChapterFile)(nil)).
+				ColumnExpr("COUNT(*) AS files, COALESCE(SUM(size), 0) AS bytes").
+				Where("process_params <> ?", params).
+				Where("series_id IN (SELECT id FROM series WHERE profile_id = ?)", p.ID).Scan(ctx, &est)
+			return &struct{ Body ProcessEstimate }{est}, toHTTPError(err)
+		})
+
 	huma.Register(s.api, huma.Operation{OperationID: "profiles-delete", Method: http.MethodDelete, Path: "/api/v1/profiles/{id}", Tags: ptags},
 		func(ctx context.Context, in *IDPath) (*struct{}, error) {
 			n, _ := s.app.DB.NewSelect().Model((*model.Series)(nil)).Where("profile_id = ?", in.ID).Count(ctx)
@@ -308,6 +335,12 @@ func (s *Server) registerSettings() {
 		})
 }
 
+// ProcessEstimate counts chapter files not processed with a profile's settings.
+type ProcessEstimate struct {
+	Files int   `json:"files" bun:"files"`
+	Bytes int64 `json:"bytes" bun:"bytes"`
+}
+
 // clearOtherDefaults keeps exactly one default profile.
 func clearOtherDefaults(ctx context.Context, tx bun.Tx, p *model.Profile) error {
 	if !p.IsDefault {
@@ -321,6 +354,19 @@ func validateProfile(p *model.Profile) error {
 	p.Name = strings.TrimSpace(p.Name)
 	if p.Name == "" {
 		return badRequest("name is required")
+	}
+	switch p.Config.Encode.Format {
+	case "":
+		p.Config.Encode.Format = "keep"
+	case "keep", "avif", "jxl":
+	default:
+		return badRequest("encode format must be keep, avif or jxl")
+	}
+	if p.Config.Encode.Preset == "" {
+		p.Config.Encode.Preset = "balanced"
+	}
+	if p.Config.ProcessTiming == "" {
+		p.Config.ProcessTiming = "background"
 	}
 	if p.Config.PreferredScanlators == nil {
 		p.Config.PreferredScanlators = []string{}

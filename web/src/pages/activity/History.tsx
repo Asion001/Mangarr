@@ -16,6 +16,7 @@ const tone: Record<string, "ok" | "warn" | "err" | "info" | "default" | "accent"
   cleaned: "warn",
   restored: "info",
   upscaled: "accent",
+  processed: "accent",
   unparsed: "warn",
 };
 

@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Trash2 } from "lucide-react";
-import { api, unwrap, type Profile } from "../../api/client";
-import { useModules, useProfiles } from "../../api/queries";
-import { Badge, Button, Card, Confirm, Field, IconButton, Input, Loading, Modal, PageHeader, Select, Switch, TagInput } from "../../components/ui";
+import { api, apiUrl, unwrap, type Profile } from "../../api/client";
+import { useChapters, useModules, useProfiles, useSeriesList } from "../../api/queries";
+import { Badge, Button, Card, Confirm, ErrorBox, Field, IconButton, Input, Loading, Modal, PageHeader, Select, Switch, TagInput } from "../../components/ui";
+import { bytes } from "../../lib/format";
 import { useToast } from "../../lib/toast";
 
 type Cfg = Profile["config"];
@@ -14,7 +15,24 @@ const emptyConfig: Cfg = {
   allowUpgrades: false,
   minPages: 0,
   upscale: { enabled: false, upscalerId: 0, minWidth: 1400, maxWidth: 2048, model: "waifu2x-cunet", noise: 1, format: "webp", quality: 90 },
+  encode: { format: "keep", preset: "balanced", quality: 0, speed: 0, grayscale: true, minSavingsPct: 10, recycleOriginals: true },
+  processTiming: "background",
+  processExisting: false,
   cleanup: {},
+};
+
+// reader support for re-encoded pages (see docs/setup.md)
+const compat: Record<string, { yes: string[]; no: string[]; note?: string }> = {
+  avif: {
+    yes: ["Mihon 0.17+", "Tachimanga", "Panels (iOS 17+)", "Paperback (iOS 16+)", "Komga (official amd64/arm64 image)", "Kavita"],
+    no: ["KOReader"],
+    note: "Chunky works through Komga's OPDS (Komga converts pages to JPEG). 32-bit ARM Komga can't read AVIF.",
+  },
+  jxl: {
+    yes: ["Mihon 0.17+", "Tachimanga", "Panels (iOS 17+)", "Komga (official amd64/arm64 image)"],
+    no: ["Kavita", "KOReader"],
+    note: "Lossless: JPEG pages can be restored bit for bit.",
+  },
 };
 
 export function ProfilesPage() {
@@ -76,6 +94,7 @@ export function ProfilesPage() {
             <div className="flex flex-wrap gap-1.5 text-xs">
               <Badge tone={p.config.allowUpgrades ? "info" : "default"}>upgrades {p.config.allowUpgrades ? "on" : "off"}</Badge>
               <Badge tone={p.config.upscale.enabled ? "accent" : "default"}>upscale {p.config.upscale.enabled ? `< ${p.config.upscale.minWidth}px` : "off"}</Badge>
+              {p.config.encode?.format && p.config.encode.format !== "keep" && <Badge tone="accent">re-encode {p.config.encode.format}</Badge>}
               {p.config.preferredScanlators?.length ? <Badge>prefers {p.config.preferredScanlators.join(", ")}</Badge> : null}
               {p.config.blockedScanlators?.length ? <Badge tone="err">blocks {p.config.blockedScanlators.join(", ")}</Badge> : null}
               {p.config.cleanup?.enabled !== undefined && <Badge tone="warn">cleanup {p.config.cleanup.enabled ? "on" : "off"}</Badge>}
@@ -93,7 +112,12 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
   const qc = useQueryClient();
   const toast = useToast();
   const { data: upscalers } = useModules("upscale");
-  const [p, setP] = useState<Profile>(() => ({ ...profile, config: { ...emptyConfig, ...profile.config, upscale: { ...emptyConfig.upscale, ...profile.config.upscale } } }));
+  const [p, setP] = useState<Profile>(() => ({
+    ...profile,
+    config: { ...emptyConfig, ...profile.config, upscale: { ...emptyConfig.upscale, ...profile.config.upscale }, encode: { ...emptyConfig.encode, ...profile.config.encode } },
+  }));
+  const [previewing, setPreviewing] = useState(false);
+  const [applyTo, setApplyTo] = useState<{ id: number; files: number; bytes: number } | null>(null);
   const [saving, setSaving] = useState(false);
   const cfg = p.config;
   const setCfg = (c: Partial<Cfg>) => setP({ ...p, config: { ...cfg, ...c } });
@@ -107,13 +131,26 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
     retry: false,
   });
 
+  const enc = cfg.encode;
+  const setEnc = (e: Partial<Cfg["encode"]>) => setCfg({ encode: { ...enc, ...e } });
+  const processing = up.enabled || (enc.format && enc.format !== "keep");
+  const changedProcessing = JSON.stringify([profile.config.upscale, profile.config.encode]) !== JSON.stringify([cfg.upscale, cfg.encode]);
+
   const save = async () => {
     setSaving(true);
     try {
-      if (p.id) await unwrap(api.PUT("/api/v1/profiles/{id}", { params: { path: { id: p.id } }, body: p }));
-      else await unwrap(api.POST("/api/v1/profiles", { body: p }));
+      const saved = p.id
+        ? await unwrap(api.PUT("/api/v1/profiles/{id}", { params: { path: { id: p.id } }, body: p }))
+        : await unwrap(api.POST("/api/v1/profiles", { body: p }));
       qc.invalidateQueries({ queryKey: ["profiles"] });
       toast.success("Profile saved");
+      if (processing && changedProcessing && !cfg.processExisting && p.id) {
+        const est = await unwrap(api.GET("/api/v1/profiles/{id}/process-estimate", { params: { path: { id: saved.id } } }));
+        if (est.files > 0) {
+          setApplyTo({ id: saved.id, files: est.files, bytes: est.bytes });
+          return;
+        }
+      }
       onClose();
     } catch (e) {
       toast.fromError(e);
@@ -161,6 +198,13 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
           </Field>
         </div>
 
+        <h3 className="font-semibold">Processing</h3>
+        <Field label="When" help="Background: chapters are readable right away and processed later (e.g. at night, see Settings → Schedule).">
+          <Select value={cfg.processTiming || "background"} onChange={(e) => setCfg({ processTiming: e.target.value as Cfg["processTiming"] })}>
+            <option value="background">In the background, after import</option>
+            <option value="inline">Before import (slower to appear)</option>
+          </Select>
+        </Field>
         <h3 className="font-semibold">Upscaling</h3>
         <Switch checked={up.enabled} onChange={(v) => setUp({ enabled: v })} label="Upscale small pages" />
         {up.enabled && (
@@ -206,6 +250,64 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
           </div>
         )}
 
+        <h3 className="font-semibold">Re-encoding to save space</h3>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field label="Format">
+            <Select value={enc.format} onChange={(e) => setEnc({ format: e.target.value as Cfg["encode"]["format"] })}>
+              <option value="keep">Keep original pages</option>
+              <option value="avif">AVIF (lossy, typically 40-70% smaller)</option>
+              <option value="jxl">JPEG XL lossless (~20% smaller JPEGs, reversible)</option>
+            </Select>
+          </Field>
+          {enc.format !== "keep" && (
+            <Field label="Preset" help="Max compression is much slower; try Preview or `mangarr bench encode` first.">
+              <Select value={enc.preset} onChange={(e) => setEnc({ preset: e.target.value as Cfg["encode"]["preset"] })}>
+                <option value="fast">Fast</option>
+                <option value="balanced">Balanced</option>
+                <option value="max">Maximum compression</option>
+              </Select>
+            </Field>
+          )}
+        </div>
+        {enc.format !== "keep" && compat[enc.format] && (
+          <div className="rounded-md border border-border bg-panel-2 p-3 text-xs">
+            <div>
+              <span className="text-ok">Reads {enc.format.toUpperCase()}:</span> {compat[enc.format].yes.join(", ")}
+            </div>
+            <div className="mt-1">
+              <span className="text-err">Can't:</span> {compat[enc.format].no.join(", ")}
+            </div>
+            {compat[enc.format].note && <div className="mt-1 text-muted">{compat[enc.format].note}</div>}
+            <div className="mt-1 text-muted">After the first re-encoded chapter mangarr asks Komga whether it could read it, and pauses re-encoding if not.</div>
+          </div>
+        )}
+        {enc.format !== "keep" && (
+          <div className="grid gap-4 md:grid-cols-2">
+            {enc.format === "avif" && (
+              <Field label="Quality" help="0 = preset (fast 60, balanced 55, max 48)">
+                <Input type="number" min={0} max={100} value={enc.quality} onChange={(e) => setEnc({ quality: Number(e.target.value) })} />
+              </Field>
+            )}
+            <Field label="Minimum saving per page (%)" help="Pages that wouldn't shrink this much stay as they are">
+              <Input type="number" min={0} max={90} value={enc.minSavingsPct} onChange={(e) => setEnc({ minSavingsPct: Number(e.target.value) })} />
+            </Field>
+            {enc.format === "avif" && <Switch checked={enc.grayscale} onChange={(v) => setEnc({ grayscale: v })} label="Encode black-and-white pages without color (smaller)" />}
+            <Switch checked={enc.recycleOriginals} onChange={(v) => setEnc({ recycleOriginals: v })} label="Keep originals in the recycle bin for a while" />
+            <div className="md:col-span-2">
+              <Button size="sm" onClick={() => setPreviewing(true)}>
+                Preview on a chapter…
+              </Button>
+            </div>
+          </div>
+        )}
+        {processing && (
+          <Switch
+            checked={cfg.processExisting}
+            onChange={(v) => setCfg({ processExisting: v })}
+            label="Also process chapters downloaded before these settings changed"
+          />
+        )}
+
         <h3 className="font-semibold">Cleanup overrides</h3>
         <div className="grid gap-4 md:grid-cols-3">
           <Field label="Cleanup">
@@ -234,6 +336,96 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
           </Field>
         </div>
       </div>
+      {previewing && <EncodePreview encode={enc} onClose={() => setPreviewing(false)} />}
+      <Confirm
+        open={!!applyTo}
+        title="Process existing chapters?"
+        confirmLabel="Process them"
+        message={applyTo ? `${applyTo.files} chapters (${bytes(applyTo.bytes)}) already downloaded with this profile weren't processed with these settings. Process them in the background too? New chapters are processed automatically either way.` : ""}
+        onConfirm={async () => {
+          if (!applyTo) return;
+          try {
+            await unwrap(api.PUT("/api/v1/profiles/{id}", { params: { path: { id: applyTo.id } }, body: { ...p, id: applyTo.id, config: { ...cfg, processExisting: true } } }));
+            qc.invalidateQueries({ queryKey: ["profiles"] });
+            toast.success("Existing chapters will be processed in the background");
+          } catch (e) {
+            toast.fromError(e);
+          }
+          setApplyTo(null);
+          onClose();
+        }}
+        onClose={() => (setApplyTo(null), onClose())}
+      />
+    </Modal>
+  );
+}
+
+/** EncodePreview re-encodes three pages of a chapter with the current settings. */
+function EncodePreview({ encode, onClose }: { encode: Cfg["encode"]; onClose: () => void }) {
+  const { data: series } = useSeriesList();
+  const [seriesId, setSeriesId] = useState(0);
+  const { data: chapters } = useChapters(seriesId);
+  const withFiles = (chapters ?? []).filter((c) => c.file);
+  const [chapterId, setChapterId] = useState(0);
+  const run = useMutation({
+    mutationFn: () => unwrap(api.POST("/api/v1/processing/preview", { body: { chapterId: chapterId || withFiles[0]?.id, encode } })),
+  });
+  const res = run.data;
+  const img = (i: number, v: "original" | "encoded") => apiUrl(`api/v1/processing/preview/${res!.token}/${i}/${v}`);
+  return (
+    <Modal open onClose={onClose} title={`Preview ${encode.format.toUpperCase()} (${encode.preset})`} size="xl">
+      <div className="mb-4 flex flex-wrap items-end gap-2">
+        <Field label="Series" className="min-w-48 flex-1">
+          <Select value={seriesId} onChange={(e) => (setSeriesId(Number(e.target.value)), setChapterId(0))}>
+            <option value={0}>Pick a series…</option>
+            {series?.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.title}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Chapter" className="w-40">
+          <Select value={chapterId || withFiles[0]?.id || 0} onChange={(e) => setChapterId(Number(e.target.value))}>
+            {withFiles.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.number}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Button variant="primary" disabled={!withFiles.length} loading={run.isPending} onClick={() => run.mutate()}>
+          Encode 3 pages
+        </Button>
+      </div>
+      {run.error && <ErrorBox error={run.error} />}
+      {res && (
+        <>
+          <p className="mb-3 text-sm text-muted">
+            {res.engine} · {res.seconds.toFixed(1)} s ·{" "}
+            <a className="text-accent-2 hover:underline" href={apiUrl(`api/v1/processing/preview/${res.token}/sample.cbz`)}>
+              download sample CBZ
+            </a>{" "}
+            to check it in your reader app
+          </p>
+          <div className="flex flex-col gap-4">
+            {res.pages.map((pg) => (
+              <div key={pg.index} className="grid grid-cols-2 gap-2">
+                {(["original", "encoded"] as const).map((v) => (
+                  <figure key={v} className="flex flex-col gap-1">
+                    <a href={img(pg.index, v)} target="_blank" rel="noreferrer">
+                      <img src={img(pg.index, v)} alt={`${v} ${pg.name}`} className="w-full rounded border border-border" loading="lazy" />
+                    </a>
+                    <figcaption className="text-xs text-muted">
+                      {v === "original" ? `${pg.originalFormat} · ${bytes(pg.originalSize)}` : `${pg.encodedFormat} · ${bytes(pg.encodedSize)} (${Math.round(100 - (100 * pg.encodedSize) / Math.max(pg.originalSize, 1))}% smaller)`}
+                    </figcaption>
+                  </figure>
+                ))}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </Modal>
   );
 }

@@ -131,9 +131,11 @@ func TestReprocessWithNothingToDo(t *testing.T) {
 			return c >= n
 		}
 	}
-	// 1. upscaling disabled on the profile
+	// 1. processing disabled on the profile: nothing is queued
 	e.runCommand(t, "UpscaleExisting", map[string]any{"seriesId": ser.ID, "force": true})
-	waitFor(t, 20*time.Second, "skipped reprocess", reprocessDone(1))
+	if n, _ := e.App.DB.NewSelect().Model((*model.DownloadJob)(nil)).Where("kind = ?", model.JobKindReprocess).Count(e.Ctx); n != 0 {
+		t.Fatalf("%d reprocess jobs for a profile without processing", n)
+	}
 
 	// 2. enabled, but pages are already wider than MinWidth
 	var prof model.Profile
@@ -143,15 +145,64 @@ func TestReprocessWithNothingToDo(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.runCommand(t, "UpscaleExisting", map[string]any{"seriesId": ser.ID, "force": true})
-	waitFor(t, 20*time.Second, "no-op reprocess", reprocessDone(2))
+	waitFor(t, 20*time.Second, "no-op reprocess", reprocessDone(1))
 
 	after := e.chapterFiles(t, ser.ID)["1"]
 	if after.ID != before.ID || after.SHA256 != before.SHA256 || after.Upscaled {
 		t.Fatalf("file was rewritten: before %+v after %+v", before, after)
 	}
+	if after.ProcessState != model.ProcessDone {
+		t.Fatalf("file should be marked processed: %+v", after)
+	}
 	var failed int
 	failed, _ = e.App.DB.NewSelect().Model((*model.DownloadJob)(nil)).Where("status = ?", model.JobFailed).Count(e.Ctx)
 	if failed != 0 {
 		t.Fatalf("%d failed jobs", failed)
+	}
+}
+
+// TestBackgroundAVIF imports originals first, then re-encodes them to AVIF
+// in the background at the same path.
+func TestBackgroundAVIF(t *testing.T) {
+	dsn := dbtest.DSNs(t)["sqlite"]
+	sc := fakesource.NewScenario("avif")
+	sc.PageWidth, sc.PageNoise = 240, true
+	sc.Sources = []source.SourceInfo{{ID: "A", Name: "Source A", Lang: "en"}}
+	sc.AddManga(&fakesource.Manga{SourceID: "A", URL: "/m", Title: "Encoded", Status: source.StatusOngoing,
+		Chapters: []fakesource.Chapter{{URL: "/c1", Name: "Chapter 1", Number: 1, Uploaded: time.Now(), Pages: 3}}})
+	e := newTestApp(t, dsn)
+	mod := e.addFakeModule(t, "avif")
+	var prof model.Profile
+	_ = e.App.DB.NewSelect().Model(&prof).Where("is_default = ?", true).Scan(e.Ctx)
+	prof.Config.Encode = model.EncodeConfig{Format: "avif", Preset: "fast", Grayscale: true, MinSavingsPct: 5, RecycleOriginals: false}
+	prof.Config.ProcessTiming = "background"
+	if _, err := e.App.DB.NewUpdate().Model(&prof).WherePK().Exec(e.Ctx); err != nil {
+		t.Fatal(err)
+	}
+	ser, err := e.App.Series.Add(e.Ctx, series.AddRequest{Title: "Encoded", RootFolderID: e.RFID, ProfileID: prof.ID, Monitor: model.MonitorAll, SearchMissing: true,
+		Sources: []series.SourceLink{{ModuleID: mod, SourceID: "A", URL: "/m", SourceName: "Source A", Lang: "en"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.runCommand(t, "RefreshSeries", map[string]any{"seriesId": ser.ID})
+	waitFor(t, 20*time.Second, "download", func() bool { return len(e.chapterFiles(t, ser.ID)) == 1 })
+	orig := e.chapterFiles(t, ser.ID)["1"]
+	if orig.Format != "png" || orig.ProcessState != "" {
+		t.Fatalf("background timing must import the original first: %+v", orig)
+	}
+	e.runCommand(t, "ProcessBacklog", nil)
+	waitFor(t, 60*time.Second, "encoded file", func() bool { return e.chapterFiles(t, ser.ID)["1"].Format == "avif" })
+	f := e.chapterFiles(t, ser.ID)["1"]
+	if f.RelativePath != orig.RelativePath || f.ProcessState != model.ProcessDone || f.SizeOriginal != orig.Size || f.Size >= orig.Size {
+		t.Fatalf("encoded file: %+v (original %+v)", f, orig)
+	}
+	pages, _, err := cbz.Read(filepath.Join(e.Root, "Encoded", f.RelativePath))
+	if err != nil || len(pages) != 3 || filepath.Ext(pages[0].Name) != ".avif" {
+		t.Fatalf("cbz pages: %v %v", pages, err)
+	}
+	// nothing is queued again for the same settings
+	e.runCommand(t, "ProcessBacklog", nil)
+	if n, _ := e.App.DB.NewSelect().Model((*model.DownloadJob)(nil)).Where("kind = ? AND status = ?", model.JobKindReprocess, model.JobQueued).Count(e.Ctx); n != 0 {
+		t.Fatalf("%d jobs queued again", n)
 	}
 }

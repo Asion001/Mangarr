@@ -40,3 +40,22 @@ type ProgressReader interface {
 	// user has started or finished.
 	ReadProgress(ctx context.Context, acc Account, localRoots []string) ([]BookProgress, error)
 }
+
+// BookCheck reports how a library server analyzed one of our files.
+type BookCheck struct {
+	// Found is false while the server hasn't picked up the file yet.
+	Found bool `json:"found"`
+	// Status is the server's analysis status (Komga: READY, ERROR, UNSUPPORTED, …).
+	Status string `json:"status"`
+	Pages  int    `json:"pages"`
+	// PageWidth is the width the server read for the first page (0 = unknown).
+	PageWidth int `json:"pageWidth"`
+	// Problem describes why the file isn't readable ("" when fine).
+	Problem string `json:"problem,omitempty"`
+}
+
+// Verifier is implemented by servers that can report whether they could read
+// a file (used after switching to new image formats like AVIF).
+type Verifier interface {
+	VerifyBook(ctx context.Context, localPath string) (BookCheck, error)
+}

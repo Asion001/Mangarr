@@ -55,5 +55,5 @@ func (a *App) wireReaders(ctx context.Context) error {
 	if err := a.Scheduler.Add(ctx, jobs.Task{Name: "SyncReadProgress", Interval: interval}); err != nil {
 		return err
 	}
-	return a.wireUpscale(ctx)
+	return a.wireProcess(ctx)
 }

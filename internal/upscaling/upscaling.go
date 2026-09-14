@@ -148,5 +148,3 @@ func (p *Processor) Process(ctx context.Context, cfg model.UpscaleConfig, pages 
 	}
 	return out, true, mdl.Name, nil
 }
-
-var _ downloads.Processor = (*Processor)(nil)

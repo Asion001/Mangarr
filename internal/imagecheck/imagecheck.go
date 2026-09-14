@@ -65,6 +65,8 @@ func Detect(data []byte) (Info, error) {
 		}
 	case "avif":
 		info.Width, info.Height = avifSize(data)
+	case "jxl":
+		info.Width, info.Height = jxlSize(data)
 	case "bmp":
 		if len(data) >= 26 {
 			info.Width = int(int32(binary.LittleEndian.Uint32(data[18:22])))
