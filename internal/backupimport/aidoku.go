@@ -149,7 +149,7 @@ func aidokuSourceName(id string) string {
 }
 
 func aidokuFromTree(root tree) (*Backup, error) {
-	b := &Backup{Format: FormatAidoku, Sources: map[string]string{}, Categories: []string{}, Entries: []Entry{}}
+	b := &Backup{Format: FormatAidoku, Sources: map[string]string{}, Categories: []string{}, Entries: []BackupManga{}}
 	if t := root.time("date"); t != nil {
 		b.CreatedAt = *t
 	}
@@ -225,7 +225,7 @@ func aidokuFromTree(root tree) (*Backup, error) {
 		}
 		k := key{l.str("sourceId"), l.str("mangaId")}
 		m := manga[k]
-		e := Entry{SourceID: k.source, SourceName: b.Sources[k.source], URL: k.manga, Favorite: true, Status: "unknown",
+		e := BackupManga{SourceID: k.source, SourceName: b.Sources[k.source], URL: k.manga, Favorite: true, Status: "unknown",
 			Categories: l.strings("categories"), Trackers: trackers[k]}
 		if e.SourceName == "" {
 			e.SourceName = aidokuSourceName(k.source)
@@ -242,7 +242,7 @@ func aidokuFromTree(root tree) (*Backup, error) {
 			}
 		}
 		for _, c := range chapters[k] {
-			ch := Chapter{URL: c.str("id"), Name: c.str("title"), Scanlator: c.str("scanlator"), Lang: c.str("lang"), Number: -1}
+			ch := BackupChapter{URL: c.str("id"), Name: c.str("title"), Scanlator: c.str("scanlator"), Lang: c.str("lang"), Number: -1}
 			if n, ok := c.num("chapter"); ok {
 				ch.Number = n
 			}

@@ -50,6 +50,10 @@ mangarr tells to rescan after every change.
   smaller) or lossless JPEG XL (~20%, reversible). Chapters are readable right
   away and processed in the background, at the same path; mangarr checks that
   Komga can read the new format before continuing.
+- **Import from Mihon, Tachiyomi, Suwayomi or Aidoku** — upload a backup,
+  review how each manga maps to your catalogs (exact for Keiyoushi sources,
+  missing extensions installed for you), and import it with read chapters,
+  categories and trackers; monitoring starts after the last chapter you read.
 - SQLite by default, **PostgreSQL** optional. Single ~30 MB static binary
   (distroless image) with the web UI embedded. OpenAPI docs at `/api/docs`.
 

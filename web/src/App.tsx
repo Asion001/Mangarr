@@ -28,6 +28,8 @@ import { StatusPage } from "./pages/system/Status";
 import { TasksPage } from "./pages/system/Tasks";
 import { BackupsPage } from "./pages/system/Backups";
 import { LogsPage } from "./pages/system/Logs";
+import { ImportsPage } from "./pages/import/Imports";
+import { ImportDetailPage } from "./pages/import/ImportDetail";
 
 export function App() {
   const { data: auth, isLoading } = useAuthStatus();
@@ -66,6 +68,8 @@ export function App() {
         <Route path="add" element={<AddSearchStep />} />
         <Route path="add/:moduleId/:metaId/sources" element={<AddSourcesStep />} />
         <Route path="add/:moduleId/:metaId/options" element={<AddOptionsStep />} />
+        <Route path="import" element={<ImportsPage />} />
+        <Route path="import/:id" element={<ImportDetailPage />} />
         <Route path="activity" element={<Navigate to="/activity/queue" replace />} />
         <Route path="activity/queue" element={<QueuePage />} />
         <Route path="activity/history" element={<HistoryPage />} />

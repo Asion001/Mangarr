@@ -141,6 +141,12 @@ export function AddSearchStep() {
           </form>
         </div>
       </Card>
+      <p className="mt-3 text-sm text-muted">
+        Coming from Mihon, Tachiyomi, Suwayomi or Aidoku?{" "}
+        <Link to="/import" className="text-accent-2 hover:underline">
+          Import your library from a backup
+        </Link>
+      </p>
     </>
   );
 }

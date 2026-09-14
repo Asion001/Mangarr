@@ -19,7 +19,7 @@ const (
 	FormatAidoku = "aidoku" // Aidoku (.aib)
 )
 
-// Tracker names used in Entry.Trackers (match metadata provider names).
+// Tracker names used in BackupManga.Trackers (match metadata provider names).
 const (
 	TrackerAniList      = "anilist"
 	TrackerMAL          = "mal"
@@ -35,11 +35,11 @@ type Backup struct {
 	// Sources maps source ids to their names.
 	Sources    map[string]string `json:"sources"`
 	Categories []string          `json:"categories"`
-	Entries    []Entry           `json:"entries"`
+	Entries    []BackupManga     `json:"entries"`
 }
 
-// Entry is one manga of the backup.
-type Entry struct {
+// BackupManga is one manga of the backup.
+type BackupManga struct {
 	// SourceID is the app's source id: a Mihon source id (decimal int64,
 	// the same as Keiyoushi/Suwayomi catalog ids) or an Aidoku source id
 	// such as "multi.mangadex".
@@ -63,11 +63,11 @@ type Entry struct {
 	// Trackers maps a tracker (TrackerAniList, ...) to the series id there.
 	Trackers           map[string]string `json:"trackers,omitempty"`
 	ExcludedScanlators []string          `json:"excludedScanlators,omitempty"`
-	Chapters           []Chapter         `json:"chapters,omitempty"`
+	Chapters           []BackupChapter   `json:"chapters,omitempty"`
 }
 
-// Chapter is one chapter of an entry with its read state.
-type Chapter struct {
+// BackupChapter is one chapter of an entry with its read state.
+type BackupChapter struct {
 	URL       string  `json:"url"`
 	Name      string  `json:"name,omitempty"`
 	Scanlator string  `json:"scanlator,omitempty"`
@@ -80,7 +80,7 @@ type Chapter struct {
 }
 
 // ReadCount returns how many chapters are read.
-func (e Entry) ReadCount() int {
+func (e BackupManga) ReadCount() int {
 	n := 0
 	for _, c := range e.Chapters {
 		if c.Read {
@@ -142,7 +142,7 @@ func Parse(data []byte) (*Backup, error) {
 
 // ResumeFrom returns the chapter number to monitor from: just after the
 // highest read chapter. ok is false when nothing was read.
-func (e Entry) ResumeFrom() (from float64, ok bool) {
+func (e BackupManga) ResumeFrom() (from float64, ok bool) {
 	maxRead := -1.0
 	for _, c := range e.Chapters {
 		if c.Read && c.Number >= 0 && c.Number > maxRead {

@@ -15,6 +15,7 @@ import {
   LogOut,
   Eraser,
   Download,
+  FileUp,
 } from "lucide-react";
 import { api } from "../api/client";
 import { useHealth, useQueue } from "../api/queries";
@@ -33,6 +34,7 @@ export function Layout() {
   const nav: NavItem[] = [
     { to: "/", label: "Series", icon: <BookOpen className="size-4" /> },
     { to: "/add", label: "Add series", icon: <PlusCircle className="size-4" /> },
+    { to: "/import", label: "Import library", icon: <FileUp className="size-4" /> },
     {
       to: "/activity",
       label: "Activity",

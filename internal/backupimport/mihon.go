@@ -151,7 +151,7 @@ type mihonHistory struct {
 }
 
 func parseMihon(data []byte) (*Backup, error) {
-	b := &Backup{Format: FormatMihon, Sources: map[string]string{}, Categories: []string{}, Entries: []Entry{}}
+	b := &Backup{Format: FormatMihon, Sources: map[string]string{}, Categories: []string{}, Entries: []BackupManga{}}
 	var rawManga [][]byte
 	var cats []mihonCategory
 	err := fields(data, func(f field) error {
@@ -213,8 +213,8 @@ func parseMihon(data []byte) (*Backup, error) {
 	return b, nil
 }
 
-func parseMihonManga(raw []byte, catByOrder map[int64]string) (Entry, error) {
-	e := Entry{Favorite: true, Status: "unknown"} // favorite defaults to true and is omitted then
+func parseMihonManga(raw []byte, catByOrder map[int64]string) (BackupManga, error) {
+	e := BackupManga{Favorite: true, Status: "unknown"} // favorite defaults to true and is omitted then
 	var history []mihonHistory
 	err := fields(raw, func(f field) error {
 		switch f.num {
@@ -307,8 +307,8 @@ func parseMihonManga(raw []byte, catByOrder map[int64]string) (Entry, error) {
 	return e, nil
 }
 
-func parseMihonChapter(raw []byte) (Chapter, error) {
-	c := Chapter{Number: -1}
+func parseMihonChapter(raw []byte) (BackupChapter, error) {
+	c := BackupChapter{Number: -1}
 	hasNumber := false
 	err := fields(raw, func(f field) error {
 		switch f.num {

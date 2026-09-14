@@ -300,6 +300,124 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["imports-list"];
+        put?: never;
+        /** Upload a Mihon/Tachiyomi/Suwayomi (.tachibk, .proto.gz) or Aidoku (.aib) backup; its manga are matched in the background */
+        post: operations["imports-create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["imports-get"];
+        put?: never;
+        post?: never;
+        /** Delete an import (series it added stay) */
+        delete: operations["imports-delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/{id}/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["imports-entries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Select, accept or re-map entries (by ids or filter) */
+        patch: operations["imports-entries-update"];
+        trace?: never;
+    };
+    "/api/v1/imports/{id}/install-extensions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Install the extensions entries need, then match those entries again */
+        post: operations["imports-install-extensions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/{id}/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["imports-options"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/{id}/remap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Match entries again (all that aren't imported when no ids are given) */
+        post: operations["imports-remap"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/{id}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add the selected entries to the library */
+        post: operations["imports-run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/modules": {
         parameters: {
             query?: never;
@@ -1588,6 +1706,7 @@ export interface components {
             searchMissing?: boolean;
         };
         AddRequest: {
+            blockedScanlators?: string[];
             /** Format: double */
             fromChapter?: number;
             language?: string;
@@ -1625,6 +1744,41 @@ export interface components {
             /** Format: int64 */
             size: number;
             type: string;
+        };
+        BackupChapter: {
+            lang?: string;
+            /** Format: int64 */
+            lastPageRead?: number;
+            name?: string;
+            /** Format: double */
+            number: number;
+            read?: boolean;
+            /** Format: date-time */
+            readAt?: string;
+            scanlator?: string;
+            url: string;
+        };
+        BackupManga: {
+            /** Format: date-time */
+            addedAt?: string;
+            artist?: string;
+            author?: string;
+            categories?: string[];
+            chapters?: components["schemas"]["BackupChapter"][];
+            description?: string;
+            excludedScanlators?: string[];
+            favorite: boolean;
+            genres?: string[];
+            sourceId: string;
+            sourceName?: string;
+            status: string;
+            thumbnailUrl?: string;
+            title: string;
+            trackers?: {
+                [key: string]: string;
+            };
+            url: string;
+            webUrl?: string;
         };
         BlocklistView: {
             /** Format: int64 */
@@ -2092,6 +2246,150 @@ export interface components {
             infoUrl?: string;
             kind: string;
             name: string;
+        };
+        ImportCategory: {
+            /** Format: int64 */
+            profileId?: number;
+            /** Format: int64 */
+            rootFolderId?: number;
+            skip?: boolean;
+        };
+        ImportEntriesPage: {
+            items: components["schemas"]["ImportEntry"][];
+            /** Format: int64 */
+            page: number;
+            /** Format: int64 */
+            pageSize: number;
+            /** Format: int64 */
+            total: number;
+        };
+        ImportEntriesPatch: {
+            accept?: boolean;
+            clearMetadata?: boolean;
+            /** @description Change every entry matching this filter instead of ids */
+            filter?: components["schemas"]["ImportEntryFilter"];
+            ids?: number[];
+            metadata?: components["schemas"]["ImportMetadata"];
+            selected?: boolean;
+            source?: components["schemas"]["ImportSource"];
+        };
+        ImportEntry: {
+            data: components["schemas"]["BackupManga"];
+            extension?: components["schemas"]["ImportExtension"];
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            importId: number;
+            message: string;
+            metadata?: components["schemas"]["ImportMetadata"];
+            /** Format: int64 */
+            position: number;
+            selected: boolean;
+            /** Format: int64 */
+            seriesId?: number;
+            source?: components["schemas"]["ImportSource"];
+            /** @enum {string} */
+            state: "pending" | "ready" | "review" | "extension" | "library" | "imported" | "failed";
+            title: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ImportEntryFilter: {
+            q?: string;
+            selected?: boolean;
+            /** @enum {string} */
+            state?: "" | "pending" | "ready" | "review" | "extension" | "library" | "imported" | "failed";
+        };
+        ImportExtension: {
+            lang: string;
+            /** Format: int64 */
+            moduleId: number;
+            name: string;
+            pkg: string;
+        };
+        ImportInfo: {
+            /** Format: date-time */
+            backupDate?: string;
+            categories: string[];
+            /** Format: int64 */
+            entries: number;
+            sources: {
+                [key: string]: string;
+            };
+        };
+        ImportMetadata: {
+            coverUrl?: string;
+            how: string;
+            id: string;
+            /** Format: int64 */
+            moduleId: number;
+            provider: string;
+            /** Format: double */
+            score?: number;
+            title?: string;
+        };
+        ImportOptions: {
+            blockScanlators: boolean;
+            categories?: {
+                [key: string]: components["schemas"]["ImportCategory"];
+            };
+            categoryTags: boolean;
+            findByTitle: boolean;
+            matchMetadata: boolean;
+            /** @enum {string} */
+            monitor: "unread" | "all" | "future" | "none";
+            /** @enum {string} */
+            monitorNew: "all" | "none";
+            onlyFavorites: boolean;
+            /** Format: int64 */
+            profileId: number;
+            pushProgress: boolean;
+            readState: boolean;
+            /** Format: int64 */
+            readerId: number;
+            /** Format: int64 */
+            rootFolderId: number;
+            searchMissing: boolean;
+        };
+        ImportResource: {
+            busy: boolean;
+            counts: {
+                [key: string]: number;
+            };
+            /** Format: date-time */
+            createdAt: string;
+            error: string;
+            fileName: string;
+            format: string;
+            /** Format: int64 */
+            id: number;
+            info: components["schemas"]["ImportInfo"];
+            options: components["schemas"]["ImportOptions"];
+            progress: string;
+            /** @enum {string} */
+            status: "mapping" | "review" | "running" | "done" | "failed";
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ImportSource: {
+            how: string;
+            lang: string;
+            /** Format: int64 */
+            moduleId: number;
+            /** Format: double */
+            score?: number;
+            sourceId: string;
+            sourceName: string;
+            thumbnailUrl?: string;
+            title: string;
+            url: string;
+        };
+        "Imports-entries-updateResponse": {
+            /** Format: int64 */
+            changed: number;
+        };
+        "Imports-remapRequest": {
+            ids?: number[];
         };
         Info: {
             devices: string[];
@@ -2689,6 +2987,7 @@ export interface components {
             addOptions: components["schemas"]["AddOptions"];
             /** Format: date-time */
             addedAt: string;
+            blockedScanlators?: string[];
             coverUrl: string;
             fullPath?: string;
             /** Format: int64 */
@@ -2935,6 +3234,7 @@ export interface components {
             requestsPerMinute?: number;
         };
         UpdateRequest: {
+            blockedScanlators?: string[];
             description?: string;
             language?: string;
             locks?: string[];
@@ -3647,6 +3947,334 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Page"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "imports-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportResource"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "imports-create": {
+        parameters: {
+            query?: {
+                fileName?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportResource"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "imports-get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportResource"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "imports-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "imports-entries": {
+        parameters: {
+            query?: {
+                state?: "" | "pending" | "ready" | "review" | "extension" | "library" | "imported" | "failed";
+                selected?: "" | "true" | "false";
+                q?: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportEntriesPage"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "imports-entries-update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportEntriesPatch"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Imports-entries-updateResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "imports-install-extensions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Command"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "imports-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportOptions"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportResource"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "imports-remap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Imports-remapRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Command"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "imports-run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Command"];
                 };
             };
             /** @description Error */

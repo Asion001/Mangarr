@@ -22,6 +22,7 @@ const map: Record<string, string[][]> = {
   profile: [["profiles"]],
   tag: [["tags"]],
   blocklist: [["blocklist"]],
+  import: [["imports"], ["import"], ["import-entries"]],
 };
 
 type Listener = (type: string, payload: unknown) => void;

@@ -56,6 +56,12 @@ type Service struct {
 	busy sync.Map // import id -> struct{}
 }
 
+// ParseError is returned for uploads that aren't a readable backup.
+type ParseError struct{ Err error }
+
+func (e *ParseError) Error() string { return e.Err.Error() }
+func (e *ParseError) Unwrap() error { return e.Err }
+
 // lock marks an import busy (mapping or running).
 func (s *Service) lock(id int64) (func(), error) {
 	if _, loaded := s.busy.LoadOrStore(id, struct{}{}); loaded {
@@ -76,7 +82,7 @@ var unsafeName = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
 func (s *Service) Create(ctx context.Context, fileName string, data []byte) (*model.Import, error) {
 	b, err := backupimport.Parse(data)
 	if err != nil {
-		return nil, err
+		return nil, &ParseError{err}
 	}
 	now := time.Now().UTC()
 	opts := model.DefaultImportOptions()
@@ -92,7 +98,7 @@ func (s *Service) Create(ctx context.Context, fileName string, data []byte) (*mo
 		opts.ReaderID = readers[0].ID
 	}
 	imp := &model.Import{Format: b.Format, FileName: filepath.Base(fileName), Status: model.ImportMapping, Options: opts,
-		Info: model.ImportInfo{Categories: b.Categories, Sources: b.Sources, Entries: len(b.Entries)}, CreatedAt: now, UpdatedAt: now}
+		Info: model.ImportInfo{Categories: usedCategories(b), Sources: b.Sources, Entries: len(b.Entries)}, CreatedAt: now, UpdatedAt: now}
 	if imp.FileName == "" || imp.FileName == "." {
 		imp.FileName = "backup"
 	}
@@ -131,7 +137,34 @@ func (s *Service) Create(ctx context.Context, fileName string, data []byte) (*mo
 	return imp, nil
 }
 
-func selectedByDefault(e backupimport.Entry, opts model.ImportOptions) bool {
+// usedCategories lists the backup's categories that have manga (apps also
+// list an implicit "Default" one).
+func usedCategories(b *backupimport.Backup) []string {
+	used := map[string]bool{}
+	for _, e := range b.Entries {
+		for _, c := range e.Categories {
+			used[c] = true
+		}
+	}
+	out := []string{}
+	for _, c := range b.Categories {
+		if used[c] {
+			out = append(out, c)
+			delete(used, c)
+		}
+	}
+	for _, e := range b.Entries { // categories missing from the list
+		for _, c := range e.Categories {
+			if used[c] {
+				out = append(out, c)
+				delete(used, c)
+			}
+		}
+	}
+	return out
+}
+
+func selectedByDefault(e backupimport.BackupManga, opts model.ImportOptions) bool {
 	if opts.OnlyFavorites && !e.Favorite {
 		return false
 	}

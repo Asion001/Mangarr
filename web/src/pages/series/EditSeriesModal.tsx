@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Lock, Unlock } from "lucide-react";
 import { api, unwrap, type Series, type UpdateRequest } from "../../api/client";
 import { useProfiles, useRootFolders, useTags } from "../../api/queries";
-import { Button, Field, Input, Modal, Select, Switch, Textarea } from "../../components/ui";
+import { Button, Field, Input, Modal, Select, Switch, TagInput, Textarea } from "../../components/ui";
 import { useToast } from "../../lib/toast";
 import { MetadataSearch } from "./AddSeries";
 
@@ -21,6 +21,7 @@ export function EditSeriesModal({ series, onClose }: { series: Series; onClose: 
   const [status, setStatus] = useState(series.status);
   const [description, setDescription] = useState(series.metadata.description ?? "");
   const [tagIds, setTagIds] = useState<number[]>(series.tags ?? []);
+  const [blocked, setBlocked] = useState<string[]>(series.blockedScanlators ?? []);
   const [locks, setLocks] = useState<string[]>(series.metadata.locks ?? []);
   const [relink, setRelink] = useState(false);
   const { data: roots } = useRootFolders();
@@ -46,6 +47,7 @@ export function EditSeriesModal({ series, onClose }: { series: Series; onClose: 
             status: (status !== series.status ? status : undefined) as UpdateRequest["status"],
             description: description !== (series.metadata.description ?? "") ? description : undefined,
             tags: tagIds,
+            blockedScanlators: blocked,
             locks,
             rootFolderId: rootId !== series.rootFolderId ? rootId : undefined,
             path: folder.trim() !== series.path ? folder.trim() : undefined,
@@ -150,6 +152,9 @@ export function EditSeriesModal({ series, onClose }: { series: Series; onClose: 
             ))}
             {!tags?.length && <span className="text-xs text-muted">Create tags in Settings → General.</span>}
           </div>
+        </Field>
+        <Field label="Blocked scanlators" help="Releases by these groups are never downloaded for this series (on top of the profile's list).">
+          <TagInput value={blocked} onChange={setBlocked} placeholder="Group name, Enter" />
         </Field>
         <Field label="Root folder">
           <Select value={rootId} onChange={(e) => setRootId(Number(e.target.value))}>

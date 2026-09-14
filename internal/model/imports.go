@@ -98,19 +98,19 @@ func DefaultImportOptions() ImportOptions {
 // ImportEntry is one manga of an import.
 type ImportEntry struct {
 	bun.BaseModel `bun:"table:import_entries"`
-	ID            int64              `bun:"id,pk,autoincrement" json:"id"`
-	ImportID      int64              `bun:"import_id,notnull" json:"importId"`
-	Position      int                `bun:"position,notnull" json:"position"`
-	Title         string             `bun:"title,notnull" json:"title"`
-	State         string             `bun:"state,notnull" json:"state" enum:"pending,ready,review,extension,library,imported,failed"`
-	Selected      bool               `bun:"selected,notnull" json:"selected"`
-	Data          backupimport.Entry `bun:"data,notnull" json:"data"`
-	Source        *ImportSource      `bun:"source" json:"source,omitempty"`
-	Metadata      *ImportMetadata    `bun:"metadata" json:"metadata,omitempty"`
-	Extension     *ImportExtension   `bun:"extension" json:"extension,omitempty"`
-	SeriesID      *int64             `bun:"series_id" json:"seriesId,omitempty"`
-	Message       string             `bun:"message,notnull" json:"message"`
-	UpdatedAt     time.Time          `bun:"updated_at,notnull" json:"updatedAt"`
+	ID            int64                    `bun:"id,pk,autoincrement" json:"id"`
+	ImportID      int64                    `bun:"import_id,notnull" json:"importId"`
+	Position      int                      `bun:"position,notnull" json:"position"`
+	Title         string                   `bun:"title,notnull" json:"title"`
+	State         string                   `bun:"state,notnull" json:"state" enum:"pending,ready,review,extension,library,imported,failed"`
+	Selected      bool                     `bun:"selected,notnull" json:"selected"`
+	Data          backupimport.BackupManga `bun:"data,notnull" json:"data"`
+	Source        *ImportSource            `bun:"source" json:"source,omitempty"`
+	Metadata      *ImportMetadata          `bun:"metadata" json:"metadata,omitempty"`
+	Extension     *ImportExtension         `bun:"extension" json:"extension,omitempty"`
+	SeriesID      *int64                   `bun:"series_id" json:"seriesId,omitempty"`
+	Message       string                   `bun:"message,notnull" json:"message"`
+	UpdatedAt     time.Time                `bun:"updated_at,notnull" json:"updatedAt"`
 }
 
 // How an entry was matched.

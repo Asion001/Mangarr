@@ -239,15 +239,15 @@ func TestAidokuJSON(t *testing.T) {
 }
 
 func TestResumeFrom(t *testing.T) {
-	e := Entry{Chapters: []Chapter{{Number: 1, Read: true}, {Number: 2, Read: true}, {Number: 2.5}, {Number: 3}, {Number: 0.5}}}
+	e := BackupManga{Chapters: []BackupChapter{{Number: 1, Read: true}, {Number: 2, Read: true}, {Number: 2.5}, {Number: 3}, {Number: 0.5}}}
 	if from, ok := e.ResumeFrom(); !ok || from < 2.4 || from > 2.5 {
 		t.Fatalf("from = %v %v", from, ok)
 	}
-	e = Entry{Chapters: []Chapter{{Number: 1, Read: true}, {Number: 2, Read: true}}}
+	e = BackupManga{Chapters: []BackupChapter{{Number: 1, Read: true}, {Number: 2, Read: true}}}
 	if from, ok := e.ResumeFrom(); !ok || from <= 2 || from > 2.01 {
 		t.Fatalf("from = %v %v", from, ok)
 	}
-	if _, ok := (Entry{Chapters: []Chapter{{Number: 1}}}).ResumeFrom(); ok {
+	if _, ok := (BackupManga{Chapters: []BackupChapter{{Number: 1}}}).ResumeFrom(); ok {
 		t.Fatal("nothing read")
 	}
 }

@@ -35,6 +35,8 @@ func TestImportMihonBackup(t *testing.T) {
 			sc.AddManga(&fakesource.Manga{SourceID: "777", URL: "/series/solo", Title: "Solo Leveling", Status: source.StatusCompleted, Chapters: chapters(2)})
 			sc.AddManga(&fakesource.Manga{SourceID: "555", URL: "/frieren", Title: "Frieren", Status: source.StatusOngoing, Chapters: chapters(2)})
 			sc.AddManga(&fakesource.Manga{SourceID: "555", URL: "/existing", Title: "Existing", Status: source.StatusOngoing, Chapters: chapters(2)})
+			sc.AddManga(&fakesource.Manga{SourceID: "2499", URL: "/dupb", Title: "Dupe", Status: source.StatusOngoing, Chapters: chapters(1)})
+			sc.AddManga(&fakesource.Manga{SourceID: "555", URL: "/dupa", Title: "Dupe", Status: source.StatusOngoing, Chapters: chapters(3)})
 
 			e := newTestApp(t, dsn)
 			mod := e.addFakeModule(t, "import-"+dialect)
@@ -47,15 +49,19 @@ func TestImportMihonBackup(t *testing.T) {
 
 			readAt := time.Date(2024, 3, 1, 0, 0, 0, 0, time.UTC)
 			backup := &backupimport.Backup{Categories: []string{"Reading"}, Sources: map[string]string{"2499": "MangaDex", "777": "Weeb Central", "999": "Gone"},
-				Entries: []backupimport.Entry{
+				Entries: []backupimport.BackupManga{
 					{SourceID: "2499", URL: "/manga/abc", Title: "One Piece", Favorite: true, Categories: []string{"Reading"},
 						ExcludedScanlators: []string{"Bad Scans"},
-						Chapters: []backupimport.Chapter{{URL: "/c1", Number: 1, Read: true, ReadAt: &readAt}, {URL: "/c2", Number: 2, Read: true},
+						Chapters: []backupimport.BackupChapter{{URL: "/c1", Number: 1, Read: true, ReadAt: &readAt}, {URL: "/c2", Number: 2, Read: true},
 							{URL: "/c3", Number: 3, LastPageRead: 4}}},
 					{SourceID: "777", URL: "/series/solo", Title: "Solo Leveling", Favorite: true},
 					{SourceID: "999", URL: "/x", Title: "Frieren", Favorite: true},
-					{SourceID: "555", URL: "/existing", Title: "Existing", Favorite: true, Chapters: []backupimport.Chapter{{URL: "/elsewhere", Number: 1, Read: true}}},
+					{SourceID: "555", URL: "/existing", Title: "Existing", Favorite: true, Chapters: []backupimport.BackupChapter{{URL: "/elsewhere", Number: 1, Read: true}}},
 					{SourceID: "2499", URL: "/manga/abc", Title: "History only", Favorite: false},
+					// the same series at two sources: the one read further is added first
+					{SourceID: "2499", URL: "/dupb", Title: "Dupe B", Favorite: true},
+					{SourceID: "555", URL: "/dupa", Title: "Dupe A", Favorite: true,
+						Chapters: []backupimport.BackupChapter{{URL: "/c1", Number: 1, Read: true}, {URL: "/c2", Number: 2, Read: true}}},
 				}}
 			imp, err := e.App.Imports.Create(e.Ctx, "mihon.tachibk", backupimport.MarshalMihon(backup))
 			if err != nil {
@@ -104,11 +110,17 @@ func TestImportMihonBackup(t *testing.T) {
 				t.Fatalf("after install: %+v", s)
 			}
 
+			for _, title := range []string{"Dupe A", "Dupe B"} {
+				md := &model.ImportMetadata{ModuleID: 999, Provider: "anilist", ID: "42"}
+				if _, err := e.App.Imports.UpdateEntries(e.Ctx, imp.ID, imports.EntryFilter{IDs: []int64{byTitle()[title].ID}}, imports.EntryPatch{Metadata: md}); err != nil {
+					t.Fatal(err)
+				}
+			}
 			res, err := e.App.Imports.Run(e.Ctx, imp.ID, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if res.Added != 3 || res.Merged != 1 || res.Failed != 0 {
+			if res.Added != 4 || res.Merged != 2 || res.Failed != 0 {
 				t.Fatalf("result = %+v (%+v)", res, byTitle())
 			}
 			got = byTitle()
@@ -134,7 +146,7 @@ func TestImportMihonBackup(t *testing.T) {
 			}
 			var states []model.ChapterReadState
 			_ = e.App.DB.NewSelect().Model(&states).Where("reader_id = ?", reloaded.Options.ReaderID).Order("chapter_id").Scan(e.Ctx)
-			if len(states) != 4 {
+			if len(states) != 6 { // One Piece 3, Existing 1, Dupe 2
 				t.Fatalf("read states = %+v", states)
 			}
 			for _, st := range states {
@@ -155,8 +167,17 @@ func TestImportMihonBackup(t *testing.T) {
 			}
 			var n int
 			n, _ = e.App.DB.NewSelect().Model((*model.Series)(nil)).Count(e.Ctx)
-			if n != 4 {
+			if n != 5 {
 				t.Fatalf("running again must not add series twice: %d", n)
+			}
+			dupe := byTitle()["Dupe B"]
+			if dupe.SeriesID == nil || byTitle()["Dupe A"].SeriesID == nil || *dupe.SeriesID != *byTitle()["Dupe A"].SeriesID {
+				t.Fatalf("dupes weren't merged: %+v / %+v", dupe, byTitle()["Dupe A"])
+			}
+			var dchs []model.Chapter
+			_ = e.App.DB.NewSelect().Model(&dchs).Where("series_id = ?", *dupe.SeriesID).Order("number_sort").Scan(e.Ctx)
+			if len(dchs) != 3 || dchs[0].Monitored || dchs[1].Monitored || !dchs[2].Monitored {
+				t.Fatalf("merged source must not bring back read chapters: %+v", dchs)
 			}
 		})
 	}

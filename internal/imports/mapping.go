@@ -229,7 +229,7 @@ func (m *mapper) mapEntry(ctx context.Context, e *model.ImportEntry) {
 	e.Selected = selectedByDefault(d, m.opts) && (e.State == model.EntryReady || e.State == model.EntryLibrary)
 }
 
-func (m *mapper) source(c catalogs.Catalog, d backupimport.Entry, url, how string) *model.ImportSource {
+func (m *mapper) source(c catalogs.Catalog, d backupimport.BackupManga, url, how string) *model.ImportSource {
 	return &model.ImportSource{ModuleID: c.ModuleID, SourceID: c.ID, SourceName: firstNonEmpty(c.DisplayName, c.Name), Lang: c.Lang,
 		URL: url, Title: d.Title, ThumbnailURL: d.ThumbnailURL, How: how}
 }
@@ -251,13 +251,13 @@ func (m *mapper) mapMihon(e *model.ImportEntry) {
 // aidokuRule converts an Aidoku source's manga key to a Keiyoushi url.
 type aidokuRule struct {
 	names []string
-	url   func(backupimport.Entry) string
+	url   func(backupimport.BackupManga) string
 	// exact rules need no check at the catalog
 	exact bool
 }
 
 var aidokuRules = map[string]aidokuRule{
-	"multi.mangadex": {names: []string{"MangaDex"}, url: func(e backupimport.Entry) string { return "/manga/" + e.URL }, exact: true},
+	"multi.mangadex": {names: []string{"MangaDex"}, url: func(e backupimport.BackupManga) string { return "/manga/" + e.URL }, exact: true},
 }
 
 // pathOf returns the path (and query) of a web url.
@@ -281,7 +281,7 @@ func (m *mapper) aidokuRule(sourceID string) (aidokuRule, string) {
 	if r, ok := aidokuRules[sourceID]; ok {
 		return r, lang
 	}
-	return aidokuRule{names: []string{name}, url: func(e backupimport.Entry) string {
+	return aidokuRule{names: []string{name}, url: func(e backupimport.BackupManga) string {
 		if strings.HasPrefix(e.URL, "/") {
 			return e.URL
 		}
@@ -290,7 +290,7 @@ func (m *mapper) aidokuRule(sourceID string) (aidokuRule, string) {
 }
 
 // entryLang picks the language of a multi-language source.
-func (m *mapper) entryLang(d backupimport.Entry, lang string) string {
+func (m *mapper) entryLang(d backupimport.BackupManga, lang string) string {
 	if lang != "" && lang != "multi" {
 		return lang
 	}
@@ -434,7 +434,7 @@ func (m *mapper) findByTitle(ctx context.Context, e *model.ImportEntry) {
 // trackerOrder tries the most useful tracker ids first.
 var trackerOrder = []string{backupimport.TrackerAniList, backupimport.TrackerMAL, backupimport.TrackerMangaUpdates, backupimport.TrackerKitsu}
 
-func (m *mapper) matchMetadata(ctx context.Context, d backupimport.Entry) *model.ImportMetadata {
+func (m *mapper) matchMetadata(ctx context.Context, d backupimport.BackupManga) *model.ImportMetadata {
 	for _, mm := range m.meta {
 		if id := d.Trackers[mm.Def.Implementation]; id != "" {
 			return &model.ImportMetadata{ModuleID: mm.Def.ID, Provider: mm.Def.Implementation, ID: id, Title: d.Title, How: model.MatchTracker}

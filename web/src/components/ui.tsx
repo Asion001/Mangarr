@@ -91,7 +91,7 @@ export function Switch({
         aria-checked={checked}
         disabled={disabled}
         onClick={() => onChange(!checked)}
-        className={clsx("relative h-5 w-9 rounded-full transition-colors", checked ? "bg-accent" : "bg-border")}
+        className={clsx("relative h-5 w-9 shrink-0 rounded-full transition-colors", checked ? "bg-accent" : "bg-border")}
       >
         <span className={clsx("absolute top-0.5 size-4 rounded-full bg-white transition-all", checked ? "left-4.5" : "left-0.5")} />
       </button>

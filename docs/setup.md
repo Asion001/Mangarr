@@ -159,13 +159,54 @@ resume it (System → Status).
   writes it back once the server has scanned the new files (readers need linked
   accounts, see section 5). It never lowers progress on the server.
 
-## 8. PostgreSQL (optional)
+## 8. Importing from Mihon, Tachiyomi, Suwayomi or Aidoku
+
+Import library → upload a backup:
+
+- **Mihon, Tachiyomi and forks (J2K, SY, …), Suwayomi**: `.tachibk` or
+  `.proto.gz` (Mihon: More → Backup and restore → Create backup; Suwayomi:
+  Settings → Backup). Old Tachiyomi JSON backups aren't supported: restore
+  them in Mihon and make a new backup.
+- **Aidoku**: `.aib` (Settings → Backups).
+
+Nothing is added until you start the import. mangarr first matches every
+manga in the background:
+
+- **Source**: Mihon/Suwayomi source ids are the same as Keiyoushi's, so a
+  manga maps exactly to its catalog. When the catalog's extension isn't
+  installed, *Install extensions* installs the missing ones and matches those
+  manga again. Aidoku sources are matched by name; MangaDex links are converted
+  directly, others are checked at the catalog or found by title. Anything
+  unsure is marked *Needs review* with the best suggestion: *Accept* it or
+  *Pick source* (the usual search).
+- **Metadata**: AniList from the backup's tracker (MAL ids are converted
+  through AniList), otherwise a confident title match. You can pick or remove
+  it per manga.
+- **Already in the library**: the source is added to the existing series and
+  read chapters are merged. Manga that appear twice (the same series at two
+  sources) become one series with both sources.
+
+Options (per import): root folder and profile (overridable per category),
+categories as tags, only library manga (not history), and **monitoring from
+the first unread chapter**, so read chapters aren't downloaded again. Read
+chapters are imported for a reader (a new "Mihon backup" reader by default;
+pick your own to let cleanup use them). With *Mark them read in
+Komga/Kavita*, chapters you read that get downloaded later are marked read on
+your library server too. Scanlators you excluded in the app stay blocked for
+that series (Edit series → *Blocked scanlators*).
+
+Importing fetches each series' chapter list from its source, with the usual
+request throttling, so a library of hundreds of series takes a while; the page
+shows progress and can be left. Running an import again only picks up
+entries that aren't imported yet (and retries failed ones).
+
+## 9. PostgreSQL (optional)
 
 For large libraries set `MANGARR_DB=postgres://mangarr:…@db:5432/mangarr?sslmode=disable`
 (e.g. your existing Postgres 16). Built-in backups then contain settings and
 modules only — back up the database with `pg_dump`.
 
-## 9. Backups & upgrades
+## 10. Backups & upgrades
 
 Daily backups (SQLite snapshot + manifest) go to `/config/backups`
 (System → Backups). Suwayomi's own data is disposable: mangarr keeps the

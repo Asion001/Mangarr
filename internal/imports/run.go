@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 	"time"
 
@@ -109,21 +110,35 @@ func (s *Service) Run(ctx context.Context, id int64, progress func(string)) (Run
 	}
 	tags := map[string]int64{}
 	if opts.CategoryTags {
-		if tags, err = s.ensureTags(ctx, imp.Info.Categories); err != nil {
+		// only categories in use (apps list an implicit "Default" too)
+		var used []string
+		seen := map[string]bool{}
+		for _, e := range entries {
+			for _, c := range e.Data.Categories {
+				if !seen[c] {
+					seen[c] = true
+					used = append(used, c)
+				}
+			}
+		}
+		if tags, err = s.ensureTags(ctx, used); err != nil {
 			return fail(err)
 		}
 	}
 
 	// entries of the same series (other sources, same metadata) merge into
-	// the series added first
+	// the series added first: the one with the most read chapters goes first
+	// so monitoring starts after what was read
+	orderDuplicates(entries)
 	added := map[string]int64{}
+	resume := map[int64]resumePoint{}
 	for i := range entries {
 		if err := ctx.Err(); err != nil {
 			s.setStatus(ctx, imp, model.ImportReview, "", "stopped")
 			return res, err
 		}
 		e := &entries[i]
-		merged, n, err := s.runEntry(ctx, imp, e, tags, added)
+		merged, n, err := s.runEntry(ctx, imp, e, tags, added, resume)
 		switch {
 		case err != nil:
 			res.Failed++
@@ -197,7 +212,8 @@ func metaKey(md *model.ImportMetadata) string {
 
 // runEntry adds (or merges) one entry. It returns whether it merged into an
 // existing series and how many read states were written.
-func (s *Service) runEntry(ctx context.Context, imp *model.Import, e *model.ImportEntry, tags map[string]int64, added map[string]int64) (bool, int, error) {
+func (s *Service) runEntry(ctx context.Context, imp *model.Import, e *model.ImportEntry, tags map[string]int64, added map[string]int64,
+	resume map[int64]resumePoint) (bool, int, error) {
 	if e.Source == nil {
 		return false, 0, errors.New("no source picked")
 	}
@@ -210,6 +226,17 @@ func (s *Service) runEntry(ctx context.Context, imp *model.Import, e *model.Impo
 		target = added[metaKey(e.Metadata)]
 	}
 	if target != 0 {
+		if rp, ok := resume[target]; ok {
+			// added by this run: monitor from the first chapter unread in
+			// every merged entry, including the new source's chapters
+			if from, read := e.Data.ResumeFrom(); read && (!rp.read || from > rp.from) {
+				rp = resumePoint{from: from, read: true}
+				resume[target] = rp
+			}
+			if err := s.monitorAgain(ctx, target, rp, opts); err != nil {
+				return true, 0, err
+			}
+		}
 		if err := s.merge(ctx, target, e); err != nil {
 			return true, 0, err
 		}
@@ -278,6 +305,9 @@ func (s *Service) runEntry(ctx context.Context, imp *model.Import, e *model.Impo
 	if k := metaKey(e.Metadata); k != "" {
 		added[k] = ser.ID
 	}
+	if opts.Monitor == "unread" || opts.Monitor == "" {
+		resume[ser.ID] = resumePoint{from: req.FromChapter, read: req.Monitor == model.MonitorFrom}
+	}
 	// the first sync creates the chapters the read state is mapped to
 	var syncErr error
 	for attempt := 0; attempt < 2; attempt++ {
@@ -291,6 +321,69 @@ func (s *Service) runEntry(ctx context.Context, imp *model.Import, e *model.Impo
 	}
 	n, err := s.readState(ctx, opts, ser.ID, d)
 	return false, n, err
+}
+
+type resumePoint struct {
+	from float64
+	read bool
+}
+
+// orderDuplicates moves the entry with the most read chapters to the front
+// of each group sharing metadata (keeping the group where it first appears).
+func orderDuplicates(entries []model.ImportEntry) {
+	first := map[string]int{}
+	for i, e := range entries {
+		if k := metaKey(e.Metadata); k != "" {
+			if _, ok := first[k]; !ok {
+				first[k] = i
+			}
+		}
+	}
+	rank := func(e model.ImportEntry) int {
+		if k := metaKey(e.Metadata); k != "" {
+			return first[k]
+		}
+		return -1
+	}
+	idx := make([]int, len(entries))
+	for i := range idx {
+		idx[i] = i
+	}
+	sort.SliceStable(idx, func(a, b int) bool {
+		ea, eb := entries[idx[a]], entries[idx[b]]
+		ka, kb := rank(ea), rank(eb)
+		pa, pb := idx[a], idx[b]
+		if ka >= 0 {
+			pa = ka
+		}
+		if kb >= 0 {
+			pb = kb
+		}
+		if pa != pb {
+			return pa < pb
+		}
+		return ea.Data.ReadCount() > eb.Data.ReadCount()
+	})
+	out := make([]model.ImportEntry, len(entries))
+	for i, j := range idx {
+		out[i] = entries[j]
+	}
+	copy(entries, out)
+}
+
+// monitorAgain makes the next sync apply the add options again (monitoring
+// every chapter from rp, and searching when asked).
+func (s *Service) monitorAgain(ctx context.Context, seriesID int64, rp resumePoint, opts model.ImportOptions) error {
+	ser, err := s.Series.Get(ctx, seriesID)
+	if err != nil {
+		return err
+	}
+	ser.AddOptions = model.AddOptions{Pending: true, Monitor: model.MonitorAll, SearchMissing: opts.SearchMissing}
+	if rp.read {
+		ser.AddOptions.Monitor, ser.AddOptions.FromChapter = model.MonitorFrom, rp.from
+	}
+	_, err = s.DB.NewUpdate().Model(ser).Column("add_options").WherePK().Exec(ctx)
+	return err
 }
 
 func err2str(err error) string {
@@ -336,7 +429,7 @@ func (s *Service) merge(ctx context.Context, seriesID int64, e *model.ImportEntr
 }
 
 // readState writes the entry's read chapters for the import's reader.
-func (s *Service) readState(ctx context.Context, opts model.ImportOptions, seriesID int64, d backupimport.Entry) (int, error) {
+func (s *Service) readState(ctx context.Context, opts model.ImportOptions, seriesID int64, d backupimport.BackupManga) (int, error) {
 	if !opts.ReadState || opts.ReaderID == 0 {
 		return 0, nil
 	}
@@ -354,7 +447,7 @@ func (s *Service) readState(ctx context.Context, opts model.ImportOptions, serie
 // ImportReadState maps the backup's read chapters to the series' chapters
 // (by chapter url, then number) and raises the reader's state. It returns
 // how many chapter states changed.
-func ImportReadState(ctx context.Context, idb bun.IDB, readerID, seriesID int64, d backupimport.Entry, now time.Time) (int, error) {
+func ImportReadState(ctx context.Context, idb bun.IDB, readerID, seriesID int64, d backupimport.BackupManga, now time.Time) (int, error) {
 	var chapters []model.Chapter
 	if err := idb.NewSelect().Model(&chapters).Column("id", "number_sort").Where("series_id = ?", seriesID).Scan(ctx); err != nil {
 		return 0, err
