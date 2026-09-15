@@ -3,6 +3,7 @@ package backup
 
 import (
 	"archive/zip"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -15,7 +16,7 @@ import (
 	"time"
 
 	"github.com/Asion001/mangarr/internal/db"
-	"github.com/Asion001/mangarr/internal/model"
+	"github.com/Asion001/mangarr/internal/dbcopy"
 	"github.com/Asion001/mangarr/internal/settings"
 	"github.com/Asion001/mangarr/internal/version"
 )
@@ -70,19 +71,26 @@ func (s *Service) Create(ctx context.Context, typ string) (*Backup, error) {
 			return fail(err)
 		}
 	} else {
-		manifest["note"] = "PostgreSQL data is not included; back it up with pg_dump. Settings and modules are exported as JSON."
-		var rows []model.Setting
-		if err := s.db.NewSelect().Model(&rows).Scan(ctx); err != nil {
+		// the whole database as a SQLite file: the same backup format on
+		// both databases, restorable into either
+		dbTmp := filepath.Join(s.dir, ".backup-db.tmp")
+		cleanup := func() {
+			for _, suffix := range []string{"", "-wal", "-shm"} {
+				_ = os.Remove(dbTmp + suffix)
+			}
+		}
+		cleanup()
+		lite, err := db.Open(ctx, "sqlite://"+dbTmp)
+		if err != nil {
 			return fail(err)
 		}
-		if err := addJSON(zw, "settings.json", rows); err != nil {
-			return fail(err)
+		_, err = dbcopy.Copy(ctx, s.db, lite, false, nil)
+		_ = lite.Close()
+		if err == nil {
+			err = addFile(zw, "mangarr.db", dbTmp)
 		}
-		var defs []model.ProviderDefinition
-		if err := s.db.NewSelect().Model(&defs).Scan(ctx); err != nil {
-			return fail(err)
-		}
-		if err := addJSON(zw, "modules.json", defs); err != nil {
+		cleanup()
+		if err != nil {
 			return fail(err)
 		}
 	}
@@ -153,13 +161,40 @@ func (s *Service) List() ([]Backup, error) {
 			continue
 		}
 		typ := "manual"
-		if strings.Contains(e.Name(), "_scheduled_") {
+		switch {
+		case strings.Contains(e.Name(), "_scheduled_"):
 			typ = "scheduled"
+		case strings.Contains(e.Name(), "_uploaded_"):
+			typ = "uploaded"
 		}
 		out = append(out, Backup{Name: e.Name(), Type: typ, Size: info.Size(), Created: info.ModTime()})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Created.After(out[j].Created) })
 	return out, nil
+}
+
+// Save stores an uploaded backup zip (it must hold a database).
+func (s *Service) Save(data []byte) (*Backup, error) {
+	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return nil, errors.New("not a zip file")
+	}
+	found := false
+	for _, f := range zr.File {
+		found = found || f.Name == "mangarr.db"
+	}
+	if !found {
+		return nil, errors.New("not a mangarr backup with a database in it")
+	}
+	if err := os.MkdirAll(s.dir, 0o775); err != nil {
+		return nil, err
+	}
+	name := fmt.Sprintf("mangarr_uploaded_%s.zip", time.Now().UTC().Format("2006.01.02_15.04.05"))
+	path := filepath.Join(s.dir, name)
+	if err := os.WriteFile(path, data, 0o664); err != nil {
+		return nil, err
+	}
+	return &Backup{Name: name, Type: "uploaded", Size: int64(len(data)), Created: time.Now()}, nil
 }
 
 // Path returns the absolute path of a backup, rejecting path traversal.

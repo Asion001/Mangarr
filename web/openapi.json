@@ -1139,6 +1139,69 @@
         ],
         "type": "object"
       },
+      "DBTest": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "rows": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "version",
+          "rows"
+        ],
+        "type": "object"
+      },
+      "DatabaseInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "defaultDsn": {
+            "type": "string"
+          },
+          "dsn": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "sqlite",
+              "postgres"
+            ],
+            "type": "string"
+          },
+          "move": {
+            "$ref": "#/components/schemas/MoveState"
+          },
+          "sizeBytes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "source": {
+            "enum": [
+              "env",
+              "file",
+              "default"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "dsn",
+          "source",
+          "sizeBytes",
+          "defaultDsn",
+          "move"
+        ],
+        "type": "object"
+      },
       "DecisionDecision": {
         "additionalProperties": false,
         "properties": {
@@ -1343,6 +1406,23 @@
           "pageRetries",
           "maxAttempts",
           "defaultCheckIntervalMinutes"
+        ],
+        "type": "object"
+      },
+      "DsnBodyBody": {
+        "additionalProperties": false,
+        "properties": {
+          "dsn": {
+            "description": "postgres://user:password@host:5432/database?sslmode=disable, or sqlite:///path/file.db",
+            "minLength": 1,
+            "type": "string"
+          },
+          "overwrite": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "dsn"
         ],
         "type": "object"
       },
@@ -3235,6 +3315,58 @@
         ],
         "type": "object"
       },
+      "MoveState": {
+        "additionalProperties": false,
+        "properties": {
+          "done": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "error": {
+            "type": "string"
+          },
+          "restarting": {
+            "type": "boolean"
+          },
+          "result": {
+            "$ref": "#/components/schemas/Result"
+          },
+          "running": {
+            "type": "boolean"
+          },
+          "setEnv": {
+            "type": "boolean"
+          },
+          "stage": {
+            "enum": [
+              "",
+              "preparing",
+              "snapshot",
+              "copying",
+              "switching",
+              "done",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "table": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "running",
+          "done",
+          "total"
+        ],
+        "type": "object"
+      },
       "NamingPreview": {
         "additionalProperties": false,
         "properties": {
@@ -4558,6 +4690,32 @@
           "rawNumber",
           "removed",
           "createdAt"
+        ],
+        "type": "object"
+      },
+      "Result": {
+        "additionalProperties": false,
+        "properties": {
+          "duration": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "rows": {
+            "additionalProperties": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "object"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total",
+          "duration"
         ],
         "type": "object"
       },
@@ -11860,6 +12018,49 @@
         ]
       }
     },
+    "/api/v1/system/backups/upload": {
+      "post": {
+        "operationId": "backups-upload",
+        "requestBody": {
+          "content": {
+            "application/zip": {
+              "schema": {
+                "contentMediaType": "application/octet-stream",
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupBackup"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Add a backup zip from another install (restore it from the list)",
+        "tags": [
+          "System"
+        ]
+      }
+    },
     "/api/v1/system/backups/{name}": {
       "delete": {
         "operationId": "backups-delete",
@@ -11919,6 +12120,40 @@
             "description": "Error"
           }
         },
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/api/v1/system/backups/{name}/restore": {
+      "post": {
+        "operationId": "backups-restore",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Replace all data with a backup's and restart (progress under /api/v1/system/database)",
         "tags": [
           "System"
         ]
@@ -11991,6 +12226,136 @@
           }
         },
         "summary": "Clear caches: catalogs (search/details) and image buckets",
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/api/v1/system/database": {
+      "get": {
+        "operationId": "database-get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseInfo"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "The database mangarr uses, and the progress of moving it",
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/api/v1/system/database/cancel": {
+      "post": {
+        "operationId": "database-move-cancel",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Leave maintenance mode without switching (after a failed move, or when MANGARR_DB can't be changed now)",
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/api/v1/system/database/move": {
+      "post": {
+        "operationId": "database-move",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DsnBodyBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Copy all data to another database and switch to it (mangarr restarts)",
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/api/v1/system/database/test": {
+      "post": {
+        "operationId": "database-test",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DsnBodyBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DBTest"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Connect to a database the data could move to",
         "tags": [
           "System"
         ]
@@ -12214,6 +12579,30 @@
             "description": "Error"
           }
         },
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/api/v1/system/restart": {
+      "post": {
+        "operationId": "system-restart",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Restart mangarr",
         "tags": [
           "System"
         ]

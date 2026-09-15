@@ -76,6 +76,7 @@ export function Layout() {
         { to: "/system/status", label: "Status" },
         { to: "/system/tasks", label: "Tasks" },
         { to: "/system/backups", label: "Backups" },
+        { to: "/system/database", label: "Database" },
         { to: "/system/logs", label: "Logs" },
       ],
     },

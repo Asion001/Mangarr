@@ -59,7 +59,7 @@ func (d *Debouncer) Do(key [2]int64, fn func()) {
 func (a *App) wireReading(ctx context.Context) error {
 	a.Reading = &reading.Service{DB: a.DB, Settings: a.Settings, Library: a.Library, ImageCache: a.ImageCache, Mods: a.Modules,
 		HTTP: a.HTTP, Bus: a.Bus, Downloads: a.Searcher, Log: a.Log.With("component", "reading")}
-	a.Komga = komgaapi.NewService(komgaapi.Deps{DB: a.DB, Settings: a.Settings, Auth: a.Auth, Reading: a.Reading, Bus: a.Bus,
+	a.Komga = komgaapi.NewService(komgaapi.Deps{DB: a.DB, Settings: a.Settings, Auth: a.Auth, Reading: a.Reading, Bus: a.Bus, Maintenance: a.InMaintenance,
 		Log: a.Log.With("component", "komga-api")}, a.Cfg.KomgaListen)
 	a.AddService(a.Komga)
 

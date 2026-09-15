@@ -29,6 +29,7 @@ import { StatusPage } from "./pages/system/Status";
 import { TasksPage } from "./pages/system/Tasks";
 import { BackupsPage } from "./pages/system/Backups";
 import { LogsPage } from "./pages/system/Logs";
+import { DatabasePage } from "./pages/system/Database";
 import { ImportsPage } from "./pages/import/Imports";
 import { ImportDetailPage } from "./pages/import/ImportDetail";
 
@@ -98,6 +99,7 @@ export function App() {
         <Route path="system/tasks" element={<TasksPage />} />
         <Route path="system/backups" element={<BackupsPage />} />
         <Route path="system/logs" element={<LogsPage />} />
+        <Route path="system/database" element={<DatabasePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

@@ -56,9 +56,27 @@ func main() {
 		}
 	}
 	if err := run(); err != nil {
+		if errors.Is(err, errRestart) {
+			reexec()
+		}
 		fmt.Fprintln(os.Stderr, "fatal:", err)
 		os.Exit(1)
 	}
+}
+
+// errRestart ends run when the app asked to restart (e.g. after moving the
+// database).
+var errRestart = errors.New("restart requested")
+
+// reexec replaces the process with a fresh copy of itself. If that isn't
+// possible it exits, and the container's restart policy starts it again.
+func reexec() {
+	exe, err := os.Executable()
+	if err == nil {
+		err = syscall.Exec(exe, os.Args, os.Environ())
+	}
+	fmt.Fprintln(os.Stderr, "restart: couldn't re-execute, exiting for the restart policy:", err)
+	os.Exit(3)
 }
 
 func run() error {
@@ -100,8 +118,12 @@ func run() error {
 	go func() { errCh <- srv.ListenAndServe() }()
 	log.Info("http server listening", "addr", cfg.Listen)
 
+	restart := false
 	select {
 	case <-ctx.Done():
+	case <-a.RestartRequested():
+		restart = true
+		stop() // end SSE streams and background work
 	case err := <-errCh:
 		if !errors.Is(err, http.ErrServerClosed) {
 			return err
@@ -110,7 +132,13 @@ func run() error {
 	log.Info("shutting down")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	return srv.Shutdown(shutdownCtx)
+	if err := srv.Shutdown(shutdownCtx); err != nil && !restart {
+		return err
+	}
+	if restart {
+		return errRestart
+	}
+	return nil
 }
 
 // dumpOpenAPI prints the OpenAPI document (used to generate web client types).

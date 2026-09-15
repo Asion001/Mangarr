@@ -299,6 +299,11 @@ func (s *Service) requireAuth(next http.Handler) http.Handler {
 			writeError(w, r, http.StatusUnauthorized, "Unauthorized")
 			return
 		}
+		if r.Method != http.MethodGet && r.Method != http.MethodHead && s.deps.Maintenance != nil && s.deps.Maintenance() {
+			w.Header().Set("Retry-After", "10")
+			writeError(w, r, http.StatusServiceUnavailable, "mangarr is moving its database; try again in a moment")
+			return
+		}
 		if issue {
 			s.setSession(w, r, p.KeyID)
 		}

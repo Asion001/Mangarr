@@ -61,9 +61,20 @@ func Copy(ctx context.Context, src, dst *db.DB, overwrite bool, progress Progres
 			return nil, fmt.Errorf("empty target: %w", err)
 		}
 	}
+	// read Postgres in one snapshot, so rows added meanwhile can't break
+	// foreign keys in the copy
+	var from reader = src
+	if src.Kind == db.Postgres {
+		tx, err := src.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+		if err != nil {
+			return nil, err
+		}
+		defer func() { _ = tx.Rollback() }()
+		from = tx
+	}
 	res := &Result{Rows: map[string]int{}}
 	for _, t := range Tables {
-		rows, err := copyTable(ctx, src, dst, t, progress)
+		rows, err := copyTable(ctx, from, dst, t, progress)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", t, err)
 		}
@@ -168,7 +179,13 @@ func columns(ctx context.Context, d *db.DB, table string) (map[string]kind, erro
 	return out, rows.Err()
 }
 
-func copyTable(ctx context.Context, src, dst *db.DB, table string, progress Progress) (int, error) {
+// reader reads the source (the database, or a snapshot transaction).
+type reader interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+func copyTable(ctx context.Context, src reader, dst *db.DB, table string, progress Progress) (int, error) {
 	want, err := columns(ctx, dst, table)
 	if err != nil {
 		return 0, err

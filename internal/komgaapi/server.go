@@ -34,6 +34,9 @@ type Deps struct {
 	Reading  *reading.Service
 	Bus      *events.Bus
 	Log      *slog.Logger
+	// Maintenance (optional) reports that the database is moving: writes
+	// answer 503 meanwhile.
+	Maintenance func() bool
 }
 
 // Service owns the listener: it runs while the API is enabled.

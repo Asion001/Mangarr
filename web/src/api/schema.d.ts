@@ -1622,6 +1622,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/system/backups/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add a backup zip from another install (restore it from the list) */
+        post: operations["backups-upload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/system/backups/{name}": {
         parameters: {
             query?: never;
@@ -1633,6 +1650,23 @@ export interface paths {
         put?: never;
         post?: never;
         delete: operations["backups-delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/backups/{name}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Replace all data with a backup's and restart (progress under /api/v1/system/database) */
+        post: operations["backups-restore"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1666,6 +1700,74 @@ export interface paths {
         put?: never;
         /** Clear caches: catalogs (search/details) and image buckets */
         post: operations["system-cache-clear"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/database": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The database mangarr uses, and the progress of moving it */
+        get: operations["database-get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/database/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Leave maintenance mode without switching (after a failed move, or when MANGARR_DB can't be changed now) */
+        post: operations["database-move-cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/database/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Copy all data to another database and switch to it (mangarr restarts) */
+        post: operations["database-move"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/database/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Connect to a database the data could move to */
+        post: operations["database-test"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1749,6 +1851,23 @@ export interface paths {
         get: operations["system-log-files"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/restart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restart mangarr */
+        post: operations["system-restart"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2224,6 +2343,23 @@ export interface components {
             password: string;
             username: string;
         };
+        DBTest: {
+            kind: string;
+            /** Format: int64 */
+            rows: number;
+            version: string;
+        };
+        DatabaseInfo: {
+            defaultDsn: string;
+            dsn: string;
+            /** @enum {string} */
+            kind: "sqlite" | "postgres";
+            move: components["schemas"]["MoveState"];
+            /** Format: int64 */
+            sizeBytes: number;
+            /** @enum {string} */
+            source: "env" | "file" | "default";
+        };
         DecisionDecision: {
             /** Format: int64 */
             chapterId: number;
@@ -2293,6 +2429,11 @@ export interface components {
             pageConcurrency: number;
             /** Format: int64 */
             pageRetries: number;
+        };
+        DsnBodyBody: {
+            /** @description postgres://user:password@host:5432/database?sslmode=disable, or sqlite:///path/file.db */
+            dsn: string;
+            overwrite?: boolean;
         };
         EditorRequest: {
             /** @enum {string} */
@@ -2864,6 +3005,21 @@ export interface components {
             };
             tags?: number[];
         };
+        MoveState: {
+            /** Format: int64 */
+            done: number;
+            error?: string;
+            restarting?: boolean;
+            result?: components["schemas"]["Result"];
+            running: boolean;
+            setEnv?: boolean;
+            /** @enum {string} */
+            stage?: "" | "preparing" | "snapshot" | "copying" | "switching" | "done" | "failed";
+            table?: string;
+            target?: string;
+            /** Format: int64 */
+            total: number;
+        };
         NamingPreview: {
             chapter: string;
             decimal: string;
@@ -3260,6 +3416,15 @@ export interface components {
             /** Format: date-time */
             uploadDate?: string;
             webUrl: string;
+        };
+        Result: {
+            /** Format: int64 */
+            duration: number;
+            rows: {
+                [key: string]: number;
+            };
+            /** Format: int64 */
+            total: number;
         };
         RootFolder: {
             /** Format: date-time */
@@ -7838,6 +8003,39 @@ export interface operations {
             };
         };
     };
+    "backups-upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/zip": string;
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupBackup"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "backups-download": {
         parameters: {
             query?: never;
@@ -7868,6 +8066,35 @@ export interface operations {
         };
     };
     "backups-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "backups-restore": {
         parameters: {
             query?: never;
             header?: never;
@@ -7945,6 +8172,126 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CacheStatus"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "database-get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatabaseInfo"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "database-move-cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "database-move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DsnBodyBody"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "database-test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DsnBodyBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DBTest"];
                 };
             };
             /** @description Error */
@@ -8101,6 +8448,33 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["LogFiles"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "system-restart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {

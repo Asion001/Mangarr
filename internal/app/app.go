@@ -70,6 +70,7 @@ type App struct {
 	ReaderServices
 
 	services []Service
+	maint    maintenance
 }
 
 // Service is a long-running component started with the app.
@@ -102,6 +103,7 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger, ring *loggin
 		HTTP:      &http.Client{Timeout: 5 * time.Minute},
 		StartedAt: time.Now().UTC(),
 	}
+	a.maint.restart = make(chan struct{})
 	if err := a.Settings.Warm(ctx); err != nil {
 		return nil, err
 	}

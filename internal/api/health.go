@@ -73,6 +73,31 @@ func (s *Server) registerHealth() {
 				_, _ = io.Copy(hctx.BodyWriter(), f)
 			}}, nil
 		})
+	huma.Register(s.api, huma.Operation{OperationID: "backups-restore", Method: http.MethodPost, Path: "/api/v1/system/backups/{name}/restore", Tags: tags,
+		Summary: "Replace all data with a backup's and restart (progress under /api/v1/system/database)"},
+		func(ctx context.Context, in *struct {
+			Name string `path:"name"`
+		}) (*struct{}, error) {
+			p, err := s.app.Backups.Path(in.Name)
+			if err != nil {
+				return nil, huma.Error404NotFound("backup not found")
+			}
+			if err := s.app.RestoreBackup(p, in.Name); err != nil {
+				return nil, huma.Error400BadRequest(err.Error())
+			}
+			return nil, nil
+		})
+	huma.Register(s.api, huma.Operation{OperationID: "backups-upload", Method: http.MethodPost, Path: "/api/v1/system/backups/upload", Tags: tags,
+		Summary: "Add a backup zip from another install (restore it from the list)", MaxBodyBytes: 4 << 30},
+		func(ctx context.Context, in *struct {
+			RawBody []byte `contentType:"application/zip"`
+		}) (*struct{ Body *backup.Backup }, error) {
+			b, err := s.app.Backups.Save(in.RawBody)
+			if err != nil {
+				return nil, huma.Error400BadRequest(err.Error())
+			}
+			return &struct{ Body *backup.Backup }{b}, nil
+		})
 	huma.Register(s.api, huma.Operation{OperationID: "backups-delete", Method: http.MethodDelete, Path: "/api/v1/system/backups/{name}", Tags: tags},
 		func(ctx context.Context, in *struct {
 			Name string `path:"name"`

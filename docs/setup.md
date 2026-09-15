@@ -246,9 +246,16 @@ entries that aren't imported yet (and retries failed ones).
 
 ## 9. PostgreSQL (optional)
 
-For large libraries set `MANGARR_DB=postgres://mangarr:…@db:5432/mangarr?sslmode=disable`
-(e.g. your existing Postgres 16). Built-in backups then contain settings and
-modules only — back up the database with `pg_dump`.
+mangarr starts on SQLite. To move to PostgreSQL (13 or newer), create an
+empty database and a user for mangarr, then open **System → Database**:
+enter the server's details, **Test connection**, then **Move data and
+switch**. mangarr pauses downloads and tasks, copies everything (usually
+seconds), and restarts on PostgreSQL. The address is kept in
+`/config/database.dsn`. The SQLite file stays in `/config`; **Move to SQLite**
+on the same page copies the data back.
+
+If you set `MANGARR_DB` yourself, the page still copies the data, and then
+tells you to change the variable and restart the container.
 
 ## 10. Logs, caches and bug reports
 
@@ -268,8 +275,11 @@ modules only — back up the database with `pg_dump`.
 
 ## 11. Backups & upgrades
 
-Daily backups (SQLite snapshot + manifest) go to `/config/backups`
-(System → Backups). Suwayomi's own data is disposable: mangarr keeps the
+Daily backups go to `/config/backups` (System → Backups). They hold the
+whole database as a SQLite file on both SQLite and PostgreSQL installs, so a
+backup restores into either, also on another install: **Add a backup file**,
+then **Restore** (mangarr replaces its data and restarts; your library files
+aren't touched). Suwayomi's own data is disposable: mangarr keeps the
 real identity of every series (`sourceId` + URL) and re-links if Suwayomi's
 database is lost. When upgrading Suwayomi, mangarr shows a health warning if
 the version differs from the tested one.

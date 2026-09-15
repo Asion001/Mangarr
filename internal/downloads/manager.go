@@ -94,6 +94,7 @@ type Manager struct {
 	runningSrc  map[string]int
 	lastMaint   time.Time
 	wasBusy     bool
+	held        bool
 	progressMu  sync.Mutex
 	lastPersist map[int64]time.Time
 }
@@ -115,6 +116,30 @@ func (m *Manager) Start(ctx context.Context) error {
 	_ = os.RemoveAll(filepath.Join(m.dataDir, "staging"))
 	go m.loop(ctx)
 	return nil
+}
+
+// Hold stops starting jobs (true) or starts again (false).
+func (m *Manager) Hold(on bool) {
+	m.mu.Lock()
+	m.held = on
+	m.mu.Unlock()
+	m.queue.signal()
+}
+
+// CancelAll stops every running job; they're queued again on next start.
+func (m *Manager) CancelAll() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, c := range m.running {
+		c()
+	}
+}
+
+// Running is the number of jobs running now.
+func (m *Manager) Running() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.running)
 }
 
 // Cancel stops a running job (used when the user removes it from the queue).
@@ -182,6 +207,9 @@ func (m *Manager) dispatch(ctx context.Context) {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.held {
+		return
+	}
 	busy := len(m.running) > 0
 	for _, j := range jobs {
 		if len(m.running) >= dl.MaxConcurrent {

@@ -20,6 +20,10 @@ type Config struct {
 	DataDir string
 	// DB is a DSN: "sqlite:///config/mangarr.db" (default) or "postgres://user:pass@host:5432/db".
 	DB string
+	// DBSource says where DB came from: "env" (MANGARR_DB), "file"
+	// (DBFileName in the data dir, written when the database was moved in
+	// the UI) or "default" (SQLite in the data dir).
+	DBSource string
 	// LogLevel: debug, info, warn, error.
 	LogLevel string
 	// LogDir holds rotating log files ("" = no log files).
@@ -100,7 +104,12 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("data dir: %w", err)
 	}
 	c.DataDir = abs
-	c.DB = env("MANGARR_DB", "sqlite://"+filepath.Join(c.DataDir, "mangarr.db"))
+	c.DB, c.DBSource = DefaultDB(c.DataDir), "default"
+	if v := env("MANGARR_DB", ""); v != "" {
+		c.DB, c.DBSource = v, "env"
+	} else if b, err := os.ReadFile(filepath.Join(c.DataDir, DBFileName)); err == nil && strings.TrimSpace(string(b)) != "" {
+		c.DB, c.DBSource = strings.TrimSpace(string(b)), "file"
+	}
 	switch d := env("MANGARR_LOG_DIR", filepath.Join(c.DataDir, "logs")); strings.ToLower(d) {
 	case "off", "none", "false", "0":
 	default:
@@ -135,6 +144,13 @@ func (c *Config) Dir(name string) (string, error) {
 	}
 	return p, nil
 }
+
+// DBFileName is the file in the data dir that holds the database DSN after
+// the database was moved from the UI (used when MANGARR_DB isn't set).
+const DBFileName = "database.dsn"
+
+// DefaultDB is the SQLite database in the data dir.
+func DefaultDB(dataDir string) string { return "sqlite://" + filepath.Join(dataDir, "mangarr.db") }
 
 func env(key, def string) string {
 	if v, ok := os.LookupEnv(key); ok && v != "" {

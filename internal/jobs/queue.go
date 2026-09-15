@@ -75,8 +75,25 @@ type Queue struct {
 	queued  []*model.Command
 	running map[int64]*model.Command
 	wake    chan struct{}
+	held    bool
 
 	onDone []func(cmd *model.Command)
+}
+
+// Hold stops starting commands (true) or starts again (false); running
+// ones finish. Used while the database moves.
+func (q *Queue) Hold(on bool) {
+	q.mu.Lock()
+	q.held = on
+	q.mu.Unlock()
+	q.signal()
+}
+
+// Running is the number of commands running now.
+func (q *Queue) Running() int {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return len(q.running)
 }
 
 func NewQueue(d *db.DB, bus *events.Bus, log *slog.Logger, workers int) *Queue {
@@ -209,6 +226,9 @@ func (q *Queue) worker(ctx context.Context) {
 func (q *Queue) next() (*model.Command, Definition) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	if q.held {
+		return nil, Definition{}
+	}
 	for _, r := range q.running {
 		if q.defs[r.Name].Exclusive {
 			return nil, Definition{}
