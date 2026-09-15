@@ -83,13 +83,9 @@ func TestKomgaAPIPages(t *testing.T) {
 			if resp.StatusCode != 200 || resp.Header.Get("Content-Type") != "image/png" || len(img) == 0 {
 				t.Fatalf("page: %d %s", resp.StatusCode, resp.Header.Get("Content-Type"))
 			}
-			fetches := sc.FetchCount()
 			resp = get("/api/v1/books/" + c1 + "/pages/1?convert=jpeg")
 			if resp.StatusCode != 200 || resp.Header.Get("Content-Type") != "image/jpeg" {
 				t.Fatalf("convert: %d %s", resp.StatusCode, resp.Header.Get("Content-Type"))
-			}
-			if sc.FetchCount() != fetches {
-				t.Fatalf("a streamed page is fetched once (%d fetches, then %d)", fetches, sc.FetchCount())
 			}
 			if resp := get("/api/v1/books/" + c1 + "/pages/9"); resp.StatusCode != 404 {
 				t.Fatalf("page out of range: %d", resp.StatusCode)
@@ -114,7 +110,7 @@ func TestKomgaAPIPages(t *testing.T) {
 			if len(pages) != 3 || pages[0]["sizeBytes"] == nil {
 				t.Fatalf("pages from file %v", pages)
 			}
-			fetches = sc.FetchCount()
+			fetches := sc.FetchCount()
 			resp = get("/api/v1/books/" + c1 + "/pages/2")
 			if resp.StatusCode != 200 || sc.FetchCount() != fetches || !strings.HasPrefix(resp.Header.Get("Content-Type"), "image/") {
 				t.Fatalf("page from file: %d %s fetches %d→%d", resp.StatusCode, resp.Header.Get("Content-Type"), fetches, sc.FetchCount())
@@ -140,6 +136,14 @@ func TestKomgaAPIPages(t *testing.T) {
 			getJSON("/api/v1/books/"+c2+"/pages", &pages)
 			if len(pages) != 4 {
 				t.Fatalf("pages of chapter 2: %d", len(pages))
+			}
+			// (no download runs now, so the fetch count is stable)
+			if resp := get("/api/v1/books/" + c2 + "/pages/1"); resp.StatusCode != 200 {
+				t.Fatalf("chapter 2 page: %d", resp.StatusCode)
+			}
+			fetches = sc.FetchCount()
+			if resp := get("/api/v1/books/" + c2 + "/pages/1?convert=png"); resp.StatusCode != 200 || sc.FetchCount() != fetches {
+				t.Fatalf("a streamed page is fetched once (%d fetches, then %d)", fetches, sc.FetchCount())
 			}
 			n, _ := e.App.DB.NewSelect().Model((*model.DownloadJob)(nil)).Where("chapter_id = ?", chs[1].ID).Count(e.Ctx)
 			if n != 0 {
