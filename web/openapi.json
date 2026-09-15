@@ -5902,7 +5902,7 @@
   "info": {
     "description": "Sonarr-style PVR for manga. All endpoints accept an X-Api-Key header.",
     "title": "mangarr",
-    "version": "d8bff67-dirty"
+    "version": "dev"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -8381,12 +8381,12 @@
         "operationId": "queue-list",
         "parameters": [
           {
-            "description": "Statuses (repeatable); empty = active (plus recent when includeDone)",
-            "explode": false,
+            "description": "Statuses (repeat the parameter or separate with commas); empty = active (plus recent when includeDone)",
+            "explode": true,
             "in": "query",
             "name": "status",
             "schema": {
-              "description": "Statuses (repeatable); empty = active (plus recent when includeDone)",
+              "description": "Statuses (repeat the parameter or separate with commas); empty = active (plus recent when includeDone)",
               "items": {
                 "type": "string"
               },
@@ -10719,10 +10719,12 @@
             }
           },
           {
-            "explode": false,
+            "description": "Catalogs (moduleId:sourceId) for scope=custom; repeat the parameter or separate with commas",
+            "explode": true,
             "in": "query",
             "name": "source",
             "schema": {
+              "description": "Catalogs (moduleId:sourceId) for scope=custom; repeat the parameter or separate with commas",
               "items": {
                 "type": "string"
               },

@@ -153,11 +153,11 @@ func (s *Server) registerSources() {
 		func(ctx context.Context, in *struct {
 			Query   string   `query:"q" minLength:"1"`
 			Scope   string   `query:"scope" enum:"active,all" default:"active"`
-			Sources []string `query:"source"`
+			Sources []string `query:"source,explode" doc:"Catalogs (moduleId:sourceId) for scope=custom; repeat the parameter or separate with commas"`
 			Lang    string   `query:"lang"`
 			Page    int      `query:"page" default:"1"`
 		}) (*struct{ Body []SearchResultGroup }, error) {
-			targets, _ := s.app.Catalogs.Select(ctx, catalogs.Filter{Scope: catalogs.Scope(in.Scope), Lang: in.Lang, Keys: in.Sources})
+			targets, _ := s.app.Catalogs.Select(ctx, catalogs.Filter{Scope: catalogs.Scope(in.Scope), Lang: in.Lang, Keys: splitList(in.Sources)})
 			if len(targets) > 40 {
 				return nil, huma.Error400BadRequest("too many catalogs selected (max 40); pick catalogs or a language")
 			}

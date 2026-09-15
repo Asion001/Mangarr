@@ -5336,7 +5336,7 @@ export interface operations {
     "queue-list": {
         parameters: {
             query?: {
-                /** @description Statuses (repeatable); empty = active (plus recent when includeDone) */
+                /** @description Statuses (repeat the parameter or separate with commas); empty = active (plus recent when includeDone) */
                 status?: string[];
                 kind?: "" | "download" | "reprocess";
                 seriesId?: number;
@@ -7117,6 +7117,7 @@ export interface operations {
             query?: {
                 q?: string;
                 scope?: "active" | "all";
+                /** @description Catalogs (moduleId:sourceId) for scope=custom; repeat the parameter or separate with commas */
                 source?: string[];
                 lang?: string;
                 page?: number;

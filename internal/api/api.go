@@ -191,6 +191,20 @@ func toHTTPError(err error) error {
 
 var ErrNotFound = errors.New("not found")
 
+// splitList flattens a repeated query parameter whose values may also be
+// comma-separated ("a,b" and "a&x=b" both work).
+func splitList(values []string) []string {
+	var out []string
+	for _, v := range values {
+		for _, p := range strings.Split(v, ",") {
+			if p = strings.TrimSpace(p); p != "" {
+				out = append(out, p)
+			}
+		}
+	}
+	return out
+}
+
 type validationError struct{ msg string }
 
 func (v validationError) Error() string { return v.msg }

@@ -212,6 +212,13 @@ export function QueuePage() {
         </p>
       ) : null}
       <div className="mb-3 flex flex-wrap items-center gap-2">
+        <button
+          onClick={() => (setStatus(""), setPage("1"), resetSelection())}
+          className={`rounded-full border px-3 py-1 text-xs ${!status ? "border-accent bg-accent/15 text-fg" : "border-border text-muted hover:text-fg"}`}
+          title="Show every status"
+        >
+          all {Object.values(data?.counts ?? {}).reduce((a, b) => a + b, 0)}
+        </button>
         {statuses.map((s) => {
           const n = data?.counts?.[s] ?? 0;
           const on = status.split(",").includes(s);

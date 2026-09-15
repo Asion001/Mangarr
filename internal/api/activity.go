@@ -68,7 +68,7 @@ func (s *Server) registerActivity() {
 	huma.Register(s.api, huma.Operation{OperationID: "queue-list", Method: http.MethodGet, Path: "/api/v1/queue", Tags: tags,
 		Summary: "Queue entries: running first, then by priority; filter by status, kind, series or title"},
 		func(ctx context.Context, in *struct {
-			Status      []string `query:"status" doc:"Statuses (repeatable); empty = active (plus recent when includeDone)"`
+			Status      []string `query:"status,explode" doc:"Statuses (repeat the parameter or separate with commas); empty = active (plus recent when includeDone)"`
 			Kind        string   `query:"kind" enum:",download,reprocess"`
 			SeriesID    int64    `query:"seriesId"`
 			Query       string   `query:"q"`
@@ -76,7 +76,7 @@ func (s *Server) registerActivity() {
 			Page        int      `query:"page" default:"1"`
 			PageSize    int      `query:"pageSize" default:"100"`
 		}) (*struct{ Body QueueResponse }, error) {
-			p, err := s.app.DLQueue.ListPage(ctx, downloads.ListFilter{Statuses: in.Status, Kind: in.Kind, SeriesID: in.SeriesID, Query: in.Query, IncludeDone: in.IncludeDone}, in.Page, in.PageSize)
+			p, err := s.app.DLQueue.ListPage(ctx, downloads.ListFilter{Statuses: splitList(in.Status), Kind: in.Kind, SeriesID: in.SeriesID, Query: in.Query, IncludeDone: in.IncludeDone}, in.Page, in.PageSize)
 			if err != nil {
 				return nil, toHTTPError(err)
 			}
