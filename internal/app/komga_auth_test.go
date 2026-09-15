@@ -93,6 +93,15 @@ func TestKomgaAPILogins(t *testing.T) {
 	if resp := do(http.DefaultClient, "GET", "/api/v1/libraries", map[string]string{"X-API-Key": apiKey + "x"}, ""); resp.StatusCode != 401 {
 		t.Fatalf("bad key: %d", resp.StatusCode)
 	}
+	// Paperback only does Basic: any username, the key as the password
+	for pass, want := range map[string]int{apiKey: 200, apiKey + "x": 401} {
+		req, _ := http.NewRequest("GET", srv.URL+"/api/v2/users/me", nil)
+		req.SetBasicAuth("whatever", pass)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil || resp.StatusCode != want {
+			t.Fatalf("basic with key: %v %d, want %d", err, resp.StatusCode, want)
+		}
+	}
 	// a session issued for a key dies with the key
 	resp = do(http.DefaultClient, "GET", "/api/v1/libraries", map[string]string{"X-API-Key": apiKey}, "")
 	keyToken := resp.Header.Get("X-Auth-Token")

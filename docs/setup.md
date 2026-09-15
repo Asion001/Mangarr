@@ -69,14 +69,16 @@ download. Progress syncs both ways.
    Publish it, e.g. `"25601:25600"` when Komga already uses 25600 on the
    host, and set *Address apps should use* to the address the apps reach.
 2. **Add device** for each app. Each one gets its own API key, so you can see
-   what every device synced and revoke one without the others.
+   what every device synced and revoke one without the others. Apps that only
+   ask for a username and password (Paperback) take any username with the
+   key as the password.
 3. Connect the apps (the page has step-by-step guides with your address):
 
 | App | How | Progress |
 |---|---|---|
 | Mihon (Android) | Komga extension (Keiyoushi repo): address + API key | Enable **Komga** under Settings → Tracking → enhanced services. Syncs finished chapters. |
 | KMReader (iPhone, iPad) | Add server: address + API key, or username and password | Page by page, live updates. Downloaded chapters can be saved offline. |
-| Paperback (iPhone, iPad) | Komga extension: address + mangarr username and password | Finished chapters, through its Komga tracker |
+| Paperback (iPhone, iPad) | Komga extension: address, any username and a device key as the password (or your mangarr login) | Finished chapters, through its Komga tracker |
 
 Apps act as one reader (Settings → Reading apps → *Reader*). What they
 report is logged per device under Settings → Readers → *Devices & sync*,

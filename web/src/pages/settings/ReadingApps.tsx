@@ -173,7 +173,8 @@ function Guide({ app, address }: { app: App; address: string }) {
             In Paperback, add the <b>Komga</b> extension from the default extensions repository.
           </li>
           <li>
-            Set the server address to <Code>{address}</Code> and log in with your mangarr username and password (Paperback doesn't use API keys).
+            Set the server address to <Code>{address}</Code>. Log in with any username and a device key from Devices as the password (or your mangarr
+            username and password).
           </li>
           <li>Enable the Komga tracker in Paperback to send finished chapters to mangarr.</li>
         </ol>

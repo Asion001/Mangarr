@@ -264,9 +264,18 @@ func (s *Service) authenticate(r *http.Request) (p Principal, issue bool, ok boo
 			}
 		}
 	}
-	if user, pass, found := r.BasicAuth(); found && s.verifyBasic(ctx, user, pass) {
-		p.Device = "password login"
-		return p, true, true
+	if user, pass, found := r.BasicAuth(); found {
+		// any username with a device key as the password, for clients
+		// that only do Basic (Paperback)
+		if rk, isKey := s.lookupKey(ctx, pass); isKey {
+			s.touchKey(rk, p.Client)
+			p.KeyID, p.Device = rk.ID, rk.Comment
+			return p, true, true
+		}
+		if s.verifyBasic(ctx, user, pass) {
+			p.Device = "password login"
+			return p, true, true
+		}
 	}
 	return p, false, false
 }
