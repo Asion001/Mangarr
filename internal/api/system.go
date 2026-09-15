@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"net/http"
-	"path/filepath"
 	"runtime"
 	"slices"
 	"time"
@@ -35,6 +34,16 @@ type CacheStatus struct {
 	Bytes    int64                   `json:"bytes"`
 	MaxBytes int64                   `json:"maxBytes"`
 	Images   []diskcache.BucketStats `json:"images"`
+	// ImageBytes is the image cache's total and ImageMaxBytes its cap (0 = none).
+	ImageBytes    int64 `json:"imageBytes"`
+	ImageMaxBytes int64 `json:"imageMaxBytes"`
+	// NeedsCompact is true while images from an older version wait to be resized.
+	NeedsCompact bool `json:"needsCompact"`
+}
+
+func (s *Server) imageCap(ctx context.Context) int64 {
+	g, _ := s.app.Settings.General(ctx)
+	return int64(g.ImageCacheMaxMB) << 20
 }
 
 type TaskInfo struct {
@@ -88,7 +97,7 @@ func (s *Server) registerSystem() {
 		func(ctx context.Context, _ *struct{}) (*struct{ Body CacheStatus }, error) {
 			n, b, max := s.app.SourceCache.Stats()
 			return &struct{ Body CacheStatus }{CacheStatus{Entries: n, Bytes: b, MaxBytes: max,
-				Images: diskcache.Stats(filepath.Join(s.app.Cfg.DataDir, "cache"))}}, nil
+				Images: s.app.ImageCache.Stats(), ImageBytes: s.app.ImageCache.Size(), ImageMaxBytes: s.imageCap(ctx), NeedsCompact: s.app.ImageCache.NeedsCompact()}}, nil
 		})
 	huma.Register(s.api, huma.Operation{OperationID: "system-cache-clear", Method: http.MethodPost, Path: "/api/v1/system/cache/clear", Tags: tags,
 		Summary: "Clear caches: catalogs (search/details) and image buckets"},
@@ -108,14 +117,14 @@ func (s *Server) registerSystem() {
 				}
 			}
 			if len(in.Body.Images) > 0 {
-				if err := diskcache.Clear(filepath.Join(s.app.Cfg.DataDir, "cache"), in.Body.Images); err != nil {
+				if err := s.app.ImageCache.Clear(in.Body.Images); err != nil {
 					return nil, toHTTPError(err)
 				}
 			}
 			s.app.Bus.Changed("cache", "cleared", 0)
 			n, b, max := s.app.SourceCache.Stats()
 			return &struct{ Body CacheStatus }{CacheStatus{Entries: n, Bytes: b, MaxBytes: max,
-				Images: diskcache.Stats(filepath.Join(s.app.Cfg.DataDir, "cache"))}}, nil
+				Images: s.app.ImageCache.Stats(), ImageBytes: s.app.ImageCache.Size(), ImageMaxBytes: s.imageCap(ctx), NeedsCompact: s.app.ImageCache.NeedsCompact()}}, nil
 		})
 
 	huma.Register(s.api, huma.Operation{OperationID: "system-logs", Method: http.MethodGet, Path: "/api/v1/system/logs", Tags: tags},

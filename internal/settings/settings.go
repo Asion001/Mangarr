@@ -196,7 +196,7 @@ func DefaultSources() Sources {
 }
 
 func DefaultGeneral() General {
-	return General{InstanceName: "mangarr", BackupRetention: 7, ImageCacheMaxMB: 1024}
+	return General{InstanceName: "mangarr", BackupRetention: 7, ImageCacheMaxMB: 512}
 }
 
 func DefaultMediaManagement() MediaManagement {

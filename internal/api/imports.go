@@ -3,13 +3,24 @@ package api
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
+	"net/url"
+	"strconv"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/Asion001/mangarr/internal/imports"
 	"github.com/Asion001/mangarr/internal/model"
+	"github.com/Asion001/mangarr/internal/modules"
+	"github.com/Asion001/mangarr/internal/modules/source"
+	"github.com/Asion001/mangarr/internal/netguard"
 )
+
+// backupCovers fetches cover links found in uploaded backups (public
+// addresses only).
+var backupCovers = netguard.Client(30 * time.Second)
 
 func init() { register((*Server).registerImports) }
 
@@ -144,6 +155,53 @@ func (s *Server) registerImports() {
 				views = append(views, v)
 			}
 			return &struct{ Body ImportEntriesPage }{ImportEntriesPage{Items: views, Total: total, Page: max(in.Page, 1), PageSize: pageSize}}, nil
+		})
+
+	huma.Register(s.api, huma.Operation{OperationID: "imports-entry-cover", Method: http.MethodGet, Path: "/api/v1/imports/{id}/entries/{entryId}/cover", Tags: tags,
+		Summary: "An entry's cover: the matched manga's thumbnail, else the backup's cover link (resized and cached)"},
+		func(ctx context.Context, in *struct {
+			ID      int64  `path:"id"`
+			EntryID int64  `path:"entryId"`
+			V       string `query:"v" doc:"Cache buster"`
+		}) (*imageOutput, error) {
+			var e model.ImportEntry
+			if err := s.app.DB.NewSelect().Model(&e).Where("id = ? AND import_id = ?", in.EntryID, in.ID).Scan(ctx); err != nil {
+				return nil, huma.Error404NotFound("entry not found")
+			}
+			if src := e.Source; src != nil && e.State != model.EntryExtension {
+				if th, _, err := modules.GetAs[source.Thumbnails](s.app.Modules, src.ModuleID); err == nil {
+					// same cache entry as the catalog thumbnail endpoint
+					key := strconv.FormatInt(src.ModuleID, 10) + "|" + src.SourceID + "|" + src.URL
+					data, ct, err := s.cachedImage(ctx, "thumbs", key, 7*24*time.Hour, func(ctx context.Context) (io.ReadCloser, string, error) {
+						return th.Thumbnail(ctx, source.MangaRef{SourceID: src.SourceID, URL: src.URL, TitleHint: src.Title})
+					})
+					if err == nil {
+						return &imageOutput{ContentType: ct, CacheControl: "public, max-age=86400", Body: data}, nil
+					}
+				}
+			}
+			u, err := url.Parse(e.Data.ThumbnailURL)
+			if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+				return nil, huma.Error404NotFound("no cover")
+			}
+			data, ct, err := s.cachedImage(ctx, "thumbs", "url|"+u.String(), 30*24*time.Hour, func(ctx context.Context) (io.ReadCloser, string, error) {
+				req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+				req.Header.Set("Referer", u.Scheme+"://"+u.Host+"/") // sites refuse foreign referers
+				req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; mangarr)")
+				resp, err := backupCovers.Do(req)
+				if err != nil {
+					return nil, "", err
+				}
+				if resp.StatusCode != http.StatusOK {
+					resp.Body.Close()
+					return nil, "", errors.New(resp.Status)
+				}
+				return resp.Body, resp.Header.Get("Content-Type"), nil
+			})
+			if err != nil {
+				return nil, huma.Error404NotFound("no cover: " + err.Error())
+			}
+			return &imageOutput{ContentType: ct, CacheControl: "public, max-age=86400", Body: data}, nil
 		})
 
 	huma.Register(s.api, huma.Operation{OperationID: "imports-entries-update", Method: http.MethodPatch, Path: "/api/v1/imports/{id}/entries", Tags: tags,

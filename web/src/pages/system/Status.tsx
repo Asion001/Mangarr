@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, Info, RefreshCw, XCircle } from "lucide-react";
 import { api, unwrap } from "../../api/client";
 import { useCommands, useHealth } from "../../api/queries";
-import { Badge, Button, Card, Loading, PageHeader, Table, Td, Th } from "../../components/ui";
+import { Badge, Button, Card, Loading, PageHeader, Progress, Table, Td, Th } from "../../components/ui";
 import { bytes, dateTime, duration, relative } from "../../lib/format";
 import { useToast } from "../../lib/toast";
 
@@ -112,9 +112,37 @@ function CacheCard() {
       toast.fromError(e);
     }
   };
+  const compact = async () => {
+    try {
+      await unwrap(api.POST("/api/v1/commands", { body: { name: "CompactImageCache" } }));
+      toast.info("Resizing cached images");
+    } catch (e) {
+      toast.fromError(e);
+    }
+  };
   if (!data) return null;
+  const pct = data.imageMaxBytes > 0 ? Math.min(100, (data.imageBytes / data.imageMaxBytes) * 100) : 0;
   return (
-    <Card title="Caches" className="mb-6">
+    <Card
+      title="Caches"
+      className="mb-6"
+      actions={
+        <Button size="sm" onClick={compact} title="Resize cached thumbnails and covers to small JPEGs">
+          Compact images
+        </Button>
+      }
+    >
+      <div className="mb-3 flex flex-col gap-1 text-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span>
+            Images on disk: <b>{bytes(data.imageBytes)}</b>
+            {data.imageMaxBytes > 0 ? ` of ${bytes(data.imageMaxBytes)} limit` : " (no limit)"}
+          </span>
+          <span className="text-xs text-muted">oldest images are removed above the limit (Settings → General)</span>
+        </div>
+        {data.imageMaxBytes > 0 && <Progress value={pct} tone={pct > 95 ? "warn" : "accent"} />}
+        {data.needsCompact && <p className="text-xs text-warn">Images cached by an older version are being resized; sizes drop once that finishes.</p>}
+      </div>
       <div className="overflow-x-auto">
         <Table>
           <thead>
@@ -122,6 +150,7 @@ function CacheCard() {
               <Th>Cache</Th>
               <Th>Entries</Th>
               <Th>Size</Th>
+              <Th>Average</Th>
               <Th></Th>
             </tr>
           </thead>
@@ -132,6 +161,7 @@ function CacheCard() {
               <Td>
                 {bytes(data.bytes)} / {bytes(data.maxBytes)}
               </Td>
+              <Td>—</Td>
               <Td className="text-right">
                 <Button size="sm" onClick={() => clear({ catalogs: true })}>
                   Clear
@@ -143,6 +173,7 @@ function CacheCard() {
                 <Td>{imageLabels[b.name] ?? b.name}</Td>
                 <Td>{b.files}</Td>
                 <Td>{bytes(b.bytes)}</Td>
+                <Td>{b.files > 0 ? bytes(b.bytes / b.files) : "—"}</Td>
                 <Td className="text-right">
                   <Button size="sm" onClick={() => clear({ images: [b.name] })}>
                     Clear

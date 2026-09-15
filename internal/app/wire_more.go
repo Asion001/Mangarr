@@ -3,12 +3,10 @@ package app
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/Asion001/mangarr/internal/backup"
-	"github.com/Asion001/mangarr/internal/diskcache"
 	"github.com/Asion001/mangarr/internal/events"
 	"github.com/Asion001/mangarr/internal/health"
 	"github.com/Asion001/mangarr/internal/jobs"
@@ -116,6 +114,26 @@ func (a *App) wireMore(ctx context.Context) error {
 		}})
 	a.Queue.Register(jobs.Definition{Name: "ExtensionUpdateCheck", Description: "Check source extensions for updates (and install them when enabled)",
 		Handler: a.extensionUpdates})
+	a.Queue.Register(jobs.Definition{Name: "CompactImageCache", Description: "Resize cached thumbnails and covers to small JPEGs",
+		Handler: func(ctx context.Context, r *jobs.Run) error {
+			res, err := a.ImageCache.Compact(ctx, func(done int) { r.Progress("checked %d images", done) })
+			r.Progress("resized %d of %d images: %s → %s", res.Converted, res.Files, humanBytes(res.Before), humanBytes(res.After))
+			a.Bus.Changed("cache", "compacted", 0)
+			return err
+		}})
+	a.Health.AddCheck(func(ctx context.Context) []health.Check {
+		g, _ := a.Settings.General(ctx)
+		limit := int64(g.ImageCacheMaxMB) << 20
+		if size := a.ImageCache.Size(); limit > 0 && size > limit+limit/10 {
+			return []health.Check{{Source: "Image cache", Type: health.Warning, Link: "/system/status",
+				Message: fmt.Sprintf("The image cache uses %s, over its %s limit; clear it or check the cache folder's permissions", humanBytes(size), humanBytes(limit))}}
+		}
+		return nil
+	})
+	if a.ImageCache.NeedsCompact() {
+		// thumbnails cached before resizing existed
+		_, _ = a.Queue.Push(ctx, "CompactImageCache", nil, "upgrade")
+	}
 
 	for _, t := range []jobs.Task{
 		{Name: "HealthCheck", Interval: 5 * time.Minute, RunOnStart: true},
@@ -150,9 +168,22 @@ func (a *App) housekeeping(ctx context.Context, r *jobs.Run) error {
 	_, _ = a.DB.NewDelete().Model((*model.Command)(nil)).Where("queued_at < ?", time.Now().UTC().Add(-30*24*time.Hour)).
 		Where("status NOT IN (?, ?)", model.CommandQueued, model.CommandStarted).Exec(ctx)
 	g, _ := a.Settings.General(ctx)
-	cleaned := diskcache.Trim(filepath.Join(a.Cfg.DataDir, "cache"), 30*24*time.Hour, int64(g.ImageCacheMaxMB)<<20)
+	cleaned := a.ImageCache.Trim(30*24*time.Hour, int64(g.ImageCacheMaxMB)<<20)
 	r.Progress("purged %d recycled files, %d cached images", purged, cleaned)
 	return nil
+}
+
+func humanBytes(n int64) string {
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%d B", n)
+	}
+	div, exp := int64(unit), 0
+	for m := n / unit; m >= unit; m /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(n)/float64(div), "KMGTPE"[exp])
 }
 
 func (a *App) extensionUpdates(ctx context.Context, r *jobs.Run) error {

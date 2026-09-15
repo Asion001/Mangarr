@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 	"time"
 
 	"github.com/Asion001/mangarr/internal/auth"
 	"github.com/Asion001/mangarr/internal/catalogs"
 	"github.com/Asion001/mangarr/internal/config"
 	"github.com/Asion001/mangarr/internal/db"
+	"github.com/Asion001/mangarr/internal/diskcache"
 	"github.com/Asion001/mangarr/internal/envcfg"
 	"github.com/Asion001/mangarr/internal/events"
 	"github.com/Asion001/mangarr/internal/imageenc"
@@ -40,6 +42,8 @@ type App struct {
 	Catalogs *catalogs.Service
 	// SourceCache caches catalog responses (keys include the catalogs generation).
 	SourceCache *sourcecache.Cache
+	// ImageCache holds thumbnails, covers and extension icons on disk.
+	ImageCache *diskcache.Store
 	// Search searches catalogs through SourceCache.
 	Search *sourcesearch.Service
 	// Encoder re-encodes pages (set before New to override engine detection in tests).
@@ -102,6 +106,10 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger, ring *loggin
 	a.Modules = modules.NewManager(d, a.HTTP, log, cfg.DataDir)
 	a.Catalogs = catalogs.New(d, a.Modules, a.Bus, a.Settings, log.With("component", "catalogs"))
 	a.SourceCache = sourcecache.New(32 << 20)
+	a.ImageCache = diskcache.NewStore(filepath.Join(cfg.DataDir, "cache"), func() int64 {
+		g, _ := a.Settings.General(context.Background())
+		return int64(g.ImageCacheMaxMB) << 20
+	}, log.With("component", "imagecache"))
 	a.Search = &sourcesearch.Service{Catalogs: a.Catalogs, Cache: a.SourceCache, Modules: a.Modules, Settings: a.Settings}
 	if err := a.Catalogs.Load(ctx); err != nil {
 		return nil, err

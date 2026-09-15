@@ -48,7 +48,7 @@ Lists are comma-separated (`a,b,c`) or JSON; key/value settings use `key=value,k
 | `MANGARR_GENERAL_INSTANCE_NAME` | string | `mangarr` | Name shown in the UI and notifications. |
 | `MANGARR_GENERAL_PUBLIC_URL` | string | `` | External URL used in notification links. |
 | `MANGARR_GENERAL_BACKUP_RETENTION` | int | `7` | Number of scheduled backups to keep. |
-| `MANGARR_GENERAL_IMAGE_CACHE_MAX_MB` | int | `1024` | Maximum size of the image cache (MB, 0 = unlimited). |
+| `MANGARR_GENERAL_IMAGE_CACHE_MAX_MB` | int | `512` | Maximum size of the image cache (MB, 0 = unlimited). |
 
 ### media
 

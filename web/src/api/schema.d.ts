@@ -351,6 +351,23 @@ export interface paths {
         patch: operations["imports-entries-update"];
         trace?: never;
     };
+    "/api/v1/imports/{id}/entries/{entryId}/cover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An entry's cover: the matched manga's thumbnail, else the backup's cover link (resized and cached) */
+        get: operations["imports-entry-cover"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/imports/{id}/install-extensions": {
         parameters: {
             query?: never;
@@ -1809,9 +1826,14 @@ export interface components {
             bytes: number;
             /** Format: int64 */
             entries: number;
+            /** Format: int64 */
+            imageBytes: number;
+            /** Format: int64 */
+            imageMaxBytes: number;
             images: components["schemas"]["BucketStats"][];
             /** Format: int64 */
             maxBytes: number;
+            needsCompact: boolean;
         };
         Catalog: {
             cooldownReason?: string;
@@ -4160,6 +4182,43 @@ export interface operations {
             };
         };
     };
+    "imports-entry-cover": {
+        parameters: {
+            query?: {
+                /** @description Cache buster */
+                v?: string;
+            };
+            header?: never;
+            path: {
+                id: number;
+                entryId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    "Content-Type"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "imports-install-extensions": {
         parameters: {
             query?: never;
@@ -5973,6 +6032,8 @@ export interface operations {
         parameters: {
             query?: {
                 v?: string;
+                /** @description full = the library's cover.jpg as is (default: a resized copy) */
+                size?: "" | "full";
             };
             header?: never;
             path: {

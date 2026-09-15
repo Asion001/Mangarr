@@ -74,7 +74,13 @@ func Clear(root string, buckets []string) error {
 func Trim(root string, maxAge time.Duration, maxBytes int64) int {
 	var files []file
 	var total int64
-	walk(root, func(f file) { files = append(files, f); total += f.size })
+	walk(root, func(f file) {
+		if filepath.Base(f.path) == ".format" {
+			return
+		}
+		files = append(files, f)
+		total += f.size
+	})
 	removed := 0
 	cutoff := time.Now().Add(-maxAge)
 	sort.Slice(files, func(i, j int) bool { return files[i].mod.Before(files[j].mod) })

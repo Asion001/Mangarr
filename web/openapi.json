@@ -396,6 +396,14 @@
             "format": "int64",
             "type": "integer"
           },
+          "imageBytes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "imageMaxBytes": {
+            "format": "int64",
+            "type": "integer"
+          },
           "images": {
             "items": {
               "$ref": "#/components/schemas/BucketStats"
@@ -405,13 +413,19 @@
           "maxBytes": {
             "format": "int64",
             "type": "integer"
+          },
+          "needsCompact": {
+            "type": "boolean"
           }
         },
         "required": [
           "entries",
           "bytes",
           "maxBytes",
-          "images"
+          "images",
+          "imageBytes",
+          "imageMaxBytes",
+          "needsCompact"
         ],
         "type": "object"
       },
@@ -5497,7 +5511,7 @@
   "info": {
     "description": "Sonarr-style PVR for manga. All endpoints accept an X-Api-Key header.",
     "title": "mangarr",
-    "version": "3c7f740-dirty"
+    "version": "1c71a2e-dirty"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -6621,6 +6635,80 @@
           }
         },
         "summary": "Select, accept or re-map entries (by ids or filter)",
+        "tags": [
+          "Import"
+        ]
+      }
+    },
+    "/api/v1/imports/{id}/entries/{entryId}/cover": {
+      "get": {
+        "operationId": "imports-entry-cover",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "entryId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Cache buster",
+            "explode": false,
+            "in": "query",
+            "name": "v",
+            "schema": {
+              "description": "Cache buster",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "contentEncoding": "base64",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Type": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "An entry's cover: the matched manga's thumbnail, else the backup's cover link (resized and cached)",
         "tags": [
           "Import"
         ]
@@ -9093,6 +9181,20 @@
             "in": "query",
             "name": "v",
             "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "full = the library's cover.jpg as is (default: a resized copy)",
+            "explode": false,
+            "in": "query",
+            "name": "size",
+            "schema": {
+              "description": "full = the library's cover.jpg as is (default: a resized copy)",
+              "enum": [
+                "",
+                "full"
+              ],
               "type": "string"
             }
           }

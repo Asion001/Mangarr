@@ -2,13 +2,8 @@ package api
 
 import (
 	"context"
-	"crypto/sha1"
-	"encoding/hex"
-	"errors"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -16,6 +11,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/Asion001/mangarr/internal/catalogs"
+	"github.com/Asion001/mangarr/internal/diskcache"
 	"github.com/Asion001/mangarr/internal/modules"
 	"github.com/Asion001/mangarr/internal/modules/library"
 	"github.com/Asion001/mangarr/internal/modules/metadata"
@@ -233,7 +229,7 @@ func (s *Server) registerSources() {
 				return nil, err
 			}
 			key := strconv.FormatInt(in.ModuleID, 10) + "|" + in.SourceID + "|" + in.URL
-			data, ct, stale, err := s.cachedImageStale(ctx, "thumbs", key, 7*24*time.Hour, func(ctx context.Context) (io.ReadCloser, string, error) {
+			data, ct, stale, err := s.app.ImageCache.Get(ctx, "thumbs", key, 7*24*time.Hour, func(ctx context.Context) (io.ReadCloser, string, error) {
 				mod, _, err := modules.GetAs[source.Thumbnails](s.app.Modules, in.ModuleID)
 				if err != nil {
 					return nil, "", err
@@ -394,83 +390,9 @@ func (s *Server) registerSources() {
 		})
 }
 
-// cachedImage serves an image from <data>/cache/<bucket>, fetching when the
-// cached copy is older than ttl. When fetching fails, a stale copy is served
-// (stale=true) so covers survive a source being down.
-func (s *Server) cachedImage(ctx context.Context, bucket, key string, ttl time.Duration, fetch func(context.Context) (io.ReadCloser, string, error)) (data []byte, ct string, err error) {
-	data, ct, _, err = s.cachedImageStale(ctx, bucket, key, ttl, fetch)
+// cachedImage serves an image from the image cache, fetching when the
+// cached copy is missing or older than ttl.
+func (s *Server) cachedImage(ctx context.Context, bucket, key string, ttl time.Duration, fetch diskcache.Fetch) (data []byte, ct string, err error) {
+	data, ct, _, err = s.app.ImageCache.Get(ctx, bucket, key, ttl, fetch)
 	return data, ct, err
-}
-
-func (s *Server) cachedImageStale(ctx context.Context, bucket, key string, ttl time.Duration, fetch func(context.Context) (io.ReadCloser, string, error)) ([]byte, string, bool, error) {
-	sum := sha1.Sum([]byte(key))
-	name := hex.EncodeToString(sum[:])
-	dir := filepath.Join(s.app.Cfg.DataDir, "cache", bucket, name[:2])
-	p := filepath.Join(dir, name)
-	readCached := func() ([]byte, string, bool) {
-		data, err := os.ReadFile(p)
-		if err != nil {
-			return nil, "", false
-		}
-		ct, _ := os.ReadFile(p + ".type")
-		return data, string(ct), true
-	}
-	st, statErr := os.Stat(p)
-	if statErr == nil && time.Since(st.ModTime()) < ttl {
-		if data, ct, ok := readCached(); ok {
-			return data, ct, false, nil
-		}
-	}
-	data, ct, err := fetchImage(ctx, fetch)
-	if err != nil {
-		if statErr == nil {
-			if data, ct, ok := readCached(); ok {
-				return data, ct, true, nil
-			}
-		}
-		return nil, "", false, err
-	}
-	if err := os.MkdirAll(dir, 0o775); err == nil {
-		_ = writeAtomic(p+".type", []byte(ct))
-		_ = writeAtomic(p, data)
-	}
-	return data, ct, false, nil
-}
-
-func fetchImage(ctx context.Context, fetch func(context.Context) (io.ReadCloser, string, error)) ([]byte, string, error) {
-	body, ct, err := fetch(ctx)
-	if err != nil {
-		return nil, "", err
-	}
-	defer body.Close()
-	data, err := io.ReadAll(io.LimitReader(body, 20<<20))
-	if err != nil {
-		return nil, "", err
-	}
-	if len(data) == 0 {
-		return nil, "", errors.New("empty image")
-	}
-	if ct == "" {
-		ct = http.DetectContentType(data)
-	}
-	return data, ct, nil
-}
-
-// writeAtomic writes via a temporary file so readers never see partial files.
-func writeAtomic(p string, data []byte) error {
-	f, err := os.CreateTemp(filepath.Dir(p), ".tmp-*")
-	if err != nil {
-		return err
-	}
-	if _, err := f.Write(data); err != nil {
-		f.Close()
-		os.Remove(f.Name())
-		return err
-	}
-	if err := f.Close(); err != nil {
-		os.Remove(f.Name())
-		return err
-	}
-	_ = os.Chmod(f.Name(), 0o664)
-	return os.Rename(f.Name(), p)
 }

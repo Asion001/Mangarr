@@ -318,7 +318,8 @@ function EntryRow({
   onPickMeta: () => void;
 }) {
   const src = e.source;
-  const thumb = src && e.state !== "extension" ? apiUrl(`api/v1/sources/${src.moduleId}/${src.sourceId}/thumbnail`, { url: src.url }) : e.data.thumbnailUrl;
+  // proxied (and resized) by the server: backup links are never hotlinked
+  const thumb = apiUrl(`api/v1/imports/${e.importId}/entries/${e.id}/cover`, { v: src ? `${src.sourceId}:${src.url}` : "" });
   return (
     <tr className={`hover:bg-panel-2/60 ${e.selected ? "" : "opacity-70"}`}>
       <Td className="w-8">
@@ -326,7 +327,7 @@ function EntryRow({
       </Td>
       <Td>
         <div className="flex items-start gap-3">
-          <Cover src={thumb || undefined} alt={e.title} className="aspect-[2/3] w-10 shrink-0" />
+          <Cover src={thumb} alt={e.title} className="aspect-[2/3] w-10 shrink-0" />
           <div className="min-w-0">
             <div className="font-medium">{e.title}</div>
             <div className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-muted">

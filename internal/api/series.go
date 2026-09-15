@@ -524,16 +524,30 @@ func (s *Server) registerSeries() {
 
 	huma.Register(s.api, huma.Operation{OperationID: "series-cover", Method: http.MethodGet, Path: "/api/v1/series/{id}/cover", Tags: tags},
 		func(ctx context.Context, in *struct {
-			ID int64  `path:"id"`
-			V  string `query:"v"`
+			ID   int64  `path:"id"`
+			V    string `query:"v"`
+			Size string `query:"size" enum:",full" doc:"full = the library's cover.jpg as is (default: a resized copy)"`
 		}) (*imageOutput, error) {
 			ser, err := s.app.Series.Get(ctx, in.ID)
 			if err != nil {
 				return nil, seriesError(err)
 			}
 			if p := s.app.Library.CoverPath(ctx, ser); p != "" {
-				if data, err := os.ReadFile(p); err == nil {
-					return &imageOutput{ContentType: http.DetectContentType(data), CacheControl: "public, max-age=3600", Body: data}, nil
+				if st, err := os.Stat(p); err == nil {
+					if in.Size == "full" {
+						if data, err := os.ReadFile(p); err == nil {
+							return &imageOutput{ContentType: http.DetectContentType(data), CacheControl: "public, max-age=3600", Body: data}, nil
+						}
+					}
+					// a resized copy, keyed by the file's version
+					key := "file|" + p + "|" + strconv.FormatInt(st.ModTime().UnixNano(), 10) + "|" + strconv.FormatInt(st.Size(), 10)
+					data, ct, err := s.cachedImage(ctx, "covers", key, 365*24*time.Hour, func(ctx context.Context) (io.ReadCloser, string, error) {
+						f, err := os.Open(p)
+						return f, "", err
+					})
+					if err == nil {
+						return &imageOutput{ContentType: ct, CacheControl: "public, max-age=3600", Body: data}, nil
+					}
 				}
 			}
 			key := "series|" + strconv.FormatInt(ser.ID, 10) + "|" + ser.Metadata.CoverURL
