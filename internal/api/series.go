@@ -76,6 +76,8 @@ type SeriesResource struct {
 	CoverURL string               `json:"coverUrl"`
 	FullPath string               `json:"fullPath,omitempty"`
 	Reading  *ReadingInfo         `json:"reading,omitempty"`
+	// Following: you follow it (new chapters on your notification targets).
+	Following bool `json:"following"`
 }
 
 type statsRow struct {
@@ -513,10 +515,13 @@ func (s *Server) registerSeries() {
 				return nil, toHTTPError(err)
 			}
 			p := access.From(ctx)
+			following := s.follows(ctx)
 			out := make([]SeriesResource, 0, len(list))
 			for _, ser := range list {
 				if p.Sees(&ser) {
-					out = append(out, s.seriesResource(ctx, ser, stats, false))
+					r := s.seriesResource(ctx, ser, stats, false)
+					r.Following = following[ser.ID]
+					out = append(out, r)
 				}
 			}
 			return &struct{ Body []SeriesResource }{out}, nil
@@ -532,7 +537,9 @@ func (s *Server) registerSeries() {
 			if err != nil {
 				return nil, toHTTPError(err)
 			}
-			return &struct{ Body SeriesResource }{s.seriesResource(ctx, *ser, stats, true)}, nil
+			r := s.seriesResource(ctx, *ser, stats, true)
+			r.Following = s.follows(ctx)[ser.ID]
+			return &struct{ Body SeriesResource }{r}, nil
 		})
 
 	huma.Register(s.api, huma.Operation{OperationID: "series-lookup", Method: http.MethodGet, Path: "/api/v1/series/lookup", Tags: tags,

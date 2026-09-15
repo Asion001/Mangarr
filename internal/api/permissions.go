@@ -32,6 +32,14 @@ var operationPermissions = map[string][]string{
 	"me-sessions":               {permSignedIn},
 	"me-sessions-revoke":        {permSignedIn},
 	"me-sessions-revoke-others": {permSignedIn},
+	"me-notifications":          {permSignedIn},
+	"me-notifications-schema":   {permSignedIn},
+	"me-notifications-create":   {permSignedIn},
+	"me-notifications-update":   {permSignedIn},
+	"me-notifications-delete":   {permSignedIn},
+	"me-notifications-test":     {permSignedIn},
+	"series-follow":             {permSignedIn},
+	"series-unfollow":           {permSignedIn},
 
 	// reading the library (limited to the series the group sees)
 	"series-list":        {permSignedIn},

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { BookOpen, ExternalLink, Eye, FilePen, HardDrive, Pencil, RefreshCw, Search, Sparkles, Trash2, FileSearch, BookText } from "lucide-react";
+import { Bell, BellOff, BookOpen, ExternalLink, Eye, FilePen, HardDrive, Pencil, RefreshCw, Search, Sparkles, Trash2, FileSearch, BookText } from "lucide-react";
 import { api, apiUrl, unwrap, type Chapter, type S } from "../../api/client";
 import { useChapters, usePushCommand, useSeries } from "../../api/queries";
 import { Cover } from "../../components/Cover";
@@ -20,7 +20,8 @@ export function SeriesDetail() {
   const { data: s, isLoading, error } = useSeries(id);
   const { data: chapters } = useChapters(id);
   const push = usePushCommand();
-  const manage = useAccount().can("library.manage");
+  const { can, account } = useAccount();
+  const manage = can("library.manage");
   const qc = useQueryClient();
   const toast = useToast();
   const nav = useNavigate();
@@ -70,7 +71,10 @@ export function SeriesDetail() {
               <h1 className="text-2xl font-semibold leading-tight">{s.title}</h1>
               {md.altTitles && md.altTitles.length > 0 && <p className="mt-1 line-clamp-1 text-sm text-muted">{md.altTitles.slice(0, 4).join(" · ")}</p>}
             </div>
-            <Switch checked={s.monitored} onChange={setMonitored} label={s.monitored ? "Monitored" : "Unmonitored"} />
+            <div className="flex items-center gap-3">
+              {account?.kind === "user" && <FollowButton seriesId={id} following={s.following} />}
+              {manage && <Switch checked={s.monitored} onChange={setMonitored} label={s.monitored ? "Monitored" : "Unmonitored"} />}
+            </div>
           </div>
           <div className="mt-3 flex flex-wrap gap-1.5">
             <Badge tone={statusTone(s.status)}>{s.status}</Badge>
@@ -223,4 +227,35 @@ function readTargetOf(chapters: Chapter[] | undefined, next?: S["NextChapter"]) 
   }
   const first = chapters.filter(readable).sort((a, b) => a.numberSort - b.numberSort)[0];
   return first ? { id: first.id, label: `Start reading ch. ${first.number}` } : null;
+}
+
+/** FollowButton: follow a series to get its new chapters on your notification targets. */
+function FollowButton({ seriesId, following }: { seriesId: number; following: boolean }) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const toggle = async () => {
+    setBusy(true);
+    try {
+      const path = { params: { path: { id: seriesId } } };
+      await unwrap(following ? api.DELETE("/api/v1/series/{id}/follow", path) : api.PUT("/api/v1/series/{id}/follow", path));
+      qc.invalidateQueries({ queryKey: ["series"] });
+    } catch (e) {
+      toast.fromError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Button
+      size="sm"
+      variant={following ? "secondary" : undefined}
+      loading={busy}
+      icon={following ? <BellOff className="size-4" /> : <Bell className="size-4" />}
+      onClick={toggle}
+      title={following ? "Stop getting its new chapters" : "Get its new chapters on your notifications (set them up under My account)"}
+    >
+      {following ? "Following" : "Follow"}
+    </Button>
+  );
 }

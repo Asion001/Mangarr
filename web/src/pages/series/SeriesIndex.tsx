@@ -11,7 +11,7 @@ import { MassEditBar } from "./Organize";
 import { ContinueReading } from "./ContinueReading";
 import { useAccount } from "../../lib/account";
 
-type Filter = "all" | "monitored" | "missing" | "ongoing" | "completed" | "unread" | "reading";
+type Filter = "all" | "monitored" | "missing" | "ongoing" | "completed" | "unread" | "reading" | "following";
 type Sort = "title" | "added" | "latest" | "missing" | "size" | "read";
 
 export function statusTone(s: string) {
@@ -60,6 +60,7 @@ export function SeriesIndex() {
     const needle = q.trim().toLowerCase();
     if (needle) l = l.filter((s) => s.title.toLowerCase().includes(needle) || s.metadata.altTitles?.some((t) => t.toLowerCase().includes(needle)));
     if (filter === "monitored") l = l.filter((s) => s.monitored);
+    if (filter === "following") l = l.filter((s) => s.following);
     if (filter === "missing") l = l.filter((s) => s.stats.missingCount > 0);
     if (filter === "unread") l = l.filter((s) => s.stats.readCount < s.stats.chapterCount);
     if (filter === "reading") l = l.filter((s) => s.stats.readCount > 0 && s.stats.readCount < s.stats.chapterCount);
@@ -109,6 +110,7 @@ export function SeriesIndex() {
         </div>
         <Select className="w-auto" value={filter} onChange={(e) => setFilter(e.target.value as Filter)}>
           <option value="all">All</option>
+          <option value="following">Following</option>
           <option value="monitored">Monitored</option>
           <option value="missing">Missing chapters</option>
           <option value="ongoing">Ongoing</option>

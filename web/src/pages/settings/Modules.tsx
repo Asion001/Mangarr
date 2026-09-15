@@ -26,9 +26,16 @@ const eventLabels: Record<string, string> = {
   "health.restored": "Health restored",
   "extension.update": "Extension updates",
   "manual.required": "Manual action required",
+  "request.created": "New requests",
 };
 
-type Draft = {
+/** personalEventLabels name what a user's own targets can get. */
+const personalEventLabels: Record<string, string> = {
+  "chapter.imported": "New chapters of series you follow",
+  "request.updated": "News about your requests",
+};
+
+export type Draft = {
   id?: number;
   implementation: string;
   name: string;
@@ -171,7 +178,20 @@ export function ModulesPage({ kind }: { kind: string }) {
   );
 }
 
-function ModuleEditor({ kind, draft: initial, impl, onClose }: { kind: string; draft: Draft; impl?: Implementation; onClose: () => void }) {
+/** ModuleEditor edits a module; personal: one of the signed-in user's notification targets. */
+export function ModuleEditor({
+  kind,
+  draft: initial,
+  impl,
+  onClose,
+  personal,
+}: {
+  kind: string;
+  draft: Draft;
+  impl?: Implementation;
+  onClose: () => void;
+  personal?: boolean;
+}) {
   const qc = useQueryClient();
   const toast = useToast();
   const [d, setD] = useState<Draft>(initial);
@@ -181,11 +201,14 @@ function ModuleEditor({ kind, draft: initial, impl, onClose }: { kind: string; d
 
   const body = () => ({ kind: kind as "source", implementation: d.implementation, name: d.name, enabled: d.enabled, priority: d.priority, events: d.events, settings: d.settings });
 
+  const own = () => ({ implementation: d.implementation, name: d.name, enabled: d.enabled, events: d.events, settings: d.settings });
+
   const test = async () => {
     setTesting(true);
     setError(null);
     try {
-      await unwrap(api.POST("/api/v1/modules/test", { body: { ...body(), id: d.id } }));
+      if (personal) await unwrap(api.POST("/api/v1/me/notifications/test", { body: { ...own(), id: d.id } }));
+      else await unwrap(api.POST("/api/v1/modules/test", { body: { ...body(), id: d.id } }));
       toast.success("Test succeeded");
     } catch (e) {
       setError(e);
@@ -197,9 +220,12 @@ function ModuleEditor({ kind, draft: initial, impl, onClose }: { kind: string; d
     setSaving(true);
     setError(null);
     try {
-      if (d.id) await unwrap(api.PUT("/api/v1/modules/{id}", { params: { path: { id: d.id } }, body: body() }));
+      if (personal && d.id) await unwrap(api.PUT("/api/v1/me/notifications/{id}", { params: { path: { id: d.id } }, body: own() }));
+      else if (personal) await unwrap(api.POST("/api/v1/me/notifications", { body: own() }));
+      else if (d.id) await unwrap(api.PUT("/api/v1/modules/{id}", { params: { path: { id: d.id } }, body: body() }));
       else await unwrap(api.POST("/api/v1/modules", { body: body() }));
       qc.invalidateQueries({ queryKey: ["modules"] });
+      qc.invalidateQueries({ queryKey: ["me-notifications"] });
       qc.invalidateQueries({ queryKey: ["sources"] });
       toast.success(`${d.name} saved`);
       onClose();
@@ -230,13 +256,15 @@ function ModuleEditor({ kind, draft: initial, impl, onClose }: { kind: string; d
     >
       <div className="flex flex-col gap-4">
         {impl?.description && <p className="text-sm text-muted">{impl.description}</p>}
-        <div className="grid gap-4 md:grid-cols-[1fr_120px]">
+        <div className={personal ? "" : "grid gap-4 md:grid-cols-[1fr_120px]"}>
           <Field label="Name" env={d.lock?.meta.name}>
             <Input value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} />
           </Field>
-          <Field label="Priority" help="Lower first" env={d.lock?.meta.priority}>
-            <Input type="number" value={d.priority} onChange={(e) => setD({ ...d, priority: Number(e.target.value) })} />
-          </Field>
+          {!personal && (
+            <Field label="Priority" help="Lower first" env={d.lock?.meta.priority}>
+              <Input type="number" value={d.priority} onChange={(e) => setD({ ...d, priority: Number(e.target.value) })} />
+            </Field>
+          )}
         </div>
         <Switch checked={d.enabled} onChange={(v) => setD({ ...d, enabled: v })} label="Enabled" env={d.lock?.meta.enabled} />
         {impl && <DynamicForm fields={impl.fields} values={d.settings} locks={d.lock?.fields} onChange={(settings) => setD({ ...d, settings })} />}
@@ -246,7 +274,7 @@ function ModuleEditor({ kind, draft: initial, impl, onClose }: { kind: string; d
               {impl.events.map((ev) => (
                 <label key={ev} className="flex items-center gap-2 text-sm">
                   <input type="checkbox" checked={d.events.includes(ev)} onChange={(e) => setD({ ...d, events: e.target.checked ? [...d.events, ev] : d.events.filter((x) => x !== ev) })} />
-                  {eventLabels[ev] ?? ev}
+                  {(personal ? personalEventLabels[ev] : eventLabels[ev]) ?? ev}
                 </label>
               ))}
             </div>
