@@ -167,6 +167,7 @@ func (a *App) housekeeping(ctx context.Context, r *jobs.Run) error {
 	_ = a.DLQueue.ClearFinished(ctx, 7*24*time.Hour)
 	_, _ = a.DB.NewDelete().Model((*model.Command)(nil)).Where("queued_at < ?", time.Now().UTC().Add(-30*24*time.Hour)).
 		Where("status NOT IN (?, ?)", model.CommandQueued, model.CommandStarted).Exec(ctx)
+	a.Auth.PurgeSessions(ctx)
 	if _, err := a.Reading.PruneEvents(ctx); err != nil {
 		a.Log.Warn("read events purge", "err", err)
 	}

@@ -15,10 +15,71 @@ import (
 
 type User struct {
 	bun.BaseModel `bun:"table:users"`
-	ID            int64     `bun:"id,pk,autoincrement" json:"id"`
-	Username      string    `bun:"username,notnull" json:"username"`
-	PasswordHash  string    `bun:"password_hash,notnull" json:"-"`
+	ID            int64  `bun:"id,pk,autoincrement" json:"id"`
+	Username      string `bun:"username,notnull" json:"username"`
+	PasswordHash  string `bun:"password_hash,notnull" json:"-"`
+	// DisplayName is shown instead of the username when set.
+	DisplayName string `bun:"display_name,notnull" json:"displayName"`
+	GroupID     int64  `bun:"group_id,nullzero" json:"groupId"`
+	// ReaderID is the user's own progress (their reader).
+	ReaderID    int64      `bun:"reader_id,nullzero" json:"readerId"`
+	Disabled    bool       `bun:"disabled,notnull" json:"disabled"`
+	LastLoginAt *time.Time `bun:"last_login_at" json:"lastLoginAt,omitempty"`
+	// OIDCSubject links the user to a single sign-on account.
+	OIDCSubject string    `bun:"oidc_subject,notnull" json:"-"`
+	CreatedBy   int64     `bun:"created_by,nullzero" json:"createdBy,omitempty"`
+	CreatedAt   time.Time `bun:"created_at,notnull" json:"createdAt"`
+}
+
+// Group gives its users permissions (internal/access) and can limit the
+// series they see to some tags or root folders.
+type Group struct {
+	bun.BaseModel `bun:"table:groups"`
+	ID            int64  `bun:"id,pk,autoincrement" json:"id"`
+	Name          string `bun:"name,notnull" json:"name"`
+	// Builtin is "admins" or "users" for the groups mangarr creates.
+	Builtin     string   `bun:"builtin,notnull" json:"builtin,omitempty"`
+	Permissions []string `bun:"permissions,notnull" json:"permissions"`
+	// IncludeTags (any of them) and ExcludeTags limit the series members
+	// see by tag, RootFolders by root folder; empty means no limit.
+	IncludeTags []int64 `bun:"include_tags,notnull" json:"includeTags"`
+	ExcludeTags []int64 `bun:"exclude_tags,notnull" json:"excludeTags"`
+	RootFolders []int64 `bun:"root_folders,notnull" json:"rootFolders"`
+	// AutoApproveRequests adds members' requests without a manager.
+	AutoApproveRequests bool      `bun:"auto_approve_requests,notnull" json:"autoApproveRequests"`
+	CreatedAt           time.Time `bun:"created_at,notnull" json:"createdAt"`
+}
+
+// Built-in groups.
+const (
+	GroupAdmins = "admins"
+	GroupUsers  = "users"
+)
+
+// Session is a web login; the cookie holds its id.
+type Session struct {
+	bun.BaseModel `bun:"table:sessions"`
+	ID            string    `bun:"id,pk" json:"-"`
+	UserID        int64     `bun:"user_id,notnull" json:"userId"`
 	CreatedAt     time.Time `bun:"created_at,notnull" json:"createdAt"`
+	LastSeenAt    time.Time `bun:"last_seen_at,notnull" json:"lastSeenAt"`
+	ExpiresAt     time.Time `bun:"expires_at,notnull" json:"expiresAt"`
+	IP            string    `bun:"ip,notnull" json:"ip"`
+	UserAgent     string    `bun:"user_agent,notnull" json:"userAgent"`
+}
+
+// Invite is a link that lets someone create an account in a group.
+type Invite struct {
+	bun.BaseModel `bun:"table:invites"`
+	ID            int64      `bun:"id,pk,autoincrement" json:"id"`
+	TokenHash     string     `bun:"token_hash,notnull" json:"-"`
+	GroupID       int64      `bun:"group_id,notnull" json:"groupId"`
+	Note          string     `bun:"note,notnull" json:"note"`
+	MaxUses       int        `bun:"max_uses,notnull" json:"maxUses"`
+	Uses          int        `bun:"uses,notnull" json:"uses"`
+	ExpiresAt     *time.Time `bun:"expires_at" json:"expiresAt,omitempty"`
+	CreatedBy     int64      `bun:"created_by,nullzero" json:"createdBy,omitempty"`
+	CreatedAt     time.Time  `bun:"created_at,notnull" json:"createdAt"`
 }
 
 type Setting struct {

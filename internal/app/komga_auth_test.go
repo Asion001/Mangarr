@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Asion001/mangarr/internal/auth"
 	"github.com/Asion001/mangarr/internal/dbtest"
 	"github.com/Asion001/mangarr/internal/komgaapi"
 	"github.com/Asion001/mangarr/internal/settings"
@@ -20,7 +21,7 @@ import (
 // and KMReader (users/me → X-Auth-Token → an API key of its own).
 func TestKomgaAPILogins(t *testing.T) {
 	e := newTestApp(t, dbtest.DSNs(t)["sqlite"])
-	if _, err := e.App.Auth.CreateUser(e.Ctx, "ann", "secret-pass"); err != nil {
+	if _, err := e.App.Auth.CreateUser(e.Ctx, auth.NewUser{Username: "ann", Password: "secret-pass"}); err != nil {
 		t.Fatal(err)
 	}
 	srv := httptest.NewServer(e.App.Komga.Handler())

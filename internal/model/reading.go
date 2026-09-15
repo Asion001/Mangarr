@@ -12,7 +12,9 @@ type ReadingKey struct {
 	bun.BaseModel `bun:"table:reading_keys"`
 	ID            int64  `bun:"id,pk,autoincrement" json:"id"`
 	KeyHash       string `bun:"key_hash,notnull" json:"-"`
-	Prefix        string `bun:"prefix,notnull" json:"prefix"`
+	// UserID is the user the device belongs to (0: from before accounts).
+	UserID int64  `bun:"user_id,nullzero" json:"userId,omitempty"`
+	Prefix string `bun:"prefix,notnull" json:"prefix"`
 	// Comment names the device ("KMReader iPad").
 	Comment string `bun:"comment,notnull" json:"comment"`
 	// LastClient is the app that last used the key (from its User-Agent).

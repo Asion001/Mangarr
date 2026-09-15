@@ -9,11 +9,13 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/Asion001/mangarr/internal/auth"
 	"github.com/Asion001/mangarr/internal/model"
 )
 
@@ -272,12 +274,28 @@ func (s *Service) authenticate(r *http.Request) (p Principal, issue bool, ok boo
 			p.KeyID, p.Device = rk.ID, rk.Comment
 			return p, true, true
 		}
+		keys := auth.LoginKeys(clientIP(r), user)
+		if _, locked := s.deps.Auth.Limiter.Locked(keys...); locked {
+			return p, false, false
+		}
 		if s.verifyBasic(ctx, user, pass) {
+			s.deps.Auth.Limiter.Reset(keys[0])
 			p.Device = "password login"
 			return p, true, true
 		}
+		if s.deps.Auth.Limiter.Fail(keys...) {
+			s.deps.Log.Warn("Komga API logins locked after repeated failures", "ip", clientIP(r), "username", user)
+		}
 	}
 	return p, false, false
+}
+
+// clientIP is the caller's address (RealIP resolved proxies).
+func clientIP(r *http.Request) string {
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
+	}
+	return r.RemoteAddr
 }
 
 // setSession hands the session token to the app as a header (KMReader) and

@@ -114,6 +114,9 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger, ring *loggin
 		return nil, err
 	}
 	a.Auth = auth.NewService(d, a.Settings, cfg.AuthDisabled)
+	if err := a.upgradeAccounts(ctx); err != nil {
+		return nil, fmt.Errorf("accounts: %w", err)
+	}
 	a.Modules = modules.NewManager(d, a.HTTP, log, cfg.DataDir)
 	a.Catalogs = catalogs.New(d, a.Modules, a.Bus, a.Settings, log.With("component", "catalogs"))
 	a.SourceCache = sourcecache.New(32 << 20)
@@ -158,6 +161,21 @@ func (a *App) Start(ctx context.Context) error {
 }
 
 func (a *App) Close() error { return a.DB.Close() }
+
+// upgradeAccounts creates the built-in groups and brings users from before
+// groups up to date. The first user gets the reader reading apps used.
+func (a *App) upgradeAccounts(ctx context.Context) error {
+	preferred := int64(0)
+	if rs, err := a.Settings.Reading(ctx); err == nil && rs.ReaderID > 0 {
+		preferred = rs.ReaderID
+	} else {
+		var r model.Reader
+		if err := a.DB.NewSelect().Model(&r).Order("id").Limit(1).Scan(ctx); err == nil {
+			preferred = r.ID
+		}
+	}
+	return a.Auth.Upgrade(ctx, preferred)
+}
 
 // ensureDefaults creates the default profile on first start.
 func (a *App) ensureDefaults(ctx context.Context) error {

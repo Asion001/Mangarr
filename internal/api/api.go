@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"reflect"
 	"strings"
@@ -16,8 +17,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/Asion001/mangarr/internal/access"
 	"github.com/Asion001/mangarr/internal/app"
-	"github.com/Asion001/mangarr/internal/auth"
 	"github.com/Asion001/mangarr/internal/version"
 )
 
@@ -34,6 +35,17 @@ func init() {
 
 // New returns the root HTTP handler.
 func New(a *app.App) http.Handler {
+	h, _ := build(a)
+	return h
+}
+
+// Permissions lists every operation with the permissions it needs.
+func Permissions(a *app.App) []string {
+	_, s := build(a)
+	return PermissionTable(s.api)
+}
+
+func build(a *app.App) (http.Handler, *Server) {
 	r := chi.NewMux()
 	r.Use(middleware.RealIP, middleware.Recoverer, requestLogger(a.Log))
 
@@ -57,6 +69,7 @@ func New(a *app.App) http.Handler {
 	cfg.Security = []map[string][]string{{"apiKey": {}}}
 	cfg.Components.Schemas = huma.NewMapRegistry("#/components/schemas/", schemaNamer)
 	s.api = humachi.New(sub, cfg)
+	s.api.UseMiddleware(s.requirePermission) // before any operation is registered
 
 	s.registerAuth()
 	s.registerSystem()
@@ -76,7 +89,7 @@ func New(a *app.App) http.Handler {
 	} else {
 		r.Mount("/", sub)
 	}
-	return r
+	return r, s
 }
 
 // schemaNamer prefixes types from module/interface packages so equally named
@@ -117,6 +130,7 @@ var extraRoutes []func(*Server)
 
 func register(fn func(*Server)) { extraRoutes = append(extraRoutes, fn) }
 
+// publicPaths don't need a login (the UI's own files don't either).
 var publicPaths = map[string]bool{
 	"/api/v1/auth/status": true,
 	"/api/v1/auth/login":  true,
@@ -124,25 +138,47 @@ var publicPaths = map[string]bool{
 	"/ping":               true,
 }
 
+// publicPrefixes are public path prefixes (invites).
+var publicPrefixes = []string{"/api/v1/invites/"}
+
+func isPublic(p string) bool {
+	if publicPaths[p] || !strings.HasPrefix(p, "/api/") {
+		return true
+	}
+	for _, pre := range publicPrefixes {
+		if strings.HasPrefix(p, pre) {
+			return true
+		}
+	}
+	return false
+}
+
+// clientOf is where a request comes from (RealIP has resolved proxies).
+func clientOf(r *http.Request) access.Client {
+	ip := r.RemoteAddr
+	if host, _, err := net.SplitHostPort(ip); err == nil {
+		ip = host
+	}
+	secure := r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+	return access.Client{IP: ip, UserAgent: r.UserAgent(), Secure: secure}
+}
+
+// authMiddleware resolves the principal; API calls without one get 401
+// (the operations themselves check permissions).
 func (s *Server) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		p := r.URL.Path
-		// UI assets and public endpoints don't need auth; the UI handles login.
-		if publicPaths[p] || !strings.HasPrefix(p, "/api/") {
-			if principal := s.app.Auth.Authenticate(r); principal != "" {
-				r = r.WithContext(auth.WithPrincipal(r.Context(), principal))
-			}
-			next.ServeHTTP(w, r)
-			return
+		r = r.WithContext(access.WithClient(r.Context(), clientOf(r)))
+		p := s.app.Auth.Authenticate(r)
+		if p != nil {
+			r = r.WithContext(access.With(r.Context(), p))
 		}
-		principal := s.app.Auth.Authenticate(r)
-		if principal == "" {
+		if p == nil && !isPublic(r.URL.Path) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
 			_, _ = w.Write([]byte(`{"title":"Unauthorized","status":401,"detail":"login or X-Api-Key required"}`))
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(auth.WithPrincipal(r.Context(), principal)))
+		next.ServeHTTP(w, r)
 	})
 }
 

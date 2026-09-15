@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Asion001/mangarr/internal/access"
 	"github.com/Asion001/mangarr/internal/events"
 )
 
@@ -22,7 +23,13 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Accel-Buffering", "no")
 
 	ch := make(chan events.Event, 256)
+	// people who aren't admins only get cache invalidation (no titles of
+	// series outside what they may see, no system events)
+	admin := access.From(r.Context()).IsAdmin()
 	unsub := s.app.Bus.Subscribe(func(e events.Event) {
+		if !admin && e.Type != events.ResourceChanged {
+			return
+		}
 		select {
 		case ch <- e:
 		default: // slow client: drop; the UI refetches on reconnect

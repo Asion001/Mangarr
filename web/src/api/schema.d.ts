@@ -45,6 +45,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Change your password (other sessions are signed out) */
         post: operations["auth-password"];
         delete?: never;
         options?: never;
@@ -61,7 +62,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create the first user (only allowed when no user exists) */
+        /** Create the first user, an administrator (only allowed when no user exists) */
         post: operations["auth-setup"];
         delete?: never;
         options?: never;
@@ -430,6 +431,57 @@ export interface paths {
         /** Add the selected entries to the library */
         post: operations["imports-run"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Your web sessions */
+        get: operations["me-sessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/sessions/revoke-others": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign out everywhere else */
+        post: operations["me-sessions-revoke-others"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/sessions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Sign out one of your sessions */
+        delete: operations["me-sessions-revoke"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1993,6 +2045,20 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        Account: {
+            displayName?: string;
+            group: string;
+            /** Format: int64 */
+            groupId: number;
+            /** Format: int64 */
+            id: number;
+            /** @enum {string} */
+            kind: "user" | "apikey" | "anonymous";
+            permissions: string[];
+            /** Format: int64 */
+            readerId: number;
+            username: string;
+        };
         AccountInput: {
             credentials: {
                 [key: string]: string;
@@ -2033,9 +2099,12 @@ export interface components {
             title?: string;
         };
         "Auth-passwordRequest": {
+            /** @description Your current password */
+            current?: string;
             password: string;
         };
         AuthStatus: {
+            account?: components["schemas"]["Account"];
             authDisabled: boolean;
             authenticated: boolean;
             needsSetup: boolean;
@@ -3038,6 +3107,8 @@ export interface components {
             /** Format: date-time */
             lastUsedAt?: string;
             prefix: string;
+            /** Format: int64 */
+            userId?: number;
         };
         NextChapter: {
             available: boolean;
@@ -3391,6 +3462,8 @@ export interface components {
             /** Format: date-time */
             lastUsedAt?: string;
             prefix: string;
+            /** Format: int64 */
+            userId?: number;
         };
         ReleaseView: {
             blocklisted: boolean;
@@ -3618,6 +3691,20 @@ export interface components {
             sizeOnDisk: number;
             /** Format: int64 */
             spaceSaved: number;
+        };
+        SessionView: {
+            /** Format: date-time */
+            createdAt: string;
+            current: boolean;
+            /** Format: date-time */
+            expiresAt: string;
+            id: string;
+            ip: string;
+            /** Format: date-time */
+            lastSeenAt: string;
+            userAgent: string;
+            /** Format: int64 */
+            userId: number;
         };
         Shelf: {
             items: components["schemas"]["ShelfItem"][];
@@ -4906,6 +4993,91 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Command"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "me-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionView"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "me-sessions-revoke-others": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "me-sessions-revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {
