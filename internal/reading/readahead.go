@@ -13,21 +13,33 @@ import (
 	"github.com/Asion001/mangarr/internal/model"
 )
 
+// readAheadRecent is how recent a reader's position must be to look ahead.
+const readAheadRecent = 14 * 24 * time.Hour
+
 // ReadAhead makes sure the chapters after a reader's position in a series
 // get downloaded (reading.readAhead): the next N chapters after the
 // furthest one the reader has progress on are monitored, even in series
-// that aren't, and searched. It returns how many downloads were queued.
+// that aren't, and searched, as long as the reader got there in the last
+// two weeks. It returns how many downloads were queued.
 func (s *Service) ReadAhead(ctx context.Context, readerID, seriesID int64) (int, error) {
 	cfg, err := s.Settings.Reading(ctx)
 	if err != nil || !cfg.ReadAhead.Enabled || cfg.ReadAhead.Chapters <= 0 || s.Downloads == nil {
 		return 0, err
 	}
-	var furthest sql.NullFloat64
+	var pos []struct {
+		Number float64      `bun:"number_sort"`
+		At     bun.NullTime `bun:"at"`
+	}
 	if err := s.DB.NewSelect().TableExpr("chapter_read_states AS rs").Join("JOIN chapters AS c ON c.id = rs.chapter_id").
-		ColumnExpr("MAX(c.number_sort)").Where("rs.reader_id = ? AND rs.series_id = ?", readerID, seriesID).
-		Where("(rs.completed OR rs.page > 0)").Scan(ctx, &furthest); err != nil || !furthest.Valid {
+		ColumnExpr("c.number_sort, COALESCE(rs.read_at, rs.synced_at) AS at").Where("rs.reader_id = ? AND rs.series_id = ?", readerID, seriesID).
+		Where("(rs.completed OR rs.page > 0)").OrderExpr("c.number_sort DESC").Limit(1).Scan(ctx, &pos); err != nil || len(pos) == 0 {
 		return 0, err
 	}
+	// old history (a first sync with a library server) isn't reading now
+	if pos[0].At.IsZero() || time.Since(pos[0].At.Time) > readAheadRecent {
+		return 0, nil
+	}
+	furthest := sql.NullFloat64{Float64: pos[0].Number, Valid: true}
 	var next []model.Chapter
 	if err := s.DB.NewSelect().Model(&next).Where("series_id = ? AND number_sort > ?", seriesID, furthest.Float64).
 		Order("number_sort", "id").Limit(cfg.ReadAhead.Chapters).Scan(ctx); err != nil {

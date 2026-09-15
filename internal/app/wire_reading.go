@@ -8,6 +8,8 @@ import (
 	"github.com/Asion001/mangarr/internal/events"
 	"github.com/Asion001/mangarr/internal/komgaapi"
 	"github.com/Asion001/mangarr/internal/model"
+	"github.com/Asion001/mangarr/internal/modules"
+	"github.com/Asion001/mangarr/internal/modules/library"
 	"github.com/Asion001/mangarr/internal/reading"
 	"github.com/Asion001/mangarr/internal/readsync"
 )
@@ -96,9 +98,15 @@ func (a *App) wireReading(ctx context.Context) error {
 
 	a.FanOut = &FanOut{a: a, pending: map[int64]*fanOutSeries{}, delay: FanOutDelay, unreadDelay: FanOutUnreadDelay}
 	a.Bus.Subscribe(func(e events.Event) {
-		if p, ok := e.Payload.(reading.ProgressPayload); ok && e.SeriesID > 0 {
-			a.FanOut.schedule(e.SeriesID, p)
+		p, ok := e.Payload.(reading.ProgressPayload)
+		if !ok || e.SeriesID == 0 {
+			return
 		}
+		// what a server reported only needs to reach the reader's other servers
+		if p.Origin == model.EventOriginServer && a.FanOut.writableAccounts(p.ReaderID) < 2 {
+			return
+		}
+		a.FanOut.schedule(e.SeriesID, p)
 	}, reading.ProgressChanged)
 	return nil
 }
@@ -122,6 +130,21 @@ type fanOutSeries struct {
 	timer  *time.Timer
 	due    time.Time
 	unread map[int64]bool
+}
+
+// writableAccounts counts the reader's accounts on servers that accept progress.
+func (f *FanOut) writableAccounts(readerID int64) int {
+	var accs []model.ReaderAccount
+	if err := f.a.DB.NewSelect().Model(&accs).Column("id", "module_id").Where("reader_id = ?", readerID).Scan(context.Background()); err != nil {
+		return 0
+	}
+	n := 0
+	for _, acc := range accs {
+		if _, _, err := modules.GetAs[library.ProgressWriter](f.a.Modules, acc.ModuleID); err == nil {
+			n++
+		}
+	}
+	return n
 }
 
 func (f *FanOut) schedule(seriesID int64, p reading.ProgressPayload) {

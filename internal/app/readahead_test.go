@@ -42,6 +42,21 @@ func TestReadAhead(t *testing.T) {
 			if len(list) != 5 {
 				t.Fatalf("chapters %d", len(list))
 			}
+			// old history (a first sync with Komga) doesn't download anything
+			rid, _ := e.App.Reading.ReaderID(e.Ctx)
+			old := time.Now().Add(-60 * 24 * time.Hour).UTC()
+			st := &model.ChapterReadState{ReaderID: rid, ChapterID: list[0].ID, SeriesID: ser.ID, Completed: true, ReadAt: &old, SyncedAt: old}
+			if _, err := e.App.DB.NewInsert().Model(st).Exec(e.Ctx); err != nil {
+				t.Fatal(err)
+			}
+			if n, err := e.App.Reading.ReadAhead(e.Ctx, rid, ser.ID); err != nil || n != 0 {
+				t.Fatalf("read ahead on old history: %d %v", n, err)
+			}
+			if n, _ := e.App.DB.NewSelect().Model((*model.Chapter)(nil)).Where("series_id = ? AND monitored", ser.ID).Count(e.Ctx); n != 0 {
+				t.Fatalf("old history monitored %d chapters", n)
+			}
+			_, _ = e.App.DB.NewDelete().Model(st).WherePK().Exec(e.Ctx)
+
 			key, _, _ := e.App.Komga.CreateKey(e.Ctx, "test", "test")
 			srv := httptest.NewServer(e.App.Komga.Handler())
 			defer srv.Close()
