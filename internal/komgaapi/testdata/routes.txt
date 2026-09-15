@@ -45,6 +45,7 @@ GET /api/v2/authors
 GET /api/v2/series/{id}/read-progress/tachiyomi
 GET /api/v2/users/me
 GET /api/v2/users/me/api-keys
+GET /sse/v1/events
 PATCH /api/v1/books/{id}/read-progress
 POST /api/logout
 POST /api/v1/books/list

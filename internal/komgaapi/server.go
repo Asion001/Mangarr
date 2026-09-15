@@ -18,6 +18,7 @@ import (
 
 	"github.com/Asion001/mangarr/internal/auth"
 	"github.com/Asion001/mangarr/internal/db"
+	"github.com/Asion001/mangarr/internal/events"
 	"github.com/Asion001/mangarr/internal/reading"
 	"github.com/Asion001/mangarr/internal/settings"
 )
@@ -31,6 +32,7 @@ type Deps struct {
 	Settings *settings.Store
 	Auth     *auth.Service
 	Reading  *reading.Service
+	Bus      *events.Bus
 	Log      *slog.Logger
 }
 
@@ -43,11 +45,12 @@ type Service struct {
 	keys  keys
 	basic basicCache
 
-	mu       sync.Mutex
-	srv      *http.Server
-	boundTo  string
-	lastErr  string
-	stopping chan struct{}
+	mu      sync.Mutex
+	srv     *http.Server
+	boundTo string
+	lastErr string
+	// cancel ends the listener's requests (SSE streams) on stop
+	cancel context.CancelFunc
 }
 
 // NewService builds the API; it starts listening once enabled (Start, Reconcile).
@@ -114,8 +117,9 @@ func (s *Service) Reconcile(ctx context.Context) {
 		s.deps.Log.Error("Komga-compatible API can't listen", "addr", s.addr, "err", err)
 		return
 	}
-	srv := &http.Server{Handler: s.handler, ReadHeaderTimeout: 15 * time.Second}
-	s.srv, s.boundTo, s.lastErr = srv, ln.Addr().String(), ""
+	base, cancel := context.WithCancel(context.Background())
+	srv := &http.Server{Handler: s.handler, ReadHeaderTimeout: 15 * time.Second, BaseContext: func(net.Listener) context.Context { return base }}
+	s.srv, s.boundTo, s.lastErr, s.cancel = srv, ln.Addr().String(), "", cancel
 	s.deps.Log.Info("Komga-compatible API listening", "addr", s.boundTo)
 	go func() {
 		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -131,12 +135,13 @@ func (s *Service) Reconcile(ctx context.Context) {
 
 func (s *Service) stop() {
 	s.mu.Lock()
-	srv := s.srv
-	s.srv, s.boundTo = nil, ""
+	srv, cancel := s.srv, s.cancel
+	s.srv, s.boundTo, s.cancel = nil, "", nil
 	s.mu.Unlock()
 	if srv == nil {
 		return
 	}
+	cancel()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(ctx)

@@ -72,6 +72,8 @@ func (s *Service) routes(r chi.Router) {
 	r.Get("/api/v1/books/{id}/file", ph.file)
 	r.Get("/api/v1/books/{id}/file/*", ph.file)
 
+	r.Get("/sse/v1/events", s.events)
+
 	pr := &progressHandlers{s}
 	r.Patch("/api/v1/books/{id}/read-progress", pr.patchBook)
 	r.Delete("/api/v1/books/{id}/read-progress", pr.deleteBook)
