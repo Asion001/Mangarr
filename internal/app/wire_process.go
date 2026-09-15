@@ -55,15 +55,32 @@ func (a *App) wireProcess(ctx context.Context) error {
 			// Force re-processes files already processed with the current settings.
 			Force bool `json:"force"`
 		}
-		if err := r.Body(&body); err != nil || (body.SeriesID == 0 && body.ProfileID == 0) {
-			return fmt.Errorf("seriesId or profileId required")
+		if err := r.Body(&body); err != nil {
+			return err
 		}
 		q := a.DB.NewUpdate().Model((*model.ChapterFile)(nil)).Set("process_params = ?", model.ProcessForce).
 			Set("process_attempts = 0").Set("process_retry_at = NULL")
-		if body.SeriesID > 0 {
+		switch {
+		case body.SeriesID > 0:
 			q = q.Where("series_id = ?", body.SeriesID)
-		} else {
+		case body.ProfileID > 0:
 			q = q.Where("series_id IN (SELECT id FROM series WHERE profile_id = ?)", body.ProfileID)
+		default: // the whole library (Run on the Tasks page): series whose profile processes pages
+			var profiles []model.Profile
+			if err := a.DB.NewSelect().Model(&profiles).Scan(ctx); err != nil {
+				return err
+			}
+			var ids []int64
+			for _, p := range profiles {
+				if p.Config.ProcessParams() != "" {
+					ids = append(ids, p.ID)
+				}
+			}
+			if len(ids) == 0 {
+				r.Progress("no profile upscales or re-encodes pages")
+				return nil
+			}
+			q = q.Where("series_id IN (SELECT id FROM series WHERE profile_id IN (?))", bun.In(ids))
 		}
 		if len(body.ChapterIDs) > 0 {
 			q = q.Where("chapter_id IN (?)", bun.In(body.ChapterIDs))
@@ -84,7 +101,7 @@ func (a *App) wireProcess(ctx context.Context) error {
 		return err
 	}
 	for _, name := range []string{"ProcessExisting", "UpscaleExisting"} {
-		a.Queue.Register(jobs.Definition{Name: name, Description: "Process already downloaded chapters with the profile's upscaling and re-encoding settings",
+		a.Queue.Register(jobs.Definition{Name: name, Description: "Process already downloaded chapters (of a series, or the whole library) with their profile's upscaling and re-encoding settings",
 			Handler: existing})
 	}
 	a.Queue.Register(jobs.Definition{Name: "ProcessBacklog", Description: "Queue background upscaling/re-encoding of chapters that need it",

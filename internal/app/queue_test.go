@@ -121,3 +121,52 @@ func TestQueuePauseAndBulk(t *testing.T) {
 		t.Fatalf("completed jobs: %d", n)
 	}
 }
+
+// TestReprocessIgnoresSourceLimits: processing a file already on disk
+// doesn't wait for its source's download slot. With one download per
+// source, a long download from source A used to hold back every reprocess
+// job of files that came from A.
+func TestReprocessIgnoresSourceLimits(t *testing.T) {
+	sc := fakesource.NewScenario("reprocess-src")
+	sc.Sources = []source.SourceInfo{{ID: "A", Name: "Source A", Lang: "en"}}
+	sc.AddManga(&fakesource.Manga{SourceID: "A", URL: "/m", Title: "Busy Source", Status: source.StatusOngoing, Chapters: []fakesource.Chapter{
+		{URL: "/c1", Name: "Chapter 1", Number: 1, Uploaded: time.Now()}, {URL: "/c2", Name: "Chapter 2", Number: 2, Uploaded: time.Now(), Pages: 10}}})
+	e := newTestApp(t, dbtest.DSNs(t)["sqlite"])
+	dl, _ := e.App.Settings.Downloads(e.Ctx)
+	dl.MaxConcurrent, dl.MaxPerSource = 3, 1
+	_ = e.App.Settings.Set(e.Ctx, settings.KeyDownloads, dl)
+	mod := e.addFakeModule(t, "reprocess-src")
+	ser, err := e.App.Series.Add(e.Ctx, series.AddRequest{Title: "Busy Source", RootFolderID: e.RFID, Monitor: model.MonitorNone,
+		Sources: []series.SourceLink{{ModuleID: mod, SourceID: "A", URL: "/m", SourceName: "Source A", Lang: "en"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.runCommand(t, "RefreshSeries", map[string]any{"seriesId": ser.ID})
+	var chs []model.Chapter
+	_ = e.App.DB.NewSelect().Model(&chs).Where("series_id = ?", ser.ID).Order("number_sort").Scan(e.Ctx)
+	e.runCommand(t, "SearchMissing", map[string]any{"seriesId": ser.ID, "chapterIds": []int64{chs[0].ID}, "explicit": true})
+	waitFor(t, 20*time.Second, "chapter 1 downloaded", func() bool { return len(e.chapterFiles(t, ser.ID)) == 1 })
+	f := e.chapterFiles(t, ser.ID)["1"]
+	if f.ReleaseID == nil {
+		t.Fatal("file without release")
+	}
+
+	// a slow download from source A holds its only slot…
+	sc.Update(func() { sc.PageDelay = 500 * time.Millisecond })
+	e.runCommand(t, "SearchMissing", map[string]any{"seriesId": ser.ID, "chapterIds": []int64{chs[1].ID}, "explicit": true})
+	waitFor(t, 10*time.Second, "chapter 2 downloading", func() bool { return e.countStatus(t, model.JobDownloading) == 1 })
+	// …while chapter 1 (also from A) is processed
+	job, _, err := e.App.DLQueue.EnqueuePriority(e.Ctx, ser.ID, f.ChapterID, f.ReleaseID, model.JobKindReprocess, true, -100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, 3*time.Second, "reprocess done during the download", func() bool {
+		j := e.jobs(t)[job.ID]
+		return j.Status == model.JobCompleted
+	})
+	if n := e.countStatus(t, model.JobDownloading); n != 1 {
+		t.Fatalf("the download should still be running: %d downloading", n)
+	}
+	// Run on the Tasks page: the whole library, no series needed
+	e.runCommand(t, "ProcessExisting", nil)
+}

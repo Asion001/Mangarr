@@ -197,6 +197,9 @@ func (m *Manager) dispatch(ctx context.Context) {
 			continue // processing is GPU/CPU heavy: one at a time
 		}
 		src := srcKey(j.ModuleID, j.SourceID)
+		if j.Kind == model.JobKindReprocess {
+			src = "" // reworks the file on disk: never talks to the source
+		}
 		if src != "" && m.runningSrc[src] >= dl.MaxPerSource {
 			continue
 		}
