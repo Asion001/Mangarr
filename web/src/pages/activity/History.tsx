@@ -19,6 +19,7 @@ const tone: Record<string, "ok" | "warn" | "err" | "info" | "default" | "accent"
   processed: "accent",
   moved: "info",
   progressRestored: "ok",
+  readAhead: "info",
   unparsed: "warn",
 };
 

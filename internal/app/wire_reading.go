@@ -20,6 +20,38 @@ const (
 	FanOutUnreadDelay = 3 * time.Second
 )
 
+// ReadAheadDelay batches a reader's progress before looking ahead.
+const ReadAheadDelay = 10 * time.Second
+
+// Debouncer runs a function once things settle, per key.
+type Debouncer struct {
+	mu      sync.Mutex
+	delay   time.Duration
+	pending map[[2]int64]*time.Timer
+}
+
+// SetDelay changes the delay (tests).
+func (d *Debouncer) SetDelay(delay time.Duration) {
+	d.mu.Lock()
+	d.delay = delay
+	d.mu.Unlock()
+}
+
+// Do runs fn after the delay, restarting the wait on every call for key.
+func (d *Debouncer) Do(key [2]int64, fn func()) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if t := d.pending[key]; t != nil {
+		t.Stop()
+	}
+	d.pending[key] = time.AfterFunc(d.delay, func() {
+		d.mu.Lock()
+		delete(d.pending, key)
+		d.mu.Unlock()
+		fn()
+	})
+}
+
 // wireReading sets up what reading apps see, the Komga-compatible API and
 // mangarr as the progress hub between apps and library servers.
 func (a *App) wireReading(ctx context.Context) error {
@@ -45,6 +77,23 @@ func (a *App) wireReading(ctx context.Context) error {
 	}
 
 	// every change reaches the other library servers
+	// reading drives downloads: the next chapters after a reader's position
+	a.ReadAhead = &Debouncer{delay: ReadAheadDelay, pending: map[[2]int64]*time.Timer{}}
+	a.Bus.Subscribe(func(e events.Event) {
+		p, ok := e.Payload.(reading.ProgressPayload)
+		if !ok || p.Deleted || e.SeriesID == 0 {
+			return
+		}
+		seriesID, readerID := e.SeriesID, p.ReaderID
+		a.ReadAhead.Do([2]int64{readerID, seriesID}, func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+			if _, err := a.Reading.ReadAhead(ctx, readerID, seriesID); err != nil {
+				a.Log.Warn("read ahead failed", "series", seriesID, "err", err)
+			}
+		})
+	}, reading.ProgressChanged)
+
 	a.FanOut = &FanOut{a: a, pending: map[int64]*fanOutSeries{}, delay: FanOutDelay, unreadDelay: FanOutUnreadDelay}
 	a.Bus.Subscribe(func(e events.Event) {
 		if p, ok := e.Payload.(reading.ProgressPayload); ok && e.SeriesID > 0 {

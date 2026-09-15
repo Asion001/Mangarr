@@ -58,7 +58,9 @@ type App struct {
 	Reading *reading.Service
 	Komga   *komgaapi.Service
 	// FanOut pushes progress changes to library servers.
-	FanOut    *FanOut
+	FanOut *FanOut
+	// ReadAhead batches progress before downloading the next chapters.
+	ReadAhead *Debouncer
 	Queue     *jobs.Queue
 	Scheduler *jobs.Scheduler
 	HTTP      *http.Client

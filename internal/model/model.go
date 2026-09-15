@@ -455,6 +455,8 @@ const (
 	HistoryMoved     = "moved"
 	HistoryProgress  = "progressRestored"
 	HistoryBlocklist = "blocklisted"
+	// HistoryReadAhead: chapters after a reader's position were monitored to be downloaded.
+	HistoryReadAhead = "readAhead"
 )
 
 type History struct {
