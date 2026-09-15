@@ -16,9 +16,9 @@ import (
 	"github.com/Asion001/mangarr/internal/downloads"
 	"github.com/Asion001/mangarr/internal/imagecheck"
 	"github.com/Asion001/mangarr/internal/model"
-	"github.com/Asion001/mangarr/internal/progress"
 	"github.com/Asion001/mangarr/internal/modules"
 	"github.com/Asion001/mangarr/internal/modules/upscale"
+	"github.com/Asion001/mangarr/internal/progress"
 )
 
 type Processor struct {
