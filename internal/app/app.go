@@ -26,6 +26,7 @@ import (
 	"github.com/Asion001/mangarr/internal/modules"
 	"github.com/Asion001/mangarr/internal/organize"
 	"github.com/Asion001/mangarr/internal/processing"
+	"github.com/Asion001/mangarr/internal/reading"
 	"github.com/Asion001/mangarr/internal/settings"
 	"github.com/Asion001/mangarr/internal/sourcecache"
 	"github.com/Asion001/mangarr/internal/sourcesearch"
@@ -53,7 +54,8 @@ type App struct {
 	Nodes      *Nodes
 	Organize   *organize.Service
 	Imports    *imports.Service
-	// Komga serves the Komga-compatible API for reading apps.
+	// Reading is the library as reading apps see it; Komga serves it.
+	Reading   *reading.Service
 	Komga     *komgaapi.Service
 	Queue     *jobs.Queue
 	Scheduler *jobs.Scheduler

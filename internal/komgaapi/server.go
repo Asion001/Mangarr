@@ -18,6 +18,7 @@ import (
 
 	"github.com/Asion001/mangarr/internal/auth"
 	"github.com/Asion001/mangarr/internal/db"
+	"github.com/Asion001/mangarr/internal/reading"
 	"github.com/Asion001/mangarr/internal/settings"
 )
 
@@ -29,6 +30,7 @@ type Deps struct {
 	DB       *db.DB
 	Settings *settings.Store
 	Auth     *auth.Service
+	Reading  *reading.Service
 	Log      *slog.Logger
 }
 

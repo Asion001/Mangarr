@@ -1,0 +1,356 @@
+// Package reading is what reading apps see of the library: every series and
+// every chapter (downloaded or not) with one reader's progress, covers,
+// pages (from files or streamed from sources) and progress updates. The
+// Komga-compatible API (internal/komgaapi) is built on it.
+package reading
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"io"
+	"log/slog"
+	"net/http"
+	"os"
+	"path/filepath"
+	"sort"
+	"strconv"
+	"time"
+
+	"github.com/uptrace/bun"
+
+	"github.com/Asion001/mangarr/internal/db"
+	"github.com/Asion001/mangarr/internal/diskcache"
+	"github.com/Asion001/mangarr/internal/events"
+	"github.com/Asion001/mangarr/internal/library"
+	"github.com/Asion001/mangarr/internal/model"
+	"github.com/Asion001/mangarr/internal/modules"
+	"github.com/Asion001/mangarr/internal/modules/source"
+	"github.com/Asion001/mangarr/internal/settings"
+)
+
+// ErrNotFound is returned for unknown series or chapters.
+var ErrNotFound = errors.New("not found")
+
+type Service struct {
+	DB         *db.DB
+	Settings   *settings.Store
+	Library    *library.Library
+	ImageCache *diskcache.Store
+	Mods       *modules.Manager
+	HTTP       *http.Client
+	Bus        *events.Bus
+	Log        *slog.Logger
+
+	pageCounts countCache
+}
+
+// ReaderID is the reader reading apps act as (the configured one, else the
+// first reader; one named "Me" is created when there is none).
+func (s *Service) ReaderID(ctx context.Context) (int64, error) {
+	rs, err := s.Settings.Reading(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if rs.ReaderID > 0 {
+		if n, _ := s.DB.NewSelect().Model((*model.Reader)(nil)).Where("id = ?", rs.ReaderID).Count(ctx); n > 0 {
+			return rs.ReaderID, nil
+		}
+	}
+	var r model.Reader
+	if err := s.DB.NewSelect().Model(&r).Order("id").Limit(1).Scan(ctx); err == nil {
+		return r.ID, nil
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return 0, err
+	}
+	r = model.Reader{Name: "Me", CreatedAt: time.Now().UTC()}
+	if _, err := s.DB.NewInsert().Model(&r).Exec(ctx); err != nil {
+		return 0, err
+	}
+	s.Bus.Changed("readers", "created", r.ID)
+	return r.ID, nil
+}
+
+// SeriesInfo is a series with the reader's counts.
+type SeriesInfo struct {
+	Series     model.Series
+	Books      int
+	Read       int
+	InProgress int
+	LastRead   *time.Time
+	// LastChapterChange is the newest chapter or file change.
+	LastChapterChange time.Time
+	FirstRelease      *time.Time
+	LastRelease       *time.Time
+	Dir               string
+}
+
+// Unread is the number of chapters not started.
+func (si SeriesInfo) Unread() int { return max(si.Books-si.Read-si.InProgress, 0) }
+
+// LastModified is when the series or any chapter last changed.
+func (si SeriesInfo) LastModified() time.Time {
+	if si.LastChapterChange.After(si.Series.UpdatedAt) {
+		return si.LastChapterChange
+	}
+	return si.Series.UpdatedAt
+}
+
+// AllSeries loads every series (id > 0: just that one) with readerID's counts.
+func (s *Service) AllSeries(ctx context.Context, readerID, id int64) ([]SeriesInfo, error) {
+	var list []model.Series
+	q := s.DB.NewSelect().Model(&list).Order("sort_title")
+	if id > 0 {
+		q = q.Where("id = ?", id)
+	}
+	if err := q.Scan(ctx); err != nil {
+		return nil, err
+	}
+	var counts []struct {
+		SeriesID int64        `bun:"series_id"`
+		Books    int          `bun:"books"`
+		Changed  bun.NullTime `bun:"changed"`
+		First    bun.NullTime `bun:"first_release"`
+		Last     bun.NullTime `bun:"last_release"`
+	}
+	cq := s.DB.NewSelect().TableExpr("chapters AS c").
+		ColumnExpr("c.series_id, COUNT(*) AS books, MAX(c.updated_at) AS changed, MIN(c.release_date) AS first_release, MAX(c.release_date) AS last_release").
+		GroupExpr("c.series_id")
+	if id > 0 {
+		cq = cq.Where("c.series_id = ?", id)
+	}
+	if err := cq.Scan(ctx, &counts); err != nil {
+		return nil, err
+	}
+	var reads []struct {
+		SeriesID   int64        `bun:"series_id"`
+		Read       int          `bun:"read_count"`
+		InProgress int          `bun:"in_progress"`
+		LastRead   bun.NullTime `bun:"last_read"`
+	}
+	rq := s.DB.NewSelect().TableExpr("chapter_read_states AS rs").
+		ColumnExpr("rs.series_id").
+		ColumnExpr("SUM(CASE WHEN rs.completed THEN 1 ELSE 0 END) AS read_count").
+		ColumnExpr("SUM(CASE WHEN NOT rs.completed AND rs.page > 0 THEN 1 ELSE 0 END) AS in_progress").
+		ColumnExpr("MAX(COALESCE(rs.read_at, rs.synced_at)) AS last_read").
+		Where("rs.reader_id = ?", readerID).GroupExpr("rs.series_id")
+	if id > 0 {
+		rq = rq.Where("rs.series_id = ?", id)
+	}
+	if err := rq.Scan(ctx, &reads); err != nil {
+		return nil, err
+	}
+	type agg struct {
+		books, read, prog int
+		changed           time.Time
+		first, last, lr   *time.Time
+	}
+	by := map[int64]*agg{}
+	get := func(id int64) *agg {
+		if by[id] == nil {
+			by[id] = &agg{}
+		}
+		return by[id]
+	}
+	nt := func(t bun.NullTime) *time.Time {
+		if t.IsZero() {
+			return nil
+		}
+		v := t.Time
+		return &v
+	}
+	for _, c := range counts {
+		a := get(c.SeriesID)
+		a.books, a.changed, a.first, a.last = c.Books, c.Changed.Time, nt(c.First), nt(c.Last)
+	}
+	for _, r := range reads {
+		a := get(r.SeriesID)
+		a.read, a.prog, a.lr = r.Read, r.InProgress, nt(r.LastRead)
+	}
+	roots := map[int64]string{}
+	var rfs []model.RootFolder
+	_ = s.DB.NewSelect().Model(&rfs).Scan(ctx)
+	for _, rf := range rfs {
+		roots[rf.ID] = rf.Path
+	}
+	out := make([]SeriesInfo, 0, len(list))
+	for _, ser := range list {
+		a := get(ser.ID)
+		out = append(out, SeriesInfo{Series: ser, Books: a.books, Read: a.read, InProgress: a.prog, LastRead: a.lr,
+			LastChapterChange: a.changed, FirstRelease: a.first, LastRelease: a.last, Dir: filepath.Join(roots[ser.RootFolderID], ser.Path)})
+	}
+	return out, nil
+}
+
+// Series loads one series with the reader's counts.
+func (s *Service) Series(ctx context.Context, readerID, id int64) (*SeriesInfo, error) {
+	list, err := s.AllSeries(ctx, readerID, id)
+	if err != nil {
+		return nil, err
+	}
+	if len(list) == 0 {
+		return nil, ErrNotFound
+	}
+	return &list[0], nil
+}
+
+// BookInfo is a chapter with its file and the reader's state.
+type BookInfo struct {
+	Chapter model.Chapter
+	File    *model.ChapterFile
+	State   *model.ChapterReadState
+	// Index is the chapter's 1-based position in its series (by number).
+	Index int
+	// Scanlator of the file (or the best known release).
+	Scanlator string
+	// Path is the CBZ's absolute path ("" when not downloaded).
+	Path string
+}
+
+// Books loads chapters (seriesID 0: all series), ordered by series and number.
+func (s *Service) Books(ctx context.Context, readerID, seriesID int64) ([]BookInfo, error) {
+	var chapters []model.Chapter
+	q := s.DB.NewSelect().Model(&chapters).Order("series_id", "number_sort", "id")
+	if seriesID > 0 {
+		q = q.Where("series_id = ?", seriesID)
+	}
+	if err := q.Scan(ctx); err != nil {
+		return nil, err
+	}
+	return s.enrich(ctx, readerID, chapters, seriesID)
+}
+
+// Book loads one chapter.
+func (s *Service) Book(ctx context.Context, readerID, chapterID int64) (*BookInfo, error) {
+	var ch model.Chapter
+	if err := s.DB.NewSelect().Model(&ch).Where("id = ?", chapterID).Scan(ctx); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	// the index needs the whole series
+	all, err := s.Books(ctx, readerID, ch.SeriesID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range all {
+		if all[i].Chapter.ID == chapterID {
+			return &all[i], nil
+		}
+	}
+	return nil, ErrNotFound
+}
+
+func (s *Service) enrich(ctx context.Context, readerID int64, chapters []model.Chapter, seriesID int64) ([]BookInfo, error) {
+	var files []model.ChapterFile
+	fq := s.DB.NewSelect().Model(&files)
+	var states []model.ChapterReadState
+	sq := s.DB.NewSelect().Model(&states).Where("reader_id = ?", readerID)
+	var rels []model.ChapterRelease
+	relq := s.DB.NewSelect().Model(&rels).Column("chapter_id", "scanlator").Where("chapter_id IS NOT NULL").Where("removed = ?", false)
+	if seriesID > 0 {
+		fq = fq.Where("series_id = ?", seriesID)
+		sq = sq.Where("series_id = ?", seriesID)
+		relq = relq.Where("series_id = ?", seriesID)
+	}
+	if err := fq.Scan(ctx); err != nil {
+		return nil, err
+	}
+	if err := sq.Scan(ctx); err != nil {
+		return nil, err
+	}
+	_ = relq.Scan(ctx)
+	fileBy := map[int64]*model.ChapterFile{}
+	for i := range files {
+		fileBy[files[i].ID] = &files[i]
+	}
+	stateBy := map[int64]*model.ChapterReadState{}
+	for i := range states {
+		stateBy[states[i].ChapterID] = &states[i]
+	}
+	scanBy := map[int64]string{}
+	for _, r := range rels {
+		if r.ChapterID != nil && r.Scanlator != "" && scanBy[*r.ChapterID] == "" {
+			scanBy[*r.ChapterID] = r.Scanlator
+		}
+	}
+	dirs := map[int64]string{}
+	out := make([]BookInfo, 0, len(chapters))
+	idx := map[int64]int{}
+	for _, ch := range chapters {
+		idx[ch.SeriesID]++
+		b := BookInfo{Chapter: ch, State: stateBy[ch.ID], Index: idx[ch.SeriesID], Scanlator: scanBy[ch.ID]}
+		if ch.FileID != nil {
+			if f := fileBy[*ch.FileID]; f != nil {
+				b.File = f
+				if f.Scanlator != "" {
+					b.Scanlator = f.Scanlator
+				}
+				dir, ok := dirs[ch.SeriesID]
+				if !ok {
+					var ser model.Series
+					if err := s.DB.NewSelect().Model(&ser).Column("id", "root_folder_id", "path").Where("id = ?", ch.SeriesID).Scan(ctx); err == nil {
+						dir, _ = s.Library.SeriesDir(ctx, &ser)
+					}
+					dirs[ch.SeriesID] = dir
+				}
+				if dir != "" {
+					b.Path = filepath.Join(dir, f.RelativePath)
+				}
+			}
+		}
+		out = append(out, b)
+	}
+	return out, nil
+}
+
+// SortSeries orders series by title (the default).
+func SortSeries(list []SeriesInfo) {
+	sort.SliceStable(list, func(i, j int) bool { return list[i].Series.SortTitle < list[j].Series.SortTitle })
+}
+
+// Cover returns a series cover for apps: the library's cover.jpg resized,
+// else the metadata cover or the first source's thumbnail (cached).
+func (s *Service) Cover(ctx context.Context, ser *model.Series) ([]byte, string, error) {
+	if p := s.Library.CoverPath(ctx, ser); p != "" {
+		if st, err := os.Stat(p); err == nil {
+			key := "file|" + p + "|" + strconv.FormatInt(st.ModTime().UnixNano(), 10) + "|" + strconv.FormatInt(st.Size(), 10)
+			data, ct, _, err := s.ImageCache.Get(ctx, "covers", key, 365*24*time.Hour, func(ctx context.Context) (io.ReadCloser, string, error) {
+				f, err := os.Open(p)
+				return f, "", err
+			})
+			if err == nil {
+				return data, ct, nil
+			}
+		}
+	}
+	key := "series|" + strconv.FormatInt(ser.ID, 10) + "|" + ser.Metadata.CoverURL
+	data, ct, _, err := s.ImageCache.Get(ctx, "covers", key, 30*24*time.Hour, func(ctx context.Context) (io.ReadCloser, string, error) {
+		if ser.Metadata.CoverURL != "" {
+			req, _ := http.NewRequestWithContext(ctx, http.MethodGet, ser.Metadata.CoverURL, nil)
+			if resp, err := s.HTTP.Do(req); err == nil {
+				if resp.StatusCode == http.StatusOK {
+					return resp.Body, resp.Header.Get("Content-Type"), nil
+				}
+				resp.Body.Close()
+			}
+		}
+		var ss model.SeriesSource
+		if err := s.DB.NewSelect().Model(&ss).Where("series_id = ?", ser.ID).Order("priority").Limit(1).Scan(ctx); err != nil {
+			return nil, "", err
+		}
+		th, _, err := modules.GetAs[source.Thumbnails](s.Mods, ss.ModuleID)
+		if err != nil {
+			return nil, "", err
+		}
+		return th.Thumbnail(ctx, source.MangaRef{SourceID: ss.SourceID, URL: ss.MangaURL, EngineRef: ss.EngineRef})
+	})
+	return data, ct, err
+}
+
+// CachedPageCount is the page count of an undownloaded chapter when its
+// page list is cached (0 when it isn't known yet).
+func (s *Service) CachedPageCount(chapterID int64) int {
+	return s.pageCounts.get(chapterID)
+}

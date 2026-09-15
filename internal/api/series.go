@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"os"
 	"strconv"
@@ -20,7 +19,6 @@ import (
 	"github.com/Asion001/mangarr/internal/modules"
 	"github.com/Asion001/mangarr/internal/modules/library"
 	"github.com/Asion001/mangarr/internal/modules/metadata"
-	"github.com/Asion001/mangarr/internal/modules/source"
 	"github.com/Asion001/mangarr/internal/naming"
 	"github.com/Asion001/mangarr/internal/organize"
 	"github.com/Asion001/mangarr/internal/series"
@@ -666,42 +664,14 @@ func (s *Server) registerSeries() {
 			if err != nil {
 				return nil, seriesError(err)
 			}
-			if p := s.app.Library.CoverPath(ctx, ser); p != "" {
-				if st, err := os.Stat(p); err == nil {
-					if in.Size == "full" {
-						if data, err := os.ReadFile(p); err == nil {
-							return &imageOutput{ContentType: http.DetectContentType(data), CacheControl: "public, max-age=3600", Body: data}, nil
-						}
-					}
-					// a resized copy, keyed by the file's version
-					key := "file|" + p + "|" + strconv.FormatInt(st.ModTime().UnixNano(), 10) + "|" + strconv.FormatInt(st.Size(), 10)
-					data, ct, err := s.cachedImage(ctx, "covers", key, 365*24*time.Hour, func(ctx context.Context) (io.ReadCloser, string, error) {
-						f, err := os.Open(p)
-						return f, "", err
-					})
-					if err == nil {
-						return &imageOutput{ContentType: ct, CacheControl: "public, max-age=3600", Body: data}, nil
+			if in.Size == "full" {
+				if p := s.app.Library.CoverPath(ctx, ser); p != "" {
+					if data, err := os.ReadFile(p); err == nil {
+						return &imageOutput{ContentType: http.DetectContentType(data), CacheControl: "public, max-age=3600", Body: data}, nil
 					}
 				}
 			}
-			key := "series|" + strconv.FormatInt(ser.ID, 10) + "|" + ser.Metadata.CoverURL
-			data, ct, err := s.cachedImage(ctx, "covers", key, 30*24*time.Hour, func(ctx context.Context) (io.ReadCloser, string, error) {
-				if ser.Metadata.CoverURL != "" {
-					req, _ := http.NewRequestWithContext(ctx, http.MethodGet, ser.Metadata.CoverURL, nil)
-					if resp, err := s.app.HTTP.Do(req); err == nil && resp.StatusCode == 200 {
-						return resp.Body, resp.Header.Get("Content-Type"), nil
-					}
-				}
-				var ss model.SeriesSource
-				if err := s.app.DB.NewSelect().Model(&ss).Where("series_id = ?", ser.ID).Order("priority").Limit(1).Scan(ctx); err != nil {
-					return nil, "", err
-				}
-				th, _, err := modules.GetAs[source.Thumbnails](s.app.Modules, ss.ModuleID)
-				if err != nil {
-					return nil, "", err
-				}
-				return th.Thumbnail(ctx, source.MangaRef{SourceID: ss.SourceID, URL: ss.MangaURL, EngineRef: ss.EngineRef})
-			})
+			data, ct, err := s.app.Reading.Cover(ctx, ser)
 			if err != nil {
 				return nil, huma.Error404NotFound("no cover")
 			}

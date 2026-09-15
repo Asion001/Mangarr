@@ -7,6 +7,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+
+	"github.com/Asion001/mangarr/internal/reading"
 )
 
 // router builds the API. Routes sit at the root, like Komga's.
@@ -41,6 +43,54 @@ func (s *Service) routes(r chi.Router) {
 	l := &libraryHandlers{s}
 	r.Get("/api/v1/libraries", l.list)
 	r.Get("/api/v1/libraries/{id}", l.get)
+
+	sh := &seriesHandlers{s}
+	bh := &bookHandlers{s}
+	ch := &catalogHandlers{s}
+	r.Get("/api/v1/series", sh.list)
+	r.Post("/api/v1/series/list", sh.search)
+	r.Get("/api/v1/series/new", sh.newest)
+	r.Get("/api/v1/series/updated", sh.updated)
+	r.Get("/api/v1/series/{id}", sh.get)
+	r.Get("/api/v1/series/{id}/thumbnail", sh.thumbnail)
+	r.Get("/api/v1/series/{id}/books", bh.seriesBooks)
+	r.Get("/api/v1/series/{id}/collections", ch.seriesCollections)
+
+	r.Get("/api/v1/books", bh.list)
+	r.Post("/api/v1/books/list", bh.search)
+	r.Get("/api/v1/books/ondeck", bh.onDeck)
+	r.Get("/api/v1/books/{id}", bh.get)
+	r.Get("/api/v1/books/{id}/next", bh.sibling(1))
+	r.Get("/api/v1/books/{id}/previous", bh.sibling(-1))
+	r.Get("/api/v1/books/{id}/readlists", ch.bookReadLists)
+
+	genres := ch.strings(func(si reading.SeriesInfo) []string { return si.Series.Metadata.Genres })
+	tags := ch.strings(func(si reading.SeriesInfo) []string { return si.Series.Metadata.Tags })
+	r.Get("/api/v1/genres", genres)
+	r.Get("/api/v1/tags", ch.strings(func(si reading.SeriesInfo) []string {
+		return append(append([]string{}, si.Series.Metadata.Genres...), si.Series.Metadata.Tags...)
+	}))
+	r.Get("/api/v1/tags/series", tags)
+	r.Get("/api/v1/tags/book", emptyList)
+	r.Get("/api/v1/publishers", ch.strings(func(si reading.SeriesInfo) []string { return []string{si.Series.Metadata.Publisher} }))
+	r.Get("/api/v1/languages", ch.strings(func(si reading.SeriesInfo) []string { return []string{si.Series.Language} }))
+	r.Get("/api/v1/age-ratings", emptyList)
+	r.Get("/api/v1/sharing-labels", emptyList)
+	r.Get("/api/v1/series/release-dates", ch.strings(func(si reading.SeriesInfo) []string {
+		if si.FirstRelease == nil {
+			return nil
+		}
+		return []string{si.FirstRelease.Format("2006")}
+	}))
+	r.Get("/api/v1/authors", ch.authorsV1)
+	r.Get("/api/v2/authors", ch.authorsV2)
+	r.Get("/api/v1/collections", ch.collections)
+	r.Get("/api/v1/collections/{id}", ch.collection)
+	r.Get("/api/v1/collections/{id}/series", ch.collectionSeries)
+	r.Get("/api/v1/readlists", ch.readLists)
+	r.Get("/api/v1/readlists/{id}", ch.readListGet)
+	r.Get("/api/v1/readlists/{id}/books", ch.readListBooks)
+	r.Get("/api/v1/history", emptyPage)
 }
 
 // cors lets browser-based clients call the API (credentials go in headers).
