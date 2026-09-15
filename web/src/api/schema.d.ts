@@ -520,6 +520,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/library-accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Library servers (Komga, Kavita) where you can link your own account to sync your progress */
+        get: operations["me-library-accounts"];
+        put?: never;
+        /** Link your account on a library server (the credentials are tested first) */
+        post: operations["me-library-account-save"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/library-accounts/{moduleId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["me-library-account-delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/notifications": {
         parameters: {
             query?: never;
@@ -3457,6 +3491,12 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        LinkedAccount: {
+            externalUser: string;
+            lastError?: string;
+            /** Format: date-time */
+            lastSyncAt?: string;
+        };
         ListFilter: {
             ids?: number[];
             includeDone?: boolean;
@@ -3678,6 +3718,14 @@ export interface components {
             target?: string;
             /** Format: int64 */
             total: number;
+        };
+        MyLibraryAccount: {
+            fields: components["schemas"]["ModuleField"][];
+            implementation: string;
+            linked?: components["schemas"]["LinkedAccount"];
+            /** Format: int64 */
+            moduleId: number;
+            name: string;
         };
         NamingPreview: {
             chapter: string;
@@ -6086,6 +6134,95 @@ export interface operations {
             header?: never;
             path: {
                 id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "me-library-accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyLibraryAccount"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "me-library-account-save": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountInput"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "me-library-account-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                moduleId: number;
             };
             cookie?: never;
         };

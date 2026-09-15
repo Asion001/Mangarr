@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, KeyRound, LogOut, Monitor, Pencil, Plus, Trash2 } from "lucide-react";
+import { Bell, KeyRound, Link2, LogOut, Monitor, Pencil, Plus, Trash2, Unlink } from "lucide-react";
 import { api, unwrap, type Implementation, type ModuleResource } from "../../api/client";
-import { defaultsOf } from "../../components/DynamicForm";
+import { DynamicForm, defaultsOf } from "../../components/DynamicForm";
 import { Badge, Button, Card, Confirm, ErrorBox, Field, IconButton, Input, Modal, PageHeader, Tabs } from "../../components/ui";
 import { ModuleEditor, type Draft } from "../settings/Modules";
 import { appAddress, DevicesCard, Guide, type App } from "../settings/ReadingApps";
@@ -48,6 +48,7 @@ export function AccountPage() {
           </div>
         </Card>
         {account?.kind === "user" && <NotificationsCard />}
+        {account?.kind === "user" && <LibraryAccountsCard />}
         {can("apps") && <ReadingAppsCard />}
         {account?.kind === "user" && <PasswordCard />}
         {account?.kind === "user" && <SessionsCard />}
@@ -281,6 +282,99 @@ function NotificationsCard() {
       </Modal>
       {draft && <ModuleEditor kind="notify" personal draft={draft} impl={implOf(draft.implementation)} onClose={() => setDraft(null)} />}
       <Confirm open={!!deleting} title="Delete notification" danger confirmLabel="Delete" message={`Delete ${deleting?.name}?`} onConfirm={remove} onClose={() => setDeleting(null)} />
+    </Card>
+  );
+}
+
+/** LibraryAccountsCard: link your own Komga/Kavita account so your progress syncs with it. */
+function LibraryAccountsCard() {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const { data: servers } = useQuery({ queryKey: ["me-library-accounts"], queryFn: () => unwrap(api.GET("/api/v1/me/library-accounts")) });
+  const [linking, setLinking] = useState<number | null>(null);
+  const [creds, setCreds] = useState<Record<string, unknown>>({});
+  const [busy, setBusy] = useState(false);
+  if (!servers?.length) return null;
+  const refresh = () => qc.invalidateQueries({ queryKey: ["me-library-accounts"] });
+  const link = async (moduleId: number) => {
+    setBusy(true);
+    try {
+      const credentials = Object.fromEntries(Object.entries(creds).map(([k, v]) => [k, String(v ?? "")]));
+      await unwrap(api.POST("/api/v1/me/library-accounts", { body: { moduleId, credentials } }));
+      toast.success("Linked", "Your progress there syncs with mangarr now.");
+      setLinking(null);
+      setCreds({});
+      refresh();
+    } catch (e) {
+      toast.fromError(e, "Couldn't link it");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const unlink = async (moduleId: number) => {
+    try {
+      await unwrap(api.DELETE("/api/v1/me/library-accounts/{moduleId}", { params: { path: { moduleId } } }));
+      refresh();
+    } catch (e) {
+      toast.fromError(e);
+    }
+  };
+  return (
+    <Card title="Library servers">
+      <p className="mb-3 text-sm text-muted">Read in Komga or Kavita with your own account? Link it and your progress there syncs with mangarr (and the other way).</p>
+      <div className="flex flex-col gap-2">
+        {servers.map((srv) => (
+          <div key={srv.moduleId} className="rounded-md bg-panel-2 px-3 py-2 text-sm">
+            <div className="flex items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="font-medium">{srv.name}</div>
+                <div className="text-xs text-muted">
+                  {srv.linked ? (
+                    <>
+                      Linked as {srv.linked.externalUser || "you"}
+                      {srv.linked.lastSyncAt && ` · synced ${relative(srv.linked.lastSyncAt)}`}
+                    </>
+                  ) : (
+                    "Not linked"
+                  )}
+                </div>
+                {srv.linked?.lastError && <div className="text-xs text-err">{srv.linked.lastError}</div>}
+              </div>
+              {srv.linked ? (
+                <Button size="sm" icon={<Unlink className="size-4" />} onClick={() => unlink(srv.moduleId)}>
+                  Unlink
+                </Button>
+              ) : (
+                linking !== srv.moduleId && (
+                  <Button
+                    size="sm"
+                    icon={<Link2 className="size-4" />}
+                    onClick={() => {
+                      setLinking(srv.moduleId);
+                      setCreds(defaultsOf(srv.fields));
+                    }}
+                  >
+                    Link
+                  </Button>
+                )
+              )}
+            </div>
+            {linking === srv.moduleId && (
+              <div className="mt-3 flex flex-col gap-3 border-t border-border pt-3">
+                <DynamicForm fields={srv.fields} values={creds} onChange={setCreds} />
+                <div className="flex justify-end gap-2">
+                  <Button size="sm" onClick={() => setLinking(null)}>
+                    Cancel
+                  </Button>
+                  <Button size="sm" variant="primary" loading={busy} onClick={() => link(srv.moduleId)}>
+                    Link
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </Card>
   );
 }

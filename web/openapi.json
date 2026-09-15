@@ -3083,6 +3083,25 @@
         ],
         "type": "object"
       },
+      "LinkedAccount": {
+        "additionalProperties": false,
+        "properties": {
+          "externalUser": {
+            "type": "string"
+          },
+          "lastError": {
+            "type": "string"
+          },
+          "lastSyncAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "externalUser"
+        ],
+        "type": "object"
+      },
       "ListFilter": {
         "additionalProperties": false,
         "properties": {
@@ -3842,6 +3861,37 @@
           "running",
           "done",
           "total"
+        ],
+        "type": "object"
+      },
+      "MyLibraryAccount": {
+        "additionalProperties": false,
+        "properties": {
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/ModuleField"
+            },
+            "type": "array"
+          },
+          "implementation": {
+            "type": "string"
+          },
+          "linked": {
+            "$ref": "#/components/schemas/LinkedAccount"
+          },
+          "moduleId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "moduleId",
+          "name",
+          "implementation",
+          "fields"
         ],
         "type": "object"
       },
@@ -9403,6 +9453,106 @@
         },
         "tags": [
           "Users"
+        ]
+      }
+    },
+    "/api/v1/me/library-accounts": {
+      "get": {
+        "operationId": "me-library-accounts",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MyLibraryAccount"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Library servers (Komga, Kavita) where you can link your own account to sync your progress",
+        "tags": [
+          "Account"
+        ]
+      },
+      "post": {
+        "operationId": "me-library-account-save",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Link your account on a library server (the credentials are tested first)",
+        "tags": [
+          "Account"
+        ]
+      }
+    },
+    "/api/v1/me/library-accounts/{moduleId}": {
+      "delete": {
+        "operationId": "me-library-account-delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "moduleId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Account"
         ]
       }
     },

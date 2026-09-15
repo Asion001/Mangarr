@@ -179,32 +179,18 @@ func (s *Server) registerReaders() {
 			ID   int64 `path:"id"`
 			Body AccountInput
 		}) (*struct{ Body model.ReaderAccount }, error) {
-			user, err := s.app.ReadSync.TestAccount(ctx, in.Body.ModuleID, in.Body.Credentials)
+			acc, err := s.saveReaderAccount(ctx, in.ID, in.Body)
 			if err != nil {
-				return nil, huma.Error400BadRequest(err.Error())
+				return nil, err
 			}
-			acc := model.ReaderAccount{ReaderID: in.ID, ModuleID: in.Body.ModuleID, Credentials: in.Body.Credentials, ExternalUser: user, CreatedAt: time.Now().UTC()}
-			_, err = s.app.DB.NewInsert().Model(&acc).
-				On("CONFLICT (reader_id, module_id) DO UPDATE").
-				Set("credentials = EXCLUDED.credentials").Set("external_user = EXCLUDED.external_user").Set("last_error = ''").
-				Exec(ctx)
-			if err != nil {
-				return nil, toHTTPError(err)
-			}
-			s.app.Bus.Changed("readers", "updated", in.ID)
-			_, _ = s.app.Queue.Push(ctx, "SyncReadProgress", nil, "account-added")
-			go s.app.Watcher.Refresh(context.Background())
-			return &struct{ Body model.ReaderAccount }{acc}, nil
+			return &struct{ Body model.ReaderAccount }{*acc}, nil
 		})
 	huma.Register(s.api, huma.Operation{OperationID: "readers-account-delete", Method: http.MethodDelete, Path: "/api/v1/readers/{id}/accounts/{accountId}", Tags: tags},
 		func(ctx context.Context, in *struct {
 			ID        int64 `path:"id"`
 			AccountID int64 `path:"accountId"`
 		}) (*struct{}, error) {
-			_, err := s.app.DB.NewDelete().Model((*model.ReaderAccount)(nil)).Where("id = ? AND reader_id = ?", in.AccountID, in.ID).Exec(ctx)
-			s.app.Bus.Changed("readers", "updated", in.ID)
-			go s.app.Watcher.Refresh(context.Background())
-			return nil, toHTTPError(err)
+			return nil, s.deleteReaderAccount(ctx, in.ID, "id = ?", in.AccountID)
 		})
 
 	ctags := []string{"Cleanup"}
@@ -232,4 +218,33 @@ func (s *Server) registerReaders() {
 			_, _ = s.app.Queue.Push(ctx, "SearchMissing", map[string]any{"seriesId": ch.SeriesID, "chapterIds": []int64{ch.ID}, "explicit": true}, "restore")
 			return &struct{ Body *model.Chapter }{ch}, nil
 		})
+}
+
+// saveReaderAccount tests credentials on a library server and links them to
+// a reader (replacing its account there).
+func (s *Server) saveReaderAccount(ctx context.Context, readerID int64, in AccountInput) (*model.ReaderAccount, error) {
+	user, err := s.app.ReadSync.TestAccount(ctx, in.ModuleID, in.Credentials)
+	if err != nil {
+		return nil, huma.Error400BadRequest(err.Error())
+	}
+	acc := model.ReaderAccount{ReaderID: readerID, ModuleID: in.ModuleID, Credentials: in.Credentials, ExternalUser: user, CreatedAt: time.Now().UTC()}
+	_, err = s.app.DB.NewInsert().Model(&acc).
+		On("CONFLICT (reader_id, module_id) DO UPDATE").
+		Set("credentials = EXCLUDED.credentials").Set("external_user = EXCLUDED.external_user").Set("last_error = ''").
+		Exec(ctx)
+	if err != nil {
+		return nil, toHTTPError(err)
+	}
+	s.app.Bus.Changed("readers", "updated", readerID)
+	_, _ = s.app.Queue.Push(ctx, "SyncReadProgress", nil, "account-added")
+	go s.app.Watcher.Refresh(context.Background())
+	return &acc, nil
+}
+
+// deleteReaderAccount unlinks a reader's account (where: which one).
+func (s *Server) deleteReaderAccount(ctx context.Context, readerID int64, where string, arg any) error {
+	_, err := s.app.DB.NewDelete().Model((*model.ReaderAccount)(nil)).Where("reader_id = ?", readerID).Where(where, arg).Exec(ctx)
+	s.app.Bus.Changed("readers", "updated", readerID)
+	go s.app.Watcher.Refresh(context.Background())
+	return toHTTPError(err)
 }
