@@ -28,6 +28,10 @@ database-move-cancel POST /api/v1/system/database/cancel -> admin
 database-test POST /api/v1/system/database/test -> admin
 extensions-action POST /api/v1/modules/{id}/extensions/{pkg}/{action} -> admin
 extensions-list GET /api/v1/modules/{id}/extensions -> admin
+groups-create POST /api/v1/groups -> admin
+groups-delete DELETE /api/v1/groups/{id} -> admin
+groups-list GET /api/v1/groups -> admin
+groups-update PUT /api/v1/groups/{id} -> admin
 health-get GET /api/v1/health -> admin
 health-run POST /api/v1/health/check -> admin
 history-list GET /api/v1/history -> library.manage
@@ -42,6 +46,11 @@ imports-list GET /api/v1/imports -> admin
 imports-options PUT /api/v1/imports/{id}/options -> admin
 imports-remap POST /api/v1/imports/{id}/remap -> admin
 imports-run POST /api/v1/imports/{id}/run -> admin
+invite-get GET /api/v1/invites/redeem/{token} -> public
+invite-redeem POST /api/v1/invites/redeem/{token} -> public
+invites-create POST /api/v1/invites -> admin
+invites-delete DELETE /api/v1/invites/{id} -> admin
+invites-list GET /api/v1/invites -> admin
 me-sessions GET /api/v1/me/sessions -> signedin
 me-sessions-revoke DELETE /api/v1/me/sessions/{id} -> signedin
 me-sessions-revoke-others POST /api/v1/me/sessions/revoke-others -> signedin
@@ -54,6 +63,7 @@ modules-test POST /api/v1/modules/test -> admin
 modules-test-saved POST /api/v1/modules/{id}/test -> admin
 modules-update PUT /api/v1/modules/{id} -> admin
 naming-preview GET /api/v1/settings/media/preview -> admin
+permissions-list GET /api/v1/permissions -> admin
 processing-history GET /api/v1/processing/history -> admin
 processing-preview POST /api/v1/processing/preview -> admin
 processing-preview-cbz GET /api/v1/processing/preview/{token}/sample.cbz -> admin
@@ -152,4 +162,10 @@ tags-list GET /api/v1/tags -> signedin
 upscaler-info GET /api/v1/modules/{id}/upscaler-info -> admin
 upscaler-nodes-heartbeat POST /api/v1/upscaler-nodes/heartbeat -> admin
 upscaler-nodes-list GET /api/v1/upscaler-nodes -> admin
+users-create POST /api/v1/users -> admin
+users-delete DELETE /api/v1/users/{id} -> admin
+users-list GET /api/v1/users -> admin
+users-password POST /api/v1/users/{id}/password -> admin
+users-signout POST /api/v1/users/{id}/signout -> admin
+users-update PUT /api/v1/users/{id} -> admin
 wanted-missing GET /api/v1/wanted/missing -> library.manage

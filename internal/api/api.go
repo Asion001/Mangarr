@@ -139,7 +139,7 @@ var publicPaths = map[string]bool{
 }
 
 // publicPrefixes are public path prefixes (invites).
-var publicPrefixes = []string{"/api/v1/invites/"}
+var publicPrefixes = []string{"/api/v1/invites/redeem/"}
 
 func isPublic(p string) bool {
 	if publicPaths[p] || !strings.HasPrefix(p, "/api/") {

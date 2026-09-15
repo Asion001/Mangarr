@@ -253,6 +253,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["groups-list"];
+        put?: never;
+        post: operations["groups-create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/groups/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["groups-update"];
+        post?: never;
+        /** Delete a group (its members move to Users) */
+        delete: operations["groups-delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -431,6 +464,57 @@ export interface paths {
         /** Add the selected entries to the library */
         post: operations["imports-run"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/invites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["invites-list"];
+        put?: never;
+        /** Create an invite link; the token is only returned now */
+        post: operations["invites-create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/invites/redeem/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What an invite link is for */
+        get: operations["invite-get"];
+        put?: never;
+        /** Create your account with an invite link (signs you in) */
+        post: operations["invite-redeem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/invites/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["invites-delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -643,6 +727,23 @@ export interface paths {
         };
         /** Models and devices of an upscaler module */
         get: operations["upscaler-info"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The permissions groups can have */
+        get: operations["permissions-list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2024,6 +2125,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["users-list"];
+        put?: never;
+        /** Create a user (with their own reader for progress) */
+        post: operations["users-create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Change a user's name, group, reader, or disable them */
+        put: operations["users-update"];
+        post?: never;
+        /** Delete a user (their reader and its progress stay) */
+        delete: operations["users-delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{id}/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set a user's password (signs them out everywhere) */
+        post: operations["users-password"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{id}/signout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign a user out of every web session */
+        post: operations["users-signout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/wanted/missing": {
         parameters: {
             query?: never;
@@ -2643,6 +2813,45 @@ export interface components {
             instanceName: string;
             publicUrl: string;
         };
+        Group: {
+            autoApproveRequests: boolean;
+            builtin?: string;
+            /** Format: date-time */
+            createdAt: string;
+            excludeTags: number[];
+            /** Format: int64 */
+            id: number;
+            includeTags: number[];
+            name: string;
+            permissions: string[];
+            rootFolders: number[];
+        };
+        GroupInput: {
+            autoApproveRequests?: boolean;
+            /** @description Never series with these tags */
+            excludeTags?: number[];
+            /** @description Only series with any of these tags (empty = all) */
+            includeTags?: number[];
+            name: string;
+            permissions?: string[];
+            /** @description Only series in these root folders (empty = all) */
+            rootFolders?: number[];
+        };
+        GroupView: {
+            autoApproveRequests: boolean;
+            builtin?: string;
+            /** Format: date-time */
+            createdAt: string;
+            excludeTags: number[];
+            /** Format: int64 */
+            id: number;
+            includeTags: number[];
+            /** Format: int64 */
+            members: number;
+            name: string;
+            permissions: string[];
+            rootFolders: number[];
+        };
         HealthCheck: {
             items?: components["schemas"]["HealthCheckItem"][];
             link?: string;
@@ -2847,6 +3056,56 @@ export interface components {
             /** Format: int64 */
             queued: number;
             version: string;
+        };
+        "Invite-redeemRequest": {
+            displayName?: string;
+            password: string;
+            username: string;
+        };
+        InviteInfo: {
+            /** Format: date-time */
+            expiresAt?: string;
+            group: string;
+            instance: string;
+            note?: string;
+        };
+        InviteView: {
+            active: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: int64 */
+            createdBy?: number;
+            /** Format: date-time */
+            expiresAt?: string;
+            group: string;
+            /** Format: int64 */
+            groupId: number;
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            maxUses: number;
+            note: string;
+            /** Format: int64 */
+            uses: number;
+        };
+        "Invites-createRequest": {
+            /**
+             * Format: int64
+             * @description Days until it expires (0 = never)
+             */
+            expireDays?: number;
+            /**
+             * Format: int64
+             * @description 0 = the Users group
+             */
+            groupId: number;
+            /**
+             * Format: int64
+             * @description How many accounts it can create (default 1)
+             */
+            maxUses?: number;
+            /** @description Who it's for */
+            note?: string;
         };
         JobView: {
             /** Format: int64 */
@@ -3096,6 +3355,26 @@ export interface components {
             folder: string;
             volume: string;
         };
+        NewInvite: {
+            active: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: int64 */
+            createdBy?: number;
+            /** Format: date-time */
+            expiresAt?: string;
+            group: string;
+            /** Format: int64 */
+            groupId: number;
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            maxUses: number;
+            note: string;
+            token: string;
+            /** Format: int64 */
+            uses: number;
+        };
         NewReadingKey: {
             comment: string;
             /** Format: date-time */
@@ -3143,6 +3422,11 @@ export interface components {
             /** Format: int64 */
             priority?: number;
             throttle?: components["schemas"]["ThrottleConfig"];
+        };
+        Permission: {
+            description: string;
+            key: string;
+            label: string;
         };
         PreviewPage: {
             encodedFormat: string;
@@ -3950,6 +4234,70 @@ export interface components {
             noiseLevels?: number[];
             scales: number[];
         };
+        User: {
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: int64 */
+            createdBy?: number;
+            disabled: boolean;
+            displayName: string;
+            /** Format: int64 */
+            groupId: number;
+            /** Format: int64 */
+            id: number;
+            /** Format: date-time */
+            lastLoginAt?: string;
+            /** Format: int64 */
+            readerId: number;
+            username: string;
+        };
+        UserView: {
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: int64 */
+            createdBy?: number;
+            /** Format: int64 */
+            devices: number;
+            disabled: boolean;
+            displayName: string;
+            group: string;
+            /** Format: int64 */
+            groupId: number;
+            /** Format: int64 */
+            id: number;
+            /** Format: date-time */
+            lastLoginAt?: string;
+            /** Format: int64 */
+            readerId: number;
+            readerName: string;
+            /** Format: int64 */
+            sessions: number;
+            username: string;
+        };
+        "Users-createRequest": {
+            displayName?: string;
+            /**
+             * Format: int64
+             * @description 0 = the Users group
+             */
+            groupId?: number;
+            password: string;
+            username: string;
+        };
+        "Users-passwordRequest": {
+            password: string;
+        };
+        "Users-updateRequest": {
+            disabled?: boolean;
+            displayName?: string;
+            /** Format: int64 */
+            groupId: number;
+            /**
+             * Format: int64
+             * @description The reader holding their progress
+             */
+            readerId?: number;
+        };
         Var: {
             default: string;
             description: string;
@@ -4547,6 +4895,130 @@ export interface operations {
             };
         };
     };
+    "groups-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupView"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "groups-create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GroupInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Group"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "groups-update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GroupInput"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "groups-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "health-get": {
         parameters: {
             query?: never;
@@ -4993,6 +5465,164 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Command"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "invites-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteView"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "invites-create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Invites-createRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewInvite"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "invite-get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteInfo"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "invite-redeem": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Invite-redeemRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthStatus"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "invites-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {
@@ -5521,6 +6151,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UpscaleInfo"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "permissions-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Permission"][];
                 };
             };
             /** @description Error */
@@ -8858,6 +9517,192 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["NodeStatus"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "users-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserView"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "users-create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Users-createRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "users-update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Users-updateRequest"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "users-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "users-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Users-passwordRequest"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "users-signout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {
