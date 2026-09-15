@@ -91,6 +91,7 @@ func TestReadSyncAndCleanup(t *testing.T) {
 			if len(e.chapterFiles(t, ser.ID)) != 4 {
 				t.Fatal("dry run must not delete")
 			}
+			e.waitIdle(t) // the dry-run cleanup the sync queued
 			cs.DryRun = false
 			if err := e.App.Settings.Set(e.Ctx, settings.KeyCleanup, cs); err != nil {
 				t.Fatal(err)

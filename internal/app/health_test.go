@@ -3,9 +3,6 @@ package app_test
 import (
 	"fmt"
 	"testing"
-	"time"
-
-	"github.com/uptrace/bun"
 
 	"github.com/Asion001/mangarr/internal/dbtest"
 	"github.com/Asion001/mangarr/internal/model"
@@ -30,11 +27,7 @@ func TestHealthFailingSourceLinksSeries(t *testing.T) {
 		}
 		ids = append(ids, ser.ID)
 	}
-	// let the refreshes queued by adding them finish (they fail and count too)
-	waitFor(t, 20*time.Second, "refreshes", func() bool {
-		n, _ := e.App.DB.NewSelect().Model((*model.Command)(nil)).Where("status IN (?)", bun.In([]string{model.CommandQueued, model.CommandStarted})).Count(e.Ctx)
-		return n == 0
-	})
+	e.waitIdle(t) // the refreshes queued by adding them fail and count too
 	_, _ = e.App.DB.NewUpdate().Model((*model.SeriesSource)(nil)).Set("consecutive_failures = 4").Set("last_error = 'HTTP 403'").Where("1 = 1").Exec(e.Ctx)
 	var found bool
 	for _, c := range e.App.Health.Run(e.Ctx) {

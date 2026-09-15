@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/uptrace/bun"
+
 	"github.com/Asion001/mangarr/internal/app"
 	"github.com/Asion001/mangarr/internal/cbz"
 	"github.com/Asion001/mangarr/internal/config"
@@ -103,6 +105,16 @@ func (e *testEnv) runCommand(t *testing.T, name string, body map[string]any) {
 	if res.Status != model.CommandCompleted {
 		t.Fatalf("%s failed: %s", name, res.Error)
 	}
+}
+
+// waitIdle waits until no command is queued or running (e.g. the ones a
+// command queued itself).
+func (e *testEnv) waitIdle(t *testing.T) {
+	t.Helper()
+	waitFor(t, 20*time.Second, "idle command queue", func() bool {
+		n, _ := e.App.DB.NewSelect().Model((*model.Command)(nil)).Where("status IN (?)", bun.In([]string{model.CommandQueued, model.CommandStarted})).Count(e.Ctx)
+		return n == 0
+	})
 }
 
 func (e *testEnv) chapterFiles(t *testing.T, seriesID int64) map[string]model.ChapterFile {
