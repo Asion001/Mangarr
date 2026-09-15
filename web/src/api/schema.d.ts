@@ -1017,6 +1017,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/read/chapters/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A chapter for the web reader: pages, neighbours and your progress */
+        get: operations["read-chapter"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/read/chapters/{id}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download a downloaded chapter's CBZ */
+        get: operations["read-file"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/read/chapters/{id}/pages/{n}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A page image (from the file, or streamed from the source) */
+        get: operations["read-page"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/read/chapters/{id}/pages/{n}/bounds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A page's size and the box inside its borders (for cropping them) */
+        get: operations["read-page-bounds"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/read/chapters/{id}/progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save where you are in a chapter (the last page finishes it) */
+        put: operations["read-progress"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/read/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Your web reader settings: defaults, and a series' own */
+        get: operations["read-settings"];
+        /** Save reader settings as your defaults (seriesId 0) or for one series (no data: back to the defaults) */
+        put: operations["read-settings-save"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/readers": {
         parameters: {
             query?: never;
@@ -2341,6 +2444,20 @@ export interface components {
             seriesTitle: string;
             sourceName: string;
         };
+        Bounds: {
+            /** Format: int64 */
+            h: number;
+            /** Format: int64 */
+            height: number;
+            /** Format: int64 */
+            w: number;
+            /** Format: int64 */
+            width: number;
+            /** Format: int64 */
+            x: number;
+            /** Format: int64 */
+            y: number;
+        };
         BucketStats: {
             /** Format: int64 */
             bytes: number;
@@ -2457,6 +2574,12 @@ export interface components {
             sourceName: string;
             upscaleModel: string;
             upscaled: boolean;
+        };
+        ChapterLink: {
+            /** Format: int64 */
+            id: number;
+            number: string;
+            title?: string;
         };
         ChapterResource: {
             /** Format: date-time */
@@ -3625,10 +3748,51 @@ export interface components {
             results: number;
             sourceName: string;
         };
+        "Read-progressRequest": {
+            completed?: boolean;
+            /** Format: int64 */
+            page: number;
+        };
+        "Read-settings-saveRequest": {
+            data?: {
+                [key: string]: unknown;
+            };
+            /** Format: int64 */
+            seriesId?: number;
+        };
         ReadAhead: {
             /** Format: int64 */
             chapters: number;
             enabled: boolean;
+        };
+        ReadChapter: {
+            canDownload: boolean;
+            downloaded: boolean;
+            /** Format: int64 */
+            id: number;
+            next?: components["schemas"]["ChapterLink"];
+            number: string;
+            pages: components["schemas"]["ReadPage"][];
+            prev?: components["schemas"]["ChapterLink"];
+            progress: components["schemas"]["ReadProgress"];
+            readingDirection: string;
+            /** Format: int64 */
+            seriesId: number;
+            seriesTitle: string;
+            title?: string;
+            volume?: string;
+        };
+        ReadPage: {
+            mediaType: string;
+            /** Format: int64 */
+            number: number;
+            /** Format: int64 */
+            size?: number;
+        };
+        ReadProgress: {
+            completed: boolean;
+            /** Format: int64 */
+            page: number;
         };
         ReadStateView: {
             completed: boolean;
@@ -3704,6 +3868,10 @@ export interface components {
             /** Format: int64 */
             id: number;
             name: string;
+        };
+        ReaderSettingsView: {
+            defaults: unknown;
+            series?: unknown;
         };
         ReaderSync: {
             devices: components["schemas"]["DeviceSync"][];
@@ -6755,6 +6923,228 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "read-chapter": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadChapter"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "read-file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "read-page": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    "Content-Type"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "read-page-bounds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Bounds"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "read-progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Read-progressRequest"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "read-settings": {
+        parameters: {
+            query?: {
+                seriesId?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReaderSettingsView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "read-settings-save": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Read-settings-saveRequest"];
+            };
+        };
         responses: {
             /** @description No Content */
             204: {

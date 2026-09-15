@@ -34,12 +34,19 @@ var operationPermissions = map[string][]string{
 	"me-sessions-revoke-others": {permSignedIn},
 
 	// reading the library (limited to the series the group sees)
-	"series-list":     {permSignedIn},
-	"series-get":      {permSignedIn},
-	"series-chapters": {permSignedIn},
-	"series-cover":    {permSignedIn},
-	"reading-shelf":   {permSignedIn},
-	"tags-list":       {permSignedIn},
+	"series-list":        {permSignedIn},
+	"series-get":         {permSignedIn},
+	"series-chapters":    {permSignedIn},
+	"series-cover":       {permSignedIn},
+	"reading-shelf":      {permSignedIn},
+	"tags-list":          {permSignedIn},
+	"read-chapter":       {permSignedIn},
+	"read-page":          {permSignedIn},
+	"read-page-bounds":   {permSignedIn},
+	"read-progress":      {permSignedIn},
+	"read-settings":      {permSignedIn},
+	"read-settings-save": {permSignedIn},
+	"read-file":          {access.Download},
 
 	// reading apps (their own devices)
 	"reading-status":      {access.Apps},

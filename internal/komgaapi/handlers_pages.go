@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/Asion001/mangarr/internal/access"
 	"github.com/Asion001/mangarr/internal/reading"
 )
 
@@ -136,6 +137,10 @@ func (h *pageHandlers) thumbnail(w http.ResponseWriter, r *http.Request) {
 // file is GET /api/v1/books/{id}/file: the CBZ of a downloaded chapter
 // (KMReader's offline download).
 func (h *pageHandlers) file(w http.ResponseWriter, r *http.Request) {
+	if !PrincipalFrom(r.Context()).User.Can(access.Download) {
+		writeError(w, r, http.StatusForbidden, "your account can't download files")
+		return
+	}
 	b, _, ok := h.book(w, r)
 	if !ok {
 		return

@@ -1,0 +1,110 @@
+package app_test
+
+import (
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/Asion001/mangarr/internal/api"
+	"github.com/Asion001/mangarr/internal/dbtest"
+	"github.com/Asion001/mangarr/internal/model"
+	"github.com/Asion001/mangarr/internal/modules/source"
+	"github.com/Asion001/mangarr/internal/series"
+	"github.com/Asion001/mangarr/internal/testutil/fakesource"
+)
+
+// TestWebReader: the web reader's API reads a downloaded chapter from its
+// file and the next one streamed, saves progress and settings.
+func TestWebReader(t *testing.T) {
+	sc := fakesource.NewScenario("webreader")
+	sc.Sources = []source.SourceInfo{{ID: "A", Name: "Source A", Lang: "en"}}
+	sc.AddManga(&fakesource.Manga{SourceID: "A", URL: "/m", Title: "Web", Status: source.StatusOngoing, Chapters: []fakesource.Chapter{
+		{URL: "/c1", Name: "Chapter 1", Number: 1, Uploaded: time.Now()}, {URL: "/c2", Name: "Chapter 2", Number: 2, Uploaded: time.Now(), Pages: 5}}})
+	e := newTestApp(t, dbtest.DSNs(t)["sqlite"])
+	mod := e.addFakeModule(t, "webreader")
+	ser, err := e.App.Series.Add(e.Ctx, series.AddRequest{Title: "Web", RootFolderID: e.RFID, Monitor: model.MonitorNone,
+		Sources: []series.SourceLink{{ModuleID: mod, SourceID: "A", URL: "/m", SourceName: "Source A", Lang: "en"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.runCommand(t, "RefreshSeries", map[string]any{"seriesId": ser.ID})
+	var chs []model.Chapter
+	_ = e.App.DB.NewSelect().Model(&chs).Where("series_id = ?", ser.ID).Order("number_sort").Scan(e.Ctx)
+	e.runCommand(t, "SearchMissing", map[string]any{"seriesId": ser.ID, "chapterIds": []int64{chs[0].ID}, "explicit": true})
+	waitFor(t, 20*time.Second, "chapter 1 downloaded", func() bool { return len(e.chapterFiles(t, ser.ID)) == 1 })
+
+	srv := httptest.NewServer(api.New(e.App))
+	defer srv.Close()
+	g, _ := e.App.Settings.General(e.Ctx)
+	call := func(method, path, body string, out any) (int, http.Header) {
+		t.Helper()
+		req, _ := http.NewRequest(method, srv.URL+path, strings.NewReader(body))
+		req.Header.Set("X-Api-Key", g.APIKey)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("User-Agent", "Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X) Safari/605.1")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(resp.Body)
+		if out != nil && resp.StatusCode < 300 {
+			if err := json.Unmarshal(b, out); err != nil {
+				t.Fatalf("%s: %v %s", path, err, b)
+			}
+		}
+		return resp.StatusCode, resp.Header
+	}
+	c1, c2 := sid(chs[0].ID), sid(chs[1].ID)
+
+	var ch api.ReadChapter
+	if code, _ := call("GET", "/api/v1/read/chapters/"+c1, "", &ch); code != 200 {
+		t.Fatalf("chapter: %d", code)
+	}
+	if !ch.Downloaded || len(ch.Pages) != 3 || ch.Next == nil || ch.Next.ID != chs[1].ID || ch.Prev != nil || ch.SeriesTitle != "Web" || !ch.CanDownload {
+		t.Fatalf("chapter %+v", ch)
+	}
+	if code, h := call("GET", "/api/v1/read/chapters/"+c1+"/pages/1", "", nil); code != 200 || !strings.HasPrefix(h.Get("Content-Type"), "image/") {
+		t.Fatalf("page: %d %s", code, h.Get("Content-Type"))
+	}
+	var bd map[string]int
+	if code, _ := call("GET", "/api/v1/read/chapters/"+c1+"/pages/1/bounds", "", &bd); code != 200 || bd["width"] == 0 || bd["w"] == 0 {
+		t.Fatalf("bounds: %d %v", code, bd)
+	}
+	if code, h := call("GET", "/api/v1/read/chapters/"+c1+"/file", "", nil); code != 200 || !strings.Contains(h.Get("Content-Disposition"), ".cbz") {
+		t.Fatalf("file: %d %v", code, h)
+	}
+	// the next one isn't downloaded: streamed
+	if code, _ := call("GET", "/api/v1/read/chapters/"+c2, "", &ch); code != 200 || ch.Downloaded || len(ch.Pages) != 5 || ch.Prev == nil {
+		t.Fatalf("streamed chapter: %d %+v", code, ch)
+	}
+	if code, _ := call("GET", "/api/v1/read/chapters/"+c2+"/pages/5", "", nil); code != 200 {
+		t.Fatalf("streamed page: %d", code)
+	}
+	if code, _ := call("GET", "/api/v1/read/chapters/"+c2+"/pages/6", "", nil); code != 404 {
+		t.Fatalf("page out of range: %d", code)
+	}
+
+	// progress: page 2, then the last page finishes it
+	if code, _ := call("PUT", "/api/v1/read/chapters/"+c1+"/progress", `{"page":2}`, nil); code != 204 {
+		t.Fatalf("progress: %d", code)
+	}
+	call("GET", "/api/v1/read/chapters/"+c1, "", &ch)
+	if ch.Progress.Page != 2 || ch.Progress.Completed {
+		t.Fatalf("progress %+v", ch.Progress)
+	}
+	call("PUT", "/api/v1/read/chapters/"+c1+"/progress", `{"page":3}`, nil)
+	call("GET", "/api/v1/read/chapters/"+c1, "", &ch)
+	if !ch.Progress.Completed {
+		t.Fatalf("last page didn't finish it: %+v", ch.Progress)
+	}
+	var ev model.ReadEvent
+	_ = e.App.DB.NewSelect().Model(&ev).OrderExpr("id DESC").Limit(1).Scan(e.Ctx)
+	if ev.Client != "Web reader" || ev.Device != "Safari on iPad" {
+		t.Fatalf("event %+v", ev)
+	}
+}

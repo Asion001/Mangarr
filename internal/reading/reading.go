@@ -46,6 +46,7 @@ type Service struct {
 	Downloads Grabber
 
 	streams streams
+	bounds  boundsCache
 }
 
 // ReaderID is the reader reading apps act as (the configured one, else the

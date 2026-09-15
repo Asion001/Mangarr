@@ -61,3 +61,13 @@ type ReadEvent struct {
 	Outcome   string    `bun:"outcome,notnull" json:"outcome"`
 	At        time.Time `bun:"at,notnull" json:"at"`
 }
+
+// ReaderPrefs are a user's web reader settings: defaults (SeriesID 0) or
+// for one series. Data is the UI's settings object.
+type ReaderPrefs struct {
+	bun.BaseModel `bun:"table:reader_prefs"`
+	UserID        int64     `bun:"user_id,pk" json:"-"`
+	SeriesID      int64     `bun:"series_id,pk" json:"seriesId"`
+	Data          string    `bun:"data,notnull" json:"-"`
+	UpdatedAt     time.Time `bun:"updated_at,notnull" json:"updatedAt"`
+}

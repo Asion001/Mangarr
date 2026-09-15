@@ -145,3 +145,32 @@ func TestInvitesAndGroups(t *testing.T) {
 		}
 	}
 }
+
+// TestReaderSettings: defaults and a series' own settings, per account.
+func TestReaderSettings(t *testing.T) {
+	srv, a := newServer(t, false)
+	if _, err := a.Auth.CreateUser(context.Background(), auth.NewUser{Username: "boss", Password: "boss-pass-1"}); err != nil {
+		t.Fatal(err)
+	}
+	me := caller{t, login(t, srv.URL, "boss", "boss-pass-1"), srv.URL}
+	if code := me.do("PUT", "/api/v1/read/settings", `{"data":{"mode":"paged","direction":"rtl"}}`, nil); code != 204 {
+		t.Fatalf("defaults: %d", code)
+	}
+	if code := me.do("PUT", "/api/v1/read/settings", `{"seriesId":7,"data":{"mode":"webtoon"}}`, nil); code != 204 {
+		t.Fatalf("series: %d", code)
+	}
+	var got struct {
+		Defaults map[string]any `json:"defaults"`
+		Series   map[string]any `json:"series"`
+	}
+	me.do("GET", "/api/v1/read/settings?seriesId=7", "", &got)
+	if got.Defaults["direction"] != "rtl" || got.Series["mode"] != "webtoon" {
+		t.Fatalf("settings %+v", got)
+	}
+	me.do("PUT", "/api/v1/read/settings", `{"seriesId":7}`, nil) // back to the defaults
+	got.Series = nil
+	me.do("GET", "/api/v1/read/settings?seriesId=7", "", &got)
+	if got.Series != nil {
+		t.Fatalf("series settings not cleared: %v", got.Series)
+	}
+}
