@@ -18,6 +18,7 @@ const map: Record<string, string[][]> = {
   processing: [["processing"], ["health"]],
   settings: [["settings"]],
   readers: [["readers"], ["series"]],
+  reading: [["reading"], ["settings"]],
   rootfolder: [["rootfolders"]],
   profile: [["profiles"]],
   tag: [["tags"]],

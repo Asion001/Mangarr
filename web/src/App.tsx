@@ -22,6 +22,7 @@ import { ModulesPage } from "./pages/settings/Modules";
 import { ProfilesPage } from "./pages/settings/Profiles";
 import { MediaPage } from "./pages/settings/Media";
 import { ReadersPage } from "./pages/settings/Readers";
+import { ReadingAppsPage } from "./pages/settings/ReadingApps";
 import { GeneralPage } from "./pages/settings/General";
 import { DownloadsPage } from "./pages/settings/Downloads";
 import { StatusPage } from "./pages/system/Status";
@@ -89,6 +90,7 @@ export function App() {
         <Route path="settings/notifications" element={<ModulesPage kind="notify" />} />
         <Route path="settings/upscalers" element={<ModulesPage kind="upscale" />} />
         <Route path="settings/readers" element={<ReadersPage />} />
+        <Route path="settings/reading" element={<ReadingAppsPage />} />
         <Route path="settings/downloads" element={<DownloadsPage />} />
         <Route path="settings/general" element={<GeneralPage />} />
         <Route path="system" element={<Navigate to="/system/status" replace />} />

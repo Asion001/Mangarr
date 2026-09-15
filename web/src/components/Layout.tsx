@@ -62,6 +62,7 @@ export function Layout() {
         { to: "/settings/notifications", label: "Notifications" },
         { to: "/settings/upscalers", label: "Upscalers" },
         { to: "/settings/readers", label: "Readers" },
+        { to: "/settings/reading", label: "Reading apps" },
         { to: "/settings/downloads", label: "Downloads" },
         { to: "/settings/schedule", label: "Schedule" },
         { to: "/settings/general", label: "General" },

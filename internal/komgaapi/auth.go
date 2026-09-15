@@ -48,6 +48,8 @@ type keys struct {
 	loaded   bool
 	byHash   map[string]model.ReadingKey
 	lastSeen map[int64]time.Time
+	// lastClient is the app that last used each key
+	lastClient map[int64]string
 }
 
 // HashKey returns the stored form of a reading key.
@@ -129,18 +131,19 @@ func (s *Service) CreateKey(ctx context.Context, comment, client string) (string
 	return key, rk, nil
 }
 
-// touchKey records a key's last use (at most once a minute).
+// touchKey records a key's last use and app.
 func (s *Service) touchKey(rk model.ReadingKey, client string) {
 	k := &s.keys
 	k.mu.Lock()
 	if k.lastSeen == nil {
-		k.lastSeen = map[int64]time.Time{}
+		k.lastSeen, k.lastClient = map[int64]time.Time{}, map[int64]string{}
 	}
-	if time.Since(k.lastSeen[rk.ID]) < time.Minute {
+	// at most once a minute, unless another app uses the key
+	if time.Since(k.lastSeen[rk.ID]) < time.Minute && k.lastClient[rk.ID] == client {
 		k.mu.Unlock()
 		return
 	}
-	k.lastSeen[rk.ID] = time.Now()
+	k.lastSeen[rk.ID], k.lastClient[rk.ID] = time.Now(), client
 	k.mu.Unlock()
 	go func() {
 		now := time.Now().UTC()

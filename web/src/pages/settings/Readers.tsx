@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router";
 import { Plus, RefreshCw, Trash2, UserPlus } from "lucide-react";
 import { api, unwrap, type Reader } from "../../api/client";
 import { useModules, usePushCommand, useReaders, useSchema } from "../../api/queries";
@@ -7,6 +8,7 @@ import { DynamicForm } from "../../components/DynamicForm";
 import { Badge, Button, Card, Confirm, EmptyState, ErrorBox, Field, IconButton, Input, Loading, Modal, PageHeader, Select, Switch } from "../../components/ui";
 import { relative } from "../../lib/format";
 import { useToast } from "../../lib/toast";
+import { ReaderSyncPanel } from "./ReaderSync";
 
 export function ReadersPage() {
   const { data, isLoading, error } = useReaders();
@@ -49,7 +51,7 @@ export function ReadersPage() {
     <>
       <PageHeader
         title="Readers"
-        subtitle="People who read your library. Their progress (from Komga/Kavita) decides what read-based cleanup may delete."
+        subtitle="People who read your library. Their progress (from Komga/Kavita and reading apps) decides what read-based cleanup may delete; mangarr passes it on to every connected server."
         actions={
           <Button icon={<RefreshCw className="size-4" />} onClick={() => push.mutate({ name: "SyncReadProgress", label: "Syncing read progress" })}>
             Sync now
@@ -57,9 +59,10 @@ export function ReadersPage() {
         }
       />
       {progressLibs.length === 0 && (
-        <div className="mb-4">
-          <ErrorBox error="Add a Komga or Kavita library server first (Settings → Library servers); readers link their own account there." />
-        </div>
+        <p className="mb-4 text-sm text-muted">
+          To sync progress from Komga or Kavita, add the server under <Link to="/settings/library" className="text-accent-2 hover:underline">Library servers</Link>; readers then link their
+          own account there. Reading apps connect through <Link to="/settings/reading" className="text-accent-2 hover:underline">Reading apps</Link>.
+        </p>
       )}
       <div className="mb-4 flex max-w-md gap-2">
         <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Reader name" />
@@ -118,6 +121,7 @@ export function ReadersPage() {
                   </Button>
                 </div>
               )}
+              <ReaderSyncPanel readerId={r.id} />
             </div>
           </Card>
         ))}
