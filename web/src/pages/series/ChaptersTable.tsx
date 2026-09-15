@@ -18,7 +18,7 @@ const stateTone: Record<string, "ok" | "warn" | "err" | "info" | "default" | "ac
   cleaned: "default",
 };
 
-export function ChaptersTable({ seriesId }: { seriesId: number }) {
+export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; manage?: boolean }) {
   const { data, isLoading, error } = useChapters(seriesId);
   const qc = useQueryClient();
   const toast = useToast();
@@ -130,10 +130,10 @@ export function ChaptersTable({ seriesId }: { seriesId: number }) {
                 <Fragment key={c.id}>
                   <tr className={c.monitored ? "" : "opacity-60"}>
                     <Td>
-                      <input type="checkbox" checked={selected.has(c.id)} onChange={() => setSelected(toggle(selected, c.id))} />
+                      {manage && <input type="checkbox" checked={selected.has(c.id)} onChange={() => setSelected(toggle(selected, c.id))} />}
                     </Td>
                     <Td>
-                      <Switch checked={c.monitored} onChange={(v) => monitor([c.id], v)} />
+                      {manage && <Switch checked={c.monitored} onChange={(v) => monitor([c.id], v)} />}
                     </Td>
                     <Td className="font-mono text-xs">
                       {c.volume && <span className="text-muted">v{c.volume} </span>}
@@ -205,7 +205,7 @@ export function ChaptersTable({ seriesId }: { seriesId: number }) {
                       </div>
                     </Td>
                     <Td className="text-right">
-                      <div className="flex justify-end">
+                      {manage && <div className="flex justify-end">
                         {c.state === "cleaned" ? (
                           <IconButton title="Restore (download again)" onClick={() => restore(c)}>
                             <RotateCcw className="size-4" />
@@ -218,7 +218,7 @@ export function ChaptersTable({ seriesId }: { seriesId: number }) {
                         <IconButton title="Why (not) downloaded?" onClick={() => setExplain(c)}>
                           <HelpCircle className="size-4" />
                         </IconButton>
-                      </div>
+                      </div>}
                     </Td>
                   </tr>
                   {open && (

@@ -9,6 +9,7 @@ import { bytes, date } from "../../lib/format";
 import { useQueryParam } from "../../lib/urlState";
 import { MassEditBar } from "./Organize";
 import { ContinueReading } from "./ContinueReading";
+import { useAccount } from "../../lib/account";
 
 type Filter = "all" | "monitored" | "missing" | "ongoing" | "completed" | "unread" | "reading";
 type Sort = "title" | "added" | "latest" | "missing" | "size" | "read";
@@ -36,6 +37,7 @@ function ReadBar({ s }: { s: Series }) {
 
 export function SeriesIndex() {
   const { data, isLoading, error } = useSeriesList();
+  const manage = useAccount().can("library.manage");
   const push = usePushCommand();
   const [q, setQ] = useQueryParam("q");
   const [filterParam, setFilter] = useQueryParam("filter", "all");
@@ -85,16 +87,18 @@ export function SeriesIndex() {
         title="Series"
         subtitle={data ? `${data.length} series · ${bytes(data.reduce((n, s) => n + s.stats.sizeOnDisk, 0))}` : undefined}
         actions={
-          <>
-            <Button icon={<RefreshCw className="size-4" />} onClick={() => push.mutate({ name: "RefreshSources", label: "Checking sources for new chapters" })}>
-              Check now
-            </Button>
-            <Link to="/add">
-              <Button variant="primary" icon={<PlusCircle className="size-4" />}>
-                Add series
+          manage && (
+            <>
+              <Button icon={<RefreshCw className="size-4" />} onClick={() => push.mutate({ name: "RefreshSources", label: "Checking sources for new chapters" })}>
+                Check now
               </Button>
-            </Link>
-          </>
+              <Link to="/add">
+                <Button variant="primary" icon={<PlusCircle className="size-4" />}>
+                  Add series
+                </Button>
+              </Link>
+            </>
+          )
         }
       />
       {!q && filter === "all" && <ContinueReading />}
@@ -121,14 +125,16 @@ export function SeriesIndex() {
           <option value="read">Sort: recently read</option>
         </Select>
         <div className="ml-auto flex gap-1">
-          <Button
-            size="sm"
-            variant={selecting ? "primary" : "secondary"}
-            icon={<CheckSquare className="size-3.5" />}
-            onClick={() => (setSelecting(!selecting), setSelected(new Set()))}
-          >
-            Select
-          </Button>
+          {manage && (
+            <Button
+              size="sm"
+              variant={selecting ? "primary" : "secondary"}
+              icon={<CheckSquare className="size-3.5" />}
+              onClick={() => (setSelecting(!selecting), setSelected(new Set()))}
+            >
+              Select
+            </Button>
+          )}
           {selecting && (
             <Button size="sm" onClick={() => setSelected(new Set(list.map((s) => s.id)))}>
               All shown

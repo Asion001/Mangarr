@@ -20,6 +20,7 @@ const map: Record<string, string[][]> = {
   readers: [["readers"], ["series"]],
   reading: [["reading"], ["settings"]],
   database: [["database"]],
+  users: [["users"], ["auth"]],
   rootfolder: [["rootfolders"]],
   profile: [["profiles"]],
   tag: [["tags"]],

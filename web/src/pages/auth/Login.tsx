@@ -48,7 +48,7 @@ export function LoginPage({ setup }: { setup: boolean }) {
             <Input type="password" autoComplete={setup ? "new-password" : "current-password"} value={password} onChange={(e) => setPassword(e.target.value)} required />
           </Field>
           {setup && (
-            <Field label="Confirm password" help="At least 6 characters.">
+            <Field label="Confirm password" help="At least 8 characters.">
               <Input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
             </Field>
           )}

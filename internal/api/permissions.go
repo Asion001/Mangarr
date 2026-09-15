@@ -86,6 +86,9 @@ var operationPermissions = map[string][]string{
 	"tags-create":             {access.LibraryManage},
 	"tags-delete":             {access.LibraryManage},
 	"modules-asset":           {access.LibraryManage},
+	"commands-push":           {access.LibraryManage}, // non-admins: managerCommands only
+	"commands-list":           {access.LibraryManage},
+	"commands-get":            {access.LibraryManage},
 }
 
 // permissionsFor returns what an operation needs (admin when unlisted).

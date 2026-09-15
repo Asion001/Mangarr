@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Navigate, Route, Routes } from "react-router";
+import { Navigate, Route, Routes, useMatch } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { Layout } from "./components/Layout";
 import { Loading } from "./components/ui";
@@ -7,6 +7,10 @@ import { useAuthStatus } from "./api/queries";
 import { onServerEvent, useLiveUpdates } from "./lib/events";
 import { useToast } from "./lib/toast";
 import { LoginPage } from "./pages/auth/Login";
+import { InvitePage } from "./pages/auth/Invite";
+import { AccountPage } from "./pages/account/Account";
+import { UsersPage } from "./pages/settings/Users";
+import { Need } from "./components/Need";
 import { SeriesIndex } from "./pages/series/SeriesIndex";
 import { SeriesDetail } from "./pages/series/SeriesDetail";
 import { AddOptionsStep, AddSearchStep, AddSourcesStep } from "./pages/series/AddSeries";
@@ -38,6 +42,7 @@ export function App() {
   const qc = useQueryClient();
   const toast = useToast();
   const authed = !!auth?.authenticated;
+  const invite = useMatch("/invite/:token");
   useLiveUpdates(authed);
 
   useEffect(() => {
@@ -59,6 +64,7 @@ export function App() {
     };
   }, [toast]);
 
+  if (invite) return <InvitePage token={invite.params.token ?? ""} />;
   if (isLoading) return <Loading />;
   if (!authed) return <LoginPage setup={!!auth?.needsSetup} />;
 
@@ -67,39 +73,41 @@ export function App() {
       <Route element={<Layout />}>
         <Route index element={<SeriesIndex />} />
         <Route path="series/:id" element={<SeriesDetail />} />
-        <Route path="add" element={<AddSearchStep />} />
-        <Route path="add/:moduleId/:metaId/sources" element={<AddSourcesStep />} />
-        <Route path="add/:moduleId/:metaId/options" element={<AddOptionsStep />} />
-        <Route path="import" element={<ImportsPage />} />
-        <Route path="import/:id" element={<ImportDetailPage />} />
+        <Route path="account" element={<AccountPage />} />
+        <Route path="add" element={<Need perm="library.manage"><AddSearchStep /></Need>} />
+        <Route path="add/:moduleId/:metaId/sources" element={<Need perm="library.manage"><AddSourcesStep /></Need>} />
+        <Route path="add/:moduleId/:metaId/options" element={<Need perm="library.manage"><AddOptionsStep /></Need>} />
+        <Route path="import" element={<Need perm="admin"><ImportsPage /></Need>} />
+        <Route path="import/:id" element={<Need perm="admin"><ImportDetailPage /></Need>} />
         <Route path="activity" element={<Navigate to="/activity/queue" replace />} />
-        <Route path="activity/queue" element={<QueuePage />} />
-        <Route path="activity/history" element={<HistoryPage />} />
-        <Route path="activity/blocklist" element={<BlocklistPage />} />
-        <Route path="wanted" element={<WantedPage />} />
-        <Route path="sources" element={<SourcesPage />} />
-        <Route path="sources/:tab" element={<SourcesPage />} />
-        <Route path="cleanup" element={<CleanupPage />} />
+        <Route path="activity/queue" element={<Need perm="library.manage"><QueuePage /></Need>} />
+        <Route path="activity/history" element={<Need perm="library.manage"><HistoryPage /></Need>} />
+        <Route path="activity/blocklist" element={<Need perm="library.manage"><BlocklistPage /></Need>} />
+        <Route path="wanted" element={<Need perm="library.manage"><WantedPage /></Need>} />
+        <Route path="sources" element={<Need perm="library.manage"><SourcesPage /></Need>} />
+        <Route path="sources/:tab" element={<Need perm="library.manage"><SourcesPage /></Need>} />
+        <Route path="cleanup" element={<Need perm="admin"><CleanupPage /></Need>} />
         <Route path="settings" element={<Navigate to="/settings/media" replace />} />
-        <Route path="settings/media" element={<MediaPage />} />
-        <Route path="settings/profiles" element={<ProfilesPage />} />
-        <Route path="settings/sources" element={<ModulesPage kind="source" />} />
-        <Route path="settings/search" element={<SearchSettingsPage />} />
-        <Route path="settings/schedule" element={<SchedulePage />} />
-        <Route path="settings/metadata" element={<ModulesPage kind="metadata" />} />
-        <Route path="settings/library" element={<ModulesPage kind="library" />} />
-        <Route path="settings/notifications" element={<ModulesPage kind="notify" />} />
-        <Route path="settings/upscalers" element={<ModulesPage kind="upscale" />} />
-        <Route path="settings/readers" element={<ReadersPage />} />
-        <Route path="settings/reading" element={<ReadingAppsPage />} />
-        <Route path="settings/downloads" element={<DownloadsPage />} />
-        <Route path="settings/general" element={<GeneralPage />} />
+        <Route path="settings/media" element={<Need perm="admin"><MediaPage /></Need>} />
+        <Route path="settings/profiles" element={<Need perm="admin"><ProfilesPage /></Need>} />
+        <Route path="settings/sources" element={<Need perm="admin"><ModulesPage kind="source" /></Need>} />
+        <Route path="settings/search" element={<Need perm="admin"><SearchSettingsPage /></Need>} />
+        <Route path="settings/schedule" element={<Need perm="admin"><SchedulePage /></Need>} />
+        <Route path="settings/metadata" element={<Need perm="admin"><ModulesPage kind="metadata" /></Need>} />
+        <Route path="settings/library" element={<Need perm="admin"><ModulesPage kind="library" /></Need>} />
+        <Route path="settings/notifications" element={<Need perm="admin"><ModulesPage kind="notify" /></Need>} />
+        <Route path="settings/upscalers" element={<Need perm="admin"><ModulesPage kind="upscale" /></Need>} />
+        <Route path="settings/users" element={<Need perm="admin"><UsersPage /></Need>} />
+        <Route path="settings/readers" element={<Need perm="admin"><ReadersPage /></Need>} />
+        <Route path="settings/reading" element={<Need perm="admin"><ReadingAppsPage /></Need>} />
+        <Route path="settings/downloads" element={<Need perm="admin"><DownloadsPage /></Need>} />
+        <Route path="settings/general" element={<Need perm="admin"><GeneralPage /></Need>} />
         <Route path="system" element={<Navigate to="/system/status" replace />} />
-        <Route path="system/status" element={<StatusPage />} />
-        <Route path="system/tasks" element={<TasksPage />} />
-        <Route path="system/backups" element={<BackupsPage />} />
-        <Route path="system/logs" element={<LogsPage />} />
-        <Route path="system/database" element={<DatabasePage />} />
+        <Route path="system/status" element={<Need perm="admin"><StatusPage /></Need>} />
+        <Route path="system/tasks" element={<Need perm="admin"><TasksPage /></Need>} />
+        <Route path="system/backups" element={<Need perm="admin"><BackupsPage /></Need>} />
+        <Route path="system/logs" element={<Need perm="admin"><LogsPage /></Need>} />
+        <Route path="system/database" element={<Need perm="admin"><DatabasePage /></Need>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

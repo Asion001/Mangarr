@@ -16,42 +16,47 @@ import {
   Eraser,
   Download,
   FileUp,
+  UserRound,
 } from "lucide-react";
 import { api } from "../api/client";
 import { useHealth, useQueue } from "../api/queries";
+import { useAccount, type Perm } from "../lib/account";
 
-type NavItem = { to: string; label: string; icon: ReactNode; children?: { to: string; label: string }[] };
+type NavItem = { to: string; label: string; icon: ReactNode; need?: Perm; children?: { to: string; label: string }[] };
 
 export function Layout() {
   const [open, setOpen] = useState(false);
   const loc = useLocation();
-  const { data: queue } = useQueue({ pageSize: 1 });
+  const { can, isAdmin, name } = useAccount();
+  const { data: queue } = useQueue({ pageSize: 1 }, can("library.manage"));
   const queued = queue?.total ?? 0;
-  const { data: health } = useHealth();
+  const { data: health } = useHealth(isAdmin);
   const qc = useQueryClient();
   const issues = (health?.checks ?? []).filter((c) => c.type === "error" || c.type === "warning").length;
 
   const nav: NavItem[] = [
     { to: "/", label: "Series", icon: <BookOpen className="size-4" /> },
-    { to: "/add", label: "Add series", icon: <PlusCircle className="size-4" /> },
-    { to: "/import", label: "Import library", icon: <FileUp className="size-4" /> },
+    { to: "/add", label: "Add series", icon: <PlusCircle className="size-4" />, need: "library.manage" },
+    { to: "/import", label: "Import library", icon: <FileUp className="size-4" />, need: "admin" },
     {
       to: "/activity",
       label: "Activity",
       icon: <Download className="size-4" />,
+      need: "library.manage",
       children: [
         { to: "/activity/queue", label: "Queue" },
         { to: "/activity/history", label: "History" },
         { to: "/activity/blocklist", label: "Blocklist" },
       ],
     },
-    { to: "/wanted", label: "Wanted", icon: <AlertCircle className="size-4" /> },
-    { to: "/sources", label: "Sources", icon: <Compass className="size-4" /> },
-    { to: "/cleanup", label: "Cleanup", icon: <Eraser className="size-4" /> },
+    { to: "/wanted", label: "Wanted", icon: <AlertCircle className="size-4" />, need: "library.manage" },
+    { to: "/sources", label: "Sources", icon: <Compass className="size-4" />, need: "library.manage" },
+    { to: "/cleanup", label: "Cleanup", icon: <Eraser className="size-4" />, need: "admin" },
     {
       to: "/settings",
       label: "Settings",
       icon: <Settings className="size-4" />,
+      need: "admin",
       children: [
         { to: "/settings/media", label: "Media management" },
         { to: "/settings/profiles", label: "Profiles" },
@@ -61,6 +66,7 @@ export function Layout() {
         { to: "/settings/library", label: "Library servers" },
         { to: "/settings/notifications", label: "Notifications" },
         { to: "/settings/upscalers", label: "Upscalers" },
+        { to: "/settings/users", label: "Users & groups" },
         { to: "/settings/readers", label: "Readers" },
         { to: "/settings/reading", label: "Reading apps" },
         { to: "/settings/downloads", label: "Downloads" },
@@ -72,6 +78,7 @@ export function Layout() {
       to: "/system",
       label: "System",
       icon: <Server className="size-4" />,
+      need: "admin",
       children: [
         { to: "/system/status", label: "Status" },
         { to: "/system/tasks", label: "Tasks" },
@@ -94,7 +101,7 @@ export function Layout() {
         <img src="./favicon.svg" className="size-7" alt="" />
         <span className="text-lg font-semibold tracking-tight">mangarr</span>
       </div>
-      {nav.map((item) => {
+      {nav.filter((item) => !item.need || can(item.need)).map((item) => {
         const active = item.to === "/" ? loc.pathname === "/" || loc.pathname.startsWith("/series") : loc.pathname.startsWith(item.to);
         return (
           <div key={item.to}>
@@ -132,10 +139,24 @@ export function Layout() {
           </div>
         );
       })}
-      <div className="mt-auto flex items-center justify-between px-2 pt-4 text-xs text-muted">
-        <span className="flex items-center gap-1">
-          <Activity className="size-3.5" /> {queued} in queue{queue?.state.paused ? " (paused)" : ""}
-        </span>
+      <NavLink
+        to="/account"
+        onClick={() => setOpen(false)}
+        className={({ isActive }) =>
+          clsx("mt-auto flex items-center gap-2.5 rounded-md px-2.5 py-2 font-medium", isActive ? "bg-panel-2 text-fg" : "text-muted hover:bg-panel-2 hover:text-fg")
+        }
+      >
+        <UserRound className="size-4" />
+        <span className="flex-1 truncate">{name || "My account"}</span>
+      </NavLink>
+      <div className="flex items-center justify-between px-2 pt-2 text-xs text-muted">
+        {can("library.manage") ? (
+          <span className="flex items-center gap-1">
+            <Activity className="size-3.5" /> {queued} in queue{queue?.state.paused ? " (paused)" : ""}
+          </span>
+        ) : (
+          <span />
+        )}
         <button className="flex items-center gap-1 hover:text-fg" onClick={logout}>
           <LogOut className="size-3.5" /> Log out
         </button>

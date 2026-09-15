@@ -19,9 +19,9 @@ chapter-restore POST /api/v1/chapters/{id}/restore -> library.manage
 chapters-monitor PUT /api/v1/chapters/monitor -> library.manage
 cleanup-preview GET /api/v1/cleanup/preview -> admin
 cleanup-run POST /api/v1/cleanup/run -> admin
-commands-get GET /api/v1/commands/{id} -> admin
-commands-list GET /api/v1/commands -> admin
-commands-push POST /api/v1/commands -> admin
+commands-get GET /api/v1/commands/{id} -> library.manage
+commands-list GET /api/v1/commands -> library.manage
+commands-push POST /api/v1/commands -> library.manage
 database-get GET /api/v1/system/database -> admin
 database-move POST /api/v1/system/database/move -> admin
 database-move-cancel POST /api/v1/system/database/cancel -> admin

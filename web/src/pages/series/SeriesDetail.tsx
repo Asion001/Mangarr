@@ -13,11 +13,13 @@ import { SourcesPanel } from "./SourcesPanel";
 import { ChaptersTable } from "./ChaptersTable";
 import { EditSeriesModal } from "./EditSeriesModal";
 import { RenameModal } from "./Organize";
+import { useAccount } from "../../lib/account";
 
 export function SeriesDetail() {
   const id = Number(useParams().id);
   const { data: s, isLoading, error } = useSeries(id);
   const push = usePushCommand();
+  const manage = useAccount().can("library.manage");
   const qc = useQueryClient();
   const toast = useToast();
   const nav = useNavigate();
@@ -133,7 +135,7 @@ export function SeriesDetail() {
               </a>
             ))}
           </div>
-          <div className="mt-4 flex flex-wrap gap-2">
+          {manage && <div className="mt-4 flex flex-wrap gap-2">
             <Button icon={<RefreshCw className="size-4" />} onClick={() => push.mutate({ name: "RefreshSeries", body: { seriesId: id }, label: "Refreshing sources" })}>
               Refresh
             </Button>
@@ -158,12 +160,12 @@ export function SeriesDetail() {
             <Button variant="ghost" icon={<Trash2 className="size-4" />} onClick={() => setDel(true)}>
               Delete
             </Button>
-          </div>
+          </div>}
         </div>
       </div>
 
-      <SourcesPanel series={s} />
-      <ChaptersTable seriesId={id} />
+      {manage && <SourcesPanel series={s} />}
+      <ChaptersTable seriesId={id} manage={manage} />
 
       {edit && <EditSeriesModal series={s} onClose={() => setEdit(false)} />}
       {renaming && <RenameModal seriesIds={[id]} onClose={() => setRenaming(false)} />}

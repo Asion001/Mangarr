@@ -32,10 +32,10 @@ export const useSchema = (kind?: string) =>
 
 export type QueueFilter = { status?: string[]; kind?: "" | "download" | "reprocess"; q?: string; seriesId?: number; includeDone?: boolean; page?: number; pageSize?: number };
 
-export const useQueue = (f: QueueFilter = {}) =>
-  useQuery({ queryKey: ["queue", f], queryFn: () => unwrap(api.GET("/api/v1/queue", { params: { query: f } })), placeholderData: (prev) => prev });
+export const useQueue = (f: QueueFilter = {}, enabled = true) =>
+  useQuery({ queryKey: ["queue", f], queryFn: () => unwrap(api.GET("/api/v1/queue", { params: { query: f } })), placeholderData: (prev) => prev, enabled });
 
-export const useHealth = () => useQuery({ queryKey: ["health"], queryFn: () => unwrap(api.GET("/api/v1/health")) });
+export const useHealth = (enabled = true) => useQuery({ queryKey: ["health"], queryFn: () => unwrap(api.GET("/api/v1/health")), enabled });
 export const useCommands = () => useQuery({ queryKey: ["commands"], queryFn: () => unwrap(api.GET("/api/v1/commands", { params: { query: { limit: 50 } } })) });
 export const useTasks = () => useQuery({ queryKey: ["tasks"], queryFn: () => unwrap(api.GET("/api/v1/system/tasks")) });
 export const useReaders = () => useQuery({ queryKey: ["readers"], queryFn: () => unwrap(api.GET("/api/v1/readers")) });

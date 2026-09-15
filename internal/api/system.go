@@ -10,6 +10,8 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
+	"github.com/Asion001/mangarr/internal/access"
+
 	"github.com/Asion001/mangarr/internal/diskcache"
 	"github.com/Asion001/mangarr/internal/envcfg"
 	"github.com/Asion001/mangarr/internal/logging"
@@ -59,6 +61,13 @@ type TaskInfo struct {
 type CommandInput struct {
 	Name string         `json:"name"`
 	Body map[string]any `json:"body,omitempty"`
+}
+
+// managerCommands are the commands library managers may run (the library's
+// own work; the rest is administration).
+var managerCommands = map[string]bool{
+	"RefreshSeries": true, "RefreshSources": true, "SearchMissing": true, "RefreshMetadata": true,
+	"ProcessExisting": true, "DiskScan": true, "LibraryRescan": true,
 }
 
 func (s *Server) registerSystem() {
@@ -205,6 +214,9 @@ func (s *Server) registerSystem() {
 	huma.Register(s.api, huma.Operation{OperationID: "commands-push", Method: http.MethodPost, Path: "/api/v1/commands", Tags: tags,
 		Summary: "Queue a command (e.g. RefreshSources, RefreshSeries {seriesId}, SearchMissing, Cleanup)"},
 		func(ctx context.Context, in *struct{ Body CommandInput }) (*struct{ Body *model.Command }, error) {
+			if !access.From(ctx).IsAdmin() && !managerCommands[in.Body.Name] {
+				return nil, huma.Error403Forbidden("only administrators can run " + in.Body.Name)
+			}
 			c, err := s.app.Queue.Push(ctx, in.Body.Name, in.Body.Body, "manual")
 			if err != nil {
 				return nil, huma.Error400BadRequest(err.Error())
