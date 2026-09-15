@@ -8,6 +8,7 @@ import { Badge, Button, EmptyState, ErrorBox, Input, Loading, PageHeader, Progre
 import { bytes, date } from "../../lib/format";
 import { useQueryParam } from "../../lib/urlState";
 import { MassEditBar } from "./Organize";
+import { ContinueReading } from "./ContinueReading";
 
 type Filter = "all" | "monitored" | "missing" | "ongoing" | "completed" | "unread" | "reading";
 type Sort = "title" | "added" | "latest" | "missing" | "size" | "read";
@@ -96,6 +97,7 @@ export function SeriesIndex() {
           </>
         }
       />
+      {!q && filter === "all" && <ContinueReading />}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="relative w-full max-w-xs">
           <Search className="absolute left-2.5 top-2.5 size-4 text-muted" />

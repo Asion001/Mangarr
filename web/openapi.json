@@ -5233,6 +5233,74 @@
         ],
         "type": "object"
       },
+      "Shelf": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ShelfItem"
+            },
+            "type": "array"
+          },
+          "reader": {
+            "type": "string"
+          },
+          "readerId": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "readerId",
+          "reader",
+          "items"
+        ],
+        "type": "object"
+      },
+      "ShelfItem": {
+        "additionalProperties": false,
+        "properties": {
+          "coverUrl": {
+            "type": "string"
+          },
+          "lastReadAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "next": {
+            "$ref": "#/components/schemas/NextChapter"
+          },
+          "page": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "read": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "seriesId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "seriesId",
+          "title",
+          "coverUrl",
+          "next",
+          "page",
+          "read",
+          "total"
+        ],
+        "type": "object"
+      },
       "Source-preferences-setRequest": {
         "additionalProperties": false,
         "properties": {
@@ -9385,6 +9453,62 @@
             "description": "Error"
           }
         },
+        "tags": [
+          "Reading apps"
+        ]
+      }
+    },
+    "/api/v1/reading/shelf": {
+      "get": {
+        "operationId": "reading-shelf",
+        "parameters": [
+          {
+            "description": "Reader (0 = the one reading apps act as)",
+            "explode": false,
+            "in": "query",
+            "name": "readerId",
+            "schema": {
+              "description": "Reader (0 = the one reading apps act as)",
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 20,
+              "format": "int64",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shelf"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Continue reading: the next chapter of each series the reader started, most recently read first",
         "tags": [
           "Reading apps"
         ]

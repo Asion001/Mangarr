@@ -980,6 +980,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reading/shelf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Continue reading: the next chapter of each series the reader started, most recently read first */
+        get: operations["reading-shelf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/reading/status": {
         parameters: {
             query?: never;
@@ -3436,6 +3453,27 @@ export interface components {
             sizeOnDisk: number;
             /** Format: int64 */
             spaceSaved: number;
+        };
+        Shelf: {
+            items: components["schemas"]["ShelfItem"][];
+            reader: string;
+            /** Format: int64 */
+            readerId: number;
+        };
+        ShelfItem: {
+            coverUrl: string;
+            /** Format: date-time */
+            lastReadAt?: string;
+            next: components["schemas"]["NextChapter"];
+            /** Format: int64 */
+            page: number;
+            /** Format: int64 */
+            read: number;
+            /** Format: int64 */
+            seriesId: number;
+            title: string;
+            /** Format: int64 */
+            total: number;
         };
         "Source-preferences-setRequest": {
             /** Format: int64 */
@@ -6025,6 +6063,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "reading-shelf": {
+        parameters: {
+            query?: {
+                /** @description Reader (0 = the one reading apps act as) */
+                readerId?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Shelf"];
+                };
             };
             /** @description Error */
             default: {

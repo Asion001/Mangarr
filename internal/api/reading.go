@@ -3,6 +3,8 @@ package api
 import (
 	"context"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 
@@ -18,8 +20,69 @@ type NewReadingKey struct {
 	Key string `json:"key"`
 }
 
+// ShelfItem is a series on the "Continue reading" shelf.
+type ShelfItem struct {
+	SeriesID int64  `json:"seriesId"`
+	Title    string `json:"title"`
+	CoverURL string `json:"coverUrl"`
+	// Next is the chapter to read next; Page is where the reader left off
+	// in it (0 = not started).
+	Next       NextChapter `json:"next"`
+	Page       int         `json:"page"`
+	Read       int         `json:"read"`
+	Total      int         `json:"total"`
+	LastReadAt *time.Time  `json:"lastReadAt,omitempty"`
+}
+
+// Shelf is a reader's "Continue reading" shelf.
+type Shelf struct {
+	ReaderID int64       `json:"readerId"`
+	Reader   string      `json:"reader"`
+	Items    []ShelfItem `json:"items"`
+}
+
 func (s *Server) registerReading() {
 	tags := []string{"Reading apps"}
+	huma.Register(s.api, huma.Operation{OperationID: "reading-shelf", Method: http.MethodGet, Path: "/api/v1/reading/shelf", Tags: tags,
+		Summary: "Continue reading: the next chapter of each series the reader started, most recently read first"},
+		func(ctx context.Context, in *struct {
+			ReaderID int64 `query:"readerId" doc:"Reader (0 = the one reading apps act as)"`
+			Limit    int   `query:"limit" default:"20" minimum:"1" maximum:"100"`
+		}) (*struct{ Body Shelf }, error) {
+			rid := in.ReaderID
+			if rid == 0 {
+				// (without readers there's no shelf; don't create one)
+				if n, err := s.app.DB.NewSelect().Model((*model.Reader)(nil)).Count(ctx); err != nil || n == 0 {
+					return &struct{ Body Shelf }{Shelf{Items: []ShelfItem{}}}, toHTTPError(err)
+				}
+				var err error
+				if rid, err = s.app.Reading.ReaderID(ctx); err != nil {
+					return nil, toHTTPError(err)
+				}
+			}
+			var r model.Reader
+			if err := s.app.DB.NewSelect().Model(&r).Where("id = ?", rid).Scan(ctx); err != nil {
+				return nil, huma.Error404NotFound("reader not found")
+			}
+			next, err := s.app.Reading.OnDeck(ctx, rid)
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			out := Shelf{ReaderID: rid, Reader: r.Name, Items: []ShelfItem{}}
+			for _, n := range next[:min(in.Limit, len(next))] {
+				ser, ch := n.Series.Series, n.Book.Chapter
+				it := ShelfItem{SeriesID: ser.ID, Title: ser.Title,
+					CoverURL: "api/v1/series/" + strconv.FormatInt(ser.ID, 10) + "/cover?v=" + strconv.FormatInt(ser.UpdatedAt.Unix(), 10),
+					Next:     NextChapter{ChapterID: ch.ID, Number: ch.NumberKey, Title: ch.Title, Available: n.Book.File != nil},
+					Read:     n.Series.Read, Total: n.Series.Books, LastReadAt: n.Series.LastRead}
+				if n.Book.State != nil && !n.Book.State.Completed {
+					it.Page = n.Book.State.Page
+				}
+				out.Items = append(out.Items, it)
+			}
+			return &struct{ Body Shelf }{out}, nil
+		})
+
 	huma.Register(s.api, huma.Operation{OperationID: "reading-status", Method: http.MethodGet, Path: "/api/v1/reading/status", Tags: tags,
 		Summary: "Whether the Komga-compatible API is enabled and listening"},
 		func(ctx context.Context, _ *struct{}) (*struct{ Body komgaapi.Status }, error) {
