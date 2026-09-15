@@ -105,7 +105,7 @@ func (s *Server) registerSystem() {
 		func(ctx context.Context, in *struct {
 			Body struct {
 				Catalogs bool     `json:"catalogs"`
-				Images   []string `json:"images,omitempty" doc:"Image buckets to clear (thumbs, assets, covers); empty = none"`
+				Images   []string `json:"images,omitempty" doc:"Image buckets to clear (thumbs, assets, covers, pages); empty = none"`
 			}
 		}) (*struct{ Body CacheStatus }, error) {
 			if in.Body.Catalogs {

@@ -64,6 +64,14 @@ func (s *Service) routes(r chi.Router) {
 	r.Get("/api/v1/books/{id}/previous", bh.sibling(-1))
 	r.Get("/api/v1/books/{id}/readlists", ch.bookReadLists)
 
+	ph := &pageHandlers{s}
+	r.Get("/api/v1/books/{id}/pages", ph.list)
+	r.Get("/api/v1/books/{id}/pages/{n}", ph.image)
+	r.Get("/api/v1/books/{id}/pages/{n}/thumbnail", ph.pageThumbnail)
+	r.Get("/api/v1/books/{id}/thumbnail", ph.thumbnail)
+	r.Get("/api/v1/books/{id}/file", ph.file)
+	r.Get("/api/v1/books/{id}/file/*", ph.file)
+
 	genres := ch.strings(func(si reading.SeriesInfo) []string { return si.Series.Metadata.Genres })
 	tags := ch.strings(func(si reading.SeriesInfo) []string { return si.Series.Metadata.Tags })
 	r.Get("/api/v1/genres", genres)

@@ -41,8 +41,10 @@ type Service struct {
 	HTTP       *http.Client
 	Bus        *events.Bus
 	Log        *slog.Logger
+	// Downloads queues chapters opened before they're downloaded.
+	Downloads Grabber
 
-	pageCounts countCache
+	streams streams
 }
 
 // ReaderID is the reader reading apps act as (the configured one, else the
@@ -347,10 +349,4 @@ func (s *Service) Cover(ctx context.Context, ser *model.Series) ([]byte, string,
 		return th.Thumbnail(ctx, source.MangaRef{SourceID: ss.SourceID, URL: ss.MangaURL, EngineRef: ss.EngineRef})
 	})
 	return data, ct, err
-}
-
-// CachedPageCount is the page count of an undownloaded chapter when its
-// page list is cached (0 when it isn't known yet).
-func (s *Service) CachedPageCount(chapterID int64) int {
-	return s.pageCounts.get(chapterID)
 }

@@ -92,6 +92,13 @@ func (s *Scenario) AddManga(m *Manga) {
 	s.Mangas[m.SourceID+"|"+m.URL] = m
 }
 
+// FetchCount is the number of pages fetched so far.
+func (s *Scenario) FetchCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.Fetches
+}
+
 // Update runs fn with the scenario locked (to mutate chapters mid-test).
 func (s *Scenario) Update(fn func()) {
 	s.mu.Lock()

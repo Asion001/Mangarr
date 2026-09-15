@@ -36,6 +36,16 @@ func TestWriteReadAtomic(t *testing.T) {
 	if string(ci) != "<ComicInfo/>" || len(got) != 2 || got[0].Name != "0001.jpg" || string(got[1].Data) != "second" {
 		t.Fatalf("read mismatch: %+v %s", got, ci)
 	}
+	entries, err := List(dst)
+	if err != nil || len(entries) != 2 || entries[0].Name != "0001.jpg" || entries[1].Size != 6 {
+		t.Fatalf("list: %+v %v", entries, err)
+	}
+	if data, err := ReadEntry(dst, entries[1].Path); err != nil || string(data) != "second" {
+		t.Fatalf("read entry: %q %v", data, err)
+	}
+	if _, err := ReadEntry(dst, "missing.jpg"); !os.IsNotExist(err) {
+		t.Fatalf("missing entry: %v", err)
+	}
 
 	// Overwrite keeps the same path (upgrade) and is still atomic.
 	if _, err := Write(dst, []Page{{Name: "0001.jpg", Data: []byte("new")}}, nil, 0, time.Time{}); err != nil {

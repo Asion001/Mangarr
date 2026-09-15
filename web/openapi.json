@@ -5491,7 +5491,7 @@
             "type": "boolean"
           },
           "images": {
-            "description": "Image buckets to clear (thumbs, assets, covers); empty = none",
+            "description": "Image buckets to clear (thumbs, assets, covers, pages); empty = none",
             "items": {
               "type": "string"
             },

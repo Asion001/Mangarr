@@ -1,47 +1,404 @@
 package reading
 
 import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"image"
+	"image/color"
+	"image/draw"
+	"image/jpeg"
+	"image/png"
+	"io"
+	"mime"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
+
+	_ "github.com/gen2brain/avif" // decoders for convert
+	_ "golang.org/x/image/webp"
+	"golang.org/x/sync/singleflight"
+
+	"github.com/Asion001/mangarr/internal/cbz"
+	"github.com/Asion001/mangarr/internal/imagecheck"
+	"github.com/Asion001/mangarr/internal/model"
+	"github.com/Asion001/mangarr/internal/modules"
+	"github.com/Asion001/mangarr/internal/modules/source"
 )
 
-// countCache remembers page counts of streamed chapters for a while, so
-// book lists can show them without asking the source again.
-type countCache struct {
+// ErrNoSource means a chapter isn't downloaded and no enabled source has it.
+var ErrNoSource = errors.New("chapter isn't downloaded and no enabled source has it")
+
+// Grabber queues downloads (the download searcher).
+type Grabber interface {
+	Evaluate(ctx context.Context, seriesID int64, chapterIDs []int64, explicit bool) (int, error)
+}
+
+// PageInfo is one page of a book.
+type PageInfo struct {
+	Number    int // 1-based
+	FileName  string
+	MediaType string
+	Size      int64 // 0 when unknown
+}
+
+const (
+	pageListTTL = 30 * time.Minute
+	// streamed pages don't change; the cache cap keeps them in check
+	pageTTL = 7 * 24 * time.Hour
+	// PagesBucket is the image cache bucket of streamed pages.
+	PagesBucket = "pages"
+)
+
+// stream is the page list of a chapter read from a source.
+type stream struct {
+	mod     source.Module
+	release int64
+	pages   []source.Page
+	exp     time.Time
+}
+
+type streams struct {
 	mu sync.Mutex
-	m  map[int64]countEntry
+	m  map[int64]*stream
+	sf singleflight.Group
 }
 
-type countEntry struct {
-	n   int
-	exp time.Time
-}
-
-const pageListTTL = 30 * time.Minute
-
-func (c *countCache) get(id int64) int {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	e, ok := c.m[id]
-	if !ok || time.Now().After(e.exp) {
-		return 0
+func (st *streams) get(chapterID int64) *stream {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if e := st.m[chapterID]; e != nil && time.Now().Before(e.exp) {
+		return e
 	}
-	return e.n
+	return nil
 }
 
-func (c *countCache) set(id int64, n int) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.m == nil {
-		c.m = map[int64]countEntry{}
+func (st *streams) put(chapterID int64, e *stream) {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if st.m == nil {
+		st.m = map[int64]*stream{}
 	}
 	now := time.Now()
-	if len(c.m) > 4096 { // drop expired entries now and then
-		for k, e := range c.m {
-			if now.After(e.exp) {
-				delete(c.m, k)
-			}
+	for k, v := range st.m {
+		if now.After(v.exp) {
+			delete(st.m, k)
 		}
 	}
-	c.m[id] = countEntry{n: n, exp: now.Add(pageListTTL)}
+	st.m[chapterID] = e
+}
+
+// CachedPageCount is the page count of an undownloaded chapter whose page
+// list is cached (0 when it isn't known yet).
+func (s *Service) CachedPageCount(chapterID int64) int {
+	if e := s.streams.get(chapterID); e != nil {
+		return len(e.pages)
+	}
+	return 0
+}
+
+// Pages lists a book's pages: from its CBZ, else from the best source (which
+// also queues the chapter's download when downloadOnOpen is on).
+func (s *Service) Pages(ctx context.Context, b *BookInfo) ([]PageInfo, error) {
+	if b.Path != "" {
+		if entries, err := cbz.List(b.Path); err == nil {
+			out := make([]PageInfo, len(entries))
+			for i, e := range entries {
+				out[i] = PageInfo{Number: i + 1, FileName: e.Name, MediaType: mediaType(e.Name), Size: e.Size}
+			}
+			return out, nil
+		}
+	}
+	st, err := s.stream(ctx, b)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]PageInfo, len(st.pages))
+	for i, p := range st.pages {
+		name := cbz.PageName(i, pageExt(p.URL))
+		out[i] = PageInfo{Number: i + 1, FileName: name, MediaType: mediaType(name)}
+	}
+	return out, nil
+}
+
+// Page returns page n (1-based) of a book.
+func (s *Service) Page(ctx context.Context, b *BookInfo, n int) ([]byte, string, error) {
+	if b.Path != "" {
+		if entries, err := cbz.List(b.Path); err == nil {
+			if n < 1 || n > len(entries) {
+				return nil, "", ErrNotFound
+			}
+			data, err := cbz.ReadEntry(b.Path, entries[n-1].Path)
+			if err != nil {
+				return nil, "", err
+			}
+			return data, contentType(data, entries[n-1].Name), nil
+		}
+	}
+	st, err := s.stream(ctx, b)
+	if err != nil {
+		return nil, "", err
+	}
+	if n < 1 || n > len(st.pages) {
+		return nil, "", ErrNotFound
+	}
+	p := st.pages[n-1]
+	key := fmt.Sprintf("%d|%d|%d", b.Chapter.ID, st.release, n)
+	data, _, _, err := s.ImageCache.Get(ctx, PagesBucket, key, pageTTL, func(ctx context.Context) (io.ReadCloser, string, error) {
+		fctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		defer cancel()
+		body, ct, err := st.mod.FetchPage(fctx, p)
+		if err != nil {
+			return nil, "", err
+		}
+		data, err := io.ReadAll(io.LimitReader(body, 20<<20))
+		body.Close()
+		if err != nil {
+			return nil, "", err
+		}
+		if _, err := imagecheck.Detect(data); err != nil {
+			return nil, "", fmt.Errorf("page %d: %w", n, err)
+		}
+		return io.NopCloser(bytes.NewReader(data)), ct, nil
+	})
+	if err != nil {
+		return nil, "", err
+	}
+	return data, contentType(data, ""), nil
+}
+
+// PageThumbnail is a small JPEG of page n (from the thumbnail cache).
+func (s *Service) PageThumbnail(ctx context.Context, b *BookInfo, n int) ([]byte, string, error) {
+	var key string
+	if b.File != nil && b.Path != "" {
+		key = fmt.Sprintf("page|%s|%d|%d|%d", b.Path, b.File.ImportedAt.Unix(), b.File.Size, n)
+	} else {
+		key = fmt.Sprintf("page|ch%d|%d", b.Chapter.ID, n)
+	}
+	data, ct, _, err := s.ImageCache.Get(ctx, "thumbs", key, 30*24*time.Hour, func(ctx context.Context) (io.ReadCloser, string, error) {
+		data, ct, err := s.Page(ctx, b, n)
+		if err != nil {
+			return nil, "", err
+		}
+		return io.NopCloser(bytes.NewReader(data)), ct, nil
+	})
+	return data, ct, err
+}
+
+// BookThumbnail is the first page of a downloaded book, else the series cover.
+func (s *Service) BookThumbnail(ctx context.Context, b *BookInfo, ser *model.Series) ([]byte, string, error) {
+	if b.Path != "" {
+		if data, ct, err := s.PageThumbnail(ctx, b, 1); err == nil {
+			return data, ct, nil
+		}
+	}
+	return s.Cover(ctx, ser)
+}
+
+// stream loads (or reuses) the page list of an undownloaded chapter.
+func (s *Service) stream(ctx context.Context, b *BookInfo) (*stream, error) {
+	if e := s.streams.get(b.Chapter.ID); e != nil {
+		return e, nil
+	}
+	v, err, _ := s.streams.sf.Do(strconv.FormatInt(b.Chapter.ID, 10), func() (any, error) {
+		// shared by concurrent requests: don't let one client's cancel fail the others
+		lctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Minute)
+		defer cancel()
+		e, err := s.loadStream(lctx, b.Chapter)
+		if err != nil {
+			return nil, err
+		}
+		s.streams.put(b.Chapter.ID, e)
+		s.downloadOnOpen(lctx, b)
+		return e, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return v.(*stream), nil
+}
+
+func (s *Service) loadStream(ctx context.Context, ch model.Chapter) (*stream, error) {
+	var rels []model.ChapterRelease
+	if err := s.DB.NewSelect().Model(&rels).
+		Join("JOIN series_sources AS ss ON ss.id = chapter_release.series_source_id").
+		Where("chapter_release.chapter_id = ?", ch.ID).Where("chapter_release.removed = ?", false).Where("ss.enabled = ?", true).
+		Where("NOT EXISTS (SELECT 1 FROM blocklist AS b WHERE b.series_source_id = chapter_release.series_source_id AND b.chapter_url = chapter_release.chapter_url)").
+		OrderExpr("ss.priority, chapter_release.id").Scan(ctx); err != nil {
+		return nil, err
+	}
+	var ser model.Series
+	_ = s.DB.NewSelect().Model(&ser).Column("id", "title").Where("id = ?", ch.SeriesID).Scan(ctx)
+	lastErr := ErrNoSource
+	links := map[int64]*model.SeriesSource{}
+	for _, rel := range rels {
+		link, ok := links[rel.SeriesSourceID]
+		if !ok {
+			link = &model.SeriesSource{}
+			if err := s.DB.NewSelect().Model(link).Where("id = ?", rel.SeriesSourceID).Scan(ctx); err != nil {
+				link = nil
+			}
+			links[rel.SeriesSourceID] = link
+		}
+		if link == nil {
+			continue
+		}
+		mod, _, err := modules.GetAs[source.Module](s.Mods, link.ModuleID)
+		if err != nil {
+			continue
+		}
+		title := link.Title
+		if title == "" {
+			title = ser.Title
+		}
+		ref := source.ChapterRef{
+			Manga:     source.MangaRef{SourceID: link.SourceID, URL: link.MangaURL, EngineRef: link.EngineRef, TitleHint: title},
+			URL:       rel.ChapterURL,
+			EngineRef: rel.EngineRef,
+		}
+		pages, err := mod.Pages(ctx, ref)
+		if err != nil || len(pages) == 0 {
+			if err == nil {
+				err = fmt.Errorf("%s has no pages for this chapter", link.SourceName)
+			}
+			lastErr = err
+			s.Log.Debug("streaming: source failed", "chapter", ch.ID, "source", link.SourceName, "error", err)
+			continue
+		}
+		return &stream{mod: mod, release: rel.ID, pages: pages, exp: time.Now().Add(pageListTTL)}, nil
+	}
+	return nil, lastErr
+}
+
+// downloadOnOpen queues an undownloaded chapter someone started reading.
+func (s *Service) downloadOnOpen(ctx context.Context, b *BookInfo) {
+	if s.Downloads == nil || b.File != nil {
+		return
+	}
+	cfg, err := s.Settings.Reading(ctx)
+	if err != nil || !cfg.DownloadOnOpen {
+		return
+	}
+	n, err := s.Downloads.Evaluate(ctx, b.Chapter.SeriesID, []int64{b.Chapter.ID}, true)
+	if err != nil {
+		s.Log.Warn("download on open failed", "chapter", b.Chapter.ID, "error", err)
+		return
+	}
+	if n > 0 {
+		s.Log.Info("reading an undownloaded chapter: download queued", "series", b.Chapter.SeriesID, "chapter", b.Chapter.ID)
+	}
+}
+
+// File is a downloaded book's CBZ (ErrNotFound when not downloaded).
+func (s *Service) File(b *BookInfo) (*os.File, os.FileInfo, error) {
+	if b.Path == "" {
+		return nil, nil, ErrNotFound
+	}
+	f, err := os.Open(b.Path)
+	if err != nil {
+		return nil, nil, ErrNotFound
+	}
+	st, err := f.Stat()
+	if err != nil {
+		f.Close()
+		return nil, nil, err
+	}
+	return f, st, nil
+}
+
+// Convert re-encodes an image to png or jpeg (for clients that can't show
+// the original format).
+func Convert(data []byte, to string) ([]byte, string, error) {
+	var img image.Image
+	var err error
+	if info, _ := imagecheck.Detect(data); info.Format == "jxl" {
+		img, err = decodeJXL(data)
+	} else {
+		img, _, err = image.Decode(bytes.NewReader(data))
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	var buf bytes.Buffer
+	if to == "jpeg" || to == "jpg" {
+		rgba := image.NewRGBA(img.Bounds())
+		draw.Draw(rgba, rgba.Bounds(), &image.Uniform{C: color.White}, image.Point{}, draw.Src)
+		draw.Draw(rgba, rgba.Bounds(), img, img.Bounds().Min, draw.Over)
+		err = jpeg.Encode(&buf, rgba, &jpeg.Options{Quality: 92})
+		return buf.Bytes(), "image/jpeg", err
+	}
+	err = (&png.Encoder{CompressionLevel: png.BestSpeed}).Encode(&buf, img)
+	return buf.Bytes(), "image/png", err
+}
+
+// decodeJXL decodes JPEG XL through libjxl's djxl, when installed.
+func decodeJXL(data []byte) (image.Image, error) {
+	bin, err := exec.LookPath("djxl")
+	if err != nil {
+		return nil, errors.New("JPEG XL pages need djxl (libjxl-tools) to be converted")
+	}
+	dir, err := os.MkdirTemp("", "mangarr-jxl-*")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(dir)
+	in, out := filepath.Join(dir, "in.jxl"), filepath.Join(dir, "out.png")
+	if err := os.WriteFile(in, data, 0o600); err != nil {
+		return nil, err
+	}
+	if msg, err := exec.Command(bin, in, out).CombinedOutput(); err != nil {
+		return nil, fmt.Errorf("djxl: %v: %s", err, strings.TrimSpace(string(msg)))
+	}
+	f, err := os.Open(out)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return png.Decode(f)
+}
+
+// pageExt guesses a page's extension from its URL (".jpg" when unknown).
+func pageExt(u string) string {
+	if i := strings.IndexAny(u, "?#"); i >= 0 {
+		u = u[:i]
+	}
+	switch ext := strings.ToLower(filepath.Ext(u)); ext {
+	case ".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif", ".jxl":
+		return ext
+	}
+	return ".jpg"
+}
+
+func mediaType(name string) string {
+	switch ext := strings.ToLower(filepath.Ext(name)); ext {
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".jxl":
+		return "image/jxl"
+	case ".avif":
+		return "image/avif"
+	case ".webp":
+		return "image/webp"
+	default:
+		if t := mime.TypeByExtension(ext); t != "" {
+			return t
+		}
+		return "image/jpeg"
+	}
+}
+
+// contentType is the type of an image from its bytes (name as a fallback).
+func contentType(data []byte, name string) string {
+	if info, err := imagecheck.Detect(data); err == nil {
+		return "image/" + info.Format
+	}
+	if name != "" {
+		return mediaType(name)
+	}
+	return "application/octet-stream"
 }

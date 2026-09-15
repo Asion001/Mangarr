@@ -3495,7 +3495,7 @@ export interface components {
         };
         "System-cache-clearRequest": {
             catalogs: boolean;
-            /** @description Image buckets to clear (thumbs, assets, covers); empty = none */
+            /** @description Image buckets to clear (thumbs, assets, covers, pages); empty = none */
             images?: string[];
         };
         "System-envResponse": {

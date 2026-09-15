@@ -160,3 +160,49 @@ func isImageName(name string) bool {
 
 // PageName returns the archive name for page index i (0-based) and extension.
 func PageName(i int, ext string) string { return fmt.Sprintf("%04d%s", i+1, ext) }
+
+// Entry is a page image in a CBZ.
+type Entry struct {
+	// Name is the page's base name; Path its path inside the archive.
+	Name string
+	Path string
+	Size int64
+}
+
+// List lists the page images of a CBZ (sorted like Read) without reading them.
+func List(path string) ([]Entry, error) {
+	zr, err := zip.OpenReader(path)
+	if err != nil {
+		return nil, err
+	}
+	defer zr.Close()
+	var out []Entry
+	for _, f := range zr.File {
+		if !f.FileInfo().IsDir() && isImageName(f.Name) {
+			out = append(out, Entry{Name: filepath.Base(f.Name), Path: f.Name, Size: int64(f.UncompressedSize64)})
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out, nil
+}
+
+// ReadEntry reads one file of a CBZ by its path inside the archive.
+func ReadEntry(path, name string) ([]byte, error) {
+	zr, err := zip.OpenReader(path)
+	if err != nil {
+		return nil, err
+	}
+	defer zr.Close()
+	for _, f := range zr.File {
+		if f.Name != name {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return nil, err
+		}
+		defer rc.Close()
+		return io.ReadAll(io.LimitReader(rc, 128<<20))
+	}
+	return nil, fs.ErrNotExist
+}

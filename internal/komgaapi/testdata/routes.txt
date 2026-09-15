@@ -4,9 +4,15 @@ GET /api/v1/authors
 GET /api/v1/books
 GET /api/v1/books/ondeck
 GET /api/v1/books/{id}
+GET /api/v1/books/{id}/file
+GET /api/v1/books/{id}/file/*
 GET /api/v1/books/{id}/next
+GET /api/v1/books/{id}/pages
+GET /api/v1/books/{id}/pages/{n}
+GET /api/v1/books/{id}/pages/{n}/thumbnail
 GET /api/v1/books/{id}/previous
 GET /api/v1/books/{id}/readlists
+GET /api/v1/books/{id}/thumbnail
 GET /api/v1/client-settings/user/list
 GET /api/v1/collections
 GET /api/v1/collections/{id}

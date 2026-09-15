@@ -11,7 +11,7 @@ import (
 )
 
 // Buckets are the cache folders.
-var Buckets = []string{"thumbs", "assets", "covers"}
+var Buckets = []string{"thumbs", "assets", "covers", "pages"}
 
 // BucketStats describes one cache folder.
 type BucketStats struct {

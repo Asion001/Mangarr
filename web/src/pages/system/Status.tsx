@@ -207,7 +207,7 @@ function CacheCard() {
   );
 }
 
-const imageLabels: Record<string, string> = { thumbs: "Search thumbnails (disk)", assets: "Extension icons (disk)", covers: "Series covers (disk)" };
+const imageLabels: Record<string, string> = { thumbs: "Search thumbnails (disk)", assets: "Extension icons (disk)", covers: "Series covers (disk)", pages: "Streamed pages (disk)" };
 
 function ProcessingCard() {
   const qc = useQueryClient();
