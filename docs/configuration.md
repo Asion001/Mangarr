@@ -15,6 +15,8 @@ Lists are comma-separated (`a,b,c`) or JSON; key/value settings use `key=value,k
 | `MANGARR_DATA_DIR` | `./config (/config in Docker)` | Database, staging, backups, recycle bin and caches. |
 | `MANGARR_DB` | `sqlite://$MANGARR_DATA_DIR/mangarr.db` | Database DSN: sqlite://… or postgres://user:pass@host:5432/db. |
 | `MANGARR_LOG_LEVEL` | `info` | debug, info, warn or error. |
+| `MANGARR_LOG_DIR` | `$MANGARR_DATA_DIR/logs` | Folder for log files (rotated at 5 MB); off disables them. |
+| `MANGARR_LOG_FILES` | `5` | How many log files to keep. |
 | `MANGARR_URL_BASE` | `` | Serve under a sub path, e.g. /mangarr. |
 | `MANGARR_AUTH_DISABLED` | `false` | Disable login and API key checks (only behind an auth proxy). |
 | `MANGARR_WEB_DIR` | `` | Serve the UI from this directory instead of the embedded copy (development). |

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"runtime"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -132,7 +133,22 @@ func (s *Server) registerSystem() {
 			Level string `query:"level" default:"info" enum:"debug,info,warn,error"`
 			Limit int    `query:"limit" default:"500" minimum:"1" maximum:"2000"`
 		}) (*struct{ Body []logging.Entry }, error) {
-			return &struct{ Body []logging.Entry }{s.app.LogRing.Entries(logging.ParseLevel(in.Level), in.Limit)}, nil
+			entries := s.app.LogRing.Entries(logging.ParseLevel(in.Level), in.Limit)
+			red := s.app.Redactor(ctx) // safe to screenshot or copy
+			for i := range entries {
+				entries[i].Message = red.String(entries[i].Message)
+				attrs := make(map[string]string, len(entries[i].Attrs))
+				for k, v := range entries[i].Attrs {
+					// with the key, so "apikey=…" patterns match
+					if r := red.String(k + "=" + v); strings.HasPrefix(r, k+"=") {
+						attrs[k] = r[len(k)+1:]
+					} else {
+						attrs[k] = red.String(v)
+					}
+				}
+				entries[i].Attrs = attrs
+			}
+			return &struct{ Body []logging.Entry }{entries}, nil
 		})
 
 	huma.Register(s.api, huma.Operation{OperationID: "system-tasks", Method: http.MethodGet, Path: "/api/v1/system/tasks", Tags: tags},

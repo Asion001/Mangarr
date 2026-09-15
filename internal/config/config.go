@@ -22,6 +22,10 @@ type Config struct {
 	DB string
 	// LogLevel: debug, info, warn, error.
 	LogLevel string
+	// LogDir holds rotating log files ("" = no log files).
+	LogDir string
+	// LogFiles is how many log files are kept (current plus rotated).
+	LogFiles int
 	// AuthDisabled turns off login + API key checks (for use behind an auth proxy).
 	AuthDisabled bool
 	// URLBase allows serving under a sub path, e.g. "/mangarr".
@@ -43,6 +47,8 @@ var Vars = []VarDoc{
 	{"MANGARR_DATA_DIR", "./config (/config in Docker)", "Database, staging, backups, recycle bin and caches."},
 	{"MANGARR_DB", "sqlite://$MANGARR_DATA_DIR/mangarr.db", "Database DSN: sqlite://… or postgres://user:pass@host:5432/db."},
 	{"MANGARR_LOG_LEVEL", "info", "debug, info, warn or error."},
+	{"MANGARR_LOG_DIR", "$MANGARR_DATA_DIR/logs", "Folder for log files (rotated at 5 MB); off disables them."},
+	{"MANGARR_LOG_FILES", "5", "How many log files to keep."},
 	{"MANGARR_URL_BASE", "", "Serve under a sub path, e.g. /mangarr."},
 	{"MANGARR_AUTH_DISABLED", "false", "Disable login and API key checks (only behind an auth proxy)."},
 	{"MANGARR_WEB_DIR", "", "Serve the UI from this directory instead of the embedded copy (development)."},
@@ -91,6 +97,14 @@ func Load() (*Config, error) {
 	}
 	c.DataDir = abs
 	c.DB = env("MANGARR_DB", "sqlite://"+filepath.Join(c.DataDir, "mangarr.db"))
+	switch d := env("MANGARR_LOG_DIR", filepath.Join(c.DataDir, "logs")); strings.ToLower(d) {
+	case "off", "none", "false", "0":
+	default:
+		c.LogDir = d
+	}
+	if c.LogFiles, err = strconv.Atoi(env("MANGARR_LOG_FILES", "5")); err != nil || c.LogFiles < 1 {
+		return nil, fmt.Errorf("MANGARR_LOG_FILES must be a positive number")
+	}
 	if c.URLBase != "" && !strings.HasPrefix(c.URLBase, "/") {
 		c.URLBase = "/" + c.URLBase
 	}

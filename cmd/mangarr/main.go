@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -65,7 +66,18 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	log, ring := logging.Setup(cfg.LogLevel, os.Stdout)
+	var out io.Writer = os.Stdout
+	if cfg.LogDir != "" {
+		rot, err := logging.OpenRotating(cfg.LogDir, "mangarr", 5<<20, cfg.LogFiles)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "log files disabled:", err)
+			cfg.LogDir = ""
+		} else {
+			defer rot.Close()
+			out = io.MultiWriter(os.Stdout, rot)
+		}
+	}
+	log, ring := logging.Setup(cfg.LogLevel, out)
 	log.Info("starting mangarr", "version", version.Version, "data", cfg.DataDir, "listen", cfg.Listen)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

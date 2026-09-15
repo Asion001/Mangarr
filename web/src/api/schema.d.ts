@@ -1587,6 +1587,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/system/logs/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download log files with secrets removed: one file as text, or all as a zip */
+        get: operations["system-logs-download"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/logs/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["system-log-files"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/system/status": {
         parameters: {
             query?: never;
@@ -2475,6 +2508,18 @@ export interface components {
         Lock: {
             env: string;
             path: string;
+        };
+        LogFile: {
+            /** Format: date-time */
+            modified: string;
+            name: string;
+            /** Format: int64 */
+            size: number;
+        };
+        LogFiles: {
+            dir: string;
+            enabled: boolean;
+            files: components["schemas"]["LogFile"][];
         };
         LookupResult: {
             adult?: boolean;
@@ -7324,6 +7369,69 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Entry"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "system-logs-download": {
+        parameters: {
+            query?: {
+                /** @description One log file (from /system/logs/files); empty = all as a zip */
+                file?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Content-Disposition"?: string;
+                    "Content-Type"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "system-log-files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogFiles"];
                 };
             };
             /** @description Error */

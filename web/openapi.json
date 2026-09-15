@@ -2490,6 +2490,51 @@
         ],
         "type": "object"
       },
+      "LogFile": {
+        "additionalProperties": false,
+        "properties": {
+          "modified": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "size": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "size",
+          "modified"
+        ],
+        "type": "object"
+      },
+      "LogFiles": {
+        "additionalProperties": false,
+        "properties": {
+          "dir": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/LogFile"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "enabled",
+          "dir",
+          "files"
+        ],
+        "type": "object"
+      },
       "LookupResult": {
         "additionalProperties": false,
         "properties": {
@@ -5511,7 +5556,7 @@
   "info": {
     "description": "Sonarr-style PVR for manga. All endpoints accept an X-Api-Key header.",
     "title": "mangarr",
-    "version": "1c71a2e-dirty"
+    "version": "43424aa-dirty"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -10947,6 +10992,92 @@
                     "$ref": "#/components/schemas/Entry"
                   },
                   "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/api/v1/system/logs/download": {
+      "get": {
+        "operationId": "system-logs-download",
+        "parameters": [
+          {
+            "description": "One log file (from /system/logs/files); empty = all as a zip",
+            "explode": false,
+            "in": "query",
+            "name": "file",
+            "schema": {
+              "description": "One log file (from /system/logs/files); empty = all as a zip",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "contentEncoding": "base64",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Type": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Download log files with secrets removed: one file as text, or all as a zip",
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/api/v1/system/logs/files": {
+      "get": {
+        "operationId": "system-log-files",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogFiles"
                 }
               }
             },
