@@ -5878,7 +5878,7 @@
   "info": {
     "description": "Sonarr-style PVR for manga. All endpoints accept an X-Api-Key header.",
     "title": "mangarr",
-    "version": "4366333-dirty"
+    "version": "c727a86-dirty"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -11285,6 +11285,50 @@
           }
         },
         "summary": "Clear caches: catalogs (search/details) and image buckets",
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/api/v1/system/diagnostics": {
+      "get": {
+        "operationId": "system-diagnostics",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "contentEncoding": "base64",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Type": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "A zip for bug reports: status, health, modules, settings, queue and logs with secrets removed",
         "tags": [
           "System"
         ]

@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router";
-import { AlertTriangle, CheckCircle2, Info, RefreshCw, XCircle } from "lucide-react";
-import { api, unwrap } from "../../api/client";
+import { AlertTriangle, CheckCircle2, Info, LifeBuoy, RefreshCw, XCircle } from "lucide-react";
+import { api, apiUrl, unwrap } from "../../api/client";
 import { useCommands, useHealth } from "../../api/queries";
 import { Badge, Button, Card, Loading, PageHeader, Progress, Table, Td, Th } from "../../components/ui";
 import { bytes, dateTime, duration, relative } from "../../lib/format";
@@ -21,7 +21,14 @@ export function StatusPage() {
     t === "error" ? <XCircle className="size-4 text-err" /> : t === "warning" ? <AlertTriangle className="size-4 text-warn" /> : <Info className="size-4 text-info" />;
   return (
     <>
-      <PageHeader title="Status" />
+      <PageHeader
+        title="Status"
+        actions={
+          <a href={apiUrl("api/v1/system/diagnostics")} download title="Status, health, modules, settings, queue and logs, with secrets removed">
+            <Button icon={<LifeBuoy className="size-4" />}>Download diagnostics</Button>
+          </a>
+        }
+      />
       <Card
         title="Health"
         className="mb-6"

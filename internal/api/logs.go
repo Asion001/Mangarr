@@ -40,7 +40,7 @@ func (s *Server) writeLogs(zw *zip.Writer, prefix string, red *redact.Redactor) 
 		files = logging.Files(s.app.Cfg.LogDir)
 	}
 	if len(files) == 0 {
-		w, err := zw.Create(prefix + "recent.txt")
+		w, err := zw.CreateHeader(&zip.FileHeader{Name: prefix + "recent.txt", Method: zip.Deflate, Modified: time.Now()})
 		if err != nil {
 			return err
 		}

@@ -50,6 +50,12 @@ mangarr tells to rescan after every change.
   smaller) or lossless JPEG XL (~20%, reversible). Chapters are readable right
   away and processed in the background, at the same path; mangarr checks that
   Komga can read the new format before continuing.
+- **Read progress from Komga, live** — chapters read on any device show up
+  within seconds; series show how far each reader got and link to Komga
+  (Kavita is synced on a timer).
+- **Operations** — live download and processing progress (pages, speed, ETA),
+  a space-saved history, rotating log files, and a one-click diagnostics zip
+  with secrets masked.
 - **Import from Mihon, Tachiyomi, Suwayomi or Aidoku** — upload a backup,
   review how each manga maps to your catalogs (exact for Keiyoushi sources,
   missing extensions installed for you), and import it with read chapters,

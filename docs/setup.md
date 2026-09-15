@@ -79,6 +79,13 @@ Cleanup deletes chapters **every reader** has finished.
 4. Cleaned chapters are never downloaded again; use **Restore** on a chapter
    to get it back.
 
+Read progress arrives **live from Komga**: each linked account keeps Komga's
+event stream open, so a chapter read on any device shows up in mangarr within
+seconds (the Readers page shows *live*). Kavita is checked on a timer
+(Settings → Readers, every 30 minutes by default). Each series shows how far
+its readers got (*Continue: ch. N*, a read bar on the Series page, and a link
+to open it in Komga).
+
 ## 6. Processing: upscaling and re-encoding (optional)
 
 Processing is configured per profile (Settings → Profiles). By default it runs
@@ -206,7 +213,23 @@ For large libraries set `MANGARR_DB=postgres://mangarr:…@db:5432/mangarr?sslmo
 (e.g. your existing Postgres 16). Built-in backups then contain settings and
 modules only — back up the database with `pg_dump`.
 
-## 10. Backups & upgrades
+## 10. Logs, caches and bug reports
+
+- **Logs** are written to `/config/logs/mangarr.txt` (rotated at 5 MB, 5 files
+  kept; `MANGARR_LOG_DIR=off` disables them). System → Logs downloads them as a
+  zip. API keys, passwords, tokens and module secrets are masked in the page,
+  in copies and in downloads.
+- **Download diagnostics** (System → Status) bundles logs, status, health,
+  modules, settings and the queue for a bug report, masked the same way.
+  Series titles and folder names are included, so look through it before
+  posting it publicly.
+- **Image cache**: thumbnails and covers are stored as 768px JPEGs (sources
+  often send multi-megapixel originals, which also upset iOS Safari). The
+  cache stays under Settings → General → *image cache limit* (512 MB by
+  default) by removing the oldest images; System → Status shows its size and
+  can *Compact* or clear it.
+
+## 11. Backups & upgrades
 
 Daily backups (SQLite snapshot + manifest) go to `/config/backups`
 (System → Backups). Suwayomi's own data is disposable: mangarr keeps the

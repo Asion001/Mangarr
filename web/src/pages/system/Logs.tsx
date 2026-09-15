@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
-import { Copy, Download, FileText, RefreshCw } from "lucide-react";
+import { Copy, Download, FileText, LifeBuoy, RefreshCw } from "lucide-react";
 import { api, apiUrl, unwrap } from "../../api/client";
 import { Button, Loading, PageHeader, Select } from "../../components/ui";
 import { bytes, relative } from "../../lib/format";
@@ -45,6 +45,9 @@ export function LogsPage() {
             <Button icon={<Copy className="size-4" />} onClick={copy}>
               Copy
             </Button>
+            <a href={apiUrl("api/v1/system/diagnostics")} download title="Logs plus status, health, modules and settings, with secrets removed">
+              <Button icon={<LifeBuoy className="size-4" />}>Diagnostics</Button>
+            </a>
             <a href={apiUrl("api/v1/system/logs/download")} download>
               <Button variant="primary" icon={<Download className="size-4" />}>
                 Download logs

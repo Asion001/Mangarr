@@ -63,3 +63,33 @@ func TestLogDownloadIsRedacted(t *testing.T) {
 		t.Fatalf("path traversal: %d", resp.StatusCode)
 	}
 }
+
+func TestDiagnosticsIsRedacted(t *testing.T) {
+	srv, a := newServer(t, true)
+	g, _ := a.Settings.General(context.Background())
+	slog.Error("oops", "key", g.APIKey)
+	resp, err := http.Get(srv.URL + "/api/v1/system/diagnostics")
+	if err != nil || resp.StatusCode != 200 {
+		t.Fatalf("%v %v", err, resp.StatusCode)
+	}
+	b, _ := io.ReadAll(resp.Body)
+	zr, err := zip.NewReader(bytes.NewReader(b), int64(len(b)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := map[string]bool{}
+	for _, f := range zr.File {
+		names[f.Name] = true
+		rc, _ := f.Open()
+		c, _ := io.ReadAll(rc)
+		rc.Close()
+		if strings.Contains(string(c), g.APIKey) || strings.Contains(string(c), g.SessionSecret) {
+			t.Fatalf("%s contains a secret", f.Name)
+		}
+	}
+	for _, n := range []string{"system.json", "health.json", "modules.json", "settings.json", "env.json", "queue.json", "logs/recent.txt"} {
+		if !names[n] {
+			t.Fatalf("missing %s in %v", n, names)
+		}
+	}
+}
