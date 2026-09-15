@@ -31,6 +31,26 @@ type Syncer struct {
 	// protected series keep their read states while progress is restored
 	// (right after a move the server reports them as unread)
 	protected map[int64]time.Time
+
+	// OnChange, when set, hears what each sync or pushed event changed.
+	OnChange func(ctx context.Context, acc *model.ReaderAccount, changes []Change)
+}
+
+// Change is one read state a server's report changed (or that mangarr kept
+// against a lower report).
+type Change struct {
+	SeriesID  int64
+	ChapterID int64
+	Completed bool
+	Page      int
+	// Outcome is model.OutcomeApplied, OutcomeUnread or OutcomeKept.
+	Outcome string
+}
+
+func (s *Syncer) report(ctx context.Context, acc *model.ReaderAccount, changes []Change) {
+	if s.OnChange != nil && len(changes) > 0 {
+		s.OnChange(ctx, acc, changes)
+	}
 }
 
 func New(d *db.DB, mods *modules.Manager, bus *events.Bus, log *slog.Logger) *Syncer {
@@ -157,18 +177,23 @@ func (s *Syncer) syncAccount(ctx context.Context, acc *model.ReaderAccount, idx 
 	now := time.Now().UTC()
 	seen := map[int64]bool{}
 	updated := 0
+	var changes []Change
 	err = s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		changes = changes[:0]
 		for _, bp := range progress {
 			ref, ok := idx[filepath.Clean(bp.LocalPath)]
 			if !ok {
 				continue
 			}
 			seen[ref.chapterID] = true
-			changed, err := s.apply(ctx, tx, acc.ReaderID, byChapter[ref.chapterID], ref, bp, now)
+			outcome, err := s.apply(ctx, tx, acc.ReaderID, byChapter[ref.chapterID], ref, bp, now)
 			if err != nil {
 				return err
 			}
-			if changed {
+			if outcome != "" {
+				changes = append(changes, Change{SeriesID: ref.seriesID, ChapterID: ref.chapterID, Completed: bp.Completed, Page: bp.Page, Outcome: outcome})
+			}
+			if outcome == model.OutcomeApplied {
 				updated++
 			}
 		}
@@ -187,33 +212,43 @@ func (s *Syncer) syncAccount(ctx context.Context, acc *model.ReaderAccount, idx 
 			if _, err := tx.NewDelete().Model(st).WherePK().Exec(ctx); err != nil {
 				return err
 			}
+			changes = append(changes, Change{SeriesID: st.SeriesID, ChapterID: chID, Outcome: model.OutcomeUnread})
 			updated++
 		}
 		return nil
 	})
+	if err == nil {
+		s.report(ctx, acc, changes)
+	}
 	return updated, err
 }
 
 // apply stores one reported book's progress (st is the current state, nil
 // when none). Restored or imported progress is never lowered, and a server
-// report takes over imported (backup) states.
-func (s *Syncer) apply(ctx context.Context, idb bun.IDB, readerID int64, st *model.ChapterReadState, ref fileRef, bp library.BookProgress, now time.Time) (bool, error) {
+// report takes over imported (backup) states. It returns
+// model.OutcomeApplied, model.OutcomeKept (a lower report was ignored) or
+// "" (nothing new).
+func (s *Syncer) apply(ctx context.Context, idb bun.IDB, readerID int64, st *model.ChapterReadState, ref fileRef, bp library.BookProgress, now time.Time) (string, error) {
 	readAt := bp.ReadAt
 	if st == nil {
+		if !bp.Completed && bp.Page <= 0 {
+			return "", nil
+		}
 		if readAt == nil && bp.Completed {
 			readAt = &now
 		}
 		st = &model.ChapterReadState{ReaderID: readerID, ChapterID: ref.chapterID, SeriesID: ref.seriesID,
 			Completed: bp.Completed, Page: bp.Page, ReadAt: readAt, SyncedAt: now}
 		_, err := idb.NewInsert().Model(st).Exec(ctx)
-		return err == nil, err
+		return model.OutcomeApplied, err
 	}
 	if st.Origin == "" && st.Completed == bp.Completed && st.Page == bp.Page && (readAt == nil || (st.ReadAt != nil && st.ReadAt.Equal(*readAt))) {
-		return false, nil
+		return "", nil
 	}
 	if (s.isProtected(ref.seriesID) || st.Origin != "") && (st.Completed && !bp.Completed || st.Page > bp.Page) {
-		return false, nil // don't lower progress that is being restored or was imported
+		return model.OutcomeKept, nil // don't lower progress that is being restored, was imported or came from an app
 	}
+	sameValues := st.Completed == bp.Completed && st.Page == bp.Page
 	if readAt == nil && bp.Completed && !st.Completed {
 		readAt = &now
 	}
@@ -223,7 +258,10 @@ func (s *Syncer) apply(ctx context.Context, idb bun.IDB, readerID int64, st *mod
 	// the server knows this chapter now; it owns the state from here on
 	st.Completed, st.Page, st.ReadAt, st.SyncedAt, st.Origin = bp.Completed, bp.Page, readAt, now, ""
 	_, err := idb.NewUpdate().Model(st).Column("completed", "page", "read_at", "synced_at", "origin").WherePK().Exec(ctx)
-	return err == nil, err
+	if sameValues {
+		return "", err // only the owner changed
+	}
+	return model.OutcomeApplied, err
 }
 
 // ApplyEvent stores one change pushed by a library server. It returns the
@@ -248,25 +286,36 @@ func (s *Syncer) ApplyEvent(ctx context.Context, acc *model.ReaderAccount, ev li
 		}
 		found = false
 	}
-	changed := false
+	outcome := ""
 	if ev.Deleted {
 		// marked unread on the server
-		if found && cur.Origin == "" && !s.isProtected(ref.seriesID) {
+		switch {
+		case !found:
+		case cur.Origin == "" && !s.isProtected(ref.seriesID):
 			if _, err := s.db.NewDelete().Model(&cur).WherePK().Exec(ctx); err != nil {
 				return 0, err
 			}
-			changed = true
+			outcome = model.OutcomeUnread
+		default:
+			outcome = model.OutcomeKept
 		}
 	} else {
 		var st *model.ChapterReadState
 		if found {
 			st = &cur
 		}
-		if changed, err = s.apply(ctx, s.db, acc.ReaderID, st, ref, *ev.Book, time.Now().UTC()); err != nil {
+		if outcome, err = s.apply(ctx, s.db, acc.ReaderID, st, ref, *ev.Book, time.Now().UTC()); err != nil {
 			return 0, err
 		}
 	}
-	if !changed {
+	if outcome != "" {
+		c := Change{SeriesID: ref.seriesID, ChapterID: ref.chapterID, Outcome: outcome}
+		if ev.Book != nil && !ev.Deleted {
+			c.Completed, c.Page = ev.Book.Completed, ev.Book.Page
+		}
+		s.report(ctx, acc, []Change{c})
+	}
+	if outcome != model.OutcomeApplied && outcome != model.OutcomeUnread {
 		return 0, nil
 	}
 	s.bus.Changed("readers", "sync", 0)
@@ -317,7 +366,17 @@ type RestoreResult struct {
 // servers that know less (e.g. after the series moved to another library).
 // Progress on the server is never lowered.
 func (s *Syncer) RestoreSeries(ctx context.Context, seriesID int64) (RestoreResult, error) {
+	return s.PushSeries(ctx, seriesID, nil)
+}
+
+// PushSeries is RestoreSeries that also clears the progress of chapters a
+// reading app marked unread (unread), where mangarr still has them unread.
+func (s *Syncer) PushSeries(ctx context.Context, seriesID int64, unread []int64) (RestoreResult, error) {
 	var res RestoreResult
+	var accounts []model.ReaderAccount
+	if err := s.db.NewSelect().Model(&accounts).Scan(ctx); err != nil || len(accounts) == 0 {
+		return res, err
+	}
 	idx, _, err := s.index(ctx)
 	if err != nil {
 		return res, err
@@ -332,10 +391,6 @@ func (s *Syncer) RestoreSeries(ctx context.Context, seriesID int64) (RestoreResu
 	}
 	if seriesDir == "" {
 		return res, nil
-	}
-	var accounts []model.ReaderAccount
-	if err := s.db.NewSelect().Model(&accounts).Scan(ctx); err != nil {
-		return res, err
 	}
 	var errs []error
 	for _, acc := range accounts {
@@ -361,7 +416,9 @@ func (s *Syncer) RestoreSeries(ctx context.Context, seriesID int64) (RestoreResu
 			}
 		}
 		var items []library.BookProgress
+		hasState := map[int64]bool{}
 		for _, st := range states {
+			hasState[st.ChapterID] = true
 			p, ok := pathOf[st.ChapterID]
 			if !ok || (!st.Completed && st.Page == 0) {
 				continue
@@ -371,6 +428,15 @@ func (s *Syncer) RestoreSeries(ctx context.Context, seriesID int64) (RestoreResu
 				continue // the server already knows as much
 			}
 			items = append(items, library.BookProgress{LocalPath: p, Completed: st.Completed, Page: st.Page})
+		}
+		for _, chID := range unread {
+			p, ok := pathOf[chID]
+			if !ok || hasState[chID] {
+				continue // not on the server, or read again since
+			}
+			if r, has := remote[p]; has && (r.Completed || r.Page > 0) {
+				items = append(items, library.BookProgress{LocalPath: p, Unread: true})
+			}
 		}
 		if len(items) == 0 {
 			continue

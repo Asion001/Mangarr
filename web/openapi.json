@@ -1183,6 +1183,44 @@
         ],
         "type": "object"
       },
+      "DeviceSync": {
+        "additionalProperties": false,
+        "properties": {
+          "client": {
+            "type": "string"
+          },
+          "device": {
+            "type": "string"
+          },
+          "events": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "kept": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "last": {
+            "$ref": "#/components/schemas/EventView"
+          },
+          "lastSeen": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "origin": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "origin",
+          "client",
+          "device",
+          "lastSeen",
+          "events",
+          "kept"
+        ],
+        "type": "object"
+      },
       "DownloadJob": {
         "additionalProperties": false,
         "properties": {
@@ -1599,6 +1637,77 @@
             "type": "string"
           }
         },
+        "type": "object"
+      },
+      "EventView": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "chapter": {
+            "type": "string"
+          },
+          "chapterId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "chapters": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "client": {
+            "type": "string"
+          },
+          "completed": {
+            "type": "boolean"
+          },
+          "device": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "origin": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "page": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "readerId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "seriesId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "seriesTitle": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "seriesTitle",
+          "chapter",
+          "id",
+          "readerId",
+          "seriesId",
+          "chapterId",
+          "chapters",
+          "completed",
+          "page",
+          "origin",
+          "client",
+          "device",
+          "outcome",
+          "at"
+        ],
         "type": "object"
       },
       "FileRename": {
@@ -4208,6 +4317,39 @@
           "name",
           "countForCleanup",
           "createdAt"
+        ],
+        "type": "object"
+      },
+      "ReaderSync": {
+        "additionalProperties": false,
+        "properties": {
+          "devices": {
+            "items": {
+              "$ref": "#/components/schemas/DeviceSync"
+            },
+            "type": "array"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/EventView"
+            },
+            "type": "array"
+          },
+          "keys": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingKey"
+            },
+            "type": "array"
+          },
+          "readingApps": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "readingApps",
+          "keys",
+          "devices",
+          "events"
         ],
         "type": "object"
       },
@@ -9082,6 +9224,60 @@
             "description": "Error"
           }
         },
+        "tags": [
+          "Readers"
+        ]
+      }
+    },
+    "/api/v1/readers/{id}/sync": {
+      "get": {
+        "operationId": "readers-sync",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "format": "int64",
+              "maximum": 500,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReaderSync"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Sync health: apps, devices and servers that reported the reader's progress, and recent reports",
         "tags": [
           "Readers"
         ]

@@ -80,7 +80,8 @@ func (a *App) wireImports(ctx context.Context) error {
 		_, _ = a.Queue.Push(ctx, "MapImport", map[string]any{"importId": id}, "startup")
 	}
 
-	// imported read state is written to Komga/Kavita once chapters are on disk
+	// imported read state, and what reading apps read before the chapter was
+	// downloaded, is written to Komga/Kavita once chapters are on disk
 	var mu sync.Mutex
 	pending := map[int64]bool{}
 	a.Bus.Subscribe(func(e events.Event) {
@@ -99,7 +100,7 @@ func (a *App) wireImports(ctx context.Context) error {
 			delete(pending, id)
 			mu.Unlock()
 			ctx := context.Background()
-			n, err := a.DB.NewSelect().Model((*model.ChapterReadState)(nil)).Where("series_id = ? AND origin = ?", id, model.ReadOriginBackup).Count(ctx)
+			n, err := a.DB.NewSelect().Model((*model.ChapterReadState)(nil)).Where("series_id = ? AND origin IN (?, ?)", id, model.ReadOriginBackup, model.ReadOriginApp).Count(ctx)
 			if err == nil && n > 0 {
 				_, _ = a.Queue.Push(ctx, "RestoreProgress", map[string]any{"seriesId": id}, "imported-read-state")
 			}

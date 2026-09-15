@@ -44,15 +44,18 @@ const (
 // ReadEvent is one progress report, for sync health per device.
 type ReadEvent struct {
 	bun.BaseModel `bun:"table:read_events"`
-	ID            int64     `bun:"id,pk,autoincrement" json:"id"`
-	ReaderID      int64     `bun:"reader_id,notnull" json:"readerId"`
-	SeriesID      int64     `bun:"series_id,notnull" json:"seriesId"`
-	ChapterID     int64     `bun:"chapter_id,notnull" json:"chapterId"`
-	Completed     bool      `bun:"completed,notnull" json:"completed"`
-	Page          int       `bun:"page,notnull" json:"page"`
-	Origin        string    `bun:"origin,notnull" json:"origin"`
-	Client        string    `bun:"client,notnull" json:"client"`
-	Device        string    `bun:"device,notnull" json:"device"`
-	Outcome       string    `bun:"outcome,notnull" json:"outcome"`
-	At            time.Time `bun:"at,notnull" json:"at"`
+	ID            int64 `bun:"id,pk,autoincrement" json:"id"`
+	ReaderID      int64 `bun:"reader_id,notnull" json:"readerId"`
+	SeriesID      int64 `bun:"series_id,notnull" json:"seriesId"`
+	ChapterID     int64 `bun:"chapter_id,notnull" json:"chapterId"`
+	// Chapters is how many chapters the event covers (ChapterID is the
+	// highest-numbered one).
+	Chapters  int       `bun:"chapters,notnull" json:"chapters"`
+	Completed bool      `bun:"completed,notnull" json:"completed"`
+	Page      int       `bun:"page,notnull" json:"page"`
+	Origin    string    `bun:"origin,notnull" json:"origin"`
+	Client    string    `bun:"client,notnull" json:"client"`
+	Device    string    `bun:"device,notnull" json:"device"`
+	Outcome   string    `bun:"outcome,notnull" json:"outcome"`
+	At        time.Time `bun:"at,notnull" json:"at"`
 }

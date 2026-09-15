@@ -55,8 +55,10 @@ type App struct {
 	Organize   *organize.Service
 	Imports    *imports.Service
 	// Reading is the library as reading apps see it; Komga serves it.
-	Reading   *reading.Service
-	Komga     *komgaapi.Service
+	Reading *reading.Service
+	Komga   *komgaapi.Service
+	// FanOut pushes progress changes to library servers.
+	FanOut    *FanOut
 	Queue     *jobs.Queue
 	Scheduler *jobs.Scheduler
 	HTTP      *http.Client

@@ -28,6 +28,9 @@ type BookProgress struct {
 	Completed bool       `json:"completed"`
 	Page      int        `json:"page"`
 	ReadAt    *time.Time `json:"readAt,omitempty"`
+	// Unread asks WriteProgress to clear the book's progress (marked unread
+	// in a reading app).
+	Unread bool `json:"unread,omitempty"`
 }
 
 // ProgressReader is implemented by servers that expose per-user read progress.

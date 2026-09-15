@@ -227,7 +227,10 @@ func (m *Module) WriteProgress(ctx context.Context, acc library.Account, items [
 			continue
 		}
 		pageNum := it.Page
-		if it.Completed {
+		switch {
+		case it.Unread:
+			pageNum = 0 // Kavita's "unread"
+		case it.Completed:
 			pageNum = t.pages
 		}
 		body := map[string]any{"volumeId": t.volume, "chapterId": t.chapter, "pageNum": pageNum, "seriesId": t.series, "libraryId": t.library}

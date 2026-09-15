@@ -54,7 +54,8 @@ func (m *Module) bookIDs(ctx context.Context, localPaths []string) (map[string]s
 	return out, nil
 }
 
-// WriteProgress marks books read (or sets the page) for the reader's account.
+// WriteProgress marks books read, sets the page or clears the progress for
+// the reader's account.
 func (m *Module) WriteProgress(ctx context.Context, acc library.Account, items []library.BookProgress) (int, []string, error) {
 	paths := make([]string, len(items))
 	for i, it := range items {
@@ -70,6 +71,13 @@ func (m *Module) WriteProgress(ctx context.Context, acc library.Account, items [
 		id, ok := ids[m.pm.ToRemote(it.LocalPath)]
 		if !ok {
 			missing = append(missing, it.LocalPath)
+			continue
+		}
+		if it.Unread {
+			if err := m.do(ctx, acc.Credentials["apiKey"], http.MethodDelete, "/api/v1/books/"+id+"/read-progress", nil, nil); err != nil {
+				return written, missing, fmt.Errorf("clear progress: %w", err)
+			}
+			written++
 			continue
 		}
 		body := map[string]any{"completed": it.Completed}

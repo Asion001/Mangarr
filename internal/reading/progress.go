@@ -8,7 +8,6 @@ import (
 
 	"github.com/uptrace/bun"
 
-	"github.com/Asion001/mangarr/internal/events"
 	"github.com/Asion001/mangarr/internal/model"
 )
 
@@ -21,6 +20,8 @@ type ProgressPayload struct {
 	ReaderID   int64   `json:"readerId"`
 	ChapterIDs []int64 `json:"chapterIds"`
 	Deleted    bool    `json:"deleted"` // marked unread
+	// Origin is where the change came from (model.EventOrigin*).
+	Origin string `json:"origin"`
 }
 
 // By is who reported progress.
@@ -86,22 +87,14 @@ func (s *Service) Record(ctx context.Context, readerID int64, changes []Change, 
 	if err != nil {
 		return nil, err
 	}
-	type key struct {
-		series int64
-		unread bool
-	}
 	changed := map[int64]bool{}
-	chapters := map[key][]int64{}
 	for _, o := range out {
 		if o.Result == model.OutcomeApplied || o.Result == model.OutcomeUnread {
 			changed[o.SeriesID] = true
-			k := key{o.SeriesID, o.Result == model.OutcomeUnread}
-			chapters[k] = append(chapters[k], o.ChapterID)
 		}
 	}
-	for k, ids := range chapters {
-		s.Bus.Publish(events.Event{Type: ProgressChanged, SeriesID: k.series, Payload: ProgressPayload{ReaderID: readerID, ChapterIDs: ids, Deleted: k.unread}})
-	}
+	s.logOutcomes(ctx, readerID, out, by, now)
+	s.announce(readerID, out, by)
 	for sid := range changed {
 		s.Bus.Changed("series", "updated", sid)
 	}

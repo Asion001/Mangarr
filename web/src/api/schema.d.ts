@@ -929,6 +929,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/readers/{id}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sync health: apps, devices and servers that reported the reader's progress, and recent reports */
+        get: operations["readers-sync"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/reading/keys": {
         parameters: {
             query?: never;
@@ -2202,6 +2219,18 @@ export interface components {
             releaseId?: number;
             temporary: boolean;
         };
+        DeviceSync: {
+            client: string;
+            device: string;
+            /** Format: int64 */
+            events: number;
+            /** Format: int64 */
+            kept: number;
+            last?: components["schemas"]["EventView"];
+            /** Format: date-time */
+            lastSeen: string;
+            origin: string;
+        };
         DownloadJob: {
             /** Format: int64 */
             attempt: number;
@@ -2348,6 +2377,29 @@ export interface components {
              * @example https://example.com/errors/example
              */
             type: string;
+        };
+        EventView: {
+            /** Format: date-time */
+            at: string;
+            chapter: string;
+            /** Format: int64 */
+            chapterId: number;
+            /** Format: int64 */
+            chapters: number;
+            client: string;
+            completed: boolean;
+            device: string;
+            /** Format: int64 */
+            id: number;
+            origin: string;
+            outcome: string;
+            /** Format: int64 */
+            page: number;
+            /** Format: int64 */
+            readerId: number;
+            /** Format: int64 */
+            seriesId: number;
+            seriesTitle: string;
         };
         FileRename: {
             /** Format: int64 */
@@ -3123,6 +3175,12 @@ export interface components {
             /** Format: int64 */
             id: number;
             name: string;
+        };
+        ReaderSync: {
+            devices: components["schemas"]["DeviceSync"][];
+            events: components["schemas"]["EventView"][];
+            keys: components["schemas"]["ReadingKey"][];
+            readingApps: boolean;
         };
         "Readers-createRequest": {
             countForCleanup: boolean;
@@ -5843,6 +5901,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "readers-sync": {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReaderSync"];
+                };
             };
             /** @description Error */
             default: {

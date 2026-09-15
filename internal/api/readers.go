@@ -12,6 +12,7 @@ import (
 	"github.com/Asion001/mangarr/internal/model"
 	"github.com/Asion001/mangarr/internal/modules"
 	"github.com/Asion001/mangarr/internal/modules/library"
+	"github.com/Asion001/mangarr/internal/reading"
 	"github.com/Asion001/mangarr/internal/readsync"
 )
 
@@ -47,6 +48,16 @@ type ReaderResource struct {
 	Accounts []ReaderAccountView `json:"accounts"`
 	// Chapters this reader finished (across all series).
 	CompletedCount int `json:"completedCount"`
+}
+
+// ReaderSync is a reader's sync health: every app, device and server that
+// reported progress, and the latest reports.
+type ReaderSync struct {
+	reading.SyncHealth
+	// ReadingApps is true when reading apps (the Komga-compatible API) act
+	// as this reader; Keys are their devices then.
+	ReadingApps bool               `json:"readingApps"`
+	Keys        []model.ReadingKey `json:"keys"`
 }
 
 type AccountInput struct {
@@ -138,6 +149,25 @@ func (s *Server) registerReaders() {
 			_, err := s.app.DB.NewDelete().Model((*model.Reader)(nil)).Where("id = ?", in.ID).Exec(ctx)
 			s.app.Bus.Changed("readers", "deleted", in.ID)
 			return nil, toHTTPError(err)
+		})
+	huma.Register(s.api, huma.Operation{OperationID: "readers-sync", Method: http.MethodGet, Path: "/api/v1/readers/{id}/sync", Tags: tags,
+		Summary: "Sync health: apps, devices and servers that reported the reader's progress, and recent reports"},
+		func(ctx context.Context, in *struct {
+			ID    int64 `path:"id"`
+			Limit int   `query:"limit" default:"50" minimum:"1" maximum:"500"`
+		}) (*struct{ Body ReaderSync }, error) {
+			h, err := s.app.Reading.SyncHealth(ctx, in.ID, in.Limit)
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			out := ReaderSync{SyncHealth: h, Keys: []model.ReadingKey{}}
+			if rid, err := s.app.Reading.ReaderID(ctx); err == nil && rid == in.ID {
+				out.ReadingApps = true
+				if err := s.app.DB.NewSelect().Model(&out.Keys).Order("created_at").Scan(ctx); err != nil {
+					return nil, toHTTPError(err)
+				}
+			}
+			return &struct{ Body ReaderSync }{out}, nil
 		})
 	huma.Register(s.api, huma.Operation{OperationID: "readers-account-save", Method: http.MethodPost, Path: "/api/v1/readers/{id}/accounts", Tags: tags,
 		Summary: "Add or replace the reader's account on a library module (credentials are tested first)"},
