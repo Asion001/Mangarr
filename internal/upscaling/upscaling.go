@@ -143,38 +143,54 @@ func (p *Processor) Process(ctx context.Context, cfg model.UpscaleConfig, pages 
 		total += len(idxs)
 	}
 	progress.Report(ctx, progress.Event{Stage: progress.StageUpscale, Total: total})
-	for scale, idxs := range groups {
-		imgs := make([]upscale.Image, 0, len(idxs))
-		for _, i := range idxs {
-			data, err := os.ReadFile(pages[i].Path)
-			if err != nil {
+	for scale, group := range groups {
+		for start := 0; start < len(group); start += ChunkPages {
+			idxs := group[start:min(start+ChunkPages, len(group))]
+			if err := p.upscaleChunk(ctx, up, mdl, cfg, format, scale, pages, idxs, out, outDir); err != nil {
 				return nil, false, "", err
 			}
-			imgs = append(imgs, upscale.Image{Name: pages[i].Name, Data: data})
-		}
-		res, err := up.Upscale(ctx, imgs, upscale.Params{Model: mdl.Name, Scale: scale, Noise: cfg.Noise, Format: format,
-			Quality: cfg.Quality, MaxWidth: cfg.MaxWidth})
-		if err != nil {
-			return nil, false, "", err
-		}
-		if len(res) != len(idxs) {
-			return nil, false, "", fmt.Errorf("upscaler returned %d of %d pages", len(res), len(idxs))
-		}
-		done += len(idxs) // workers upscale a batch at a time
-		progress.Report(ctx, progress.Event{Stage: progress.StageUpscale, Done: done, Total: total})
-		for k, i := range idxs {
-			info, err := imagecheck.Detect(res[k].Data)
-			if err != nil {
-				return nil, false, "", fmt.Errorf("upscaled %s: %w", pages[i].Name, err)
-			}
-			base := strings.TrimSuffix(pages[i].Name, filepath.Ext(pages[i].Name))
-			name := base + imagecheck.Ext(info.Format)
-			path := filepath.Join(outDir, name)
-			if err := os.WriteFile(path, res[k].Data, 0o664); err != nil {
-				return nil, false, "", err
-			}
-			out[i] = downloads.PageFile{Name: name, Path: path, Format: info.Format, Width: info.Width, Height: info.Height}
+			done += len(idxs)
+			progress.Report(ctx, progress.Event{Stage: progress.StageUpscale, Done: done, Total: total})
 		}
 	}
 	return out, true, mdl.Name, nil
+}
+
+// ChunkPages is how many pages go to the upscaler at once: short runs keep
+// memory bounded, stay far from the upscaler's time limit on slow GPUs and
+// show progress.
+var ChunkPages = 8
+
+func (p *Processor) upscaleChunk(ctx context.Context, up upscale.Module, mdl *upscale.Model, cfg model.UpscaleConfig, format string, scale int,
+	pages []downloads.PageFile, idxs []int, out []downloads.PageFile, outDir string) error {
+	imgs := make([]upscale.Image, 0, len(idxs))
+	for _, i := range idxs {
+		data, err := os.ReadFile(pages[i].Path)
+		if err != nil {
+			return err
+		}
+		imgs = append(imgs, upscale.Image{Name: pages[i].Name, Data: data})
+	}
+	res, err := up.Upscale(ctx, imgs, upscale.Params{Model: mdl.Name, Scale: scale, Noise: cfg.Noise, Format: format,
+		Quality: cfg.Quality, MaxWidth: cfg.MaxWidth})
+	if err != nil {
+		return err
+	}
+	if len(res) != len(idxs) {
+		return fmt.Errorf("upscaler returned %d of %d pages", len(res), len(idxs))
+	}
+	for k, i := range idxs {
+		info, err := imagecheck.Detect(res[k].Data)
+		if err != nil {
+			return fmt.Errorf("upscaled %s: %w", pages[i].Name, err)
+		}
+		base := strings.TrimSuffix(pages[i].Name, filepath.Ext(pages[i].Name))
+		name := base + imagecheck.Ext(info.Format)
+		path := filepath.Join(outDir, name)
+		if err := os.WriteFile(path, res[k].Data, 0o664); err != nil {
+			return err
+		}
+		out[i] = downloads.PageFile{Name: name, Path: path, Format: info.Format, Width: info.Width, Height: info.Height}
+	}
+	return nil
 }

@@ -118,7 +118,7 @@ func (c NodeConfig) NodeID() string {
 
 // NewNodeServer builds the worker for c.
 func NewNodeServer(c NodeConfig, log *slog.Logger) *Server {
-	runner := CLIRunner{ToolsDir: c.ToolsDir, GPU: c.GPU, Threads: c.Threads, Tile: c.Tile}
+	runner := CLIRunner{ToolsDir: c.ToolsDir, GPU: c.GPU, Threads: c.Threads, Tile: c.Tile, Log: log}
 	return NewServer(Config{Token: c.Token, TmpDir: c.TmpDir, CWebP: c.CWebP, Timeout: c.Timeout, Version: version.Version}, runner, log)
 }
 

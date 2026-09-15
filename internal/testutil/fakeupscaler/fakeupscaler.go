@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 
 	"golang.org/x/image/draw"
 
@@ -21,10 +22,19 @@ type Runner struct{}
 
 func (Runner) Available(e upscaler.Engine) bool { return e.Name == "waifu2x-cunet" }
 
+// MaxBatch is the most pages seen in one run.
+var MaxBatch atomic.Int64
+
 func (Runner) Run(ctx context.Context, e upscaler.Engine, in, out string, scale, noise int) error {
 	entries, err := os.ReadDir(in)
 	if err != nil {
 		return err
+	}
+	for n := int64(len(entries)); ; {
+		cur := MaxBatch.Load()
+		if n <= cur || MaxBatch.CompareAndSwap(cur, n) {
+			break
+		}
 	}
 	for _, ent := range entries {
 		f, err := os.Open(filepath.Join(in, ent.Name()))

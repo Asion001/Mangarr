@@ -19,6 +19,7 @@ import (
 	"github.com/Asion001/mangarr/internal/testutil/fakesource"
 	"github.com/Asion001/mangarr/internal/testutil/fakeupscaler"
 	"github.com/Asion001/mangarr/internal/upscaler"
+	"github.com/Asion001/mangarr/internal/upscaling"
 )
 
 func pageWidths(t *testing.T, path string) []int {
@@ -51,7 +52,7 @@ func TestUpscaling(t *testing.T) {
 	sc.PageWidth = 64
 	sc.Sources = []source.SourceInfo{{ID: "A", Name: "Source A", Lang: "en"}}
 	sc.AddManga(&fakesource.Manga{SourceID: "A", URL: "/m", Title: "Tiny Pages", Status: source.StatusOngoing,
-		Chapters: []fakesource.Chapter{{URL: "/c1", Name: "Chapter 1", Number: 1, Uploaded: time.Now()}}})
+		Chapters: []fakesource.Chapter{{URL: "/c1", Name: "Chapter 1", Number: 1, Uploaded: time.Now(), Pages: 20}}})
 
 	e := newTestApp(t, dsn)
 	mod := e.addFakeModule(t, "upscale")
@@ -85,8 +86,12 @@ func TestUpscaling(t *testing.T) {
 	if after.RelativePath != f.RelativePath || after.UpscaleModel != "waifu2x-cunet" || after.AvgWidth != 128 {
 		t.Fatalf("unexpected file after upscale: %+v", after)
 	}
-	if w := pageWidths(t, path); w[0] != 128 {
+	if w := pageWidths(t, path); w[0] != 128 || len(w) != 20 {
 		t.Fatalf("pages not upscaled: %v", w)
+	}
+	// pages go to the upscaler a few at a time
+	if n := fakeupscaler.MaxBatch.Load(); n == 0 || n > int64(upscaling.ChunkPages) {
+		t.Fatalf("largest batch was %d pages", n)
 	}
 }
 

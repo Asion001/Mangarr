@@ -34,7 +34,7 @@ func init() {
 				tmp = os.TempDir()
 			}
 			_ = os.MkdirAll(tmp, 0o775)
-			runner := upscaler.CLIRunner{ToolsDir: st.ToolsDir, GPU: st.GPU, Threads: st.Threads, Tile: st.Tile}
+			runner := upscaler.CLIRunner{ToolsDir: st.ToolsDir, GPU: st.GPU, Threads: st.Threads, Tile: st.Tile, Log: deps.Log}
 			log := deps.Log
 			srv := upscaler.NewServer(upscaler.Config{TmpDir: tmp, Version: version.Version}, runner, log)
 			return &Module{srv: srv, dir: st.ToolsDir}, nil

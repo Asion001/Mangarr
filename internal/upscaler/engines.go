@@ -6,11 +6,17 @@ package upscaler
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
+	"strings"
+	"syscall"
+	"time"
 )
 
 // Engine describes one model of one ncnn tool.
@@ -62,6 +68,8 @@ type CLIRunner struct {
 	GPU      string // "" = auto
 	Threads  string // e.g. "1:2:2"
 	Tile     int
+	// Log (optional) reports retries with smaller tiles.
+	Log *slog.Logger
 }
 
 func (r CLIRunner) bin(e Engine) string { return filepath.Join(r.ToolsDir, e.Tool, e.Binary) }
@@ -75,7 +83,41 @@ func (r CLIRunner) Available(e Engine) bool {
 	return err == nil
 }
 
+// ErrOutOfMemory is returned when the tool ran out of (GPU or system)
+// memory, even with the smallest tile size.
+var ErrOutOfMemory = errors.New("out of memory")
+
+// RetryTiles are the tile sizes tried, in order, after the tool runs out of
+// memory (larger configured tiles first fall back to these).
+var RetryTiles = []int{256, 128}
+
+// Run upscales every image in inDir into outDir. When the tool runs out of
+// memory (killed by the kernel, or a Vulkan allocation failure) it is run
+// again with smaller tiles.
 func (r CLIRunner) Run(ctx context.Context, e Engine, inDir, outDir string, scale, noise int) error {
+	tiles := []int{r.Tile}
+	for _, t := range RetryTiles {
+		if r.Tile <= 0 || t < r.Tile {
+			tiles = append(tiles, t)
+		}
+	}
+	var err error
+	for i, tile := range tiles {
+		err = r.run(ctx, e, inDir, outDir, scale, noise, tile)
+		if err == nil || !errors.Is(err, ErrOutOfMemory) || i == len(tiles)-1 {
+			if err == nil && i > 0 && r.Log != nil {
+				r.Log.Warn("upscaler ran out of memory with larger tiles; set this tile size to avoid retries", "tile", tile, "tool", e.Binary)
+			}
+			return err
+		}
+		if r.Log != nil {
+			r.Log.Warn("upscaler ran out of memory, retrying with smaller tiles", "tool", e.Binary, "tile", tile, "next", tiles[i+1])
+		}
+	}
+	return err
+}
+
+func (r CLIRunner) run(ctx context.Context, e Engine, inDir, outDir string, scale, noise, tile int) error {
 	args := []string{"-i", inDir, "-o", outDir, "-s", strconv.Itoa(scale), "-f", "png",
 		"-m", filepath.Join(r.ToolsDir, e.Tool, e.ModelDir)}
 	if e.ModelName != "" {
@@ -89,20 +131,73 @@ func (r CLIRunner) Run(ctx context.Context, e Engine, inDir, outDir string, scal
 	if r.Threads != "" {
 		args = append(args, "-j", r.Threads)
 	}
-	if r.Tile > 0 {
-		args = append(args, "-t", strconv.Itoa(r.Tile))
+	if tile > 0 {
+		args = append(args, "-t", strconv.Itoa(tile))
 	}
 	cmd := exec.CommandContext(ctx, r.bin(e), args...)
 	cmd.Dir = filepath.Join(r.ToolsDir, e.Tool)
+	cmd.WaitDelay = 2 * time.Second // don't hang on pipes held open after a kill
+	start := time.Now()
 	out, err := cmd.CombinedOutput()
-	if err != nil {
-		tail := string(out)
-		if len(tail) > 2000 {
-			tail = tail[len(tail)-2000:]
-		}
-		return fmt.Errorf("%s failed: %w: %s", e.Binary, err, tail)
+	if err == nil {
+		return nil
 	}
-	return nil
+	tileNote := "automatic tiles"
+	if tile > 0 {
+		tileNote = fmt.Sprintf("tile %d", tile)
+	}
+	switch {
+	case errors.Is(ctx.Err(), context.DeadlineExceeded):
+		return fmt.Errorf("%s timed out after %s: %w", e.Binary, time.Since(start).Round(time.Second), ctx.Err())
+	case ctx.Err() != nil:
+		return ctx.Err()
+	case killed(err):
+		// SIGKILL without a timeout or cancel: the kernel's out-of-memory killer
+		return fmt.Errorf("%s was killed by the system after %s with %s, most likely out of memory (lower the tile size or use a lighter model): %w",
+			e.Binary, time.Since(start).Round(time.Second), tileNote, ErrOutOfMemory)
+	case outOfMemory(out):
+		return fmt.Errorf("%s ran out of GPU memory with %s: %s: %w", e.Binary, tileNote, errorTail(out), ErrOutOfMemory)
+	}
+	return fmt.Errorf("%s failed: %w: %s", e.Binary, err, errorTail(out))
+}
+
+// killed reports whether the process died from SIGKILL.
+func killed(err error) bool {
+	var ee *exec.ExitError
+	if !errors.As(err, &ee) {
+		return false
+	}
+	ws, ok := ee.Sys().(syscall.WaitStatus)
+	return ok && ws.Signaled() && ws.Signal() == syscall.SIGKILL
+}
+
+func outOfMemory(out []byte) bool {
+	s := strings.ToLower(string(out))
+	return strings.Contains(s, "vkallocatememory failed") || strings.Contains(s, "out_of_device_memory") ||
+		strings.Contains(s, "out_of_host_memory") || strings.Contains(s, "out of memory")
+}
+
+// deviceLine matches the device list ncnn prints on every run
+// ("[0 Intel(R) Graphics (ADL-N)]  queueC=0[1] ...").
+var deviceLine = regexp.MustCompile(`^\[\d+ [^\]]*\]`)
+
+// errorTail keeps the tool's output that isn't the device list.
+func errorTail(out []byte) string {
+	var keep []string
+	for _, l := range strings.Split(string(out), "\n") {
+		l = strings.TrimSpace(l)
+		if l != "" && !deviceLine.MatchString(l) {
+			keep = append(keep, l)
+		}
+	}
+	tail := strings.Join(keep, "; ")
+	if tail == "" {
+		return "no error output"
+	}
+	if len(tail) > 1500 {
+		tail = "…" + tail[len(tail)-1500:]
+	}
+	return tail
 }
 
 // ToolsAvailable reports whether any upscaler tool is installed in dir.
