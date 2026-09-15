@@ -1,3 +1,5 @@
+DELETE /api/v1/books/{id}/read-progress
+DELETE /api/v1/series/{id}/read-progress
 DELETE /api/v2/users/me/api-keys/{id}
 GET /api/v1/age-ratings
 GET /api/v1/authors
@@ -33,15 +35,21 @@ GET /api/v1/series/updated
 GET /api/v1/series/{id}
 GET /api/v1/series/{id}/books
 GET /api/v1/series/{id}/collections
+GET /api/v1/series/{id}/read-progress/tachiyomi
 GET /api/v1/series/{id}/thumbnail
 GET /api/v1/sharing-labels
 GET /api/v1/tags
 GET /api/v1/tags/book
 GET /api/v1/tags/series
 GET /api/v2/authors
+GET /api/v2/series/{id}/read-progress/tachiyomi
 GET /api/v2/users/me
 GET /api/v2/users/me/api-keys
+PATCH /api/v1/books/{id}/read-progress
 POST /api/logout
 POST /api/v1/books/list
 POST /api/v1/series/list
+POST /api/v1/series/{id}/read-progress
 POST /api/v2/users/me/api-keys
+PUT /api/v1/series/{id}/read-progress/tachiyomi
+PUT /api/v2/series/{id}/read-progress/tachiyomi

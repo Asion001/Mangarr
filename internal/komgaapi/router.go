@@ -72,6 +72,16 @@ func (s *Service) routes(r chi.Router) {
 	r.Get("/api/v1/books/{id}/file", ph.file)
 	r.Get("/api/v1/books/{id}/file/*", ph.file)
 
+	pr := &progressHandlers{s}
+	r.Patch("/api/v1/books/{id}/read-progress", pr.patchBook)
+	r.Delete("/api/v1/books/{id}/read-progress", pr.deleteBook)
+	r.Post("/api/v1/series/{id}/read-progress", pr.markSeries(true))
+	r.Delete("/api/v1/series/{id}/read-progress", pr.markSeries(false))
+	r.Get("/api/v2/series/{id}/read-progress/tachiyomi", pr.tachiyomiV2)
+	r.Put("/api/v2/series/{id}/read-progress/tachiyomi", pr.putTachiyomiV2)
+	r.Get("/api/v1/series/{id}/read-progress/tachiyomi", pr.tachiyomiV1)
+	r.Put("/api/v1/series/{id}/read-progress/tachiyomi", pr.putTachiyomiV1)
+
 	genres := ch.strings(func(si reading.SeriesInfo) []string { return si.Series.Metadata.Genres })
 	tags := ch.strings(func(si reading.SeriesInfo) []string { return si.Series.Metadata.Tags })
 	r.Get("/api/v1/genres", genres)
