@@ -135,6 +135,11 @@ func TestKomgaWriteProgress(t *testing.T) {
 				t.Errorf("progress must be written with the reader's key")
 			}
 			patched = append(patched, r.URL.Path+" "+string(body))
+		case r.Method == http.MethodDelete && strings.HasSuffix(r.URL.Path, "/read-progress"):
+			if r.Header.Get("X-API-Key") != "reader" {
+				t.Errorf("progress must be cleared with the reader's key")
+			}
+			patched = append(patched, "DELETE "+r.URL.Path)
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
@@ -148,11 +153,13 @@ func TestKomgaWriteProgress(t *testing.T) {
 		{LocalPath: "/data/manga/One Piece/One Piece Ch.0001.cbz", Completed: true},
 		{LocalPath: "/data/manga/One Piece/One Piece Ch.0002.cbz", Page: 7},
 		{LocalPath: "/data/manga/One Piece/One Piece Ch.0003.cbz", Completed: true},
+		{LocalPath: "/data/manga/One Piece/One Piece Ch.0001.cbz", Unread: true},
 	})
-	if err != nil || n != 2 || len(missing) != 1 {
+	if err != nil || n != 3 || len(missing) != 1 {
 		t.Fatalf("write: %d %v %v", n, missing, err)
 	}
-	if len(patched) != 2 || !strings.Contains(patched[0], `"completed":true`) || !strings.Contains(patched[1], `"page":7`) {
+	if len(patched) != 3 || !strings.Contains(patched[0], `"completed":true`) || !strings.Contains(patched[1], `"page":7`) ||
+		patched[2] != "DELETE /api/v1/books/B1/read-progress" {
 		t.Fatalf("patches: %v", patched)
 	}
 }

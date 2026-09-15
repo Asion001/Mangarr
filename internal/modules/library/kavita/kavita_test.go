@@ -103,11 +103,15 @@ func TestKavitaWriteProgress(t *testing.T) {
 	s, _ := modules.DecodeSettings(impl, map[string]any{"url": srv.URL, "apiKey": "admin", "pathMappings": map[string]any{"/data/manga": "/kavita/manga"}})
 	inst, _ := impl.New(modules.Deps{HTTP: srv.Client()}, s)
 	n, missing, err := inst.(library.ProgressWriter).WriteProgress(context.Background(), library.Account{Credentials: map[string]string{"apiKey": "reader"}},
-		[]library.BookProgress{{LocalPath: "/data/manga/One Piece/One Piece Ch.0001.cbz", Completed: true}, {LocalPath: "/data/manga/One Piece/x.cbz"}})
-	if err != nil || n != 1 || len(missing) != 1 {
+		[]library.BookProgress{{LocalPath: "/data/manga/One Piece/One Piece Ch.0001.cbz", Completed: true}, {LocalPath: "/data/manga/One Piece/x.cbz"},
+			{LocalPath: "/data/manga/One Piece/One Piece Ch.0001.cbz", Unread: true}})
+	if err != nil || n != 2 || len(missing) != 1 {
 		t.Fatalf("write: %d %v %v", n, missing, err)
 	}
 	if posted[0]["pageNum"] != float64(20) || posted[0]["chapterId"] != float64(11) || posted[0]["libraryId"] != float64(2) {
 		t.Fatalf("posted: %v", posted)
+	}
+	if posted[1]["pageNum"] != float64(0) { // Kavita's unread
+		t.Fatalf("unread: %v", posted[1])
 	}
 }
