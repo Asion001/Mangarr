@@ -3,15 +3,17 @@
 A Sonarr-style PVR for manga. mangarr monitors series, finds new chapters on
 [Keiyoushi](https://keiyoushi.github.io) (Mihon/Tachiyomi) extension sources,
 downloads them as CBZ files with `ComicInfo.xml`, and keeps a complete,
-self-contained local library. You read with the apps you like — Mihon,
-Paperback, Tachimanga, Panels, Chunky, KOReader — through
-[Komga](https://komga.org) or [Kavita](https://www.kavitareader.com), which
-mangarr tells to rescan after every change.
+self-contained local library. You read in Mihon, KMReader or Paperback
+straight from mangarr, through its Komga-compatible API: every chapter it
+knows, downloaded or not, with progress synced both ways. Or you read
+through [Komga](https://komga.org) or [Kavita](https://www.kavitareader.com),
+which mangarr tells to rescan after every change.
 
 ```
  mangarr ──► Suwayomi (runs Keiyoushi extensions) ──► FlareSolverr ──► sites
+    ├──► /data/manga/<lang>/<Series>/*.cbz  ◄── Komga / Kavita ◄── your apps
     │
-    └──► /data/manga/<lang>/<Series>/*.cbz  ◄── Komga / Kavita ◄── your apps
+    └──► Komga-compatible API (:25600) ◄── Mihon, KMReader, Paperback
 ```
 
 ## Features
@@ -50,9 +52,16 @@ mangarr tells to rescan after every change.
   smaller) or lossless JPEG XL (~20%, reversible). Chapters are readable right
   away and processed in the background, at the same path; mangarr checks that
   Komga can read the new format before continuing.
-- **Read progress from Komga, live** — chapters read on any device show up
-  within seconds; series show how far each reader got and link to Komga
-  (Kavita is synced on a timer).
+- **Read from mangarr in Komga apps** (off by default) — Mihon's Komga
+  extension, KMReader and Paperback connect to mangarr's Komga-compatible
+  API and see the whole library. Chapters that aren't downloaded are
+  streamed from the source and queued for download, and the next chapters
+  are downloaded while you read. Each device gets its own API key.
+- **mangarr as the progress hub** — progress from apps and from Komga
+  (live) or Kavita (on a timer) is merged, never lowered by a server that
+  doesn't know a chapter yet, and passed on to every server. A *Continue
+  reading* shelf and *Devices & sync* per reader show where everyone is and
+  which device reported what.
 - **Operations** — live download and processing progress (pages, speed, ETA),
   a space-saved history, rotating log files, and a one-click diagnostics zip
   with secrets masked.
@@ -97,6 +106,7 @@ The old `mangarr-upscaler` image is replaced by `mangarr:latest` with
 | Variable | Default | Description |
 |---|---|---|
 | `MANGARR_LISTEN` | `:8787` | HTTP listen address |
+| `MANGARR_KOMGA_LISTEN` | `:25600` | Komga-compatible API for reading apps (only while enabled in Settings → Reading apps) |
 | `MANGARR_DATA_DIR` | `./config` (`/config` in Docker) | database, staging, backups, recycle bin, caches |
 | `MANGARR_DB` | `sqlite://$DATA_DIR/mangarr.db` | or `postgres://user:pass@host:5432/mangarr?sslmode=disable` |
 | `MANGARR_LOG_LEVEL` | `info` | debug, info, warn, error |

@@ -44,6 +44,9 @@ services:
       - /data/storage/manga:/data/manga
     ports:
       - "8787:8787"
+      # Komga-compatible API for Mihon, KMReader and Paperback (Settings →
+      # Reading apps); 25601 on the host because Komga below uses 25600
+      - "25601:25600"
     restart: unless-stopped
     depends_on: [suwayomi]
 

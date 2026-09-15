@@ -56,7 +56,42 @@ login and API key. With an auth proxy in front you may set
 
 ## 4. Reading apps
 
-Point your apps at Komga:
+There are two ways to read.
+
+**Straight from mangarr (recommended).** mangarr has a Komga-compatible API.
+Komga apps connect to mangarr as if it were a Komga server, and see **every
+series and every chapter mangarr knows**, downloaded or not. Chapters that
+aren't downloaded are streamed from the source; opening one also queues its
+download. Progress syncs both ways.
+
+1. Settings → **Reading apps** → *Allow Komga apps to connect*. The API
+   listens on its own port, `25600` like Komga (`MANGARR_KOMGA_LISTEN`).
+   Publish it, e.g. `"25601:25600"` when Komga already uses 25600 on the
+   host, and set *Address apps should use* to the address the apps reach.
+2. **Add device** for each app. Each one gets its own API key, so you can see
+   what every device synced and revoke one without the others.
+3. Connect the apps (the page has step-by-step guides with your address):
+
+| App | How | Progress |
+|---|---|---|
+| Mihon (Android) | Komga extension (Keiyoushi repo): address + API key | Enable **Komga** under Settings → Tracking → enhanced services. Syncs finished chapters. |
+| KMReader (iPhone, iPad) | Add server: address + API key, or username and password | Page by page, live updates. Downloaded chapters can be saved offline. |
+| Paperback (iPhone, iPad) | Komga extension: address + mangarr username and password | Finished chapters, through its Komga tracker |
+
+Apps act as one reader (Settings → Reading apps → *Reader*). What they
+report is logged per device under Settings → Readers → *Devices & sync*,
+next to what Komga and Kavita report. mangarr passes every change on to
+the library servers, so Komga's own web reader stays up to date too. It
+never lowers progress, except when you mark a chapter unread in an app.
+
+*Read ahead* (on by default) downloads the next 3 chapters after the
+furthest one a reader has started, in any app or library server, even in
+series that aren't monitored. The Series page shows a **Continue reading**
+row with the next chapter of each series in progress. The apps get the same
+list as *On deck* and as a *Continue reading* read list.
+
+**Through Komga or Kavita.** Apps can also read the library through Komga
+or Kavita. They then only see downloaded chapters:
 
 | App | How |
 |---|---|

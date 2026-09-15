@@ -63,7 +63,7 @@ COPY --from=build --chown=65532:65532 /out/config /config
 ENV MANGARR_DATA_DIR=/config \
     MANGARR_LISTEN=:8787 \
     MANGARR_MODE=server
-EXPOSE 8787
+EXPOSE 8787 25600
 VOLUME ["/config"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s CMD ["/mangarr", "healthcheck"]
 ENTRYPOINT ["/mangarr"]
@@ -84,7 +84,7 @@ ENV MANGARR_DATA_DIR=/config \
     MANGARR_MODE=integrated \
     MANGARR_UPSCALER_TOOLS_DIR=/opt/upscalers \
     MANGARR_UPSCALER_LISTEN=:8788
-EXPOSE 8787 8788
+EXPOSE 8787 8788 25600
 VOLUME ["/config"]
 USER 65532
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s CMD ["mangarr", "healthcheck"]
