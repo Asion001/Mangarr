@@ -96,6 +96,25 @@ type ReadSync struct {
 	IntervalMinutes int `json:"intervalMinutes" desc:"Minutes between reader progress syncs."`
 }
 
+// Reading controls the Komga-compatible API that reading apps (Mihon's
+// Komga extension, KMReader, Paperback) use to read from mangarr directly.
+type Reading struct {
+	Enabled bool `json:"enabled" desc:"Allow Komga apps (Mihon's Komga extension, KMReader, Paperback) to connect."`
+	// ReaderID is the reader whose progress the apps read and write (0 = the first reader).
+	ReaderID int64 `json:"readerId" desc:"Reader whose progress Komga apps read and write (0 = the first reader)."`
+	// PublicURL is the address shown in setup guides.
+	PublicURL string `json:"publicUrl" desc:"Address Komga apps should use, e.g. https://manga.example.com:25600 (for the setup guides)."`
+	// DownloadOnOpen queues a download when a chapter that isn't downloaded is opened.
+	DownloadOnOpen bool      `json:"downloadOnOpen" desc:"Queue a download when an app opens a chapter that isn't downloaded yet."`
+	ReadAhead      ReadAhead `json:"readAhead"`
+}
+
+// ReadAhead downloads the chapters after the one being read.
+type ReadAhead struct {
+	Enabled  bool `json:"enabled" desc:"Monitor and download the next chapters after the one a reader is on."`
+	Chapters int  `json:"chapters" desc:"How many chapters to keep downloaded ahead of the reader."`
+}
+
 // Sources controls which catalogs are used, quick search and throttling.
 type Sources struct {
 	HideNSFW bool `json:"hideNsfw" desc:"Hide NSFW catalogs in search and browse."`
@@ -226,6 +245,10 @@ func DefaultCleanup() Cleanup {
 
 func DefaultReadSync() ReadSync { return ReadSync{IntervalMinutes: 30} }
 
+func DefaultReading() Reading {
+	return Reading{DownloadOnOpen: true, ReadAhead: ReadAhead{Enabled: true, Chapters: 3}}
+}
+
 // Store caches settings documents in memory.
 type Store struct {
 	db     *db.DB
@@ -270,6 +293,7 @@ var Docs = []DocInfo{
 	{KeyReadSync, "readsync", "READSYNC", func() any { v := DefaultReadSync(); return &v }},
 	{KeySources, "sources", "SOURCES", func() any { v := DefaultSources(); return &v }},
 	{KeySchedule, "schedule", "SCHEDULE", func() any { v := Schedule{Windows: []ScheduleWindow{}}; return &v }},
+	{KeyReading, "reading", "READING", func() any { v := DefaultReading(); return &v }},
 }
 
 // SetOverlay pins fields of document key: raw is a partial JSON object that
@@ -299,6 +323,7 @@ const (
 	KeyReadSync        = "read_sync"
 	KeySources         = "sources"
 	KeySchedule        = "schedule"
+	KeyReading         = "reading"
 	KeyQueueState      = "queue_state"
 )
 
@@ -430,6 +455,11 @@ func (s *Store) QueueState(ctx context.Context) (QueueState, error) {
 func (s *Store) ReadSync(ctx context.Context) (ReadSync, error) {
 	v := DefaultReadSync()
 	return v, s.Get(ctx, KeyReadSync, &v)
+}
+
+func (s *Store) Reading(ctx context.Context) (Reading, error) {
+	v := DefaultReading()
+	return v, s.Get(ctx, KeyReading, &v)
 }
 
 // EnsureSecrets generates the API key and session secret on first start.

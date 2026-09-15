@@ -20,6 +20,7 @@ Lists are comma-separated (`a,b,c`) or JSON; key/value settings use `key=value,k
 | `MANGARR_URL_BASE` | `` | Serve under a sub path, e.g. /mangarr. |
 | `MANGARR_AUTH_DISABLED` | `false` | Disable login and API key checks (only behind an auth proxy). |
 | `MANGARR_WEB_DIR` | `` | Serve the UI from this directory instead of the embedded copy (development). |
+| `MANGARR_KOMGA_LISTEN` | `:25600` | Listen address of the Komga-compatible API for reading apps (when enabled in Settings → Reading apps). |
 | `MANGARR_ROOT_FOLDERS` | `` | Root folders to create and lock, comma-separated; append \|lang to set a language (/data/manga/ja\|ja). |
 
 ## Processing nodes (`MANGARR_MODE=upscaler`)
@@ -128,6 +129,17 @@ Lists are comma-separated (`a,b,c`) or JSON; key/value settings use `key=value,k
 |---|---|---|---|
 | `MANGARR_SCHEDULE_TIMEZONE` | string | `` | IANA time zone for the windows (empty = server time, TZ). |
 | `MANGARR_SCHEDULE_WINDOWS` | json | `` | Time windows as JSON: [{"name":"Night","days":["mon"],"start":"01:00","end":"07:00","pauseDownloads":true}] |
+
+### reading
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `MANGARR_READING_ENABLED` | bool | `false` | Allow Komga apps (Mihon's Komga extension, KMReader, Paperback) to connect. |
+| `MANGARR_READING_READER_ID` | int | `0` | Reader whose progress Komga apps read and write (0 = the first reader). |
+| `MANGARR_READING_PUBLIC_URL` | string | `` | Address Komga apps should use, e.g. https://manga.example.com:25600 (for the setup guides). |
+| `MANGARR_READING_DOWNLOAD_ON_OPEN` | bool | `true` | Queue a download when an app opens a chapter that isn't downloaded yet. |
+| `MANGARR_READING_READ_AHEAD_ENABLED` | bool | `true` | Monitor and download the next chapters after the one a reader is on. |
+| `MANGARR_READING_READ_AHEAD_CHAPTERS` | int | `3` | How many chapters to keep downloaded ahead of the reader. |
 
 ## Modules
 

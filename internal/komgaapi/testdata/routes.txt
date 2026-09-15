@@ -1,0 +1,8 @@
+DELETE /api/v2/users/me/api-keys/{id}
+GET /api/v1/client-settings/user/list
+GET /api/v1/libraries
+GET /api/v1/libraries/{id}
+GET /api/v2/users/me
+GET /api/v2/users/me/api-keys
+POST /api/logout
+POST /api/v2/users/me/api-keys

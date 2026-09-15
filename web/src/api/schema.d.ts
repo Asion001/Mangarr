@@ -929,6 +929,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reading/keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** API keys of reading apps (one per device) */
+        get: operations["reading-keys"];
+        put?: never;
+        /** Create a key for a reading app; the key is only shown in this response */
+        post: operations["reading-keys-create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reading/keys/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["reading-keys-delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reading/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether the Komga-compatible API is enabled and listening */
+        get: operations["reading-status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/rootfolders": {
         parameters: {
             query?: never;
@@ -1333,6 +1384,22 @@ export interface paths {
         /** Render naming templates with sample values */
         get: operations["naming-preview"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/reading": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["settings-get-reading"];
+        put: operations["settings-put-reading"];
         post?: never;
         delete?: never;
         options?: never;
@@ -2735,6 +2802,18 @@ export interface components {
             folder: string;
             volume: string;
         };
+        NewReadingKey: {
+            comment: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: int64 */
+            id: number;
+            key: string;
+            lastClient: string;
+            /** Format: date-time */
+            lastUsedAt?: string;
+            prefix: string;
+        };
         NextChapter: {
             available: boolean;
             /** Format: int64 */
@@ -2965,6 +3044,11 @@ export interface components {
             results: number;
             sourceName: string;
         };
+        ReadAhead: {
+            /** Format: int64 */
+            chapters: number;
+            enabled: boolean;
+        };
         ReadStateView: {
             completed: boolean;
             /** Format: int64 */
@@ -3048,11 +3132,34 @@ export interface components {
             countForCleanup: boolean;
             name: string;
         };
+        Reading: {
+            downloadOnOpen: boolean;
+            enabled: boolean;
+            publicUrl: string;
+            readAhead: components["schemas"]["ReadAhead"];
+            /** Format: int64 */
+            readerId: number;
+        };
+        "Reading-keys-createRequest": {
+            /** @description Device name, e.g. "Mihon phone" */
+            comment: string;
+        };
         ReadingInfo: {
             nextUnread?: components["schemas"]["NextChapter"];
             readers: components["schemas"]["ReaderProgress"][];
             webName?: string;
             webUrl?: string;
+        };
+        ReadingKey: {
+            comment: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: int64 */
+            id: number;
+            lastClient: string;
+            /** Format: date-time */
+            lastUsedAt?: string;
+            prefix: string;
         };
         ReleaseView: {
             blocklisted: boolean;
@@ -3376,6 +3483,12 @@ export interface components {
             verified?: {
                 [key: string]: string;
             };
+        };
+        Status: {
+            address: string;
+            enabled: boolean;
+            error?: string;
+            listening: boolean;
         };
         "Stores-addRequest": {
             url: string;
@@ -5742,6 +5855,126 @@ export interface operations {
             };
         };
     };
+    "reading-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingKey"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "reading-keys-create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Reading-keys-createRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewReadingKey"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "reading-keys-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "reading-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Status"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "rootfolders-list": {
         parameters: {
             query?: never;
@@ -6849,6 +7082,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NamingPreview"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "settings-get-reading": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reading"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "settings-put-reading": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Reading"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reading"];
                 };
             };
             /** @description Error */

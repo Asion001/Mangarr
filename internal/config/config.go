@@ -32,6 +32,8 @@ type Config struct {
 	URLBase string
 	// WebDir overrides the embedded UI with files from disk (development).
 	WebDir string
+	// KomgaListen is where the Komga-compatible API listens while enabled.
+	KomgaListen string
 	// Env is the MANGARR_* environment used to pin settings, root folders and
 	// modules (see internal/envcfg). Nil in tests unless set explicitly.
 	Env map[string]string
@@ -52,6 +54,7 @@ var Vars = []VarDoc{
 	{"MANGARR_URL_BASE", "", "Serve under a sub path, e.g. /mangarr."},
 	{"MANGARR_AUTH_DISABLED", "false", "Disable login and API key checks (only behind an auth proxy)."},
 	{"MANGARR_WEB_DIR", "", "Serve the UI from this directory instead of the embedded copy (development)."},
+	{"MANGARR_KOMGA_LISTEN", ":25600", "Listen address of the Komga-compatible API for reading apps (when enabled in Settings → Reading apps)."},
 }
 
 // Modes.
@@ -80,13 +83,14 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	c := &Config{
-		Mode:     mode,
-		Listen:   env("MANGARR_LISTEN", ":8787"),
-		DataDir:  env("MANGARR_DATA_DIR", "./config"),
-		LogLevel: env("MANGARR_LOG_LEVEL", "info"),
-		URLBase:  strings.TrimRight(env("MANGARR_URL_BASE", ""), "/"),
-		WebDir:   env("MANGARR_WEB_DIR", ""),
-		Env:      Environ(),
+		Mode:        mode,
+		Listen:      env("MANGARR_LISTEN", ":8787"),
+		DataDir:     env("MANGARR_DATA_DIR", "./config"),
+		LogLevel:    env("MANGARR_LOG_LEVEL", "info"),
+		URLBase:     strings.TrimRight(env("MANGARR_URL_BASE", ""), "/"),
+		WebDir:      env("MANGARR_WEB_DIR", ""),
+		KomgaListen: env("MANGARR_KOMGA_LISTEN", ":25600"),
+		Env:         Environ(),
 	}
 	if c.AuthDisabled, err = envBool("MANGARR_AUTH_DISABLED", false); err != nil {
 		return nil, err

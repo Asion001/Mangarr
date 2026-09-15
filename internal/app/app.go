@@ -20,6 +20,7 @@ import (
 	"github.com/Asion001/mangarr/internal/imageenc"
 	"github.com/Asion001/mangarr/internal/imports"
 	"github.com/Asion001/mangarr/internal/jobs"
+	"github.com/Asion001/mangarr/internal/komgaapi"
 	"github.com/Asion001/mangarr/internal/logging"
 	"github.com/Asion001/mangarr/internal/model"
 	"github.com/Asion001/mangarr/internal/modules"
@@ -52,10 +53,12 @@ type App struct {
 	Nodes      *Nodes
 	Organize   *organize.Service
 	Imports    *imports.Service
-	Queue      *jobs.Queue
-	Scheduler  *jobs.Scheduler
-	HTTP       *http.Client
-	StartedAt  time.Time
+	// Komga serves the Komga-compatible API for reading apps.
+	Komga     *komgaapi.Service
+	Queue     *jobs.Queue
+	Scheduler *jobs.Scheduler
+	HTTP      *http.Client
+	StartedAt time.Time
 	Services
 	MoreServices
 	ReaderServices

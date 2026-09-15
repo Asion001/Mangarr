@@ -135,6 +135,11 @@ func (s *Server) registerSettings() {
 	})
 	settingsDoc(s, "downloads", settings.KeyDownloads, s.app.Settings.Downloads, nil)
 	settingsDoc(s, "cleanup", settings.KeyCleanup, s.app.Settings.Cleanup, nil)
+	settingsDoc(s, "reading", settings.KeyReading, s.app.Settings.Reading, func(ctx context.Context, v settings.Reading) error {
+		s.app.Komga.Reconcile(ctx) // start or stop the Komga-compatible API
+		s.app.Bus.Changed("reading", "updated", 0)
+		return nil
+	})
 	settingsDoc(s, "readsync", settings.KeyReadSync, s.app.Settings.ReadSync, func(ctx context.Context, v settings.ReadSync) error {
 		if v.IntervalMinutes < 5 {
 			v.IntervalMinutes = 5
