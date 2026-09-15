@@ -28,6 +28,7 @@ import (
 	"github.com/Asion001/mangarr/internal/model"
 	"github.com/Asion001/mangarr/internal/modules"
 	"github.com/Asion001/mangarr/internal/modules/source"
+	"github.com/Asion001/mangarr/internal/progress"
 	"github.com/Asion001/mangarr/internal/quiet"
 	"github.com/Asion001/mangarr/internal/settings"
 	"github.com/Asion001/mangarr/internal/sourcegov"
@@ -52,6 +53,8 @@ type ProcessResult struct {
 	UpscaleModel string
 	Encoded      int // pages re-encoded
 	Encoder      string
+	// Seconds is how long processing took (set by the manager).
+	Seconds float64
 }
 
 // Processor upscales and/or re-encodes pages according to a profile.
@@ -80,6 +83,8 @@ type Manager struct {
 	dataDir  string
 
 	Processor Processor
+	// Live has the progress of running jobs.
+	Live *Live
 	// Gov (optional) paces chapters per catalog and defers throttled catalogs.
 	Gov *sourcegov.Governor
 
@@ -95,7 +100,8 @@ type Manager struct {
 
 func NewManager(d *db.DB, bus *events.Bus, mods *modules.Manager, st *settings.Store, lib *library.Library, q *Queue, s *Searcher, log *slog.Logger, dataDir string) *Manager {
 	return &Manager{db: d, bus: bus, mods: mods, settings: st, lib: lib, queue: q, searcher: s, log: log, dataDir: dataDir,
-		running: map[int64]context.CancelFunc{}, runningKind: map[int64]string{}, runningSrc: map[string]int{}, lastPersist: map[int64]time.Time{}}
+		running: map[int64]context.CancelFunc{}, runningKind: map[int64]string{}, runningSrc: map[string]int{}, lastPersist: map[int64]time.Time{},
+		Live: NewLive(bus)}
 }
 
 // Start recovers interrupted jobs and starts the scheduling loop.
@@ -301,6 +307,7 @@ func (m *Manager) setStatus(ctx context.Context, job *model.DownloadJob, status 
 }
 
 func (m *Manager) progress(job *model.DownloadJob, done, total int) {
+	m.Live.Update(job.ID, progress.Event{Stage: progress.StageDownload, Done: done, Total: total})
 	job.PagesDone, job.PagesTotal = done, total
 	if total > 0 {
 		job.Progress = done * 100 / total
@@ -336,6 +343,9 @@ func (m *Manager) run(ctx context.Context, job model.DownloadJob) {
 	if !m.claim(ctx, &job) {
 		return
 	}
+	m.Live.Start(job.ID, job.Kind)
+	defer m.Live.Finish(job.ID)
+	ctx = progress.With(ctx, m.Live.Reporter(job.ID))
 	log := m.log.With("job", job.ID, "chapterId", job.ChapterID)
 	jc, err := m.load(ctx, &job)
 	if err != nil {
@@ -391,7 +401,7 @@ func (m *Manager) run(ctx context.Context, job model.DownloadJob) {
 	proc := ProcessResult{Pages: pages}
 	processed := false
 	if job.Kind == model.JobKindReprocess && params == "" {
-		m.markProcessed(ctx, jc.file, "")
+		m.markProcessed(ctx, jc.file, "", 0)
 		m.completeUnchanged(ctx, &job, "processing is disabled for this series' profile")
 		return
 	}
@@ -403,7 +413,9 @@ func (m *Manager) run(ctx context.Context, job model.DownloadJob) {
 	inline := job.Kind == model.JobKindReprocess || cfg.ProcessTiming == "inline"
 	if m.Processor != nil && params != "" && inline && !processingPaused {
 		m.setStatus(ctx, &job, model.JobProcessing, model.ChapterProcessing)
+		started := time.Now()
 		res, perr := m.Processor.Process(ctx, cfg, pages, workDir)
+		res.Seconds = time.Since(started).Seconds()
 		var tmp interface{ Temporary() bool }
 		switch {
 		case perr != nil && ctx.Err() != nil:
@@ -427,7 +439,7 @@ func (m *Manager) run(ctx context.Context, job model.DownloadJob) {
 		}
 		if processed && job.Kind == model.JobKindReprocess && !proc.Changed {
 			// nothing to upscale and re-encoding wouldn't save space
-			m.markProcessed(ctx, jc.file, params)
+			m.markProcessed(ctx, jc.file, params, proc.Seconds)
 			m.completeUnchanged(ctx, &job, "nothing to change")
 			return
 		}
@@ -446,12 +458,17 @@ func (m *Manager) run(ctx context.Context, job model.DownloadJob) {
 }
 
 // markProcessed records that a file was processed with params (no rewrite).
-func (m *Manager) markProcessed(ctx context.Context, f *model.ChapterFile, params string) {
+func (m *Manager) markProcessed(ctx context.Context, f *model.ChapterFile, params string, seconds float64) {
 	if f == nil {
 		return
 	}
 	now := time.Now().UTC()
+	pages := 0
+	if seconds > 0 {
+		pages = f.PageCount
+	}
 	_, _ = m.db.NewUpdate().Model((*model.ChapterFile)(nil)).Set("process_params = ?", params).Set("process_state = ?", model.ProcessDone).
+		Set("process_seconds = ?", seconds).Set("process_pages = ?", pages).
 		Set("process_error = ''").Set("process_attempts = 0").Set("process_retry_at = NULL").Set("processed_at = ?", now).
 		Where("id = ?", f.ID).Exec(ctx)
 	m.bus.Changed("chapter", "updated", f.ChapterID)
@@ -806,6 +823,7 @@ func (m *Manager) importChapter(ctx context.Context, jc *jobCtx, proc ProcessRes
 	}
 	if params != "" {
 		file.ProcessParams, file.ProcessState, file.ProcessedAt = params, model.ProcessDone, &now
+		file.ProcessSeconds, file.ProcessPages = proc.Seconds, len(proc.Pages)
 	}
 	if jc.release != nil {
 		file.ReleaseID, file.Scanlator = &jc.release.ID, jc.release.Scanlator

@@ -17,6 +17,7 @@ import (
 
 	"github.com/Asion001/mangarr/internal/imagecheck"
 	"github.com/Asion001/mangarr/internal/model"
+	"github.com/Asion001/mangarr/internal/progress"
 )
 
 func TestResolve(t *testing.T) {
@@ -114,9 +115,16 @@ func TestEncodePages(t *testing.T) {
 	}
 	eng := &fakeEngine{accepts: []string{"jpeg"}, outSize: 600}
 	enc := New(eng)
-	out, st, err := enc.EncodePages(context.Background(), pages, model.EncodeConfig{Format: "avif", Preset: "balanced", Grayscale: true, MinSavingsPct: 10}, dir)
+	var evMu sync.Mutex
+	var evs []progress.Event
+	ctx := progress.With(context.Background(), func(ev progress.Event) { evMu.Lock(); evs = append(evs, ev); evMu.Unlock() })
+	out, st, err := enc.EncodePages(ctx, pages, model.EncodeConfig{Format: "avif", Preset: "balanced", Grayscale: true, MinSavingsPct: 10}, dir)
 	if err != nil {
 		t.Fatal(err)
+	}
+	// skipped pages count as done up front, then one event per encoded page
+	if len(evs) != 3 || evs[0].Done != 2 || evs[2].Done != 4 || evs[2].Total != 4 || evs[2].Stage != progress.StageEncode || evs[2].BytesIn != st.Before {
+		t.Fatalf("progress events %+v", evs)
 	}
 	if st.Encoded != 2 || st.Skipped != 2 || out[0].Format != "avif" || out[0].Name != "0001.avif" || out[2].Format != "gif" || out[3].Format != "avif" {
 		t.Fatalf("stats %+v out %+v", st, out)

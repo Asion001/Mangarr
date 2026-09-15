@@ -96,6 +96,8 @@ type JobView struct {
 	NumberSort  float64 `json:"numberSort"`
 	SourceName  string  `json:"sourceName"`
 	Scanlator   string  `json:"scanlator"`
+	// Live is the progress of a running job (not stored).
+	Live *LiveProgress `json:"live,omitempty" bun:"-"`
 }
 
 // ListFilter selects queue entries.
@@ -108,6 +110,8 @@ type ListFilter struct {
 	// Query matches the series title.
 	Query       string `json:"q,omitempty"`
 	IncludeDone bool   `json:"includeDone,omitempty"`
+	// IDs limits to these jobs.
+	IDs []int64 `json:"ids,omitempty"`
 }
 
 func (q *Queue) base(f ListFilter, withStatus bool) *bun.SelectQuery {
@@ -121,6 +125,9 @@ func (q *Queue) base(f ListFilter, withStatus bool) *bun.SelectQuery {
 	}
 	if f.SeriesID > 0 {
 		sel = sel.Where("j.series_id = ?", f.SeriesID)
+	}
+	if len(f.IDs) > 0 {
+		sel = sel.Where("j.id IN (?)", bun.In(f.IDs))
 	}
 	if qs := strings.TrimSpace(f.Query); qs != "" {
 		sel = sel.Where("LOWER(s.title) LIKE ?", "%"+strings.ToLower(qs)+"%")

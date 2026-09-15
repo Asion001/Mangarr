@@ -80,6 +80,11 @@ func (s *Server) registerActivity() {
 			if err != nil {
 				return nil, toHTTPError(err)
 			}
+			for i := range p.Items {
+				if lp, ok := s.app.Downloads.Live.Get(p.Items[i].ID); ok {
+					p.Items[i].Live = &lp
+				}
+			}
 			return &struct{ Body QueueResponse }{QueueResponse{QueuePage: *p, State: s.queueState(ctx)}}, nil
 		})
 	huma.Register(s.api, huma.Operation{OperationID: "queue-bulk", Method: http.MethodPost, Path: "/api/v1/queue/bulk", Tags: tags,

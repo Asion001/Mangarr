@@ -616,6 +616,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/processing/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Processed files per day: pages, size before and after, time spent */
+        get: operations["processing-history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/processing/preview": {
         parameters: {
             query?: never;
@@ -1937,8 +1954,12 @@ export interface components {
             /** Format: int64 */
             processAttempts: number;
             processError?: string;
+            /** Format: int64 */
+            processPages?: number;
             /** Format: date-time */
             processRetryAt?: string;
+            /** Format: double */
+            processSeconds?: number;
             /** @enum {string} */
             processState?: "" | "done" | "failed";
             /** Format: date-time */
@@ -2471,6 +2492,7 @@ export interface components {
             id: number;
             isUpgrade: boolean;
             kind: string;
+            live?: components["schemas"]["LiveProgress"];
             /** Format: date-time */
             notBefore: string;
             /** Format: double */
@@ -2497,6 +2519,7 @@ export interface components {
             updatedAt: string;
         };
         ListFilter: {
+            ids?: number[];
             includeDone?: boolean;
             /** @enum {string} */
             kind?: "" | "download" | "reprocess";
@@ -2504,6 +2527,28 @@ export interface components {
             /** Format: int64 */
             seriesId?: number;
             statuses?: string[];
+        };
+        LiveProgress: {
+            /** Format: int64 */
+            bytesIn: number;
+            /** Format: int64 */
+            bytesOut: number;
+            /** Format: int64 */
+            done: number;
+            /** Format: double */
+            eta: number;
+            /** Format: int64 */
+            jobId: number;
+            /** Format: date-time */
+            jobStarted: string;
+            kind: string;
+            /** Format: double */
+            rate: number;
+            stage: string;
+            /** Format: date-time */
+            stageStarted: string;
+            /** Format: int64 */
+            total: number;
         };
         Lock: {
             env: string;
@@ -2722,19 +2767,56 @@ export interface components {
             /** Format: int64 */
             files: number;
         };
+        ProcessedFile: {
+            chapter: string;
+            /** Format: int64 */
+            pages: number;
+            /** Format: date-time */
+            processedAt: string;
+            /** Format: double */
+            seconds: number;
+            /** Format: int64 */
+            seriesId: number;
+            seriesTitle: string;
+            /** Format: int64 */
+            size: number;
+            /** Format: int64 */
+            sizeOriginal: number;
+        };
         "Processing-previewRequest": {
             /** Format: int64 */
             chapterId: number;
             encode: components["schemas"]["EncodeConfig"];
         };
+        ProcessingDay: {
+            /** Format: int64 */
+            bytesAfter: number;
+            /** Format: int64 */
+            bytesBefore: number;
+            day: string;
+            /** Format: int64 */
+            files: number;
+            /** Format: int64 */
+            pages: number;
+            /** Format: double */
+            seconds: number;
+        };
         ProcessingStatus: {
+            active: components["schemas"]["JobView"][];
             engines: components["schemas"]["EngineInfo"][];
+            /** Format: double */
+            etaSeconds: number;
             /** Format: int64 */
             failed: number;
+            /** Format: double */
+            pagesPerMinute: number;
             /** Format: int64 */
             pending: number;
             /** Format: int64 */
+            pendingPages: number;
+            /** Format: int64 */
             processed: number;
+            recent: components["schemas"]["ProcessedFile"][];
             /** Format: int64 */
             spaceSaved: number;
             state: components["schemas"]["State"];
@@ -4856,6 +4938,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProcessingStatus"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "processing-history": {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessingDay"][];
                 };
             };
             /** @description Error */

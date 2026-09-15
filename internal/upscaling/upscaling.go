@@ -16,6 +16,7 @@ import (
 	"github.com/Asion001/mangarr/internal/downloads"
 	"github.com/Asion001/mangarr/internal/imagecheck"
 	"github.com/Asion001/mangarr/internal/model"
+	"github.com/Asion001/mangarr/internal/progress"
 	"github.com/Asion001/mangarr/internal/modules"
 	"github.com/Asion001/mangarr/internal/modules/upscale"
 )
@@ -137,6 +138,11 @@ func (p *Processor) Process(ctx context.Context, cfg model.UpscaleConfig, pages 
 	if err := os.MkdirAll(outDir, 0o775); err != nil {
 		return nil, false, "", err
 	}
+	done, total := 0, 0
+	for _, idxs := range groups {
+		total += len(idxs)
+	}
+	progress.Report(ctx, progress.Event{Stage: progress.StageUpscale, Total: total})
 	for scale, idxs := range groups {
 		imgs := make([]upscale.Image, 0, len(idxs))
 		for _, i := range idxs {
@@ -154,6 +160,8 @@ func (p *Processor) Process(ctx context.Context, cfg model.UpscaleConfig, pages 
 		if len(res) != len(idxs) {
 			return nil, false, "", fmt.Errorf("upscaler returned %d of %d pages", len(res), len(idxs))
 		}
+		done += len(idxs) // workers upscale a batch at a time
+		progress.Report(ctx, progress.Event{Stage: progress.StageUpscale, Done: done, Total: total})
 		for k, i := range idxs {
 			info, err := imagecheck.Detect(res[k].Data)
 			if err != nil {

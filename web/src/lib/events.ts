@@ -56,7 +56,7 @@ export function useLiveUpdates(enabled: boolean) {
         /* ignore */
       }
     });
-    for (const t of ["chapter.imported", "download.failed", "health.issue", "health.restored", "cleanup.done", "series.added"]) {
+    for (const t of ["chapter.imported", "download.failed", "health.issue", "health.restored", "cleanup.done", "series.added", "processing.progress"]) {
       es.addEventListener(t, (ev) => {
         try {
           const e = JSON.parse((ev as MessageEvent).data);

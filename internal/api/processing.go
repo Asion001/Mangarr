@@ -17,6 +17,7 @@ import (
 	"github.com/Asion001/mangarr/internal/imageenc"
 	"github.com/Asion001/mangarr/internal/model"
 	"github.com/Asion001/mangarr/internal/processing"
+	"github.com/Asion001/mangarr/internal/progress"
 	"github.com/Asion001/mangarr/internal/settings"
 )
 
@@ -36,6 +37,38 @@ type ProcessingStatus struct {
 	Failed     int   `json:"failed"`
 	Processed  int   `json:"processed"`
 	SpaceSaved int64 `json:"spaceSaved"`
+	// Active are the jobs processing right now, with live progress.
+	Active []downloads.JobView `json:"active"`
+	// PagesPerMinute is the processing speed over the last day (0 = unknown).
+	PagesPerMinute float64 `json:"pagesPerMinute"`
+	// PendingPages sums the pages of pending files; ETASeconds estimates the
+	// time to process them at PagesPerMinute.
+	PendingPages int     `json:"pendingPages"`
+	ETASeconds   float64 `json:"etaSeconds"`
+	// Recent are the last processed files.
+	Recent []ProcessedFile `json:"recent"`
+}
+
+// ProcessedFile is one processed chapter file.
+type ProcessedFile struct {
+	SeriesID     int64     `json:"seriesId"`
+	SeriesTitle  string    `json:"seriesTitle"`
+	Chapter      string    `json:"chapter"`
+	SizeOriginal int64     `json:"sizeOriginal"`
+	Size         int64     `json:"size"`
+	Pages        int       `json:"pages"`
+	Seconds      float64   `json:"seconds"`
+	ProcessedAt  time.Time `json:"processedAt"`
+}
+
+// ProcessingDay aggregates one day of processing.
+type ProcessingDay struct {
+	Day         string  `json:"day"` // YYYY-MM-DD, server time
+	Files       int     `json:"files"`
+	Pages       int     `json:"pages"`
+	BytesBefore int64   `json:"bytesBefore"`
+	BytesAfter  int64   `json:"bytesAfter"`
+	Seconds     float64 `json:"seconds"`
 }
 
 type PreviewPage struct {
@@ -79,6 +112,85 @@ func (s *Server) cleanPreviews() {
 	}
 }
 
+// processingActivity fills in running jobs, speed, ETA and recent files.
+func (s *Server) processingActivity(ctx context.Context, st *ProcessingStatus) {
+	st.Active, st.Recent = []downloads.JobView{}, []ProcessedFile{}
+	var ids []int64
+	live := map[int64]downloads.LiveProgress{}
+	for _, lp := range s.app.Downloads.Live.All() {
+		if lp.Kind == model.JobKindReprocess || lp.Stage == progress.StageUpscale || lp.Stage == progress.StageEncode {
+			ids = append(ids, lp.JobID)
+			live[lp.JobID] = lp
+		}
+	}
+	if len(ids) > 0 {
+		if p, err := s.app.DLQueue.ListPage(ctx, downloads.ListFilter{IDs: ids, IncludeDone: true}, 1, 100); err == nil {
+			for _, j := range p.Items {
+				lp := live[j.ID]
+				j.Live = &lp
+				st.Active = append(st.Active, j)
+			}
+		}
+	}
+	var speed struct {
+		Pages   int     `bun:"pages"`
+		Seconds float64 `bun:"seconds"`
+	}
+	_ = s.app.DB.NewSelect().Model((*model.ChapterFile)(nil)).
+		ColumnExpr("COALESCE(SUM(process_pages), 0) AS pages, COALESCE(SUM(process_seconds), 0) AS seconds").
+		Where("processed_at > ? AND process_seconds > 0", time.Now().UTC().Add(-24*time.Hour)).Scan(ctx, &speed)
+	if speed.Seconds > 0 && speed.Pages > 0 {
+		st.PagesPerMinute = float64(speed.Pages) / speed.Seconds * 60
+		st.ETASeconds = float64(st.PendingPages) / st.PagesPerMinute * 60
+	}
+	_ = s.app.DB.NewSelect().TableExpr("chapter_files AS f").
+		Join("JOIN series AS s ON s.id = f.series_id").Join("JOIN chapters AS c ON c.id = f.chapter_id").
+		ColumnExpr("f.series_id AS series_id, s.title AS series_title, c.number_key AS chapter, f.size_original AS size_original").
+		ColumnExpr("f.size AS size, f.process_pages AS pages, f.process_seconds AS seconds, f.processed_at AS processed_at").
+		Where("f.processed_at IS NOT NULL AND f.process_seconds > 0").OrderExpr("f.processed_at DESC").Limit(10).Scan(ctx, &st.Recent)
+}
+
+// processingHistory aggregates processed files per day.
+func (s *Server) processingHistory(ctx context.Context, days int) ([]ProcessingDay, error) {
+	since := time.Now().AddDate(0, 0, -days+1)
+	since = time.Date(since.Year(), since.Month(), since.Day(), 0, 0, 0, 0, time.Local)
+	var rows []struct {
+		ProcessedAt  time.Time `bun:"processed_at"`
+		SizeOriginal int64     `bun:"size_original"`
+		Size         int64     `bun:"size"`
+		Pages        int       `bun:"process_pages"`
+		Seconds      float64   `bun:"process_seconds"`
+	}
+	if err := s.app.DB.NewSelect().Model((*model.ChapterFile)(nil)).
+		Column("processed_at", "size_original", "size", "process_pages", "process_seconds").
+		Where("processed_at >= ? AND process_state = ?", since.UTC(), model.ProcessDone).Scan(ctx, &rows); err != nil {
+		return nil, err
+	}
+	byDay := map[string]*ProcessingDay{}
+	out := make([]ProcessingDay, days)
+	for i := range out {
+		d := since.AddDate(0, 0, i).Format("2006-01-02")
+		out[i].Day = d
+		byDay[d] = &out[i]
+	}
+	for _, r := range rows {
+		d := byDay[r.ProcessedAt.Local().Format("2006-01-02")]
+		if d == nil {
+			continue
+		}
+		before := r.SizeOriginal
+		if before <= 0 {
+			before = r.Size
+		}
+		d.Files++
+		d.Pages += r.Pages
+		d.BytesBefore += before
+		d.BytesAfter += r.Size
+		d.Seconds += r.Seconds
+	}
+	return out, nil
+}
+
 func (s *Server) registerProcessing() {
 	tags := []string{"Processing"}
 	huma.Register(s.api, huma.Operation{OperationID: "processing-status", Method: http.MethodGet, Path: "/api/v1/processing", Tags: tags,
@@ -100,6 +212,11 @@ func (s *Server) registerProcessing() {
 					Where("series_id IN (SELECT id FROM series WHERE profile_id = ?)", p.ID)
 				n, _ := base.Where("process_attempts < ?", downloads.MaxProcessAttempts).Count(ctx)
 				st.Pending += n
+				var pages int
+				_ = s.app.DB.NewSelect().Model((*model.ChapterFile)(nil)).ColumnExpr("COALESCE(SUM(page_count), 0)").
+					Where("process_params <> ?", params).Where("series_id IN (SELECT id FROM series WHERE profile_id = ?)", p.ID).
+					Where("process_attempts < ?", downloads.MaxProcessAttempts).Scan(ctx, &pages)
+				st.PendingPages += pages
 				f, _ := s.app.DB.NewSelect().Model((*model.ChapterFile)(nil)).Where("process_params <> ?", params).
 					Where("series_id IN (SELECT id FROM series WHERE profile_id = ?)", p.ID).
 					Where("process_attempts >= ?", downloads.MaxProcessAttempts).Count(ctx)
@@ -113,7 +230,20 @@ func (s *Server) registerProcessing() {
 				ColumnExpr("SUM(CASE WHEN process_state = ? THEN 1 ELSE 0 END) AS processed", model.ProcessDone).
 				ColumnExpr("COALESCE(SUM(CASE WHEN size_original > size THEN size_original - size ELSE 0 END), 0) AS saved").Scan(ctx, &agg)
 			st.Processed, st.SpaceSaved = agg.Processed, agg.Saved
+			s.processingActivity(ctx, &st)
 			return &struct{ Body ProcessingStatus }{st}, nil
+		})
+
+	huma.Register(s.api, huma.Operation{OperationID: "processing-history", Method: http.MethodGet, Path: "/api/v1/processing/history", Tags: tags,
+		Summary: "Processed files per day: pages, size before and after, time spent"},
+		func(ctx context.Context, in *struct {
+			Days int `query:"days" default:"30" minimum:"1" maximum:"365"`
+		}) (*struct{ Body []ProcessingDay }, error) {
+			days, err := s.processingHistory(ctx, in.Days)
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			return &struct{ Body []ProcessingDay }{days}, nil
 		})
 
 	huma.Register(s.api, huma.Operation{OperationID: "processing-resume", Method: http.MethodPost, Path: "/api/v1/processing/resume", Tags: tags,

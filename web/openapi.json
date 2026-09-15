@@ -640,9 +640,17 @@
           "processError": {
             "type": "string"
           },
+          "processPages": {
+            "format": "int64",
+            "type": "integer"
+          },
           "processRetryAt": {
             "format": "date-time",
             "type": "string"
+          },
+          "processSeconds": {
+            "format": "double",
+            "type": "number"
           },
           "processState": {
             "enum": [
@@ -2367,6 +2375,9 @@
           "kind": {
             "type": "string"
           },
+          "live": {
+            "$ref": "#/components/schemas/LiveProgress"
+          },
           "notBefore": {
             "format": "date-time",
             "type": "string"
@@ -2447,6 +2458,13 @@
       "ListFilter": {
         "additionalProperties": false,
         "properties": {
+          "ids": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
           "includeDone": {
             "type": "boolean"
           },
@@ -2472,6 +2490,67 @@
             "type": "array"
           }
         },
+        "type": "object"
+      },
+      "LiveProgress": {
+        "additionalProperties": false,
+        "properties": {
+          "bytesIn": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "bytesOut": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "done": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "eta": {
+            "format": "double",
+            "type": "number"
+          },
+          "jobId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "jobStarted": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "rate": {
+            "format": "double",
+            "type": "number"
+          },
+          "stage": {
+            "type": "string"
+          },
+          "stageStarted": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "jobId",
+          "kind",
+          "stage",
+          "done",
+          "total",
+          "bytesIn",
+          "bytesOut",
+          "rate",
+          "eta",
+          "stageStarted",
+          "jobStarted"
+        ],
         "type": "object"
       },
       "Lock": {
@@ -3229,6 +3308,52 @@
         ],
         "type": "object"
       },
+      "ProcessedFile": {
+        "additionalProperties": false,
+        "properties": {
+          "chapter": {
+            "type": "string"
+          },
+          "pages": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "processedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "seconds": {
+            "format": "double",
+            "type": "number"
+          },
+          "seriesId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "seriesTitle": {
+            "type": "string"
+          },
+          "size": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sizeOriginal": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "seriesId",
+          "seriesTitle",
+          "chapter",
+          "sizeOriginal",
+          "size",
+          "pages",
+          "seconds",
+          "processedAt"
+        ],
+        "type": "object"
+      },
       "Processing-previewRequest": {
         "additionalProperties": false,
         "properties": {
@@ -3246,26 +3371,87 @@
         ],
         "type": "object"
       },
+      "ProcessingDay": {
+        "additionalProperties": false,
+        "properties": {
+          "bytesAfter": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "bytesBefore": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "day": {
+            "type": "string"
+          },
+          "files": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "pages": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "seconds": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "day",
+          "files",
+          "pages",
+          "bytesBefore",
+          "bytesAfter",
+          "seconds"
+        ],
+        "type": "object"
+      },
       "ProcessingStatus": {
         "additionalProperties": false,
         "properties": {
+          "active": {
+            "items": {
+              "$ref": "#/components/schemas/JobView"
+            },
+            "type": "array"
+          },
           "engines": {
             "items": {
               "$ref": "#/components/schemas/EngineInfo"
             },
             "type": "array"
           },
+          "etaSeconds": {
+            "format": "double",
+            "type": "number"
+          },
           "failed": {
             "format": "int64",
             "type": "integer"
           },
+          "pagesPerMinute": {
+            "format": "double",
+            "type": "number"
+          },
           "pending": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "pendingPages": {
             "format": "int64",
             "type": "integer"
           },
           "processed": {
             "format": "int64",
             "type": "integer"
+          },
+          "recent": {
+            "items": {
+              "$ref": "#/components/schemas/ProcessedFile"
+            },
+            "type": "array"
           },
           "spaceSaved": {
             "format": "int64",
@@ -3281,7 +3467,12 @@
           "pending",
           "failed",
           "processed",
-          "spaceSaved"
+          "spaceSaved",
+          "active",
+          "pagesPerMinute",
+          "pendingPages",
+          "etaSeconds",
+          "recent"
         ],
         "type": "object"
       },
@@ -5556,7 +5747,7 @@
   "info": {
     "description": "Sonarr-style PVR for manga. All endpoints accept an X-Api-Key header.",
     "title": "mangarr",
-    "version": "43424aa-dirty"
+    "version": "03349bf-dirty"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -7588,6 +7779,54 @@
           }
         },
         "summary": "Encoders, background backlog and space saved",
+        "tags": [
+          "Processing"
+        ]
+      }
+    },
+    "/api/v1/processing/history": {
+      "get": {
+        "operationId": "processing-history",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "days",
+            "schema": {
+              "default": 30,
+              "format": "int64",
+              "maximum": 365,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProcessingDay"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Processed files per day: pages, size before and after, time spent",
         "tags": [
           "Processing"
         ]

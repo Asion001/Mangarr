@@ -397,6 +397,9 @@ type ChapterFile struct {
 	ProcessedAt     *time.Time `bun:"processed_at" json:"processedAt,omitempty"`
 	// SizeOriginal is the size as downloaded, before any processing.
 	SizeOriginal int64 `bun:"size_original,notnull" json:"sizeOriginal"`
+	// ProcessSeconds and ProcessPages describe the last processing run.
+	ProcessSeconds float64 `bun:"process_seconds,notnull" json:"processSeconds,omitempty"`
+	ProcessPages   int     `bun:"process_pages,notnull" json:"processPages,omitempty"`
 }
 
 // ---- Queue / history / blocklist ---------------------------------------------

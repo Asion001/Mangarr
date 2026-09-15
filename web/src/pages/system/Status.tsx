@@ -1,10 +1,12 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router";
 import { AlertTriangle, CheckCircle2, Info, RefreshCw, XCircle } from "lucide-react";
 import { api, unwrap } from "../../api/client";
 import { useCommands, useHealth } from "../../api/queries";
 import { Badge, Button, Card, Loading, PageHeader, Progress, Table, Td, Th } from "../../components/ui";
 import { bytes, dateTime, duration, relative } from "../../lib/format";
 import { useToast } from "../../lib/toast";
+import { describe, eta, useLiveProgress } from "../../lib/liveProgress";
 
 export function StatusPage() {
   const qc = useQueryClient();
@@ -193,7 +195,12 @@ const imageLabels: Record<string, string> = { thumbs: "Search thumbnails (disk)"
 function ProcessingCard() {
   const qc = useQueryClient();
   const toast = useToast();
-  const { data } = useQuery({ queryKey: ["processing"], queryFn: () => unwrap(api.GET("/api/v1/processing")) });
+  const liveMap = useLiveProgress();
+  const { data } = useQuery({
+    queryKey: ["processing"],
+    queryFn: () => unwrap(api.GET("/api/v1/processing")),
+    refetchInterval: (q) => ((q.state.data?.active.length ?? 0) > 0 || (q.state.data?.pending ?? 0) > 0 ? 10_000 : 60_000),
+  });
   if (!data) return null;
   const resume = async () => {
     try {
@@ -214,27 +221,135 @@ function ProcessingCard() {
           </Button>
         </div>
       )}
-      <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-        <div>
-          <div className="text-muted">Space saved</div>
-          <div className="font-medium">{bytes(data.spaceSaved)}</div>
-        </div>
-        <div>
-          <div className="text-muted">Processed</div>
-          <div className="font-medium">{data.processed}</div>
-        </div>
-        <div>
-          <div className="text-muted">Waiting</div>
-          <div className="font-medium">{data.pending}</div>
-        </div>
-        <div>
-          <div className="text-muted">Gave up</div>
-          <div className="font-medium">{data.failed}</div>
-        </div>
+      <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-5">
+        <Stat label="Space saved" value={bytes(data.spaceSaved)} />
+        <Stat label="Processed" value={String(data.processed)} />
+        <Stat
+          label="Waiting"
+          value={data.pending > 0 ? `${data.pending} ch · ${data.pendingPages.toLocaleString()} p` : "0"}
+          hint={data.failed > 0 ? `${data.failed} gave up` : undefined}
+        />
+        <Stat label="Speed (last day)" value={data.pagesPerMinute > 0 ? `${data.pagesPerMinute.toFixed(1)} pages/min` : "—"} />
+        <Stat label="Backlog done in" value={data.etaSeconds > 0 ? `~${eta(data.etaSeconds)}` : "—"} />
       </div>
+
+      {data.active.length > 0 && (
+        <div className="mt-4 flex flex-col gap-2">
+          {data.active.map((j) => {
+            const live = liveMap.get(j.id) ?? j.live;
+            return (
+              <div key={j.id} className="rounded-md border border-border p-2 text-sm">
+                <div className="mb-1 flex flex-wrap justify-between gap-2">
+                  <Link to={`/series/${j.seriesId}`} className="font-medium hover:text-accent-2">
+                    {j.seriesTitle} · ch. {j.chapter}
+                  </Link>
+                  <span className="text-xs text-muted">{live ? describe(live) : j.status}</span>
+                </div>
+                <Progress value={live && live.total > 0 ? (live.done / live.total) * 100 : 0} />
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <SavedChart />
+
+      {data.recent.length > 0 && (
+        <div className="mt-4 overflow-x-auto">
+          <Table>
+            <thead>
+              <tr>
+                <Th>Recently processed</Th>
+                <Th>Size</Th>
+                <Th>Pages</Th>
+                <Th>Time</Th>
+                <Th>When</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.recent.map((f, i) => (
+                <tr key={i}>
+                  <Td>
+                    <Link to={`/series/${f.seriesId}`} className="hover:text-accent-2">
+                      {f.seriesTitle} · ch. {f.chapter}
+                    </Link>
+                  </Td>
+                  <Td className="whitespace-nowrap">
+                    {bytes(f.sizeOriginal)} → {bytes(f.size)}
+                    {f.sizeOriginal > 0 && <span className="ml-1 text-xs text-ok">−{Math.round((1 - f.size / f.sizeOriginal) * 100)}%</span>}
+                  </Td>
+                  <Td>{f.pages}</Td>
+                  <Td className="whitespace-nowrap">
+                    {eta(f.seconds)}
+                    {f.seconds > 0 && <span className="ml-1 text-xs text-muted">{(f.pages / f.seconds).toFixed(1)} p/s</span>}
+                  </Td>
+                  <Td className="whitespace-nowrap text-muted">{relative(f.processedAt)}</Td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        </div>
+      )}
       <p className="mt-3 text-xs text-muted">
         Encoders: {data.engines.map((e) => `${e.name} (${e.format}${e.slow ? ", slow" : ""})`).join(", ") || "none"}
       </p>
     </Card>
+  );
+}
+
+function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div>
+      <div className="text-muted">{label}</div>
+      <div className="font-medium">{value}</div>
+      {hint && <div className="text-xs text-warn">{hint}</div>}
+    </div>
+  );
+}
+
+/** SavedChart shows MB saved (bars) and pages processed per day for 30 days. */
+function SavedChart() {
+  const { data } = useQuery({ queryKey: ["processing", "history"], queryFn: () => unwrap(api.GET("/api/v1/processing/history", { params: { query: { days: 30 } } })) });
+  if (!data || !data.some((d) => d.files > 0)) return null;
+  const saved = data.map((d) => Math.max(0, d.bytesBefore - d.bytesAfter));
+  const maxSaved = Math.max(...saved, 1);
+  const total = saved.reduce((a, b) => a + b, 0);
+  const pages = data.reduce((a, d) => a + d.pages, 0);
+  const W = 600,
+    H = 120,
+    gap = 2,
+    bw = W / data.length - gap;
+  return (
+    <div className="mt-4">
+      <div className="mb-1 flex flex-wrap justify-between gap-2 text-xs text-muted">
+        <span>Saved per day, last 30 days</span>
+        <span>
+          {bytes(total)} saved · {pages.toLocaleString()} pages
+        </span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H + 14}`} className="h-auto w-full" role="img" aria-label="Space saved per day">
+        {data.map((d, i) => {
+          const h = (saved[i] / maxSaved) * H;
+          const x = i * (bw + gap);
+          return (
+            <g key={d.day}>
+              <rect x={x} y={H - h} width={bw} height={Math.max(h, d.files > 0 ? 1 : 0)} rx={1.5} className="fill-accent/80">
+                <title>{`${d.day}: ${bytes(saved[i])} saved, ${d.files} files, ${d.pages} pages, ${eta(d.seconds)}`}</title>
+              </rect>
+              {(i === data.length - 1 || (i % 7 === 0 && i < data.length - 4)) && (
+                <text
+                  x={i === 0 ? x : i === data.length - 1 ? x + bw : x + bw / 2}
+                  y={H + 12}
+                  textAnchor={i === 0 ? "start" : i === data.length - 1 ? "end" : "middle"}
+                  className="fill-muted text-[9px]"
+                >
+                  {d.day.slice(5)}
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+    </div>
   );
 }

@@ -6,6 +6,7 @@ import { useChapters } from "../../api/queries";
 import { Badge, Button, Card, ErrorBox, IconButton, Loading, Modal, Progress, Switch, Table, Td, Th } from "../../components/ui";
 import { bytes, date, relative } from "../../lib/format";
 import { useToast } from "../../lib/toast";
+import { eta } from "../../lib/liveProgress";
 
 const stateTone: Record<string, "ok" | "warn" | "err" | "info" | "default" | "accent"> = {
   imported: "ok",
@@ -170,7 +171,15 @@ export function ChaptersTable({ seriesId }: { seriesId: number }) {
                               </Badge>
                             )}
                             {(c.file.format === "avif" || c.file.format === "jxl") && (
-                              <Badge tone="info" title={c.file.sizeOriginal > c.file.size ? `was ${bytes(c.file.sizeOriginal)}` : undefined}>
+                              <Badge
+                                tone="info"
+                                title={[
+                                  c.file.sizeOriginal > c.file.size ? `was ${bytes(c.file.sizeOriginal)}` : "",
+                                  c.file.processSeconds ? `processed in ${eta(c.file.processSeconds)} (${((c.file.processPages ?? 0) / c.file.processSeconds).toFixed(1)} pages/s)` : "",
+                                ]
+                                  .filter(Boolean)
+                                  .join(", ") || undefined}
+                              >
                                 {c.file.format}
                                 {c.file.sizeOriginal > c.file.size && ` −${Math.round(100 - (100 * c.file.size) / c.file.sizeOriginal)}%`}
                               </Badge>

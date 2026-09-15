@@ -20,6 +20,7 @@ import (
 
 	"github.com/Asion001/mangarr/internal/imagecheck"
 	"github.com/Asion001/mangarr/internal/model"
+	"github.com/Asion001/mangarr/internal/progress"
 )
 
 // Options are resolved encoder parameters.
@@ -160,9 +161,15 @@ func (e *Encoder) EncodePages(ctx context.Context, pages []Page, cfg model.Encod
 	var firstErr error
 	sem := make(chan struct{}, max(e.Threads, 1))
 	var wg sync.WaitGroup
-	for i, p := range pages {
+	for _, p := range pages {
 		if skip(p.Format, cfg.Format) {
 			st.Skipped++
+		}
+	}
+	done := st.Skipped
+	progress.Report(ctx, progress.Event{Stage: progress.StageEncode, Done: done, Total: len(pages)})
+	for i, p := range pages {
+		if skip(p.Format, cfg.Format) {
 			continue
 		}
 		wg.Add(1)
@@ -172,11 +179,11 @@ func (e *Encoder) EncodePages(ctx context.Context, pages []Page, cfg model.Encod
 			defer func() { <-sem }()
 			np, before, after, err := e.encodeOne(ctx, eng, p, cfg, o, outDir)
 			mu.Lock()
-			defer mu.Unlock()
 			if err != nil {
 				if firstErr == nil {
 					firstErr = fmt.Errorf("%s: %w", p.Name, err)
 				}
+				mu.Unlock()
 				return
 			}
 			st.Before += before
@@ -188,6 +195,10 @@ func (e *Encoder) EncodePages(ctx context.Context, pages []Page, cfg model.Encod
 				st.Kept++
 				st.After += before
 			}
+			done++
+			ev := progress.Event{Stage: progress.StageEncode, Done: done, Total: len(pages), BytesIn: st.Before, BytesOut: st.After}
+			mu.Unlock()
+			progress.Report(ctx, ev)
 		}()
 	}
 	wg.Wait()

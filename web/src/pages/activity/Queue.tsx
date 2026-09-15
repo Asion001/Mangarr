@@ -8,6 +8,7 @@ import { Badge, Button, Confirm, EmptyState, ErrorBox, IconButton, Input, Loadin
 import { relative } from "../../lib/format";
 import { useQueryParam } from "../../lib/urlState";
 import { useToast } from "../../lib/toast";
+import { describe, useLiveProgress } from "../../lib/liveProgress";
 
 const tone = (s: string) => (s === "completed" ? "ok" : s === "failed" ? "err" : s === "paused" ? "warn" : s === "queued" ? "default" : "info");
 const statuses = ["downloading", "processing", "importing", "queued", "paused", "failed", "completed"] as const;
@@ -25,6 +26,7 @@ export function QueuePage() {
   const page = Number(pageStr) || 1;
   const filter = { status: status ? status.split(",") : undefined, kind: (kind || undefined) as "download" | "reprocess" | undefined, q: q || undefined, includeDone: true };
   const { data, isLoading, error } = useQueue({ ...filter, page, pageSize: PAGE });
+  const liveMap = useLiveProgress();
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [allMatching, setAllMatching] = useState(false);
   const [lastClicked, setLastClicked] = useState<number | null>(null);
@@ -89,7 +91,9 @@ export function QueuePage() {
     return [...m.entries()];
   }, [items, group]);
 
-  const row = (j: Job, idx: number) => (
+  const row = (j: Job, idx: number) => {
+    const live = j.status === "completed" || j.status === "failed" ? undefined : (liveMap.get(j.id) ?? j.live);
+    return (
     <tr key={j.id} className={selected.has(j.id) || allMatching ? "bg-accent/5" : undefined}>
       <Td className="w-8">
         <input type="checkbox" aria-label="Select" checked={allMatching || selected.has(j.id)} onChange={() => undefined} onClick={(e) => toggle(idx, e.shiftKey)} />
@@ -128,11 +132,20 @@ export function QueuePage() {
           </div>
         )}
       </Td>
-      <Td className="w-40">
-        <Progress value={j.progress} tone={j.status === "failed" ? "err" : j.status === "completed" ? "ok" : "accent"} />
-        <div className="mt-1 text-xs text-muted">
-          {j.pagesDone}/{j.pagesTotal} pages
-        </div>
+      <Td className="w-48">
+        {live ? (
+          <>
+            <Progress value={live.total > 0 ? (live.done / live.total) * 100 : 0} tone="accent" />
+            <div className="mt-1 text-xs text-muted">{describe(live)}</div>
+          </>
+        ) : (
+          <>
+            <Progress value={j.progress} tone={j.status === "failed" ? "err" : j.status === "completed" ? "ok" : "accent"} />
+            <div className="mt-1 text-xs text-muted">
+              {j.pagesDone}/{j.pagesTotal} pages
+            </div>
+          </>
+        )}
       </Td>
       <Td className="whitespace-nowrap text-muted">{relative(j.updatedAt)}</Td>
       <Td className="text-right">
@@ -161,7 +174,8 @@ export function QueuePage() {
         </div>
       </Td>
     </tr>
-  );
+    );
+  };
 
   return (
     <>

@@ -196,6 +196,10 @@ func TestBackgroundAVIF(t *testing.T) {
 	if f.RelativePath != orig.RelativePath || f.ProcessState != model.ProcessDone || f.SizeOriginal != orig.Size || f.Size >= orig.Size {
 		t.Fatalf("encoded file: %+v (original %+v)", f, orig)
 	}
+	if f.ProcessSeconds <= 0 || f.ProcessPages != 3 {
+		t.Fatalf("processing time wasn't recorded: %v s, %d pages", f.ProcessSeconds, f.ProcessPages)
+	}
+	waitFor(t, 5*time.Second, "finished jobs leave the live progress list", func() bool { return len(e.App.Downloads.Live.All()) == 0 })
 	pages, _, err := cbz.Read(filepath.Join(e.Root, "Encoded", f.RelativePath))
 	if err != nil || len(pages) != 3 || filepath.Ext(pages[0].Name) != ".avif" {
 		t.Fatalf("cbz pages: %v %v", pages, err)
