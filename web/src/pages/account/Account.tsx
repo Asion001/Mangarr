@@ -2,7 +2,8 @@ import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { KeyRound, LogOut, Monitor } from "lucide-react";
 import { api, unwrap } from "../../api/client";
-import { Badge, Button, Card, ErrorBox, Field, IconButton, Input, PageHeader } from "../../components/ui";
+import { Badge, Button, Card, ErrorBox, Field, IconButton, Input, PageHeader, Tabs } from "../../components/ui";
+import { appAddress, DevicesCard, Guide, type App } from "../settings/ReadingApps";
 import { useAccount } from "../../lib/account";
 import { relative } from "../../lib/format";
 import { useToast } from "../../lib/toast";
@@ -24,7 +25,7 @@ function browser(ua: string) {
 }
 
 export function AccountPage() {
-  const { account, name } = useAccount();
+  const { account, name, can } = useAccount();
   return (
     <>
       <PageHeader title="My account" subtitle={
@@ -44,9 +45,43 @@ export function AccountPage() {
             </div>
           </div>
         </Card>
+        {can("apps") && <ReadingAppsCard />}
         {account?.kind === "user" && <PasswordCard />}
         {account?.kind === "user" && <SessionsCard />}
       </div>
+    </>
+  );
+}
+
+function ReadingAppsCard() {
+  const { data: st } = useQuery({ queryKey: ["reading", "status"], queryFn: () => unwrap(api.GET("/api/v1/reading/status")) });
+  const [app, setApp] = useState<App>("mihon");
+  if (!st) return null;
+  if (!st.enabled) {
+    return (
+      <Card title="Reading apps">
+        <p className="text-sm text-muted">Mihon, KMReader and Paperback can read this library once an administrator turns on reading apps.</p>
+      </Card>
+    );
+  }
+  return (
+    <>
+      <Card title="Reading apps">
+        <p className="mb-3 text-sm text-muted">Read in Mihon, KMReader or Paperback: they connect as your account and sync your progress.</p>
+        <Tabs
+          tabs={[
+            { value: "mihon", label: "Mihon (Android)" },
+            { value: "kmreader", label: "KMReader (iPhone, iPad)" },
+            { value: "paperback", label: "Paperback (iPhone, iPad)" },
+          ]}
+          value={app}
+          onChange={setApp}
+        />
+        <div className="mt-4 text-sm">
+          <Guide app={app} address={appAddress(st.publicUrl, st.address)} />
+        </div>
+      </Card>
+      <DevicesCard />
     </>
   );
 }

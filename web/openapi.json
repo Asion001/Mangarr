@@ -5057,6 +5057,74 @@
         ],
         "type": "object"
       },
+      "ReadingKeyView": {
+        "additionalProperties": false,
+        "properties": {
+          "comment": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "lastClient": {
+            "type": "string"
+          },
+          "lastUsedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "prefix": {
+            "type": "string"
+          },
+          "user": {
+            "type": "string"
+          },
+          "userId": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "prefix",
+          "comment",
+          "lastClient",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "ReadingStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string"
+          },
+          "listening": {
+            "type": "boolean"
+          },
+          "publicUrl": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "publicUrl",
+          "enabled",
+          "listening",
+          "address"
+        ],
+        "type": "object"
+      },
       "ReleaseView": {
         "additionalProperties": false,
         "properties": {
@@ -6295,29 +6363,6 @@
         },
         "required": [
           "encodeBlocked"
-        ],
-        "type": "object"
-      },
-      "Status": {
-        "additionalProperties": false,
-        "properties": {
-          "address": {
-            "type": "string"
-          },
-          "enabled": {
-            "type": "boolean"
-          },
-          "error": {
-            "type": "string"
-          },
-          "listening": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "enabled",
-          "listening",
-          "address"
         ],
         "type": "object"
       },
@@ -10651,13 +10696,25 @@
     "/api/v1/reading/keys": {
       "get": {
         "operationId": "reading-keys",
+        "parameters": [
+          {
+            "description": "Everyone's keys (admins)",
+            "explode": false,
+            "in": "query",
+            "name": "all",
+            "schema": {
+              "description": "Everyone's keys (admins)",
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/ReadingKey"
+                    "$ref": "#/components/schemas/ReadingKeyView"
                   },
                   "type": "array"
                 }
@@ -10676,7 +10733,7 @@
             "description": "Error"
           }
         },
-        "summary": "API keys of reading apps (one per device)",
+        "summary": "Your reading apps' keys (one per device); admins can list everyone's",
         "tags": [
           "Reading apps"
         ]
@@ -10715,7 +10772,7 @@
             "description": "Error"
           }
         },
-        "summary": "Create a key for a reading app; the key is only shown in this response",
+        "summary": "Create a key for one of your reading apps; the key is only shown in this response",
         "tags": [
           "Reading apps"
         ]
@@ -10750,6 +10807,7 @@
             "description": "Error"
           }
         },
+        "summary": "Revoke a device key (yours; admins any)",
         "tags": [
           "Reading apps"
         ]
@@ -10819,7 +10877,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Status"
+                  "$ref": "#/components/schemas/ReadingStatus"
                 }
               }
             },
@@ -10836,7 +10894,7 @@
             "description": "Error"
           }
         },
-        "summary": "Whether the Komga-compatible API is enabled and listening",
+        "summary": "Whether the Komga-compatible API is on, and the address apps should use",
         "tags": [
           "Reading apps"
         ]

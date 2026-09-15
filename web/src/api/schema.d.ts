@@ -1106,10 +1106,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** API keys of reading apps (one per device) */
+        /** Your reading apps' keys (one per device); admins can list everyone's */
         get: operations["reading-keys"];
         put?: never;
-        /** Create a key for a reading app; the key is only shown in this response */
+        /** Create a key for one of your reading apps; the key is only shown in this response */
         post: operations["reading-keys-create"];
         delete?: never;
         options?: never;
@@ -1127,6 +1127,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /** Revoke a device key (yours; admins any) */
         delete: operations["reading-keys-delete"];
         options?: never;
         head?: never;
@@ -1157,7 +1158,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Whether the Komga-compatible API is enabled and listening */
+        /** Whether the Komga-compatible API is on, and the address apps should use */
         get: operations["reading-status"];
         put?: never;
         post?: never;
@@ -3749,6 +3750,27 @@ export interface components {
             /** Format: int64 */
             userId?: number;
         };
+        ReadingKeyView: {
+            comment: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: int64 */
+            id: number;
+            lastClient: string;
+            /** Format: date-time */
+            lastUsedAt?: string;
+            prefix: string;
+            user?: string;
+            /** Format: int64 */
+            userId?: number;
+        };
+        ReadingStatus: {
+            address: string;
+            enabled: boolean;
+            error?: string;
+            listening: boolean;
+            publicUrl: string;
+        };
         ReleaseView: {
             blocklisted: boolean;
             /** Format: int64 */
@@ -4115,12 +4137,6 @@ export interface components {
             verified?: {
                 [key: string]: string;
             };
-        };
-        Status: {
-            address: string;
-            enabled: boolean;
-            error?: string;
-            listening: boolean;
         };
         "Stores-addRequest": {
             url: string;
@@ -6982,7 +6998,10 @@ export interface operations {
     };
     "reading-keys": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Everyone's keys (admins) */
+                all?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -6995,7 +7014,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReadingKey"][];
+                    "application/json": components["schemas"]["ReadingKeyView"][];
                 };
             };
             /** @description Error */
@@ -7119,7 +7138,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Status"];
+                    "application/json": components["schemas"]["ReadingStatus"];
                 };
             };
             /** @description Error */

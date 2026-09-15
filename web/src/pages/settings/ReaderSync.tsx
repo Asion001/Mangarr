@@ -99,7 +99,10 @@ export function ReaderSyncPanel({ readerId }: { readerId: number }) {
           {error && <ErrorBox error={error} />}
           {data?.readingApps && (
             <p className="text-xs text-muted">
-              Reading apps (Mihon, KMReader, Paperback) act as this reader. <Link to="/settings/reading" className="text-accent-2 hover:underline">Reading apps settings</Link>
+              This is an account's progress: its reading apps (Mihon, KMReader, Paperback) write here.{" "}
+              <Link to="/settings/users" className="text-accent-2 hover:underline">
+                Users & groups
+              </Link>
             </p>
           )}
           {data && data.devices.length === 0 && unusedKeys.length === 0 && <p className="text-sm text-muted">No progress reports in the last 30 days.</p>}

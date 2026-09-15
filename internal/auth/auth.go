@@ -221,8 +221,28 @@ func (s *Service) Upgrade(ctx context.Context, preferredReader int64) error {
 			return err
 		}
 	}
+	// device keys from before accounts belong to the first admin
+	var admin model.User
+	if err := s.db.NewSelect().Model(&admin).Where("group_id = ?", groups[model.GroupAdmins]).Order("id").Limit(1).Scan(ctx); err == nil {
+		if _, err := s.db.NewUpdate().Model((*model.ReadingKey)(nil)).Set("user_id = ?", admin.ID).Where("user_id IS NULL").Exec(ctx); err != nil {
+			return err
+		}
+	}
 	s.Invalidate()
 	return nil
+}
+
+// PrincipalByName builds the principal of a user by username (nil when
+// unknown or disabled).
+func (s *Service) PrincipalByName(ctx context.Context, username string) (*access.Principal, error) {
+	var u model.User
+	if err := s.db.NewSelect().Model(&u).Column("id").Where("LOWER(username) = LOWER(?)", strings.TrimSpace(username)).Scan(ctx); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return s.UserPrincipal(ctx, u.ID)
 }
 
 // SetPassword changes a user's password and signs out their other sessions

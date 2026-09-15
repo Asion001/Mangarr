@@ -89,11 +89,11 @@ readers-delete DELETE /api/v1/readers/{id} -> admin
 readers-list GET /api/v1/readers -> admin
 readers-sync GET /api/v1/readers/{id}/sync -> admin
 readers-update PUT /api/v1/readers/{id} -> admin
-reading-keys GET /api/v1/reading/keys -> admin
-reading-keys-create POST /api/v1/reading/keys -> admin
-reading-keys-delete DELETE /api/v1/reading/keys/{id} -> admin
+reading-keys GET /api/v1/reading/keys -> apps
+reading-keys-create POST /api/v1/reading/keys -> apps
+reading-keys-delete DELETE /api/v1/reading/keys/{id} -> apps
 reading-shelf GET /api/v1/reading/shelf -> signedin
-reading-status GET /api/v1/reading/status -> admin
+reading-status GET /api/v1/reading/status -> apps
 rootfolders-create POST /api/v1/rootfolders -> admin
 rootfolders-delete DELETE /api/v1/rootfolders/{id} -> admin
 rootfolders-list GET /api/v1/rootfolders -> library.manage

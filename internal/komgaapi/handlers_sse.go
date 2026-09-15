@@ -80,8 +80,8 @@ func (s *Service) komgaEvents(ctx context.Context, e events.Event) []sseEvent {
 		if !ok {
 			return nil
 		}
-		if rid, err := s.deps.Reading.ReaderID(ctx); err != nil || rid != p.ReaderID {
-			return nil // another reader's progress
+		if u := PrincipalFrom(ctx).User; u == nil || u.ReaderID != p.ReaderID {
+			return nil // someone else's progress
 		}
 		name, seriesName := "ReadProgressChanged", "ReadProgressSeriesChanged"
 		if p.Deleted {

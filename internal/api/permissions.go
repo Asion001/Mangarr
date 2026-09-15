@@ -41,6 +41,12 @@ var operationPermissions = map[string][]string{
 	"reading-shelf":   {permSignedIn},
 	"tags-list":       {permSignedIn},
 
+	// reading apps (their own devices)
+	"reading-status":      {access.Apps},
+	"reading-keys":        {access.Apps},
+	"reading-keys-create": {access.Apps},
+	"reading-keys-delete": {access.Apps},
+
 	// finding series (to add, or to request)
 	"series-lookup":     {access.LibraryManage, access.RequestsCreate},
 	"series-lookup-get": {access.LibraryManage, access.RequestsCreate},

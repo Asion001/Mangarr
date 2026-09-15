@@ -54,8 +54,8 @@ type ReaderResource struct {
 // reported progress, and the latest reports.
 type ReaderSync struct {
 	reading.SyncHealth
-	// ReadingApps is true when reading apps (the Komga-compatible API) act
-	// as this reader; Keys are their devices then.
+	// ReadingApps is true when an account uses this reader (its apps write
+	// here); Keys are that account's devices.
 	ReadingApps bool               `json:"readingApps"`
 	Keys        []model.ReadingKey `json:"keys"`
 }
@@ -161,12 +161,16 @@ func (s *Server) registerReaders() {
 				return nil, toHTTPError(err)
 			}
 			out := ReaderSync{SyncHealth: h, Keys: []model.ReadingKey{}}
+			// the devices of the account whose progress this is
+			q := s.app.DB.NewSelect().Model(&out.Keys).Where("user_id IN (SELECT id FROM users WHERE reader_id = ?)", in.ID)
 			if rid, err := s.app.Reading.ReaderID(ctx); err == nil && rid == in.ID {
-				out.ReadingApps = true
-				if err := s.app.DB.NewSelect().Model(&out.Keys).Order("created_at").Scan(ctx); err != nil {
-					return nil, toHTTPError(err)
-				}
+				q = q.WhereOr("user_id IS NULL") // keys from before accounts
 			}
+			if err := q.Order("created_at").Scan(ctx); err != nil {
+				return nil, toHTTPError(err)
+			}
+			n, _ := s.app.DB.NewSelect().Model((*model.User)(nil)).Where("reader_id = ?", in.ID).Count(ctx)
+			out.ReadingApps = n > 0 || len(out.Keys) > 0
 			return &struct{ Body ReaderSync }{out}, nil
 		})
 	huma.Register(s.api, huma.Operation{OperationID: "readers-account-save", Method: http.MethodPost, Path: "/api/v1/readers/{id}/accounts", Tags: tags,

@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Asion001/mangarr/internal/access"
 	"github.com/Asion001/mangarr/internal/auth"
 	"github.com/Asion001/mangarr/internal/model"
 )
@@ -34,6 +35,8 @@ type Principal struct {
 	Device string
 	// Client is the app, from its User-Agent.
 	Client string
+	// User is the account (with its reader and the series it may see).
+	User *access.Principal
 }
 
 type principalKey struct{}
@@ -67,11 +70,15 @@ func NewKey() string {
 	return "mgr_" + hex.EncodeToString(b)
 }
 
-// InvalidateKeys reloads reading keys on next use (after creating or deleting one).
+// InvalidateKeys reloads reading keys (after creating or deleting one) and
+// accounts (after user or group changes) on next use.
 func (s *Service) InvalidateKeys() {
 	s.keys.mu.Lock()
 	s.keys.loaded = false
 	s.keys.mu.Unlock()
+	s.users.mu.Lock()
+	s.users.m = nil
+	s.users.mu.Unlock()
 }
 
 // loadKeys fills the key cache; the caller holds s.keys.mu.
@@ -119,10 +126,10 @@ func (s *Service) keyByID(ctx context.Context, id int64) (model.ReadingKey, bool
 
 // CreateKey stores a new reading key for a device and returns it (the key
 // itself is only available now).
-func (s *Service) CreateKey(ctx context.Context, comment, client string) (string, *model.ReadingKey, error) {
+func (s *Service) CreateKey(ctx context.Context, userID int64, comment, client string) (string, *model.ReadingKey, error) {
 	key := NewKey()
 	now := time.Now().UTC()
-	rk := &model.ReadingKey{KeyHash: HashKey(key), Prefix: key[:8], Comment: strings.TrimSpace(comment), LastClient: client, CreatedAt: now}
+	rk := &model.ReadingKey{KeyHash: HashKey(key), Prefix: key[:8], UserID: userID, Comment: strings.TrimSpace(comment), LastClient: client, CreatedAt: now}
 	if rk.Comment == "" {
 		rk.Comment = "reading app"
 	}
@@ -161,11 +168,12 @@ func (s *Service) sessionKey(ctx context.Context) []byte {
 	return sum[:]
 }
 
-// issueToken signs a session for keyID (0 = password login).
-func (s *Service) issueToken(ctx context.Context, keyID int64) string {
-	payload := make([]byte, 16)
+// issueToken signs a session for a key (keyID) or a password login (userID).
+func (s *Service) issueToken(ctx context.Context, keyID, userID int64) string {
+	payload := make([]byte, 24)
 	binary.BigEndian.PutUint64(payload[:8], uint64(keyID))
-	binary.BigEndian.PutUint64(payload[8:], uint64(time.Now().Add(sessionTTL).Unix()))
+	binary.BigEndian.PutUint64(payload[8:16], uint64(userID))
+	binary.BigEndian.PutUint64(payload[16:], uint64(time.Now().Add(sessionTTL).Unix()))
 	mac := hmac.New(sha256.New, s.sessionKey(ctx))
 	mac.Write(payload)
 	return base64.RawURLEncoding.EncodeToString(payload) + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
@@ -173,27 +181,27 @@ func (s *Service) issueToken(ctx context.Context, keyID int64) string {
 
 var errBadToken = errors.New("invalid session")
 
-// verifyToken returns the key id a token was issued for.
-func (s *Service) verifyToken(ctx context.Context, tok string) (int64, time.Time, error) {
+// verifyToken returns the key and user a token was issued for.
+func (s *Service) verifyToken(ctx context.Context, tok string) (keyID, userID int64, exp time.Time, err error) {
 	p, sig, ok := strings.Cut(tok, ".")
 	if !ok {
-		return 0, time.Time{}, errBadToken
+		return 0, 0, time.Time{}, errBadToken
 	}
 	payload, err1 := base64.RawURLEncoding.DecodeString(p)
 	mac, err2 := base64.RawURLEncoding.DecodeString(sig)
-	if err1 != nil || err2 != nil || len(payload) != 16 {
-		return 0, time.Time{}, errBadToken
+	if err1 != nil || err2 != nil || len(payload) != 24 {
+		return 0, 0, time.Time{}, errBadToken
 	}
 	h := hmac.New(sha256.New, s.sessionKey(ctx))
 	h.Write(payload)
 	if !hmac.Equal(mac, h.Sum(nil)) {
-		return 0, time.Time{}, errBadToken
+		return 0, 0, time.Time{}, errBadToken
 	}
-	exp := time.Unix(int64(binary.BigEndian.Uint64(payload[8:])), 0)
+	exp = time.Unix(int64(binary.BigEndian.Uint64(payload[16:])), 0)
 	if time.Now().After(exp) {
-		return 0, time.Time{}, errBadToken
+		return 0, 0, time.Time{}, errBadToken
 	}
-	return int64(binary.BigEndian.Uint64(payload[:8])), exp, nil
+	return int64(binary.BigEndian.Uint64(payload[:8])), int64(binary.BigEndian.Uint64(payload[8:16])), exp, nil
 }
 
 // basicCache remembers verified passwords briefly (bcrypt is slow).
@@ -230,26 +238,20 @@ func (s *Service) verifyBasic(ctx context.Context, user, pass string) bool {
 func (s *Service) authenticate(r *http.Request) (p Principal, issue bool, ok bool) {
 	ctx := r.Context()
 	p.Client = ClientName(r.UserAgent())
-	keyPrincipal := func(id int64) (Principal, bool) {
-		if id == 0 {
-			p.Device = "password login"
-			return p, true
-		}
-		rk, found := s.keyByID(ctx, id)
-		if !found {
-			return p, false // the key was deleted
+	withKey := func(rk model.ReadingKey) bool {
+		u := s.keyUser(ctx, rk)
+		if u == nil {
+			return false // the key's user was disabled or deleted
 		}
 		s.touchKey(rk, p.Client)
-		p.KeyID, p.Device = rk.ID, rk.Comment
-		return p, true
+		p.KeyID, p.Device, p.User = rk.ID, rk.Comment, u
+		return true
 	}
 	if key := r.Header.Get("X-API-Key"); key != "" {
 		rk, found := s.lookupKey(ctx, key)
-		if !found {
+		if !found || !withKey(rk) {
 			return p, false, false
 		}
-		s.touchKey(rk, p.Client)
-		p.KeyID, p.Device = rk.ID, rk.Comment
 		_, hasCookie := r.Cookie(SessionCookie)
 		return p, r.Header.Get("X-Auth-Token") == "" && hasCookie != nil, true
 	}
@@ -260,9 +262,15 @@ func (s *Service) authenticate(r *http.Request) (p Principal, issue bool, ok boo
 		}
 	}
 	if tok != "" {
-		if id, exp, err := s.verifyToken(ctx, tok); err == nil {
-			if pp, found := keyPrincipal(id); found {
-				return pp, time.Until(exp) < sessionTTL/2, true
+		if keyID, userID, exp, err := s.verifyToken(ctx, tok); err == nil {
+			renew := time.Until(exp) < sessionTTL/2
+			if keyID > 0 {
+				if rk, found := s.keyByID(ctx, keyID); found && withKey(rk) {
+					return p, renew, true
+				}
+			} else if u := s.userPrincipal(ctx, userID); u != nil {
+				p.Device, p.User = "password login", u
+				return p, renew, true
 			}
 		}
 	}
@@ -270,9 +278,7 @@ func (s *Service) authenticate(r *http.Request) (p Principal, issue bool, ok boo
 		// any username with a device key as the password, for clients
 		// that only do Basic (Paperback)
 		if rk, isKey := s.lookupKey(ctx, pass); isKey {
-			s.touchKey(rk, p.Client)
-			p.KeyID, p.Device = rk.ID, rk.Comment
-			return p, true, true
+			return p, true, withKey(rk)
 		}
 		keys := auth.LoginKeys(clientIP(r), user)
 		if _, locked := s.deps.Auth.Limiter.Locked(keys...); locked {
@@ -280,7 +286,11 @@ func (s *Service) authenticate(r *http.Request) (p Principal, issue bool, ok boo
 		}
 		if s.verifyBasic(ctx, user, pass) {
 			s.deps.Auth.Limiter.Reset(keys[0])
-			p.Device = "password login"
+			u, err := s.deps.Auth.PrincipalByName(ctx, user)
+			if err != nil || u == nil {
+				return p, false, false
+			}
+			p.Device, p.User = "password login", u
 			return p, true, true
 		}
 		if s.deps.Auth.Limiter.Fail(keys...) {
@@ -288,6 +298,53 @@ func (s *Service) authenticate(r *http.Request) (p Principal, issue bool, ok boo
 		}
 	}
 	return p, false, false
+}
+
+// keyUser is the account a device key acts as. Keys from before accounts
+// (no user) act as the reader set for reading apps and see everything.
+func (s *Service) keyUser(ctx context.Context, rk model.ReadingKey) *access.Principal {
+	if rk.UserID > 0 {
+		return s.userPrincipal(ctx, rk.UserID)
+	}
+	rid, err := s.deps.Reading.ReaderID(ctx)
+	if err != nil {
+		return nil
+	}
+	p := access.AdminPrincipal(access.KindAPIKey)
+	p.ReaderID = rid
+	return p
+}
+
+// userPrincipal loads a user's principal, cached briefly (every page turn
+// authenticates).
+func (s *Service) userPrincipal(ctx context.Context, userID int64) *access.Principal {
+	s.users.mu.Lock()
+	if e, ok := s.users.m[userID]; ok && time.Since(e.at) < 30*time.Second {
+		s.users.mu.Unlock()
+		return e.p
+	}
+	s.users.mu.Unlock()
+	p, err := s.deps.Auth.UserPrincipal(ctx, userID)
+	if err != nil {
+		return nil
+	}
+	s.users.mu.Lock()
+	if s.users.m == nil {
+		s.users.m = map[int64]userEntry{}
+	}
+	s.users.m[userID] = userEntry{p: p, at: time.Now()}
+	s.users.mu.Unlock()
+	return p
+}
+
+type userEntry struct {
+	p  *access.Principal
+	at time.Time
+}
+
+type userCache struct {
+	mu sync.Mutex
+	m  map[int64]userEntry
 }
 
 // clientIP is the caller's address (RealIP resolved proxies).
@@ -300,8 +357,12 @@ func clientIP(r *http.Request) string {
 
 // setSession hands the session token to the app as a header (KMReader) and
 // a cookie (Mihon's tracker).
-func (s *Service) setSession(w http.ResponseWriter, r *http.Request, keyID int64) {
-	tok := s.issueToken(r.Context(), keyID)
+func (s *Service) setSession(w http.ResponseWriter, r *http.Request, p Principal) {
+	userID := int64(0)
+	if p.User != nil {
+		userID = p.User.UserID
+	}
+	tok := s.issueToken(r.Context(), p.KeyID, userID)
 	w.Header().Set("X-Auth-Token", tok)
 	http.SetCookie(w, &http.Cookie{Name: SessionCookie, Value: tok, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode,
 		Expires: time.Now().Add(sessionTTL), Secure: r.TLS != nil})
@@ -322,10 +383,15 @@ func (s *Service) requireAuth(next http.Handler) http.Handler {
 			writeError(w, r, http.StatusServiceUnavailable, "mangarr is moving its database; try again in a moment")
 			return
 		}
-		if issue {
-			s.setSession(w, r, p.KeyID)
+		if !p.User.Can(access.Apps) {
+			writeError(w, r, http.StatusForbidden, "your account can't use reading apps; ask an administrator")
+			return
 		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), principalKey{}, p)))
+		if issue {
+			s.setSession(w, r, p)
+		}
+		ctx := context.WithValue(r.Context(), principalKey{}, p)
+		next.ServeHTTP(w, r.WithContext(access.With(ctx, p.User))) // the reading service limits series by it
 	})
 }
 

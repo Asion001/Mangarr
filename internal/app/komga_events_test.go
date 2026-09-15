@@ -117,7 +117,7 @@ func TestKomgaAPIStopEndsStreams(t *testing.T) {
 	if err := svc.Start(e.Ctx); err != nil {
 		t.Fatal(err)
 	}
-	key, _, err := svc.CreateKey(e.Ctx, "test", "test")
+	key, _, err := svc.CreateKey(e.Ctx, 0, "test", "test")
 	if err != nil {
 		t.Fatal(err)
 	}

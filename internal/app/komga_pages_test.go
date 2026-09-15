@@ -44,7 +44,7 @@ func TestKomgaAPIPages(t *testing.T) {
 			if len(chs) != 2 || chs[0].FileID != nil {
 				t.Fatalf("chapters %+v", chs)
 			}
-			key, _, err := e.App.Komga.CreateKey(e.Ctx, "test", "test")
+			key, _, err := e.App.Komga.CreateKey(e.Ctx, 0, "test", "test")
 			if err != nil {
 				t.Fatal(err)
 			}

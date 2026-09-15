@@ -19,7 +19,11 @@ type listBody struct {
 	FullTextSearch string     `json:"fullTextSearch"`
 }
 
+// readerID is the caller's reader (their progress).
 func (s *Service) readerID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	if u := PrincipalFrom(r.Context()).User; u != nil && u.ReaderID > 0 {
+		return u.ReaderID, true
+	}
 	rid, err := s.deps.Reading.ReaderID(r.Context())
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, err.Error())

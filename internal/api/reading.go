@@ -8,11 +8,25 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
+	"github.com/Asion001/mangarr/internal/access"
 	"github.com/Asion001/mangarr/internal/komgaapi"
 	"github.com/Asion001/mangarr/internal/model"
 )
 
 func init() { register((*Server).registerReading) }
+
+// ReadingStatus is the Komga-compatible API's state for connect guides.
+type ReadingStatus struct {
+	komgaapi.Status
+	// PublicURL is the address apps should use (empty: this server's host).
+	PublicURL string `json:"publicUrl"`
+}
+
+// ReadingKeyView is a device key with its owner.
+type ReadingKeyView struct {
+	model.ReadingKey
+	User string `json:"user,omitempty"`
+}
 
 // NewReadingKey is a key as created: Key is only returned this once.
 type NewReadingKey struct {
@@ -50,6 +64,9 @@ func (s *Server) registerReading() {
 			Limit    int   `query:"limit" default:"20" minimum:"1" maximum:"100"`
 		}) (*struct{ Body Shelf }, error) {
 			rid := in.ReaderID
+			if p := access.From(ctx); p != nil && p.Kind == access.KindUser && (rid == 0 || !p.IsAdmin()) {
+				rid = p.ReaderID // your own shelf (only admins look at others')
+			}
 			if rid == 0 {
 				// (without readers there's no shelf; don't create one)
 				if n, err := s.app.DB.NewSelect().Model((*model.Reader)(nil)).Count(ctx); err != nil || n == 0 {
@@ -84,27 +101,50 @@ func (s *Server) registerReading() {
 		})
 
 	huma.Register(s.api, huma.Operation{OperationID: "reading-status", Method: http.MethodGet, Path: "/api/v1/reading/status", Tags: tags,
-		Summary: "Whether the Komga-compatible API is enabled and listening"},
-		func(ctx context.Context, _ *struct{}) (*struct{ Body komgaapi.Status }, error) {
-			return &struct{ Body komgaapi.Status }{s.app.Komga.Status(ctx)}, nil
+		Summary: "Whether the Komga-compatible API is on, and the address apps should use"},
+		func(ctx context.Context, _ *struct{}) (*struct{ Body ReadingStatus }, error) {
+			rs, _ := s.app.Settings.Reading(ctx)
+			return &struct{ Body ReadingStatus }{ReadingStatus{Status: s.app.Komga.Status(ctx), PublicURL: rs.PublicURL}}, nil
 		})
 
 	huma.Register(s.api, huma.Operation{OperationID: "reading-keys", Method: http.MethodGet, Path: "/api/v1/reading/keys", Tags: tags,
-		Summary: "API keys of reading apps (one per device)"},
-		func(ctx context.Context, _ *struct{}) (*struct{ Body []model.ReadingKey }, error) {
-			out := []model.ReadingKey{}
-			err := s.app.DB.NewSelect().Model(&out).Order("id").Scan(ctx)
-			return &struct{ Body []model.ReadingKey }{out}, toHTTPError(err)
+		Summary: "Your reading apps' keys (one per device); admins can list everyone's"},
+		func(ctx context.Context, in *struct {
+			All bool `query:"all" doc:"Everyone's keys (admins)"`
+		}) (*struct{ Body []ReadingKeyView }, error) {
+			p := access.From(ctx)
+			var keys []model.ReadingKey
+			q := s.app.DB.NewSelect().Model(&keys).Order("id")
+			if !(in.All && p.IsAdmin()) {
+				q = q.Where("COALESCE(user_id, 0) = ?", p.UserID)
+			}
+			if err := q.Scan(ctx); err != nil {
+				return nil, toHTTPError(err)
+			}
+			var users []model.User
+			_ = s.app.DB.NewSelect().Model(&users).Column("id", "username", "display_name").Scan(ctx)
+			names := map[int64]string{}
+			for _, u := range users {
+				names[u.ID] = u.Username
+				if u.DisplayName != "" {
+					names[u.ID] = u.DisplayName
+				}
+			}
+			out := make([]ReadingKeyView, len(keys))
+			for i, k := range keys {
+				out[i] = ReadingKeyView{ReadingKey: k, User: names[k.UserID]}
+			}
+			return &struct{ Body []ReadingKeyView }{out}, nil
 		})
 
 	huma.Register(s.api, huma.Operation{OperationID: "reading-keys-create", Method: http.MethodPost, Path: "/api/v1/reading/keys", Tags: tags,
-		Summary: "Create a key for a reading app; the key is only shown in this response"},
+		Summary: "Create a key for one of your reading apps; the key is only shown in this response"},
 		func(ctx context.Context, in *struct {
 			Body struct {
 				Comment string `json:"comment" doc:"Device name, e.g. \"Mihon phone\""`
 			}
 		}) (*struct{ Body NewReadingKey }, error) {
-			key, rk, err := s.app.Komga.CreateKey(ctx, in.Body.Comment, "")
+			key, rk, err := s.app.Komga.CreateKey(ctx, access.From(ctx).UserID, in.Body.Comment, "")
 			if err != nil {
 				return nil, toHTTPError(err)
 			}
@@ -112,10 +152,20 @@ func (s *Server) registerReading() {
 			return &struct{ Body NewReadingKey }{NewReadingKey{ReadingKey: *rk, Key: key}}, nil
 		})
 
-	huma.Register(s.api, huma.Operation{OperationID: "reading-keys-delete", Method: http.MethodDelete, Path: "/api/v1/reading/keys/{id}", Tags: tags},
+	huma.Register(s.api, huma.Operation{OperationID: "reading-keys-delete", Method: http.MethodDelete, Path: "/api/v1/reading/keys/{id}", Tags: tags,
+		Summary: "Revoke a device key (yours; admins any)"},
 		func(ctx context.Context, in *IDPath) (*struct{}, error) {
-			if _, err := s.app.DB.NewDelete().Model((*model.ReadingKey)(nil)).Where("id = ?", in.ID).Exec(ctx); err != nil {
+			p := access.From(ctx)
+			q := s.app.DB.NewDelete().Model((*model.ReadingKey)(nil)).Where("id = ?", in.ID)
+			if !p.IsAdmin() {
+				q = q.Where("COALESCE(user_id, 0) = ?", p.UserID)
+			}
+			res, err := q.Exec(ctx)
+			if err != nil {
 				return nil, toHTTPError(err)
+			}
+			if n, _ := res.RowsAffected(); n == 0 {
+				return nil, huma.Error404NotFound("no such key")
 			}
 			s.app.Komga.InvalidateKeys()
 			s.app.Bus.Changed("reading", "key-deleted", in.ID)

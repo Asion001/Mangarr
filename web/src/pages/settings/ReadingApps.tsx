@@ -3,18 +3,17 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, KeyRound, Plus, Trash2 } from "lucide-react";
 import { Link } from "react-router";
 import { api, unwrap, type S } from "../../api/client";
-import { useReaders } from "../../api/queries";
-import { Badge, Button, Card, Confirm, ErrorBox, Field, IconButton, Input, Loading, Modal, PageHeader, Select, Switch, Table, Tabs, Td, Th } from "../../components/ui";
+import { Badge, Button, Card, Confirm, ErrorBox, Field, IconButton, Input, Loading, Modal, PageHeader, Switch, Table, Tabs, Td, Th } from "../../components/ui";
 import { relative } from "../../lib/format";
 import { useToast } from "../../lib/toast";
 import { useSettingsDoc } from "./useSettingsDoc";
 
 type ReadingSettings = S["Reading"];
 type Key = S["ReadingKey"];
-type App = "mihon" | "kmreader" | "paperback";
+export type App = "mihon" | "kmreader" | "paperback";
 
 /** The address apps should use: the configured one, else this host on the API's port. */
-function appAddress(publicUrl: string, listen?: string) {
+export function appAddress(publicUrl: string, listen?: string) {
   if (publicUrl) return publicUrl.replace(/\/+$/, "");
   const port = listen?.split(":").pop() || "25600";
   return `${window.location.protocol}//${window.location.hostname}:${port}`;
@@ -23,7 +22,6 @@ function appAddress(publicUrl: string, listen?: string) {
 export function ReadingAppsPage() {
   const { value: r, patch, save, saving, isLoading, error, lock } = useSettingsDoc<ReadingSettings>("reading");
   const status = useQuery({ queryKey: ["reading", "status"], queryFn: () => unwrap(api.GET("/api/v1/reading/status")), refetchInterval: 10_000 });
-  const { data: readers } = useReaders();
   const [app, setApp] = useState<App>("mihon");
   const st = status.data;
   const address = appAddress(r?.publicUrl ?? "", st?.address);
@@ -82,16 +80,6 @@ export function ReadingAppsPage() {
                 <Field env={lock("publicUrl")} label="Address apps should use" help={`Shown in the guides below. Empty: ${appAddress("", st?.address)}`}>
                   <Input value={r.publicUrl} placeholder="https://manga.example.com:25600" onChange={(e) => patch({ publicUrl: e.target.value })} />
                 </Field>
-                <Field env={lock("readerId")} label="Reader" help="Whose progress the apps read and write. Its sync health is under Settings → Readers.">
-                  <Select value={r.readerId} onChange={(e) => patch({ readerId: Number(e.target.value) })}>
-                    <option value={0}>First reader{readers?.[0] ? ` (${readers[0].name})` : ""}</option>
-                    {readers?.map((x) => (
-                      <option key={x.id} value={x.id}>
-                        {x.name}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
                 <Field env={lock("readAhead.chapters")} label="Chapters to download ahead" help="After the furthest chapter a reader has started, in any app or library server.">
                   <Input
                     type="number"
@@ -106,7 +94,7 @@ export function ReadingAppsPage() {
             </div>
           </Card>
 
-          <DevicesCard />
+          <DevicesCard all />
 
           <Card title="Connect an app">
             <Tabs
@@ -133,7 +121,7 @@ function Code({ children }: { children: string }) {
   return <code className="rounded bg-panel-2 px-1.5 py-0.5 text-xs break-all">{children}</code>;
 }
 
-function Guide({ app, address }: { app: App; address: string }) {
+export function Guide({ app, address }: { app: App; address: string }) {
   switch (app) {
     case "mihon":
       return (
@@ -182,10 +170,10 @@ function Guide({ app, address }: { app: App; address: string }) {
   }
 }
 
-function DevicesCard() {
+export function DevicesCard({ all = false }: { all?: boolean }) {
   const qc = useQueryClient();
   const toast = useToast();
-  const keys = useQuery({ queryKey: ["reading", "keys"], queryFn: () => unwrap(api.GET("/api/v1/reading/keys")) });
+  const keys = useQuery({ queryKey: ["reading", "keys", all], queryFn: () => unwrap(api.GET("/api/v1/reading/keys", { params: { query: { all } } })) });
   const [adding, setAdding] = useState(false);
   const [deleting, setDeleting] = useState<Key | null>(null);
   const remove = async () => {
@@ -208,8 +196,17 @@ function DevicesCard() {
       }
     >
       <p className="mb-3 text-sm text-muted">
-        Each app gets its own API key, so you can see which device synced what (Settings → <Link to="/settings/readers" className="text-accent-2 hover:underline">Readers</Link>) and revoke one without
-        the others.
+        {all ? (
+          <>
+            Every account's app keys. Apps act as the key's account, with its progress and the series its group sees. Sync history per device is under Settings →{" "}
+            <Link to="/settings/readers" className="text-accent-2 hover:underline">
+              Readers
+            </Link>
+            .
+          </>
+        ) : (
+          "Each of your apps gets its own key: it reads and writes your progress, and you can revoke one without the others."
+        )}
       </p>
       {keys.error && <ErrorBox error={keys.error} />}
       {keys.data?.length === 0 && <p className="text-sm text-muted">No devices yet.</p>}
@@ -219,6 +216,7 @@ function DevicesCard() {
             <thead>
               <tr>
                 <Th>Device</Th>
+                {all && <Th>Account</Th>}
                 <Th>Key</Th>
                 <Th>Last used</Th>
                 <Th>Added</Th>
@@ -229,6 +227,7 @@ function DevicesCard() {
               {keys.data.map((k) => (
                 <tr key={k.id}>
                   <Td className="font-medium">{k.comment || "Unnamed"}</Td>
+                  {all && <Td className="text-muted">{k.user || "—"}</Td>}
                   <Td>
                     <Code>{`${k.prefix}…`}</Code>
                   </Td>

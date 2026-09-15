@@ -47,6 +47,7 @@ type Service struct {
 
 	keys  keys
 	basic basicCache
+	users userCache
 
 	mu      sync.Mutex
 	srv     *http.Server

@@ -57,7 +57,7 @@ func TestReadAhead(t *testing.T) {
 			}
 			_, _ = e.App.DB.NewDelete().Model(st).WherePK().Exec(e.Ctx)
 
-			key, _, _ := e.App.Komga.CreateKey(e.Ctx, "test", "test")
+			key, _, _ := e.App.Komga.CreateKey(e.Ctx, 0, "test", "test")
 			srv := httptest.NewServer(e.App.Komga.Handler())
 			defer srv.Close()
 			req, _ := http.NewRequest("PATCH", srv.URL+"/api/v1/books/"+sid(list[0].ID)+"/read-progress", strings.NewReader(`{"completed":true}`))

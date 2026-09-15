@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"time"
 
@@ -35,17 +36,22 @@ type apiKeyDTO struct {
 
 type authHandlers struct{ s *Service }
 
-func (h *authHandlers) username(r *http.Request) string {
-	var u model.User
-	if err := h.s.deps.DB.NewSelect().Model(&u).Order("id").Limit(1).Scan(r.Context()); err == nil {
-		return u.Username
+// account is the caller's user id and name.
+func account(r *http.Request) (int64, string) {
+	p := PrincipalFrom(r.Context())
+	if p.User == nil || p.User.UserID == 0 {
+		return 0, "mangarr"
 	}
-	return "mangarr"
+	return p.User.UserID, p.User.Username
 }
 
 func (h *authHandlers) me(w http.ResponseWriter, r *http.Request) {
+	id, name := account(r)
+	if id == 0 {
+		id = 1
+	}
 	// no ADMIN role: apps then skip admin-only endpoints
-	writeJSON(w, http.StatusOK, userDTO{ID: "1", Email: h.username(r), Roles: []string{"USER", "FILE_DOWNLOAD", "PAGE_STREAMING"},
+	writeJSON(w, http.StatusOK, userDTO{ID: strconv.FormatInt(id, 10), Email: name, Roles: []string{"USER", "FILE_DOWNLOAD", "PAGE_STREAMING"},
 		SharedAllLibraries: true, SharedLibrariesIDs: []string{}, LabelsAllow: []string{}, LabelsExclude: []string{}})
 }
 
@@ -57,13 +63,14 @@ func keyDTO(rk model.ReadingKey, key string) apiKeyDTO {
 	if rk.LastUsedAt != nil {
 		modified = *rk.LastUsedAt
 	}
-	return apiKeyDTO{ID: strconv.FormatInt(rk.ID, 10), UserID: "1", Key: key, Comment: rk.Comment,
+	return apiKeyDTO{ID: strconv.FormatInt(rk.ID, 10), UserID: strconv.FormatInt(max(rk.UserID, 1), 10), Key: key, Comment: rk.Comment,
 		CreatedDate: komgaTime(rk.CreatedAt), LastModifiedDate: komgaTime(modified)}
 }
 
 func (h *authHandlers) listKeys(w http.ResponseWriter, r *http.Request) {
+	uid, _ := account(r)
 	var list []model.ReadingKey
-	if err := h.s.deps.DB.NewSelect().Model(&list).Order("id").Scan(r.Context()); err != nil {
+	if err := h.s.deps.DB.NewSelect().Model(&list).Where("COALESCE(user_id, 0) = ?", uid).Order("id").Scan(r.Context()); err != nil {
 		writeError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -84,7 +91,8 @@ func (h *authHandlers) createKey(w http.ResponseWriter, r *http.Request) {
 	if comment == "" {
 		comment = p.Client
 	}
-	key, rk, err := h.s.CreateKey(r.Context(), comment, p.Client)
+	uid, _ := account(r)
+	key, rk, err := h.s.CreateKey(r.Context(), uid, comment, p.Client)
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, err.Error())
 		return
@@ -94,7 +102,8 @@ func (h *authHandlers) createKey(w http.ResponseWriter, r *http.Request) {
 
 func (h *authHandlers) deleteKey(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if _, err := h.s.deps.DB.NewDelete().Model((*model.ReadingKey)(nil)).Where("id = ?", id).Exec(r.Context()); err != nil {
+	uid, _ := account(r)
+	if _, err := h.s.deps.DB.NewDelete().Model((*model.ReadingKey)(nil)).Where("id = ? AND COALESCE(user_id, 0) = ?", id, uid).Exec(r.Context()); err != nil {
 		writeError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -133,8 +142,11 @@ func (h *libraryHandlers) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := make([]libraryDTO, 0, len(roots))
+	limit := PrincipalFrom(r.Context()).User.Scope.RootFolders
 	for _, rf := range roots {
-		out = append(out, libraryFrom(rf))
+		if len(limit) == 0 || slices.Contains(limit, rf.ID) {
+			out = append(out, libraryFrom(rf))
+		}
 	}
 	writeJSON(w, http.StatusOK, out)
 }

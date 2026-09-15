@@ -19,6 +19,7 @@ import (
 
 	"github.com/uptrace/bun"
 
+	"github.com/Asion001/mangarr/internal/access"
 	"github.com/Asion001/mangarr/internal/db"
 	"github.com/Asion001/mangarr/internal/diskcache"
 	"github.com/Asion001/mangarr/internal/events"
@@ -107,6 +108,15 @@ func (s *Service) AllSeries(ctx context.Context, readerID, id int64) ([]SeriesIn
 	}
 	if err := q.Scan(ctx); err != nil {
 		return nil, err
+	}
+	if sc := scopeOf(ctx); sc != nil {
+		kept := list[:0]
+		for i := range list {
+			if sc.Allows(&list[i]) {
+				kept = append(kept, list[i])
+			}
+		}
+		list = kept
 	}
 	var counts []struct {
 		SeriesID int64        `bun:"series_id"`
@@ -211,6 +221,10 @@ type BookInfo struct {
 
 // Books loads chapters (seriesID 0: all series), ordered by series and number.
 func (s *Service) Books(ctx context.Context, readerID, seriesID int64) ([]BookInfo, error) {
+	allowed, err := s.visibleSeries(ctx, seriesID)
+	if err != nil {
+		return nil, err
+	}
 	var chapters []model.Chapter
 	q := s.DB.NewSelect().Model(&chapters).Order("series_id", "number_sort", "id")
 	if seriesID > 0 {
@@ -218,6 +232,15 @@ func (s *Service) Books(ctx context.Context, readerID, seriesID int64) ([]BookIn
 	}
 	if err := q.Scan(ctx); err != nil {
 		return nil, err
+	}
+	if allowed != nil {
+		kept := chapters[:0]
+		for _, c := range chapters {
+			if allowed[c.SeriesID] {
+				kept = append(kept, c)
+			}
+		}
+		chapters = kept
 	}
 	return s.enrich(ctx, readerID, chapters, seriesID)
 }
@@ -349,4 +372,47 @@ func (s *Service) Cover(ctx context.Context, ser *model.Series) ([]byte, string,
 		return th.Thumbnail(ctx, source.MangaRef{SourceID: ss.SourceID, URL: ss.MangaURL, EngineRef: ss.EngineRef})
 	})
 	return data, ct, err
+}
+
+// scopeOf is the series limit of the request's viewer (nil: no limit, also
+// for work mangarr does on its own).
+func scopeOf(ctx context.Context) *access.Scope {
+	p := access.From(ctx)
+	if p == nil || p.Can(access.LibraryManage) || !p.Scope.Limited() {
+		return nil
+	}
+	return &p.Scope
+}
+
+// visibleSeries returns the series the viewer may see (nil: all). For one
+// series (id > 0) it's ErrNotFound when hidden.
+func (s *Service) visibleSeries(ctx context.Context, id int64) (map[int64]bool, error) {
+	sc := scopeOf(ctx)
+	if sc == nil {
+		return nil, nil
+	}
+	var list []model.Series
+	q := s.DB.NewSelect().Model(&list).Column("id", "root_folder_id", "tags")
+	if id > 0 {
+		q = q.Where("id = ?", id)
+	}
+	if err := q.Scan(ctx); err != nil {
+		return nil, err
+	}
+	out := map[int64]bool{}
+	for i := range list {
+		if sc.Allows(&list[i]) {
+			out[list[i].ID] = true
+		}
+	}
+	if id > 0 && !out[id] {
+		return nil, ErrNotFound
+	}
+	return out, nil
+}
+
+// CanSee reports whether the viewer may see a series.
+func (s *Service) CanSee(ctx context.Context, seriesID int64) bool {
+	_, err := s.visibleSeries(ctx, seriesID)
+	return err == nil
 }

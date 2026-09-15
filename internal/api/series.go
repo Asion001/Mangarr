@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/Asion001/mangarr/internal/access"
 	"net/http"
 	"os"
 	"strconv"
@@ -127,7 +128,7 @@ func (s *Server) seriesStats(ctx context.Context, seriesID int64) (map[int64]Ser
 		st.SizeOnDisk, st.SpaceSaved = sz.Size, sz.Saved
 		out[sz.SeriesID] = st
 	}
-	readers := s.countedReaders(ctx)
+	readers := s.statsReaders(ctx)
 	if len(readers) == 0 {
 		return out, nil
 	}
@@ -159,6 +160,25 @@ func (s *Server) seriesStats(ctx context.Context, seriesID int64) (map[int64]Ser
 		out[r.SeriesID] = st
 	}
 	return out, nil
+}
+
+// statsReaders are the readers whose progress the series pages show: a
+// signed-in user's own, else (the API key) the ones counting for cleanup.
+func (s *Server) statsReaders(ctx context.Context) []int64 {
+	if p := access.From(ctx); p != nil && p.Kind == access.KindUser && p.ReaderID > 0 {
+		return []int64{p.ReaderID}
+	}
+	return s.countedReaders(ctx)
+}
+
+// ownReaderOnly is set when the caller only sees their own progress (not
+// an administrator).
+func ownReaderOnly(ctx context.Context) (int64, bool) {
+	p := access.From(ctx)
+	if p == nil || p.IsAdmin() {
+		return 0, false
+	}
+	return p.ReaderID, true
 }
 
 // countedReaders are the readers whose progress counts (cleanup readers,
@@ -195,7 +215,11 @@ func (s *Server) readingInfo(ctx context.Context, ser *model.Series, fullPath st
 		ColumnExpr("SUM(CASE WHEN NOT rs.completed AND rs.page > 0 THEN 1 ELSE 0 END) AS in_progress").
 		ColumnExpr("MAX(rs.read_at) AS last_read").
 		Where("rs.series_id = ?", ser.ID).GroupExpr("rs.reader_id, r.name").OrderExpr("r.name").Scan(ctx, &rows)
+	own, onlyOwn := ownReaderOnly(ctx)
 	for _, r := range rows {
+		if onlyOwn && r.ReaderID != own {
+			continue // others' progress is theirs
+		}
 		rp := ReaderProgress{ReaderID: r.ReaderID, Reader: r.Name, Read: r.Read, InProgress: r.InProgress}
 		if !r.LastRead.IsZero() {
 			t := r.LastRead.Time
@@ -203,7 +227,7 @@ func (s *Server) readingInfo(ctx context.Context, ser *model.Series, fullPath st
 		}
 		info.Readers = append(info.Readers, rp)
 	}
-	if readers := s.countedReaders(ctx); len(readers) > 0 {
+	if readers := s.statsReaders(ctx); len(readers) > 0 {
 		// the first chapter after the highest one read
 		var maxRead float64
 		err := s.app.DB.NewSelect().TableExpr("chapter_read_states AS rs").Join("JOIN chapters AS c ON c.id = rs.chapter_id").
@@ -321,7 +345,11 @@ func (s *Server) chapterResources(ctx context.Context, seriesID int64) ([]Chapte
 		jobBy[jobs[i].ChapterID] = &jobs[i] // latest wins (ordered by id)
 	}
 	readBy := map[int64][]ReadStateView{}
+	own, onlyOwn := ownReaderOnly(ctx)
 	for _, r := range reads {
+		if onlyOwn && r.ReaderID != own {
+			continue
+		}
 		readBy[r.ChapterID] = append(readBy[r.ChapterID], ReadStateView{ReaderID: r.ReaderID, Reader: r.Name, Completed: r.Completed, Page: r.Page, ReadAt: r.ReadAt})
 	}
 	out := make([]ChapterResource, 0, len(chapters))
@@ -408,6 +436,19 @@ func (s *Server) existingByExternalID(ctx context.Context) func(ids map[string]s
 	}
 }
 
+// visibleSeries loads a series the caller may see (404 otherwise, so hidden
+// series don't reveal they exist).
+func (s *Server) visibleSeries(ctx context.Context, id int64) (*model.Series, error) {
+	ser, err := s.app.Series.Get(ctx, id)
+	if err != nil {
+		return nil, seriesError(err)
+	}
+	if !access.From(ctx).Sees(ser) {
+		return nil, huma.Error404NotFound("series not found")
+	}
+	return ser, nil
+}
+
 func (s *Server) registerSeries() {
 	tags := []string{"Series"}
 	huma.Register(s.api, huma.Operation{OperationID: "series-list", Method: http.MethodGet, Path: "/api/v1/series", Tags: tags},
@@ -420,18 +461,21 @@ func (s *Server) registerSeries() {
 			if err != nil {
 				return nil, toHTTPError(err)
 			}
+			p := access.From(ctx)
 			out := make([]SeriesResource, 0, len(list))
 			for _, ser := range list {
-				out = append(out, s.seriesResource(ctx, ser, stats, false))
+				if p.Sees(&ser) {
+					out = append(out, s.seriesResource(ctx, ser, stats, false))
+				}
 			}
 			return &struct{ Body []SeriesResource }{out}, nil
 		})
 
 	huma.Register(s.api, huma.Operation{OperationID: "series-get", Method: http.MethodGet, Path: "/api/v1/series/{id}", Tags: tags},
 		func(ctx context.Context, in *IDPath) (*struct{ Body SeriesResource }, error) {
-			ser, err := s.app.Series.Get(ctx, in.ID)
+			ser, err := s.visibleSeries(ctx, in.ID)
 			if err != nil {
-				return nil, seriesError(err)
+				return nil, err
 			}
 			stats, err := s.seriesStats(ctx, in.ID)
 			if err != nil {
@@ -528,6 +572,9 @@ func (s *Server) registerSeries() {
 
 	huma.Register(s.api, huma.Operation{OperationID: "series-chapters", Method: http.MethodGet, Path: "/api/v1/series/{id}/chapters", Tags: tags},
 		func(ctx context.Context, in *IDPath) (*struct{ Body []ChapterResource }, error) {
+			if _, err := s.visibleSeries(ctx, in.ID); err != nil {
+				return nil, err
+			}
 			out, err := s.chapterResources(ctx, in.ID)
 			return &struct{ Body []ChapterResource }{out}, toHTTPError(err)
 		})
@@ -660,9 +707,9 @@ func (s *Server) registerSeries() {
 			V    string `query:"v"`
 			Size string `query:"size" enum:",full" doc:"full = the library's cover.jpg as is (default: a resized copy)"`
 		}) (*imageOutput, error) {
-			ser, err := s.app.Series.Get(ctx, in.ID)
+			ser, err := s.visibleSeries(ctx, in.ID)
 			if err != nil {
-				return nil, seriesError(err)
+				return nil, err
 			}
 			if in.Size == "full" {
 				if p := s.app.Library.CoverPath(ctx, ser); p != "" {

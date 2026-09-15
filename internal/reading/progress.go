@@ -152,7 +152,7 @@ type chapterState struct {
 func (s *Service) seriesStates(ctx context.Context, readerID, seriesID int64) ([]chapterState, error) {
 	if exists, err := s.DB.NewSelect().Model((*model.Series)(nil)).Where("id = ?", seriesID).Exists(ctx); err != nil {
 		return nil, err
-	} else if !exists {
+	} else if !exists || !s.CanSee(ctx, seriesID) {
 		return nil, ErrNotFound
 	}
 	var chs []model.Chapter
@@ -283,6 +283,9 @@ func (s *Service) ChapterPages(ctx context.Context, chapterID int64) (*model.Cha
 			return nil, 0, ErrNotFound
 		}
 		return nil, 0, err
+	}
+	if !s.CanSee(ctx, ch.SeriesID) {
+		return nil, 0, ErrNotFound
 	}
 	if ch.FileID != nil {
 		var n int

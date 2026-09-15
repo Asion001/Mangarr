@@ -87,7 +87,7 @@ func newKomgaFixture(t *testing.T, dsn string) *komgaFixture {
 			t.Fatal(err)
 		}
 	}
-	f.key, _, err = e.App.Komga.CreateKey(e.Ctx, "test", "test")
+	f.key, _, err = e.App.Komga.CreateKey(e.Ctx, 0, "test", "test")
 	if err != nil {
 		t.Fatal(err)
 	}
