@@ -2298,10 +2298,16 @@ export interface components {
             publicUrl: string;
         };
         HealthCheck: {
+            items?: components["schemas"]["HealthCheckItem"][];
             link?: string;
             message: string;
             source: string;
             type: string;
+        };
+        HealthCheckItem: {
+            detail?: string;
+            label: string;
+            link?: string;
         };
         HealthResponse: {
             /** Format: date-time */

@@ -30,9 +30,55 @@ type Check struct {
 	Type    string `json:"type"`
 	Message string `json:"message"`
 	Link    string `json:"link,omitempty"`
+	// Items are the things the check is about (e.g. series), with links.
+	Items []CheckItem `json:"items,omitempty"`
+}
+
+// CheckItem is one thing a check is about.
+type CheckItem struct {
+	Label string `json:"label"`
+	Link  string `json:"link,omitempty"`
+	// Detail explains the item's problem (e.g. the last error).
+	Detail string `json:"detail,omitempty"`
 }
 
 func (c Check) key() string { return c.Source + "|" + c.Message }
+
+// Text is the message with the items' labels, for notifications.
+func (c Check) Text() string {
+	if len(c.Items) == 0 {
+		return c.Message
+	}
+	labels := make([]string, 0, len(c.Items))
+	for _, it := range c.Items {
+		labels = append(labels, it.Label)
+	}
+	return c.Message + ": " + strings.Join(first(labels, 5), "; ")
+}
+
+// moduleLink is the settings page of a module kind.
+func moduleLink(kind string) string {
+	switch kind {
+	case "source":
+		return "/settings/sources"
+	case "metadata":
+		return "/settings/metadata"
+	case "library":
+		return "/settings/library"
+	case "notify":
+		return "/settings/notifications"
+	case "upscale":
+		return "/settings/upscalers"
+	}
+	return ""
+}
+
+func seriesItem(id int64, title, detail string) CheckItem {
+	if len(detail) > 300 {
+		detail = detail[:300] + "…"
+	}
+	return CheckItem{Label: title, Link: fmt.Sprintf("/series/%d", id), Detail: detail}
+}
 
 // StatusProvider exposes failing instances of a subsystem (notifications, rescans).
 type StatusProvider interface {
@@ -91,11 +137,11 @@ func (c *Checker) Run(ctx context.Context) []Check {
 	}
 	for label, fn := range c.statuses {
 		for id, msg := range fn() {
-			name := fmt.Sprintf("#%d", id)
+			name, link := fmt.Sprintf("#%d", id), ""
 			if l, ok := c.mods.Get(id); ok {
-				name = l.Def.Name
+				name, link = l.Def.Name, moduleLink(l.Def.Kind)
 			}
-			add(Check{Source: label, Type: Warning, Message: name + ": " + msg})
+			add(Check{Source: label, Type: Warning, Message: name + ": " + msg, Link: link})
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return rank(out[i].Type) > rank(out[j].Type) })
@@ -111,12 +157,12 @@ func (c *Checker) Run(ctx context.Context) []Check {
 
 	for k, ch := range next {
 		if _, ok := prev[k]; !ok && ch.Type != Notice {
-			c.bus.Publish(events.Event{Type: events.HealthIssue, Payload: events.MessagePayload{Title: "Health issue: " + ch.Source, Message: ch.Message}})
+			c.bus.Publish(events.Event{Type: events.HealthIssue, Payload: events.MessagePayload{Title: "Health issue: " + ch.Source, Message: ch.Text()}})
 		}
 	}
 	for k, ch := range prev {
 		if _, ok := next[k]; !ok && ch.Type != Notice {
-			c.bus.Publish(events.Event{Type: events.HealthRestored, Payload: events.MessagePayload{Title: "Health restored: " + ch.Source, Message: ch.Message}})
+			c.bus.Publish(events.Event{Type: events.HealthRestored, Payload: events.MessagePayload{Title: "Health restored: " + ch.Source, Message: ch.Text()}})
 		}
 	}
 	c.bus.Changed("health", "sync", 0)
@@ -135,13 +181,13 @@ func rank(t string) int {
 
 func (c *Checker) checkModules(ctx context.Context, add func(Check)) {
 	if len(c.mods.Active(modules.KindSource)) == 0 {
-		add(Check{Source: "Sources", Type: Warning, Message: "No source module is configured; add one under Settings → Sources"})
+		add(Check{Source: "Sources", Type: Warning, Message: "No source module is configured; add one under Settings → Sources", Link: moduleLink("source")})
 	}
 	if len(c.mods.Active(modules.KindMetadata)) == 0 {
-		add(Check{Source: "Metadata", Type: Notice, Message: "No metadata module is configured; series use source metadata only"})
+		add(Check{Source: "Metadata", Type: Notice, Message: "No metadata module is configured; series use source metadata only", Link: moduleLink("metadata")})
 	}
 	if len(c.mods.Active(modules.KindLibrary)) == 0 {
-		add(Check{Source: "Library servers", Type: Notice, Message: "No library server (Komga/Kavita) is configured; reader apps won't see new chapters until they rescan on their own"})
+		add(Check{Source: "Library servers", Type: Notice, Message: "No library server (Komga/Kavita) is configured; reader apps won't see new chapters until they rescan on their own", Link: moduleLink("library")})
 	}
 	for _, l := range c.mods.All("") {
 		if !l.Def.Enabled {
@@ -149,7 +195,7 @@ func (c *Checker) checkModules(ctx context.Context, add func(Check)) {
 		}
 		label := strings.ToUpper(l.Def.Kind[:1]) + l.Def.Kind[1:]
 		if l.Err != nil {
-			add(Check{Source: label, Type: Error, Message: fmt.Sprintf("%s is misconfigured: %v", l.Def.Name, l.Err)})
+			add(Check{Source: label, Type: Error, Message: fmt.Sprintf("%s is misconfigured: %v", l.Def.Name, l.Err), Link: moduleLink(l.Def.Kind)})
 			continue
 		}
 		if l.Def.Kind == string(modules.KindNotify) {
@@ -166,9 +212,9 @@ func (c *Checker) checkModules(ctx context.Context, add func(Check)) {
 		cancel()
 		switch {
 		case err != nil:
-			add(Check{Source: label, Type: Error, Message: fmt.Sprintf("%s is unavailable: %v", l.Def.Name, err)})
+			add(Check{Source: label, Type: Error, Message: fmt.Sprintf("%s is unavailable: %v", l.Def.Name, err), Link: moduleLink(l.Def.Kind)})
 		case warn != "":
-			add(Check{Source: label, Type: Warning, Message: fmt.Sprintf("%s: %s", l.Def.Name, warn)})
+			add(Check{Source: label, Type: Warning, Message: fmt.Sprintf("%s: %s", l.Def.Name, warn), Link: moduleLink(l.Def.Kind)})
 		}
 	}
 }
@@ -179,45 +225,55 @@ func (c *Checker) checkRootFolders(ctx context.Context, add func(Check)) {
 		return
 	}
 	if len(roots) == 0 {
-		add(Check{Source: "Root folders", Type: Warning, Message: "No root folder is configured"})
+		add(Check{Source: "Root folders", Type: Warning, Message: "No root folder is configured", Link: "/settings/media"})
 	}
 	mm, _ := c.settings.MediaManagement(ctx)
 	for _, r := range roots {
 		if err := fsutil.Writable(r.Path); err != nil {
-			add(Check{Source: "Root folders", Type: Error, Message: fmt.Sprintf("%s is not writable: %v", r.Path, err)})
+			add(Check{Source: "Root folders", Type: Error, Message: fmt.Sprintf("%s is not writable: %v", r.Path, err), Link: "/settings/media"})
 			continue
 		}
 		if free, err := fsutil.FreeSpace(r.Path); err == nil && mm.MinFreeSpaceMB > 0 && free < uint64(mm.MinFreeSpaceMB)*2<<20 {
-			add(Check{Source: "Root folders", Type: Warning, Message: fmt.Sprintf("%s is low on space (%d MB free)", r.Path, free>>20)})
+			add(Check{Source: "Root folders", Type: Warning, Message: fmt.Sprintf("%s is low on space (%d MB free)", r.Path, free>>20), Link: "/settings/media"})
 		}
 	}
 }
 
 func (c *Checker) checkSources(ctx context.Context, add func(Check)) {
 	type row struct {
+		SeriesID   int64  `bun:"series_id"`
 		Title      string `bun:"title"`
 		SourceName string `bun:"source_name"`
 		Failures   int    `bun:"consecutive_failures"`
 		LastError  string `bun:"last_error"`
 	}
 	var failing []row
-	_ = c.db.NewSelect().TableExpr("series_sources AS ss").ColumnExpr("s.title, ss.source_name, ss.consecutive_failures, ss.last_error").
+	_ = c.db.NewSelect().TableExpr("series_sources AS ss").ColumnExpr("ss.series_id, s.title, ss.source_name, ss.consecutive_failures, ss.last_error").
 		Join("JOIN series AS s ON s.id = ss.series_id").Where("ss.enabled = ? AND ss.consecutive_failures >= 3", true).
 		OrderExpr("ss.consecutive_failures DESC").Limit(50).Scan(ctx, &failing)
-	bySource := map[string][]string{}
+	bySource := map[string][]CheckItem{}
+	var order []string
 	for _, f := range failing {
-		bySource[f.SourceName] = append(bySource[f.SourceName], f.Title)
+		if _, ok := bySource[f.SourceName]; !ok {
+			order = append(order, f.SourceName)
+		}
+		bySource[f.SourceName] = append(bySource[f.SourceName], seriesItem(f.SeriesID, f.Title,
+			fmt.Sprintf("%d failed checks in a row: %s", f.Failures, f.LastError)))
 	}
-	for src, titles := range bySource {
-		msg := fmt.Sprintf("%s keeps failing for %d series (%s)", src, len(titles), strings.Join(first(titles, 3), ", "))
-		add(Check{Source: "Sources", Type: Warning, Message: msg})
+	for _, src := range order {
+		items := bySource[src]
+		add(Check{Source: "Sources", Type: Warning, Message: fmt.Sprintf("%s keeps failing for %d series", src, len(items)), Items: items})
 	}
-	var orphans []string
-	_ = c.db.NewSelect().Model((*model.Series)(nil)).Column("title").
+	var orphans []model.Series
+	_ = c.db.NewSelect().Model(&orphans).Column("id", "title").
 		Where("monitored = ? AND NOT EXISTS (SELECT 1 FROM series_sources ss WHERE ss.series_id = series.id AND ss.enabled = ?)", true, true).
-		Limit(20).Scan(ctx, &orphans)
+		Order("title").Limit(20).Scan(ctx)
 	if len(orphans) > 0 {
-		add(Check{Source: "Series", Type: Warning, Message: fmt.Sprintf("%d monitored series have no enabled source (%s)", len(orphans), strings.Join(first(orphans, 3), ", "))})
+		items := make([]CheckItem, 0, len(orphans))
+		for _, o := range orphans {
+			items = append(items, seriesItem(o.ID, o.Title, "no enabled source: link or enable one"))
+		}
+		add(Check{Source: "Series", Type: Warning, Message: fmt.Sprintf("%d monitored series have no enabled source", len(orphans)), Items: items})
 	}
 }
 
@@ -225,7 +281,7 @@ func (c *Checker) checkQueue(ctx context.Context, add func(Check)) {
 	n, _ := c.db.NewSelect().Model((*model.DownloadJob)(nil)).Where("status = ?", model.JobFailed).
 		Where("updated_at > ?", time.Now().UTC().Add(-24*time.Hour)).Count(ctx)
 	if n > 0 {
-		add(Check{Source: "Downloads", Type: Warning, Message: fmt.Sprintf("%d downloads failed in the last 24 hours", n)})
+		add(Check{Source: "Downloads", Type: Warning, Message: fmt.Sprintf("%d downloads failed in the last 24 hours", n), Link: "/activity/queue?status=failed"})
 	}
 }
 
@@ -237,7 +293,7 @@ func (c *Checker) checkReaders(ctx context.Context, add func(Check)) {
 	_ = c.db.NewSelect().TableExpr("reader_accounts AS a").ColumnExpr("r.name, a.last_error").
 		Join("JOIN readers AS r ON r.id = a.reader_id").Where("a.last_error <> ''").Scan(ctx, &bad)
 	for _, b := range bad {
-		add(Check{Source: "Readers", Type: Warning, Message: fmt.Sprintf("progress sync for %s fails: %s", b.Name, b.LastError)})
+		add(Check{Source: "Readers", Type: Warning, Message: fmt.Sprintf("progress sync for %s fails: %s", b.Name, b.LastError), Link: "/settings/readers"})
 	}
 }
 
@@ -248,7 +304,7 @@ func (c *Checker) checkUpscale(ctx context.Context, add func(Check)) {
 	}
 	for _, p := range profiles {
 		if p.Config.Upscale.Enabled && len(c.mods.Active(modules.KindUpscale)) == 0 {
-			add(Check{Source: "Upscaling", Type: Warning, Message: fmt.Sprintf("profile %q enables upscaling but no upscaler module is configured", p.Name)})
+			add(Check{Source: "Upscaling", Type: Warning, Message: fmt.Sprintf("profile %q enables upscaling but no upscaler module is configured", p.Name), Link: moduleLink("upscale")})
 		}
 	}
 }

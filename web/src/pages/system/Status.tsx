@@ -1,7 +1,8 @@
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router";
 import { AlertTriangle, CheckCircle2, Info, LifeBuoy, RefreshCw, XCircle } from "lucide-react";
-import { api, apiUrl, unwrap } from "../../api/client";
+import { api, apiUrl, unwrap, type S } from "../../api/client";
 import { useCommands, useHealth } from "../../api/queries";
 import { Badge, Button, Card, Loading, PageHeader, Progress, Table, Td, Th } from "../../components/ui";
 import { bytes, dateTime, duration, relative } from "../../lib/format";
@@ -48,8 +49,17 @@ export function StatusPage() {
           {health?.checks.map((c, i) => (
             <div key={i} className="flex items-start gap-2 text-sm">
               {icon(c.type)}
-              <span className="font-medium">{c.source}:</span>
-              <span className="text-fg/85">{c.message}</span>
+              <div className="min-w-0">
+                <span className="font-medium">{c.source}:</span>{" "}
+                {c.link ? (
+                  <Link to={c.link} className="text-fg/85 underline decoration-muted decoration-dotted underline-offset-2 hover:text-accent-2">
+                    {c.message}
+                  </Link>
+                ) : (
+                  <span className="text-fg/85">{c.message}</span>
+                )}
+                {c.items && c.items.length > 0 && <CheckItems items={c.items} />}
+              </div>
             </div>
           ))}
         </div>
@@ -301,6 +311,32 @@ function ProcessingCard() {
         Encoders: {data.engines.map((e) => `${e.name} (${e.format}${e.slow ? ", slow" : ""})`).join(", ") || "none"}
       </p>
     </Card>
+  );
+}
+
+/** CheckItems lists what a health check is about, linked (first 10, then "show all"). */
+function CheckItems({ items }: { items: NonNullable<S["HealthCheck"]["items"]> }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? items : items.slice(0, 10);
+  return (
+    <div className="mt-1 flex flex-wrap gap-1.5">
+      {shown.map((it, i) =>
+        it.link ? (
+          <Link key={i} to={it.link} title={it.detail} className="rounded border border-border bg-panel-2 px-1.5 py-0.5 text-xs hover:border-accent hover:text-accent-2">
+            {it.label}
+          </Link>
+        ) : (
+          <span key={i} title={it.detail} className="rounded border border-border bg-panel-2 px-1.5 py-0.5 text-xs">
+            {it.label}
+          </span>
+        ),
+      )}
+      {items.length > shown.length && (
+        <button type="button" className="text-xs text-accent-2 hover:underline" onClick={() => setAll(true)}>
+          +{items.length - shown.length} more
+        </button>
+      )}
+    </div>
   );
 }
 
