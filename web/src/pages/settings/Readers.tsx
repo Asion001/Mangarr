@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, RefreshCw, Trash2, UserPlus } from "lucide-react";
 import { api, unwrap, type Reader } from "../../api/client";
 import { useModules, usePushCommand, useReaders, useSchema } from "../../api/queries";
@@ -11,6 +11,8 @@ import { useToast } from "../../lib/toast";
 export function ReadersPage() {
   const { data, isLoading, error } = useReaders();
   const { data: libs } = useModules("library");
+  const { data: rs } = useQuery({ queryKey: ["settings", "readsync"], queryFn: () => unwrap(api.GET("/api/v1/settings/readsync")) });
+  const syncEvery = Math.max(rs?.intervalMinutes ?? 30, 5);
   const push = usePushCommand();
   const qc = useQueryClient();
   const toast = useToast();
@@ -90,6 +92,19 @@ export function ReadersPage() {
                   <Badge tone="info">{a.moduleName}</Badge>
                   <span className="flex-1 truncate">{a.externalUser}</span>
                   <span className="text-xs text-muted">synced {relative(a.lastSyncAt)}</span>
+                  {a.liveCapable ? (
+                    a.live?.connected ? (
+                      <Badge tone="ok" title={a.live.lastEventAt ? `last change ${relative(a.live.lastEventAt)}` : "connected"}>
+                        live
+                      </Badge>
+                    ) : (
+                      <Badge tone="warn" title={a.live?.error || "connecting"}>
+                        reconnecting
+                      </Badge>
+                    )
+                  ) : (
+                    <span className="text-xs text-muted">every {syncEvery} min</span>
+                  )}
                   {a.lastError && <Badge tone="err" title={a.lastError}>error</Badge>}
                   <IconButton title="Remove account" onClick={() => removeAccount(r, a.id)}>
                     <Trash2 className="size-4" />

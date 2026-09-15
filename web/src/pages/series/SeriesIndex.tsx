@@ -9,8 +9,8 @@ import { bytes, date } from "../../lib/format";
 import { useQueryParam } from "../../lib/urlState";
 import { MassEditBar } from "./Organize";
 
-type Filter = "all" | "monitored" | "missing" | "ongoing" | "completed";
-type Sort = "title" | "added" | "latest" | "missing" | "size";
+type Filter = "all" | "monitored" | "missing" | "ongoing" | "completed" | "unread" | "reading";
+type Sort = "title" | "added" | "latest" | "missing" | "size" | "read";
 
 export function statusTone(s: string) {
   return s === "ongoing" ? "ok" : s === "completed" ? "info" : s === "hiatus" ? "warn" : s === "cancelled" ? "err" : "default";
@@ -21,6 +21,16 @@ function progressOf(s: Series) {
   if (monitoredCount === 0) return { pct: 0, tone: "accent" as const };
   const pct = ((monitoredCount - missingCount) / monitoredCount) * 100;
   return { pct, tone: missingCount === 0 ? ("ok" as const) : fileCount === 0 ? ("err" as const) : ("warn" as const) };
+}
+
+/** ReadBar is a thin bar of chapters read. */
+function ReadBar({ s }: { s: Series }) {
+  const pct = s.stats.chapterCount > 0 ? Math.min(100, (s.stats.readCount / s.stats.chapterCount) * 100) : 0;
+  return (
+    <div className="-mt-1 h-1 overflow-hidden rounded-full bg-panel-2" title={`${s.stats.readCount} of ${s.stats.chapterCount} read`}>
+      <div className="h-full rounded-full bg-info" style={{ width: `${pct}%` }} />
+    </div>
+  );
 }
 
 export function SeriesIndex() {
@@ -48,6 +58,8 @@ export function SeriesIndex() {
     if (needle) l = l.filter((s) => s.title.toLowerCase().includes(needle) || s.metadata.altTitles?.some((t) => t.toLowerCase().includes(needle)));
     if (filter === "monitored") l = l.filter((s) => s.monitored);
     if (filter === "missing") l = l.filter((s) => s.stats.missingCount > 0);
+    if (filter === "unread") l = l.filter((s) => s.stats.readCount < s.stats.chapterCount);
+    if (filter === "reading") l = l.filter((s) => s.stats.readCount > 0 && s.stats.readCount < s.stats.chapterCount);
     if (filter === "ongoing") l = l.filter((s) => s.status === "ongoing");
     if (filter === "completed") l = l.filter((s) => s.status === "completed");
     const by: Record<Sort, (a: Series, b: Series) => number> = {
@@ -55,6 +67,7 @@ export function SeriesIndex() {
       added: (a, b) => b.addedAt.localeCompare(a.addedAt),
       latest: (a, b) => b.stats.lastChapter - a.stats.lastChapter,
       missing: (a, b) => b.stats.missingCount - a.stats.missingCount,
+      read: (a, b) => (b.stats.lastReadAt ?? "").localeCompare(a.stats.lastReadAt ?? ""),
       size: (a, b) => b.stats.sizeOnDisk - a.stats.sizeOnDisk,
     };
     return l.sort(by[sort]);
@@ -94,6 +107,8 @@ export function SeriesIndex() {
           <option value="missing">Missing chapters</option>
           <option value="ongoing">Ongoing</option>
           <option value="completed">Completed</option>
+          <option value="unread">With unread chapters</option>
+          <option value="reading">Started reading</option>
         </Select>
         <Select className="w-auto" value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
           <option value="title">Sort: title</option>
@@ -101,6 +116,7 @@ export function SeriesIndex() {
           <option value="latest">Sort: latest chapter</option>
           <option value="missing">Sort: missing</option>
           <option value="size">Sort: size</option>
+          <option value="read">Sort: recently read</option>
         </Select>
         <div className="ml-auto flex gap-1">
           <Button
@@ -153,9 +169,11 @@ export function SeriesIndex() {
                   )}
                 </div>
                 <Progress value={p.pct} tone={p.tone} />
+                {s.stats.readCount > 0 && <ReadBar s={s} />}
                 <div className="line-clamp-2 text-sm font-medium leading-tight">{s.title}</div>
                 <div className="-mt-1 text-xs text-muted">
                   {s.stats.fileCount}/{s.stats.chapterCount} chapters
+                  {s.stats.readCount > 0 && ` · ${s.stats.readCount} read`}
                 </div>
               </Link>
             );
@@ -196,6 +214,7 @@ export function SeriesIndex() {
                     <div className="w-24"><Progress value={progressOf(s).pct} tone={progressOf(s).tone} /></div>
                     <span className="text-xs text-muted">
                       {s.stats.fileCount}/{s.stats.chapterCount}
+                      {s.stats.readCount > 0 && ` · ${s.stats.readCount} read`}
                     </span>
                   </div>
                 </Td>

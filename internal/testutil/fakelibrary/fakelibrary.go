@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/Asion001/mangarr/internal/modules"
 	"github.com/Asion001/mangarr/internal/modules/library"
@@ -27,6 +28,60 @@ type Scenario struct {
 	// set, limits which paths the server "has scanned" (others are missing).
 	Written map[string][]library.BookProgress
 	Known   map[string]bool
+	// Live makes the module push progress (library.ProgressWatcher): see Push.
+	Live    bool
+	streams map[string]chan library.ProgressEvent
+}
+
+// Push sends a progress event to the account with this api key (it waits
+// until the account is watched).
+func (s *Scenario) Push(ctx context.Context, key string, ev library.ProgressEvent) error {
+	for {
+		s.mu.Lock()
+		ch := s.streams[key]
+		s.mu.Unlock()
+		if ch != nil {
+			select {
+			case ch <- ev:
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+}
+
+// LiveModule is a Module that pushes progress.
+type LiveModule struct{ Module }
+
+func (m *LiveModule) WatchProgress(ctx context.Context, acc library.Account, onEvent func(library.ProgressEvent)) error {
+	key := acc.Credentials["apiKey"]
+	ch := make(chan library.ProgressEvent)
+	m.sc.mu.Lock()
+	if m.sc.streams == nil {
+		m.sc.streams = map[string]chan library.ProgressEvent{}
+	}
+	m.sc.streams[key] = ch
+	m.sc.mu.Unlock()
+	defer func() {
+		m.sc.mu.Lock()
+		delete(m.sc.streams, key)
+		m.sc.mu.Unlock()
+	}()
+	onEvent(library.ProgressEvent{Resync: true})
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case ev := <-ch:
+			onEvent(ev)
+		}
+	}
 }
 
 var (
@@ -66,6 +121,9 @@ func init() {
 			if sc == nil {
 				// schema listing builds instances with defaults
 				return &Module{sc: &Scenario{Progress: map[string][]library.BookProgress{}}}, nil
+			}
+			if sc.Live {
+				return &LiveModule{Module{sc: sc}}, nil
 			}
 			return &Module{sc: sc}, nil
 		},

@@ -4,6 +4,7 @@ package readsync
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -163,38 +164,13 @@ func (s *Syncer) syncAccount(ctx context.Context, acc *model.ReaderAccount, idx 
 				continue
 			}
 			seen[ref.chapterID] = true
-			st := byChapter[ref.chapterID]
-			readAt := bp.ReadAt
-			if st == nil {
-				if readAt == nil && bp.Completed {
-					readAt = &now
-				}
-				st = &model.ChapterReadState{ReaderID: acc.ReaderID, ChapterID: ref.chapterID, SeriesID: ref.seriesID,
-					Completed: bp.Completed, Page: bp.Page, ReadAt: readAt, SyncedAt: now}
-				if _, err := tx.NewInsert().Model(st).Exec(ctx); err != nil {
-					return err
-				}
-				updated++
-				continue
-			}
-			if st.Origin == "" && st.Completed == bp.Completed && st.Page == bp.Page && (readAt == nil || (st.ReadAt != nil && st.ReadAt.Equal(*readAt))) {
-				continue
-			}
-			if (s.isProtected(ref.seriesID) || st.Origin != "") && (st.Completed && !bp.Completed || st.Page > bp.Page) {
-				continue // don't lower progress that is being restored or was imported
-			}
-			if readAt == nil && bp.Completed && !st.Completed {
-				readAt = &now
-			}
-			if readAt == nil {
-				readAt = st.ReadAt
-			}
-			// the server knows this chapter now; it owns the state from here on
-			st.Completed, st.Page, st.ReadAt, st.SyncedAt, st.Origin = bp.Completed, bp.Page, readAt, now, ""
-			if _, err := tx.NewUpdate().Model(st).Column("completed", "page", "read_at", "synced_at", "origin").WherePK().Exec(ctx); err != nil {
+			changed, err := s.apply(ctx, tx, acc.ReaderID, byChapter[ref.chapterID], ref, bp, now)
+			if err != nil {
 				return err
 			}
-			updated++
+			if changed {
+				updated++
+			}
 		}
 		// Chapters that still have files but are no longer reported were
 		// marked unread on the server.
@@ -216,6 +192,105 @@ func (s *Syncer) syncAccount(ctx context.Context, acc *model.ReaderAccount, idx 
 		return nil
 	})
 	return updated, err
+}
+
+// apply stores one reported book's progress (st is the current state, nil
+// when none). Restored or imported progress is never lowered, and a server
+// report takes over imported (backup) states.
+func (s *Syncer) apply(ctx context.Context, idb bun.IDB, readerID int64, st *model.ChapterReadState, ref fileRef, bp library.BookProgress, now time.Time) (bool, error) {
+	readAt := bp.ReadAt
+	if st == nil {
+		if readAt == nil && bp.Completed {
+			readAt = &now
+		}
+		st = &model.ChapterReadState{ReaderID: readerID, ChapterID: ref.chapterID, SeriesID: ref.seriesID,
+			Completed: bp.Completed, Page: bp.Page, ReadAt: readAt, SyncedAt: now}
+		_, err := idb.NewInsert().Model(st).Exec(ctx)
+		return err == nil, err
+	}
+	if st.Origin == "" && st.Completed == bp.Completed && st.Page == bp.Page && (readAt == nil || (st.ReadAt != nil && st.ReadAt.Equal(*readAt))) {
+		return false, nil
+	}
+	if (s.isProtected(ref.seriesID) || st.Origin != "") && (st.Completed && !bp.Completed || st.Page > bp.Page) {
+		return false, nil // don't lower progress that is being restored or was imported
+	}
+	if readAt == nil && bp.Completed && !st.Completed {
+		readAt = &now
+	}
+	if readAt == nil {
+		readAt = st.ReadAt
+	}
+	// the server knows this chapter now; it owns the state from here on
+	st.Completed, st.Page, st.ReadAt, st.SyncedAt, st.Origin = bp.Completed, bp.Page, readAt, now, ""
+	_, err := idb.NewUpdate().Model(st).Column("completed", "page", "read_at", "synced_at", "origin").WherePK().Exec(ctx)
+	return err == nil, err
+}
+
+// ApplyEvent stores one change pushed by a library server. It returns the
+// series that changed (0 when nothing did).
+func (s *Syncer) ApplyEvent(ctx context.Context, acc *model.ReaderAccount, ev library.ProgressEvent) (int64, error) {
+	if ev.Book == nil {
+		return 0, nil
+	}
+	idx, _, err := s.index(ctx)
+	if err != nil {
+		return 0, err
+	}
+	ref, ok := idx[filepath.Clean(ev.Book.LocalPath)]
+	if !ok {
+		return 0, nil // not one of our files
+	}
+	var cur model.ChapterReadState
+	found := true
+	if err := s.db.NewSelect().Model(&cur).Where("reader_id = ? AND chapter_id = ?", acc.ReaderID, ref.chapterID).Scan(ctx); err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			return 0, err
+		}
+		found = false
+	}
+	changed := false
+	if ev.Deleted {
+		// marked unread on the server
+		if found && cur.Origin == "" && !s.isProtected(ref.seriesID) {
+			if _, err := s.db.NewDelete().Model(&cur).WherePK().Exec(ctx); err != nil {
+				return 0, err
+			}
+			changed = true
+		}
+	} else {
+		var st *model.ChapterReadState
+		if found {
+			st = &cur
+		}
+		if changed, err = s.apply(ctx, s.db, acc.ReaderID, st, ref, *ev.Book, time.Now().UTC()); err != nil {
+			return 0, err
+		}
+	}
+	if !changed {
+		return 0, nil
+	}
+	s.bus.Changed("readers", "sync", 0)
+	s.bus.Changed("series", "updated", ref.seriesID)
+	return ref.seriesID, nil
+}
+
+// SyncAccount refreshes one reader account.
+func (s *Syncer) SyncAccount(ctx context.Context, acc *model.ReaderAccount) (int, error) {
+	idx, roots, err := s.index(ctx)
+	if err != nil {
+		return 0, err
+	}
+	n, err := s.syncAccount(ctx, acc, idx, roots)
+	now := time.Now().UTC()
+	acc.LastSyncAt, acc.LastError = &now, ""
+	if err != nil {
+		acc.LastError = err.Error()
+	}
+	_, _ = s.db.NewUpdate().Model(acc).Column("last_sync_at", "last_error").WherePK().Exec(ctx)
+	if n > 0 {
+		s.bus.Changed("readers", "sync", 0)
+	}
+	return n, err
 }
 
 // TestAccount validates credentials for a module and returns the server username.

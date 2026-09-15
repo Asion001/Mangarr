@@ -12,6 +12,7 @@ import (
 	"github.com/Asion001/mangarr/internal/model"
 	"github.com/Asion001/mangarr/internal/modules"
 	"github.com/Asion001/mangarr/internal/modules/library"
+	"github.com/Asion001/mangarr/internal/readsync"
 )
 
 func init() {
@@ -35,6 +36,10 @@ func init() {
 type ReaderAccountView struct {
 	model.ReaderAccount
 	ModuleName string `json:"moduleName"`
+	// LiveCapable is true when the server pushes progress changes (Komga);
+	// Live is the connection's state then.
+	LiveCapable bool                  `json:"liveCapable"`
+	Live        *readsync.WatchStatus `json:"live,omitempty"`
 }
 
 type ReaderResource struct {
@@ -68,6 +73,7 @@ func (s *Server) readerResources(ctx context.Context) ([]ReaderResource, error) 
 	for _, c := range counts {
 		countBy[c.ReaderID] = c.N
 	}
+	live := s.app.Watcher.Status()
 	out := make([]ReaderResource, 0, len(readers))
 	for _, r := range readers {
 		rr := ReaderResource{Reader: r, Accounts: []ReaderAccountView{}, CompletedCount: countBy[r.ID]}
@@ -79,7 +85,14 @@ func (s *Server) readerResources(ctx context.Context) ([]ReaderResource, error) 
 			if l, ok := s.app.Modules.Get(a.ModuleID); ok {
 				name = l.Def.Name
 			}
-			rr.Accounts = append(rr.Accounts, ReaderAccountView{ReaderAccount: a, ModuleName: name})
+			v := ReaderAccountView{ReaderAccount: a, ModuleName: name}
+			if _, _, err := modules.GetAs[library.ProgressWatcher](s.app.Modules, a.ModuleID); err == nil {
+				v.LiveCapable = true
+				if st, ok := live[a.ID]; ok {
+					v.Live = &st
+				}
+			}
+			rr.Accounts = append(rr.Accounts, v)
 		}
 		out = append(out, rr)
 	}
@@ -146,6 +159,7 @@ func (s *Server) registerReaders() {
 			}
 			s.app.Bus.Changed("readers", "updated", in.ID)
 			_, _ = s.app.Queue.Push(ctx, "SyncReadProgress", nil, "account-added")
+			go s.app.Watcher.Refresh(context.Background())
 			return &struct{ Body model.ReaderAccount }{acc}, nil
 		})
 	huma.Register(s.api, huma.Operation{OperationID: "readers-account-delete", Method: http.MethodDelete, Path: "/api/v1/readers/{id}/accounts/{accountId}", Tags: tags},
@@ -155,6 +169,7 @@ func (s *Server) registerReaders() {
 		}) (*struct{}, error) {
 			_, err := s.app.DB.NewDelete().Model((*model.ReaderAccount)(nil)).Where("id = ? AND reader_id = ?", in.AccountID, in.ID).Exec(ctx)
 			s.app.Bus.Changed("readers", "updated", in.ID)
+			go s.app.Watcher.Refresh(context.Background())
 			return nil, toHTTPError(err)
 		})
 

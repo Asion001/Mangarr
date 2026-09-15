@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, FilePen, HardDrive, Pencil, RefreshCw, Search, Sparkles, Trash2, FileSearch, BookText } from "lucide-react";
+import { BookOpen, ExternalLink, Eye, FilePen, HardDrive, Pencil, RefreshCw, Search, Sparkles, Trash2, FileSearch, BookText } from "lucide-react";
 import { api, apiUrl, unwrap } from "../../api/client";
 import { usePushCommand, useSeries } from "../../api/queries";
 import { Cover } from "../../components/Cover";
 import { Badge, Button, Confirm, ErrorBox, Loading, Switch } from "../../components/ui";
-import { bytes } from "../../lib/format";
+import { bytes, relative } from "../../lib/format";
 import { useToast } from "../../lib/toast";
 import { statusTone } from "./SeriesIndex";
 import { SourcesPanel } from "./SourcesPanel";
@@ -87,6 +87,31 @@ export function SeriesDetail() {
             <Stat label="Cleaned" value={String(s.stats.cleanedCount)} />
             <Stat label="On disk" value={s.stats.spaceSaved > 0 ? `${bytes(s.stats.sizeOnDisk)} (saved ${bytes(s.stats.spaceSaved)})` : bytes(s.stats.sizeOnDisk)} />
           </div>
+          {s.reading && (s.reading.readers.length > 0 || s.reading.webUrl) && (
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+              {s.reading.nextUnread && (
+                <span className="flex items-center gap-1">
+                  <BookOpen className="size-4 text-info" />
+                  Continue: ch. {s.reading.nextUnread.number}
+                  {s.reading.nextUnread.title && s.reading.nextUnread.title !== s.reading.nextUnread.number && (
+                    <span className="text-muted">{s.reading.nextUnread.title}</span>
+                  )}
+                  {!s.reading.nextUnread.available && <Badge tone="warn">not downloaded</Badge>}
+                </span>
+              )}
+              {s.reading.readers.map((r) => (
+                <span key={r.readerId} className="text-muted" title={r.lastReadAt ? `last read ${relative(r.lastReadAt)}` : undefined}>
+                  <Eye className="mr-1 inline size-3.5" />
+                  {r.reader}: {r.read}/{s.stats.chapterCount} read{r.inProgress > 0 && `, ${r.inProgress} started`}
+                </span>
+              ))}
+              {s.reading.webUrl && (
+                <a href={s.reading.webUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-accent-2 hover:underline">
+                  <ExternalLink className="size-3.5" /> Open in {s.reading.webName || "library"}
+                </a>
+              )}
+            </div>
+          )}
           {(md.authors?.length || md.artists?.length) && (
             <p className="mt-3 text-sm text-muted">
               {md.authors?.length ? <>Story: {md.authors.join(", ")}</> : null}

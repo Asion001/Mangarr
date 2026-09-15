@@ -18,6 +18,7 @@ import (
 	"github.com/Asion001/mangarr/internal/metadataagg"
 	"github.com/Asion001/mangarr/internal/model"
 	"github.com/Asion001/mangarr/internal/modules"
+	"github.com/Asion001/mangarr/internal/modules/library"
 	"github.com/Asion001/mangarr/internal/modules/metadata"
 	"github.com/Asion001/mangarr/internal/modules/source"
 	"github.com/Asion001/mangarr/internal/naming"
@@ -37,6 +38,36 @@ type SeriesStats struct {
 	// SpaceSaved is how much smaller processing (re-encoding) made the files.
 	SpaceSaved  int64   `json:"spaceSaved"`
 	LastChapter float64 `json:"lastChapter"`
+	// Read progress over readers who count for cleanup (all readers when
+	// none do): chapters finished, chapters started, last read.
+	ReadCount       int        `json:"readCount"`
+	InProgressCount int        `json:"inProgressCount"`
+	LastReadAt      *time.Time `json:"lastReadAt,omitempty"`
+}
+
+// ReadingInfo is a series' reading progress (series detail).
+type ReadingInfo struct {
+	// NextUnread is the first chapter after the last one read.
+	NextUnread *NextChapter     `json:"nextUnread,omitempty"`
+	Readers    []ReaderProgress `json:"readers"`
+	// WebURL opens the series on a library server (e.g. Komga).
+	WebURL  string `json:"webUrl,omitempty"`
+	WebName string `json:"webName,omitempty"`
+}
+
+type NextChapter struct {
+	ChapterID int64  `json:"chapterId"`
+	Number    string `json:"number"`
+	Title     string `json:"title,omitempty"`
+	Available bool   `json:"available"` // has a file
+}
+
+type ReaderProgress struct {
+	ReaderID   int64      `json:"readerId"`
+	Reader     string     `json:"reader"`
+	Read       int        `json:"read"`
+	InProgress int        `json:"inProgress"`
+	LastReadAt *time.Time `json:"lastReadAt,omitempty"`
 }
 
 type SeriesResource struct {
@@ -45,6 +76,7 @@ type SeriesResource struct {
 	Sources  []model.SeriesSource `json:"sources,omitempty"`
 	CoverURL string               `json:"coverUrl"`
 	FullPath string               `json:"fullPath,omitempty"`
+	Reading  *ReadingInfo         `json:"reading,omitempty"`
 }
 
 type statsRow struct {
@@ -97,7 +129,108 @@ func (s *Server) seriesStats(ctx context.Context, seriesID int64) (map[int64]Ser
 		st.SizeOnDisk, st.SpaceSaved = sz.Size, sz.Saved
 		out[sz.SeriesID] = st
 	}
+	readers := s.countedReaders(ctx)
+	if len(readers) == 0 {
+		return out, nil
+	}
+	var reads []struct {
+		SeriesID   int64        `bun:"series_id"`
+		Read       int          `bun:"read_count"`
+		InProgress int          `bun:"in_progress"`
+		LastRead   bun.NullTime `bun:"last_read"`
+	}
+	rq := s.app.DB.NewSelect().TableExpr("chapter_read_states AS rs").
+		ColumnExpr("rs.series_id").
+		ColumnExpr("COUNT(DISTINCT CASE WHEN rs.completed THEN rs.chapter_id END) AS read_count").
+		ColumnExpr("COUNT(DISTINCT CASE WHEN NOT rs.completed AND rs.page > 0 THEN rs.chapter_id END) AS in_progress").
+		ColumnExpr("MAX(rs.read_at) AS last_read").
+		Where("rs.reader_id IN (?)", bun.In(readers)).GroupExpr("rs.series_id")
+	if seriesID > 0 {
+		rq = rq.Where("rs.series_id = ?", seriesID)
+	}
+	if err := rq.Scan(ctx, &reads); err != nil {
+		return nil, err
+	}
+	for _, r := range reads {
+		st := out[r.SeriesID]
+		st.ReadCount, st.InProgressCount = r.Read, r.InProgress
+		if !r.LastRead.IsZero() {
+			t := r.LastRead.Time
+			st.LastReadAt = &t
+		}
+		out[r.SeriesID] = st
+	}
 	return out, nil
+}
+
+// countedReaders are the readers whose progress counts (cleanup readers,
+// or everyone when no reader counts for cleanup).
+func (s *Server) countedReaders(ctx context.Context) []int64 {
+	var readers []model.Reader
+	_ = s.app.DB.NewSelect().Model(&readers).Scan(ctx)
+	var counted, all []int64
+	for _, r := range readers {
+		all = append(all, r.ID)
+		if r.CountForCleanup {
+			counted = append(counted, r.ID)
+		}
+	}
+	if len(counted) > 0 {
+		return counted
+	}
+	return all
+}
+
+// readingInfo describes who read what of a series, and what's next.
+func (s *Server) readingInfo(ctx context.Context, ser *model.Series, fullPath string) *ReadingInfo {
+	info := &ReadingInfo{Readers: []ReaderProgress{}}
+	var rows []struct {
+		ReaderID   int64        `bun:"reader_id"`
+		Name       string       `bun:"name"`
+		Read       int          `bun:"read_count"`
+		InProgress int          `bun:"in_progress"`
+		LastRead   bun.NullTime `bun:"last_read"`
+	}
+	_ = s.app.DB.NewSelect().TableExpr("chapter_read_states AS rs").Join("JOIN readers AS r ON r.id = rs.reader_id").
+		ColumnExpr("rs.reader_id, r.name").
+		ColumnExpr("SUM(CASE WHEN rs.completed THEN 1 ELSE 0 END) AS read_count").
+		ColumnExpr("SUM(CASE WHEN NOT rs.completed AND rs.page > 0 THEN 1 ELSE 0 END) AS in_progress").
+		ColumnExpr("MAX(rs.read_at) AS last_read").
+		Where("rs.series_id = ?", ser.ID).GroupExpr("rs.reader_id, r.name").OrderExpr("r.name").Scan(ctx, &rows)
+	for _, r := range rows {
+		rp := ReaderProgress{ReaderID: r.ReaderID, Reader: r.Name, Read: r.Read, InProgress: r.InProgress}
+		if !r.LastRead.IsZero() {
+			t := r.LastRead.Time
+			rp.LastReadAt = &t
+		}
+		info.Readers = append(info.Readers, rp)
+	}
+	if readers := s.countedReaders(ctx); len(readers) > 0 {
+		// the first chapter after the highest one read
+		var maxRead float64
+		err := s.app.DB.NewSelect().TableExpr("chapter_read_states AS rs").Join("JOIN chapters AS c ON c.id = rs.chapter_id").
+			ColumnExpr("COALESCE(MAX(c.number_sort), -1)").Where("rs.series_id = ? AND rs.completed AND rs.reader_id IN (?)", ser.ID, bun.In(readers)).
+			Scan(ctx, &maxRead)
+		if err == nil && maxRead >= 0 {
+			var next model.Chapter
+			if err := s.app.DB.NewSelect().Model(&next).Where("series_id = ? AND number_sort > ?", ser.ID, maxRead).
+				Order("number_sort").Limit(1).Scan(ctx); err == nil {
+				info.NextUnread = &NextChapter{ChapterID: next.ID, Number: next.NumberKey, Title: next.Title, Available: next.FileID != nil}
+			}
+		}
+	}
+	if fullPath != "" {
+		for _, m := range modules.ActiveAs[library.WebLinker](s.app.Modules, modules.KindLibrary) {
+			wctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+			u, err := m.Instance.SeriesURL(wctx, fullPath)
+			cancel()
+			if err == nil && u != "" {
+				info.WebURL, info.WebName = u, m.Def.Name
+				break
+			}
+		}
+	}
+	return info
 }
 
 func (s *Server) seriesResource(ctx context.Context, ser model.Series, stats map[int64]SeriesStats, detail bool) SeriesResource {
@@ -106,6 +239,7 @@ func (s *Server) seriesResource(ctx context.Context, ser model.Series, stats map
 	if detail {
 		_ = s.app.DB.NewSelect().Model(&r.Sources).Where("series_id = ?", ser.ID).Order("priority", "id").Scan(ctx)
 		r.FullPath, _ = s.app.Library.SeriesDir(ctx, &ser)
+		r.Reading = s.readingInfo(ctx, &ser, r.FullPath)
 	}
 	return r
 }

@@ -2712,6 +2712,13 @@ export interface components {
             folder: string;
             volume: string;
         };
+        NextChapter: {
+            available: boolean;
+            /** Format: int64 */
+            chapterId: number;
+            number: string;
+            title?: string;
+        };
         NodeStatus: {
             info: components["schemas"]["Info"];
             /** Format: date-time */
@@ -2980,9 +2987,22 @@ export interface components {
             lastError: string;
             /** Format: date-time */
             lastSyncAt?: string;
+            live?: components["schemas"]["WatchStatus"];
+            liveCapable: boolean;
             /** Format: int64 */
             moduleId: number;
             moduleName: string;
+            /** Format: int64 */
+            readerId: number;
+        };
+        ReaderProgress: {
+            /** Format: int64 */
+            inProgress: number;
+            /** Format: date-time */
+            lastReadAt?: string;
+            /** Format: int64 */
+            read: number;
+            reader: string;
             /** Format: int64 */
             readerId: number;
         };
@@ -3004,6 +3024,12 @@ export interface components {
         "Readers-updateRequest": {
             countForCleanup: boolean;
             name: string;
+        };
+        ReadingInfo: {
+            nextUnread?: components["schemas"]["NextChapter"];
+            readers: components["schemas"]["ReaderProgress"][];
+            webName?: string;
+            webUrl?: string;
         };
         ReleaseView: {
             blocklisted: boolean;
@@ -3154,6 +3180,7 @@ export interface components {
             path: string;
             /** Format: int64 */
             profileId: number;
+            reading?: components["schemas"]["ReadingInfo"];
             readingDirection: string;
             /** Format: int64 */
             rootFolderId: number;
@@ -3205,12 +3232,18 @@ export interface components {
             cleanedCount: number;
             /** Format: int64 */
             fileCount: number;
+            /** Format: int64 */
+            inProgressCount: number;
             /** Format: double */
             lastChapter: number;
+            /** Format: date-time */
+            lastReadAt?: string;
             /** Format: int64 */
             missingCount: number;
             /** Format: int64 */
             monitoredCount: number;
+            /** Format: int64 */
+            readCount: number;
             /** Format: int64 */
             sizeOnDisk: number;
             /** Format: int64 */
@@ -3479,6 +3512,16 @@ export interface components {
             pageSize: number;
             /** Format: int64 */
             total: number;
+        };
+        WatchStatus: {
+            /** Format: int64 */
+            accountId: number;
+            connected: boolean;
+            /** Format: date-time */
+            connectedAt?: string;
+            error?: string;
+            /** Format: date-time */
+            lastEventAt?: string;
         };
     };
     responses: never;

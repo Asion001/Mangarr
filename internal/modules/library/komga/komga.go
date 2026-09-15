@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"path"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Asion001/mangarr/internal/modules"
@@ -44,6 +45,9 @@ type Module struct {
 	s    *Settings
 	http *http.Client
 	pm   library.PathMap
+
+	dirsOnce sync.Once
+	dirs     *seriesDirs
 }
 
 func (m *Module) do(ctx context.Context, key, method, p string, body, out any) error {

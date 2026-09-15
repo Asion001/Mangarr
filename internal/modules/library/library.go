@@ -68,3 +68,28 @@ type ProgressWriter interface {
 	// Missing lists paths the server doesn't know (yet).
 	WriteProgress(ctx context.Context, acc Account, items []BookProgress) (written int, missing []string, err error)
 }
+
+// ProgressEvent is a progress change pushed by a server.
+type ProgressEvent struct {
+	// Book is the changed book (nil for Resync).
+	Book *BookProgress
+	// Deleted is true when the book's progress was removed (marked unread).
+	Deleted bool
+	// Resync asks for a full sync of the account: many books changed, or
+	// events may have been missed (e.g. right after connecting).
+	Resync bool
+}
+
+// ProgressWatcher is implemented by servers that push progress changes.
+type ProgressWatcher interface {
+	// WatchProgress streams the account's changes to onEvent until ctx ends
+	// or the connection breaks (returning why). It sends a Resync event once
+	// connected.
+	WatchProgress(ctx context.Context, acc Account, onEvent func(ProgressEvent)) error
+}
+
+// WebLinker is implemented by servers with a web UI to link series to.
+type WebLinker interface {
+	// SeriesURL returns the server's page for the local series folder ("" when unknown).
+	SeriesURL(ctx context.Context, localDir string) (string, error)
+}
