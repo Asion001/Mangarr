@@ -12,7 +12,7 @@ backups-upload POST /api/v1/system/backups/upload -> admin
 blocklist-delete DELETE /api/v1/blocklist/{id} -> library.manage
 blocklist-list GET /api/v1/blocklist -> library.manage
 calendar GET /api/v1/calendar -> library.manage
-catalogs-list GET /api/v1/catalogs -> library.manage
+catalogs-list GET /api/v1/catalogs -> library.manage | requests.manage
 catalogs-update PUT /api/v1/catalogs -> admin
 chapter-decision GET /api/v1/series/{id}/chapters/{chapterId}/decision -> library.manage
 chapter-restore POST /api/v1/chapters/{id}/restore -> library.manage
@@ -72,7 +72,7 @@ processing-resume POST /api/v1/processing/resume -> admin
 processing-status GET /api/v1/processing -> admin
 profiles-create POST /api/v1/profiles -> admin
 profiles-delete DELETE /api/v1/profiles/{id} -> admin
-profiles-list GET /api/v1/profiles -> library.manage
+profiles-list GET /api/v1/profiles -> library.manage | requests.manage
 profiles-process-estimate GET /api/v1/profiles/{id}/process-estimate -> admin
 profiles-update PUT /api/v1/profiles/{id} -> admin
 queue-bulk POST /api/v1/queue/bulk -> library.manage
@@ -101,11 +101,19 @@ reading-keys-create POST /api/v1/reading/keys -> apps
 reading-keys-delete DELETE /api/v1/reading/keys/{id} -> apps
 reading-shelf GET /api/v1/reading/shelf -> signedin
 reading-status GET /api/v1/reading/status -> apps
+requests-count GET /api/v1/requests/count -> requests.manage | library.manage
+requests-create POST /api/v1/requests -> requests.create
+requests-decline POST /api/v1/requests/{id}/decline -> requests.manage | library.manage
+requests-delete DELETE /api/v1/requests/{id} -> requests.manage | library.manage
+requests-get GET /api/v1/requests/{id} -> requests.create | requests.manage | library.manage
+requests-link POST /api/v1/requests/{id}/link -> requests.manage | library.manage
+requests-list GET /api/v1/requests -> requests.create | requests.manage | library.manage
+requests-withdraw DELETE /api/v1/requests/{id}/mine -> requests.create
 rootfolders-create POST /api/v1/rootfolders -> admin
 rootfolders-delete DELETE /api/v1/rootfolders/{id} -> admin
-rootfolders-list GET /api/v1/rootfolders -> library.manage
+rootfolders-list GET /api/v1/rootfolders -> library.manage | requests.manage
 rootfolders-move PUT /api/v1/rootfolders/{id} -> admin
-series-add POST /api/v1/series -> library.manage
+series-add POST /api/v1/series -> library.manage | requests.manage
 series-chapters GET /api/v1/series/{id}/chapters -> signedin
 series-cover GET /api/v1/series/{id}/cover -> signedin
 series-delete DELETE /api/v1/series/{id} -> library.manage
@@ -144,12 +152,12 @@ settings-put-sources PUT /api/v1/settings/sources -> admin
 settings-regenerate-apikey POST /api/v1/settings/general/apikey -> admin
 source-preferences GET /api/v1/sources/{moduleId}/{sourceId}/preferences -> admin
 source-preferences-set PUT /api/v1/sources/{moduleId}/{sourceId}/preferences -> admin
-sources-browse GET /api/v1/sources/{moduleId}/{sourceId}/browse -> library.manage
-sources-list GET /api/v1/sources -> library.manage
-sources-manga GET /api/v1/sources/{moduleId}/{sourceId}/manga -> library.manage
-sources-quick-search POST /api/v1/sources/quick-search -> library.manage
-sources-search GET /api/v1/sources/search -> library.manage
-sources-thumbnail GET /api/v1/sources/{moduleId}/{sourceId}/thumbnail -> library.manage
+sources-browse GET /api/v1/sources/{moduleId}/{sourceId}/browse -> library.manage | requests.manage
+sources-list GET /api/v1/sources -> library.manage | requests.manage
+sources-manga GET /api/v1/sources/{moduleId}/{sourceId}/manga -> library.manage | requests.manage
+sources-quick-search POST /api/v1/sources/quick-search -> library.manage | requests.manage
+sources-search GET /api/v1/sources/search -> library.manage | requests.manage
+sources-thumbnail GET /api/v1/sources/{moduleId}/{sourceId}/thumbnail -> library.manage | requests.manage
 stores-add POST /api/v1/modules/{id}/stores -> admin
 stores-list GET /api/v1/modules/{id}/stores -> admin
 stores-remove DELETE /api/v1/modules/{id}/stores -> admin

@@ -15,11 +15,13 @@ import (
 	"github.com/Asion001/mangarr/internal/modules"
 	"github.com/Asion001/mangarr/internal/modules/source"
 	"github.com/Asion001/mangarr/internal/notifications"
+	"github.com/Asion001/mangarr/internal/requests"
 )
 
 // MoreServices are created by wireMore.
 type MoreServices struct {
 	Notifications *notifications.Dispatcher
+	Requests      *requests.Service
 	Rescanner     *libsync.Rescanner
 	Health        *health.Checker
 	Backups       *backup.Service
@@ -31,6 +33,7 @@ func (a *App) wireMore(ctx context.Context) error {
 	log := a.Log
 	a.Notifications = notifications.New(a.DB, a.Bus, a.Modules, a.Settings, log.With("component", "notifications"))
 	a.AddService(a.Notifications)
+	a.wireRequests()
 	a.Rescanner = libsync.New(a.Modules, a.Bus, log.With("component", "libsync"))
 	a.AddService(a.Rescanner)
 	a.Backups = backup.New(a.DB, a.Settings, a.Cfg.DataDir)

@@ -17,12 +17,13 @@ import {
   Download,
   FileUp,
   UserRound,
+  Inbox,
 } from "lucide-react";
 import { api } from "../api/client";
-import { useHealth, useQueue } from "../api/queries";
+import { useHealth, usePendingRequests, useQueue } from "../api/queries";
 import { useAccount, type Perm } from "../lib/account";
 
-type NavItem = { to: string; label: string; icon: ReactNode; need?: Perm; children?: { to: string; label: string }[] };
+type NavItem = { to: string; label: string; icon: ReactNode; need?: Perm | Perm[]; children?: { to: string; label: string }[] };
 
 export function Layout() {
   const [open, setOpen] = useState(false);
@@ -33,10 +34,13 @@ export function Layout() {
   const { data: health } = useHealth(isAdmin);
   const qc = useQueryClient();
   const issues = (health?.checks ?? []).filter((c) => c.type === "error" || c.type === "warning").length;
+  const { data: requestCount } = usePendingRequests(can(["requests.manage", "library.manage"]));
+  const pendingRequests = requestCount?.pending ?? 0;
 
   const nav: NavItem[] = [
     { to: "/", label: "Series", icon: <BookOpen className="size-4" /> },
     { to: "/add", label: "Add series", icon: <PlusCircle className="size-4" />, need: "library.manage" },
+    { to: "/requests", label: "Requests", icon: <Inbox className="size-4" />, need: ["requests.create", "requests.manage", "library.manage"] },
     { to: "/import", label: "Import library", icon: <FileUp className="size-4" />, need: "admin" },
     {
       to: "/activity",
@@ -118,6 +122,7 @@ export function Layout() {
               {item.to === "/activity" && queued > 0 && (
                 <span className={`rounded-full px-1.5 text-xs text-white ${queue?.state.paused ? "bg-warn" : "bg-accent"}`}>{queued}</span>
               )}
+              {item.to === "/requests" && pendingRequests > 0 && <span className="rounded-full bg-accent px-1.5 text-xs text-white">{pendingRequests}</span>}
               {item.to === "/system" && issues > 0 && <span className="rounded-full bg-warn px-1.5 text-xs text-black">{issues}</span>}
             </NavLink>
             {item.children && active && (

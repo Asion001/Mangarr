@@ -9,6 +9,7 @@ import { useToast } from "./lib/toast";
 import { LoginPage } from "./pages/auth/Login";
 import { InvitePage } from "./pages/auth/Invite";
 import { ReaderPage } from "./pages/reader/Reader";
+import { RequestsPage } from "./pages/requests/Requests";
 import { AccountPage } from "./pages/account/Account";
 import { UsersPage } from "./pages/settings/Users";
 import { Need } from "./components/Need";
@@ -76,9 +77,10 @@ export function App() {
         <Route index element={<SeriesIndex />} />
         <Route path="series/:id" element={<SeriesDetail />} />
         <Route path="account" element={<AccountPage />} />
-        <Route path="add" element={<Need perm="library.manage"><AddSearchStep /></Need>} />
-        <Route path="add/:moduleId/:metaId/sources" element={<Need perm="library.manage"><AddSourcesStep /></Need>} />
-        <Route path="add/:moduleId/:metaId/options" element={<Need perm="library.manage"><AddOptionsStep /></Need>} />
+        <Route path="add" element={<Need perm={["library.manage", "requests.manage"]}><AddSearchStep /></Need>} />
+        <Route path="add/:moduleId/:metaId/sources" element={<Need perm={["library.manage", "requests.manage"]}><AddSourcesStep /></Need>} />
+        <Route path="add/:moduleId/:metaId/options" element={<Need perm={["library.manage", "requests.manage"]}><AddOptionsStep /></Need>} />
+        <Route path="requests" element={<Need perm={["requests.create", "requests.manage", "library.manage"]}><RequestsPage /></Need>} />
         <Route path="import" element={<Need perm="admin"><ImportsPage /></Need>} />
         <Route path="import/:id" element={<Need perm="admin"><ImportDetailPage /></Need>} />
         <Route path="activity" element={<Navigate to="/activity/queue" replace />} />

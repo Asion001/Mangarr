@@ -76,6 +76,8 @@ type AddRequest struct {
 	BlockedScanlators []string `json:"blockedScanlators,omitempty"`
 	// NoRefresh skips queueing the first refresh (the caller syncs itself).
 	NoRefresh bool `json:"-"`
+	// RequestID is the request this fulfils (the API links them).
+	RequestID int64 `json:"requestId,omitempty"`
 }
 
 // Add creates a series, links its sources and queues the first refresh.

@@ -23,6 +23,7 @@ var Tables = []string{
 	"download_jobs", "history", "blocklist", "commands", "scheduled_tasks",
 	"reader_accounts", "chapter_read_states",
 	"imports", "import_entries", "reading_keys", "read_events", "reader_prefs",
+	"requests", "request_users", "follows",
 }
 
 // ErrNotEmpty is returned when the target already has data and overwrite

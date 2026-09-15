@@ -238,7 +238,9 @@ type ProviderDefinition struct {
 	Events         []string       `bun:"events,notnull" json:"events"`
 	Settings       map[string]any `bun:"settings,notnull" json:"settings"`
 	// ManagedBy is "env:<NAME>" for instances defined by MANGARR_MODULE_<NAME>_* variables.
-	ManagedBy string    `bun:"managed_by,notnull" json:"managedBy,omitempty"`
+	ManagedBy string `bun:"managed_by,notnull" json:"managedBy,omitempty"`
+	// UserID is set on a user's own notification targets (nil: the install's).
+	UserID    *int64    `bun:"user_id" json:"userId,omitempty"`
 	CreatedAt time.Time `bun:"created_at,notnull" json:"createdAt"`
 	UpdatedAt time.Time `bun:"updated_at,notnull" json:"updatedAt"`
 }

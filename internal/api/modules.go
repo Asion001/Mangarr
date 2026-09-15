@@ -112,6 +112,9 @@ func (s *Server) registerModules() {
 		}) (*struct{ Body []ModuleResource }, error) {
 			out := []ModuleResource{}
 			for _, l := range s.app.Modules.All(modules.Kind(in.Kind)) {
+				if l.Def.UserID != nil {
+					continue // users' own targets are under their account
+				}
 				out = append(out, s.toModuleResource(l))
 			}
 			return &struct{ Body []ModuleResource }{out}, nil

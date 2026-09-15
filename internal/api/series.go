@@ -383,7 +383,54 @@ func seriesError(err error) error {
 
 type LookupResult struct {
 	metadataagg.Candidate
+	// ExistingSeriesID is the series in the library (one you can see).
 	ExistingSeriesID int64 `json:"existingSeriesId,omitempty"`
+	// Request is an open request for it.
+	Request *LookupRequest `json:"request,omitempty"`
+}
+
+// LookupRequest describes an open request for a lookup result.
+type LookupRequest struct {
+	ID     int64  `json:"id"`
+	Status string `json:"status"`
+	// Mine: you asked for it.
+	Mine bool `json:"mine"`
+}
+
+// lookupIDs are a result's external ids including its own provider's.
+func lookupIDs(md metadata.SeriesMetadata) map[string]string {
+	ids := map[string]string{}
+	for k, v := range md.ExternalIDs {
+		ids[k] = v
+	}
+	if md.Provider != "" && md.ID != "" {
+		ids[md.Provider] = md.ID
+	}
+	return ids
+}
+
+// requestedByExternalID finds open requests for lookup results.
+func (s *Server) requestedByExternalID(ctx context.Context) func(ids map[string]string) *LookupRequest {
+	var open []model.Request
+	_ = s.app.DB.NewSelect().Model(&open).Where("status IN (?)", bun.In([]string{model.RequestPending, model.RequestApproved})).Scan(ctx)
+	mine := map[int64]bool{}
+	if p := access.From(ctx); p != nil && p.Kind == access.KindUser && len(open) > 0 {
+		var ids []int64
+		_ = s.app.DB.NewSelect().Model((*model.RequestUser)(nil)).Column("request_id").Where("user_id = ?", p.UserID).Scan(ctx, &ids)
+		for _, id := range ids {
+			mine[id] = true
+		}
+	}
+	return func(ids map[string]string) *LookupRequest {
+		for _, r := range open {
+			for k, v := range ids {
+				if k != "mal" && v != "" && r.Metadata.ExternalIDs[k] == v {
+					return &LookupRequest{ID: r.ID, Status: r.Status, Mine: mine[r.ID]}
+				}
+			}
+		}
+		return nil
+	}
 }
 
 // moveAfterUpdate queues a MoveSeries command when the root folder or folder
@@ -423,9 +470,13 @@ func toBody(v any) map[string]any {
 // existingByExternalID returns a matcher from external ids to series in the library.
 func (s *Server) existingByExternalID(ctx context.Context) func(ids map[string]string) int64 {
 	var existing []model.Series
-	_ = s.app.DB.NewSelect().Model(&existing).Column("id", "metadata").Scan(ctx)
+	_ = s.app.DB.NewSelect().Model(&existing).Column("id", "metadata", "tags", "root_folder_id").Scan(ctx)
+	p := access.From(ctx)
 	return func(ids map[string]string) int64 {
 		for _, e := range existing {
+			if p != nil && !p.Sees(&e) {
+				continue // hidden series stay hidden
+			}
 			for k, v := range ids {
 				if k != "mal" && v != "" && e.Metadata.ExternalIDs[k] == v {
 					return e.ID
@@ -503,8 +554,10 @@ func (s *Server) registerSeries() {
 			}{}
 			out.Body.Results, out.Body.Errors = []LookupResult{}, []string{}
 			existing := s.existingByExternalID(ctx)
+			requested := s.requestedByExternalID(ctx)
 			for _, c := range cands {
-				out.Body.Results = append(out.Body.Results, LookupResult{Candidate: c, ExistingSeriesID: existing(c.ExternalIDs)})
+				out.Body.Results = append(out.Body.Results, LookupResult{Candidate: c, ExistingSeriesID: existing(lookupIDs(c.SeriesMetadata)),
+					Request: requested(lookupIDs(c.SeriesMetadata))})
 			}
 			for _, e := range errs {
 				out.Body.Errors = append(out.Body.Errors, e.Error())
@@ -527,7 +580,8 @@ func (s *Server) registerSeries() {
 				return nil, huma.Error404NotFound(err.Error())
 			}
 			c := metadataagg.Candidate{SeriesMetadata: *md, ModuleID: def.ID, ModuleName: def.Name}
-			return &struct{ Body LookupResult }{LookupResult{Candidate: c, ExistingSeriesID: s.existingByExternalID(ctx)(md.ExternalIDs)}}, nil
+			ids := lookupIDs(*md)
+			return &struct{ Body LookupResult }{LookupResult{Candidate: c, ExistingSeriesID: s.existingByExternalID(ctx)(ids), Request: s.requestedByExternalID(ctx)(ids)}}, nil
 		})
 
 	huma.Register(s.api, huma.Operation{OperationID: "series-add", Method: http.MethodPost, Path: "/api/v1/series", Tags: tags},
@@ -535,6 +589,11 @@ func (s *Server) registerSeries() {
 			ser, err := s.app.Series.Add(ctx, in.Body)
 			if err != nil {
 				return nil, seriesError(err)
+			}
+			if in.Body.RequestID > 0 {
+				if err := s.app.Requests.Link(ctx, in.Body.RequestID, ser.ID, access.From(ctx)); err != nil {
+					s.app.Log.Warn("link request", "request", in.Body.RequestID, "err", err)
+				}
 			}
 			return &struct{ Body SeriesResource }{s.seriesResource(ctx, *ser, nil, true)}, nil
 		})

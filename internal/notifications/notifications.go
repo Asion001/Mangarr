@@ -36,6 +36,10 @@ type Dispatcher struct {
 	// DigestMax caps how long a digest may be delayed.
 	DigestMax time.Duration
 
+	// Followers lists the users to tell about a series' new chapters (those
+	// following it who can see it).
+	Followers func(ctx context.Context, seriesID int64) []int64
+
 	mu      sync.Mutex
 	digests map[int64]*digest
 	status  map[int64]*instanceStatus
@@ -75,6 +79,9 @@ func (d *Dispatcher) Status() map[int64]instanceStatus {
 	defer d.mu.Unlock()
 	out := map[int64]instanceStatus{}
 	for id, s := range d.status {
+		if l, ok := d.mods.Get(id); ok && l.Def.UserID != nil {
+			continue // a user's own target is their business
+		}
 		if s.Failures > 0 {
 			out[id] = *s
 		}
@@ -134,7 +141,13 @@ func (d *Dispatcher) flush(seriesID int64) {
 		return
 	}
 	if len(dg.items) > 0 {
-		d.dispatch(events.ChapterImported, seriesID, DigestMessage(dg.title, dg.cover, dg.items, false))
+		msg := DigestMessage(dg.title, dg.cover, dg.items, false)
+		d.dispatch(events.ChapterImported, seriesID, msg)
+		if d.Followers != nil {
+			if users := d.Followers(d.context(), seriesID); len(users) > 0 {
+				d.SendToUsers(users, events.ChapterImported, seriesID, msg)
+			}
+		}
 	}
 	if len(dg.upgraded) > 0 {
 		d.dispatch(events.ChapterUpgraded, seriesID, DigestMessage(dg.title, dg.cover, dg.upgraded, true))
@@ -197,12 +210,15 @@ func wants(def model.ProviderDefinition, event string) bool {
 
 var backoffSteps = []time.Duration{0, time.Minute, 5 * time.Minute, 15 * time.Minute, 30 * time.Minute, time.Hour, 3 * time.Hour, 6 * time.Hour, 12 * time.Hour, 24 * time.Hour}
 
-// Send delivers msg to one instance synchronously (used by tests/"Test" buttons).
-func (d *Dispatcher) dispatch(event string, seriesID int64, msg notify.Message) {
-	ctx := d.ctx
-	if ctx == nil {
-		ctx = context.Background()
+func (d *Dispatcher) context() context.Context {
+	if d.ctx == nil {
+		return context.Background()
 	}
+	return d.ctx
+}
+
+// fill completes a message about a series (title, link).
+func (d *Dispatcher) fill(ctx context.Context, event string, seriesID int64, msg *notify.Message) []int64 {
 	msg.Event, msg.SeriesID = event, seriesID
 	var seriesTags []int64
 	if seriesID > 0 {
@@ -213,39 +229,80 @@ func (d *Dispatcher) dispatch(event string, seriesID int64, msg notify.Message) 
 				msg.Series = s.Title
 			}
 		}
-		if g, err := d.settings.General(ctx); err == nil && g.PublicURL != "" {
+		if g, err := d.settings.General(ctx); err == nil && g.PublicURL != "" && msg.URL == "" {
 			msg.URL = g.PublicURL + "/series/" + strconv.FormatInt(seriesID, 10)
 		}
 	}
+	return seriesTags
+}
+
+// dispatch sends an event to the install's notification targets.
+func (d *Dispatcher) dispatch(event string, seriesID int64, msg notify.Message) {
+	ctx := d.context()
+	seriesTags := d.fill(ctx, event, seriesID, &msg)
 	for _, inst := range modules.ActiveAs[notify.Module](d.mods, modules.KindNotify) {
-		if !wants(inst.Def, event) || !tagsMatch(inst.Def.Tags, seriesTags) {
+		if inst.Def.UserID != nil || !wants(inst.Def, event) || !tagsMatch(inst.Def.Tags, seriesTags) {
 			continue
 		}
-		d.mu.Lock()
-		st := d.status[inst.Def.ID]
-		if st == nil {
-			st = &instanceStatus{}
-			d.status[inst.Def.ID] = st
-		}
-		skip := time.Now().Before(st.Until)
-		d.mu.Unlock()
-		if skip {
-			continue
-		}
-		sctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		err := inst.Instance.Send(sctx, msg)
-		cancel()
-		d.mu.Lock()
-		if err != nil {
-			st.Failures++
-			st.LastError = err.Error()
-			st.Until = time.Now().Add(backoffSteps[min(st.Failures, len(backoffSteps)-1)])
-			d.log.Warn("notification failed", "instance", inst.Def.Name, "event", event, "err", err)
-		} else {
-			st.Failures, st.LastError, st.Until = 0, "", time.Time{}
-		}
-		d.mu.Unlock()
+		d.send(ctx, inst, event, msg)
 	}
+}
+
+// SendToUsers sends an event to those users' own notification targets.
+func (d *Dispatcher) SendToUsers(users []int64, event string, seriesID int64, msg notify.Message) {
+	ctx := d.context()
+	to := map[int64]bool{}
+	for _, u := range users {
+		to[u] = true
+	}
+	d.fill(ctx, event, seriesID, &msg)
+	for _, inst := range modules.ActiveAs[notify.Module](d.mods, modules.KindNotify) {
+		if inst.Def.UserID == nil || !to[*inst.Def.UserID] || !wantsPersonal(inst.Def, event) {
+			continue
+		}
+		d.send(ctx, inst, event, msg)
+	}
+}
+
+// send delivers to one instance, backing off after failures.
+func (d *Dispatcher) send(ctx context.Context, inst modules.Typed[notify.Module], event string, msg notify.Message) {
+	d.mu.Lock()
+	st := d.status[inst.Def.ID]
+	if st == nil {
+		st = &instanceStatus{}
+		d.status[inst.Def.ID] = st
+	}
+	skip := time.Now().Before(st.Until)
+	d.mu.Unlock()
+	if skip {
+		return
+	}
+	sctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	err := inst.Instance.Send(sctx, msg)
+	cancel()
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if err != nil {
+		st.Failures++
+		st.LastError = err.Error()
+		st.Until = time.Now().Add(backoffSteps[min(st.Failures, len(backoffSteps)-1)])
+		d.log.Warn("notification failed", "instance", inst.Def.Name, "event", event, "err", err)
+	} else {
+		st.Failures, st.LastError, st.Until = 0, "", time.Time{}
+	}
+}
+
+// wantsPersonal: a user's target gets every personal event unless it picked some.
+func wantsPersonal(def model.ProviderDefinition, event string) bool {
+	if len(def.Events) == 0 {
+		return true
+	}
+	for _, e := range def.Events {
+		if e == event {
+			return true
+		}
+	}
+	return false
 }
 
 func tagsMatch(defTags, seriesTags []int64) bool {

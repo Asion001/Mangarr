@@ -14,6 +14,7 @@ import (
 
 	"github.com/Asion001/mangarr/internal/db"
 	"github.com/Asion001/mangarr/internal/model"
+	"github.com/Asion001/mangarr/internal/netguard"
 )
 
 // Loaded is a provider definition plus its built instance (or build error).
@@ -39,6 +40,9 @@ func As[T any](l *Loaded) (T, bool) {
 
 // Decorator wraps instances of one kind as they are built.
 type Decorator func(def model.ProviderDefinition, inst Instance) Instance
+
+// guardedClient is the HTTP client of users' own modules.
+var guardedClient = netguard.Client(30 * time.Second)
 
 // Manager builds and caches instances of all provider definitions.
 type Manager struct {
@@ -110,8 +114,13 @@ func (m *Manager) build(d model.ProviderDefinition) *Loaded {
 		l.Err = err
 		return l
 	}
+	hc := m.http
+	if d.UserID != nil {
+		// a user's own target: only public addresses, never the local network
+		hc = guardedClient
+	}
 	inst, err := impl.New(Deps{
-		ID: d.ID, Name: d.Name, HTTP: m.http,
+		ID: d.ID, Name: d.Name, HTTP: hc,
 		Log:     m.log.With("module", d.Kind+"/"+d.Implementation, "instance", d.Name),
 		DataDir: m.dataDir,
 	}, settings)
@@ -216,6 +225,9 @@ func Validate(def *model.ProviderDefinition) error {
 	if !ValidKind(def.Kind) {
 		return fmt.Errorf("invalid kind %q", def.Kind)
 	}
+	if def.UserID != nil && Kind(def.Kind) != KindNotify {
+		return fmt.Errorf("users can only have their own notification targets")
+	}
 	impl, ok := Lookup(Kind(def.Kind), def.Implementation)
 	if !ok {
 		return fmt.Errorf("unknown implementation %q for kind %s", def.Implementation, def.Kind)
@@ -257,7 +269,7 @@ func (m *Manager) Update(ctx context.Context, def *model.ProviderDefinition) err
 		}
 		return err
 	}
-	def.Kind, def.Implementation, def.ManagedBy = stored.Kind, stored.Implementation, stored.ManagedBy
+	def.Kind, def.Implementation, def.ManagedBy, def.UserID = stored.Kind, stored.Implementation, stored.ManagedBy, stored.UserID
 	if impl, ok := Lookup(Kind(def.Kind), def.Implementation); ok {
 		def.Settings = MergeSecrets(impl, def.Settings, stored.Settings)
 	}
@@ -295,6 +307,7 @@ func (m *Manager) TestDefinition(ctx context.Context, def model.ProviderDefiniti
 	if def.ID != 0 {
 		if l, ok := m.Get(def.ID); ok && l.Impl != nil {
 			def.Settings = MergeSecrets(l.Impl, def.Settings, l.Def.Settings)
+			def.UserID = l.Def.UserID
 		}
 	}
 	if err := Validate(&def); err != nil {

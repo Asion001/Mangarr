@@ -1,0 +1,388 @@
+import { useState } from "react";
+import { Link, useNavigate } from "react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { BookOpen, Check, Clock, Inbox, Link2, PlusCircle, Trash2, Undo2, X } from "lucide-react";
+import { api, unwrap, type LookupResult, type S } from "../../api/client";
+import { Cover } from "../../components/Cover";
+import { Badge, Button, Card, EmptyState, ErrorBox, Field, Input, Loading, Modal, PageHeader, Select, Tabs, Textarea } from "../../components/ui";
+import { useAccount } from "../../lib/account";
+import { relative } from "../../lib/format";
+import { useToast } from "../../lib/toast";
+import { useQueryParam } from "../../lib/urlState";
+import { MetadataSearch } from "../series/AddSeries";
+
+type Request = S["Request"];
+type Status = Request["status"];
+
+const statusTone: Record<Status, "info" | "accent" | "ok" | "err"> = { pending: "info", approved: "accent", available: "ok", declined: "err" };
+const statusLabel: Record<Status, string> = { pending: "Pending", approved: "Approved", available: "Available", declined: "Declined" };
+
+function useRequests(all: boolean, status: string) {
+  return useQuery({
+    queryKey: ["requests", all ? "all" : "mine", status],
+    queryFn: () => unwrap(api.GET("/api/v1/requests", { params: { query: { all, status: (status || undefined) as Status | undefined } } })),
+  });
+}
+
+/** RequestsPage: ask for series (Jellyseerr style), and handle requests. */
+export function RequestsPage() {
+  const { can } = useAccount();
+  const manager = can(["requests.manage", "library.manage"]);
+  const asker = can("requests.create");
+  const [tab, setTab] = useQueryParam("tab", manager ? "manage" : "ask");
+  return (
+    <>
+      <PageHeader title="Requests" subtitle="Ask for series to be added to the library; you'll be told when they arrive." />
+      <Tabs
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          ...(manager ? [{ value: "manage", label: "To handle" }] : []),
+          ...(asker ? [{ value: "ask", label: "Request a series" }] : []),
+          ...(asker ? [{ value: "mine", label: "My requests" }] : []),
+        ]}
+      />
+      {tab === "manage" && manager && <ManageTab />}
+      {tab === "ask" && asker && <AskTab onDone={() => setTab("mine")} />}
+      {tab === "mine" && asker && <MineTab />}
+    </>
+  );
+}
+
+function AskTab({ onDone }: { onDone: () => void }) {
+  const [q, setQ] = useQueryParam("q");
+  const [asking, setAsking] = useState<LookupResult | null>(null);
+  return (
+    <>
+      <Card>
+        <MetadataSearch
+          query={q}
+          setQuery={(v) => setQ(v, { replace: false })}
+          placeholder="Search for a series to request"
+          action={(r) =>
+            r.existingSeriesId ? (
+              <Link to={`/series/${r.existingSeriesId}`}>
+                <Button size="sm" icon={<BookOpen className="size-4" />}>
+                  In library
+                </Button>
+              </Link>
+            ) : r.request?.mine ? (
+              <Badge tone={statusTone[r.request.status as Status] ?? "info"}>
+                <Check className="size-3" /> Requested
+              </Badge>
+            ) : (
+              <Button size="sm" variant="primary" icon={<PlusCircle className="size-4" />} onClick={() => setAsking(r)}>
+                {r.request ? "Request too" : "Request"}
+              </Button>
+            )
+          }
+        />
+      </Card>
+      {asking && <AskModal result={asking} onClose={() => setAsking(null)} onDone={onDone} />}
+    </>
+  );
+}
+
+function AskModal({ result, onClose, onDone }: { result: LookupResult; onClose: () => void; onDone: () => void }) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const send = async () => {
+    setBusy(true);
+    try {
+      const res = await unwrap(api.POST("/api/v1/requests", { body: { moduleId: result.moduleId, id: result.id, note: note.trim() || undefined } }));
+      qc.invalidateQueries({ queryKey: ["requests"] });
+      qc.invalidateQueries({ queryKey: ["lookup"] });
+      toast.success(res.joined ? "Added you to the request" : "Requested", res.joined ? "Someone asked for it already; you'll be told too." : "You'll be told when it's added.");
+      onClose();
+      onDone();
+    } catch (e) {
+      toast.fromError(e, "Couldn't request it");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Request ${result.title}`}
+      size="sm"
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" loading={busy} onClick={send}>
+            Request
+          </Button>
+        </>
+      }
+    >
+      <div className="flex gap-3">
+        <Cover src={result.coverUrl} alt={result.title} className="aspect-[2/3] w-20 shrink-0" />
+        <div className="min-w-0 text-sm">
+          <div className="font-medium">{result.title}</div>
+          <div className="text-muted">{[result.year, result.format].filter(Boolean).join(" · ")}</div>
+          {result.request && <p className="mt-2 text-muted">Someone asked for this already; you'll be added to their request.</p>}
+        </div>
+      </div>
+      <Field label="Note (optional)" className="mt-4">
+        <Textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="e.g. the official English translation" />
+      </Field>
+    </Modal>
+  );
+}
+
+function MineTab() {
+  const { data, isLoading, error } = useRequests(false, "");
+  const qc = useQueryClient();
+  const toast = useToast();
+  const withdraw = async (r: Request) => {
+    try {
+      await unwrap(api.DELETE("/api/v1/requests/{id}/mine", { params: { path: { id: r.id } } }));
+      qc.invalidateQueries({ queryKey: ["requests"] });
+    } catch (e) {
+      toast.fromError(e);
+    }
+  };
+  if (isLoading) return <Loading />;
+  if (error) return <ErrorBox error={error} />;
+  if (!data?.length)
+    return (
+      <EmptyState title="No requests yet" icon={<Inbox className="size-8" />}>
+        Find a series under Request a series.
+      </EmptyState>
+    );
+  return (
+    <div className="flex flex-col gap-2">
+      {data.map((r) => (
+        <RequestRow
+          key={r.id}
+          r={r}
+          actions={
+            r.status === "pending" && (
+              <Button size="sm" icon={<Undo2 className="size-4" />} onClick={() => withdraw(r)}>
+                Withdraw
+              </Button>
+            )
+          }
+        />
+      ))}
+    </div>
+  );
+}
+
+function ManageTab() {
+  const [status, setStatus] = useQueryParam("status", "pending");
+  const { data, isLoading, error } = useRequests(true, status === "all" ? "" : status);
+  const nav = useNavigate();
+  const qc = useQueryClient();
+  const toast = useToast();
+  const [declining, setDeclining] = useState<Request | null>(null);
+  const [linking, setLinking] = useState<Request | null>(null);
+  const remove = async (r: Request) => {
+    try {
+      await unwrap(api.DELETE("/api/v1/requests/{id}", { params: { path: { id: r.id } } }));
+      qc.invalidateQueries({ queryKey: ["requests"] });
+    } catch (e) {
+      toast.fromError(e);
+    }
+  };
+  return (
+    <>
+      <div className="mb-3 flex items-center gap-2">
+        <Select value={status} onChange={(e) => setStatus(e.target.value)} className="w-44">
+          <option value="pending">Pending</option>
+          <option value="approved">Approved</option>
+          <option value="available">Available</option>
+          <option value="declined">Declined</option>
+          <option value="all">All</option>
+        </Select>
+      </div>
+      {isLoading && <Loading />}
+      {error && <ErrorBox error={error} />}
+      {data && data.length === 0 && (
+        <EmptyState title={status === "pending" ? "Nothing to handle" : "No requests"} icon={<Inbox className="size-8" />}>
+          {status === "pending" && "New requests show up here."}
+        </EmptyState>
+      )}
+      <div className="flex flex-col gap-2">
+        {data?.map((r) => (
+          <RequestRow
+            key={r.id}
+            r={r}
+            showRequesters
+            actions={
+              <>
+                {(r.status === "pending" || r.status === "declined") && r.metadata.moduleId && r.metadata.id && (
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    icon={<PlusCircle className="size-4" />}
+                    onClick={() => nav(`/add/${r.metadata.moduleId}/${encodeURIComponent(r.metadata.id!)}/sources?request=${r.id}`)}
+                  >
+                    Add series
+                  </Button>
+                )}
+                {(r.status === "pending" || r.status === "declined") && (
+                  <Button size="sm" icon={<Link2 className="size-4" />} onClick={() => setLinking(r)}>
+                    Link
+                  </Button>
+                )}
+                {r.status === "pending" && (
+                  <Button size="sm" icon={<X className="size-4" />} onClick={() => setDeclining(r)}>
+                    Decline
+                  </Button>
+                )}
+                {r.status !== "pending" && (
+                  <Button size="sm" variant="ghost" icon={<Trash2 className="size-4" />} onClick={() => remove(r)} title="Delete the request">
+                    Delete
+                  </Button>
+                )}
+              </>
+            }
+          />
+        ))}
+      </div>
+      {declining && <DeclineModal r={declining} onClose={() => setDeclining(null)} />}
+      {linking && <LinkModal r={linking} onClose={() => setLinking(null)} />}
+    </>
+  );
+}
+
+function RequestRow({ r, actions, showRequesters }: { r: Request; actions?: React.ReactNode; showRequesters?: boolean }) {
+  const md = r.metadata;
+  return (
+    <div className="flex flex-wrap gap-3 rounded-lg border border-border bg-panel p-3 sm:flex-nowrap">
+      <Cover src={md.coverUrl} alt={r.title} className="aspect-[2/3] w-14 shrink-0" />
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          {r.seriesId ? (
+            <Link to={`/series/${r.seriesId}`} className="font-medium hover:text-accent-2">
+              {r.seriesTitle || r.title}
+            </Link>
+          ) : (
+            <span className="font-medium">{r.title}</span>
+          )}
+          {md.year ? <Badge>{md.year}</Badge> : null}
+          {md.format && <Badge>{md.format}</Badge>}
+          <Badge tone={statusTone[r.status]}>{statusLabel[r.status]}</Badge>
+          {r.count > 1 && <Badge title="People who asked for it">{r.count} people</Badge>}
+        </div>
+        <div className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-muted">
+          <span className="flex items-center gap-1">
+            <Clock className="size-3" /> asked {relative(r.createdAt)}
+            {showRequesters && r.requesters.length > 0 && <> by {r.requesters.map((x) => x.name).join(", ")}</>}
+          </span>
+          {r.handledAt && r.status !== "pending" && (
+            <span>
+              {r.status === "declined" ? "declined" : "added"} {relative(r.handledAt)}
+              {r.handledBy && ` by ${r.handledBy}`}
+            </span>
+          )}
+        </div>
+        {r.requesters
+          .filter((x) => x.note)
+          .map((x) => (
+            <p key={x.userId} className="mt-1 text-sm text-fg/80">
+              “{x.note}”{showRequesters && <span className="text-muted"> — {x.name}</span>}
+            </p>
+          ))}
+        {r.reason && <p className="mt-1 text-sm text-err">Declined: {r.reason}</p>}
+      </div>
+      {actions && <div className="flex shrink-0 flex-wrap items-center gap-2 self-center">{actions}</div>}
+    </div>
+  );
+}
+
+function DeclineModal({ r, onClose }: { r: Request; onClose: () => void }) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const decline = async () => {
+    setBusy(true);
+    try {
+      await unwrap(api.POST("/api/v1/requests/{id}/decline", { params: { path: { id: r.id } }, body: { reason: reason.trim() || undefined } }));
+      qc.invalidateQueries({ queryKey: ["requests"] });
+      onClose();
+    } catch (e) {
+      toast.fromError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Decline ${r.title}`}
+      size="sm"
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="danger" loading={busy} onClick={decline}>
+            Decline
+          </Button>
+        </>
+      }
+    >
+      <Field label="Reason (the requesters see it)">
+        <Input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} placeholder="e.g. no source has it" />
+      </Field>
+    </Modal>
+  );
+}
+
+/** norm compares titles by their letters and digits ("Journey’s" = "Journey's"). */
+const norm = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/['’`]/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+
+function LinkModal({ r, onClose }: { r: Request; onClose: () => void }) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const [filter, setFilter] = useState(r.title);
+  const [busy, setBusy] = useState(false);
+  const { data: series } = useQuery({ queryKey: ["series", "pick"], queryFn: () => unwrap(api.GET("/api/v1/series")) });
+  const words = norm(filter).split(" ").filter(Boolean);
+  const list = (series ?? []).filter((s) => words.every((w) => norm(s.title).includes(w))).slice(0, 30);
+  const link = async (seriesId: number) => {
+    setBusy(true);
+    try {
+      await unwrap(api.POST("/api/v1/requests/{id}/link", { params: { path: { id: r.id } }, body: { seriesId } }));
+      qc.invalidateQueries({ queryKey: ["requests"] });
+      toast.success("Linked", "The requesters were told.");
+      onClose();
+    } catch (e) {
+      toast.fromError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal open onClose={onClose} title={`Link ${r.title} to a series`}>
+      <p className="mb-3 text-sm text-muted">Already in the library under another name? Pick it; the request is marked as added.</p>
+      <Input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter series" autoFocus />
+      <div className="mt-3 flex flex-col gap-1">
+        {list.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            disabled={busy}
+            onClick={() => link(s.id)}
+            className="flex items-center justify-between rounded-md px-3 py-2 text-left text-sm hover:bg-panel-2 disabled:opacity-50"
+          >
+            <span className="truncate">{s.title}</span>
+            <span className="text-xs text-muted">{s.metadata.year || ""}</span>
+          </button>
+        ))}
+        {series && list.length === 0 && <p className="text-sm text-muted">No series match.</p>}
+      </div>
+    </Modal>
+  );
+}

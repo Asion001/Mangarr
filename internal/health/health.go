@@ -190,8 +190,8 @@ func (c *Checker) checkModules(ctx context.Context, add func(Check)) {
 		add(Check{Source: "Library servers", Type: Notice, Message: "No library server (Komga/Kavita) is configured; reader apps won't see new chapters until they rescan on their own", Link: moduleLink("library")})
 	}
 	for _, l := range c.mods.All("") {
-		if !l.Def.Enabled {
-			continue
+		if !l.Def.Enabled || l.Def.UserID != nil {
+			continue // users' own targets are theirs to fix
 		}
 		label := strings.ToUpper(l.Def.Kind[:1]) + l.Def.Kind[1:]
 		if l.Err != nil {

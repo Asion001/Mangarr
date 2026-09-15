@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, BookPlus, Search, X } from "lucide-react";
@@ -16,11 +16,16 @@ export function MetadataSearch({
   query: controlled,
   setQuery: setControlled,
   onPick,
+  action,
+  placeholder = "Search by title (AniList and other metadata modules)",
 }: {
   initialQuery?: string;
   query?: string;
   setQuery?: (q: string) => void;
-  onPick: (c: LookupResult) => void;
+  onPick?: (c: LookupResult) => void;
+  /** action replaces the Select button (e.g. Request). */
+  action?: (c: LookupResult) => ReactNode;
+  placeholder?: string;
 }) {
   const [local, setLocal] = useState(initialQuery);
   const query = controlled ?? local;
@@ -42,7 +47,7 @@ export function MetadataSearch({
           setQuery(draft.trim());
         }}
       >
-        <Input autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Search by title (AniList and other metadata modules)" />
+        <Input autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={placeholder} />
         <Button type="submit" variant="primary" icon={<Search className="size-4" />}>
           Search
         </Button>
@@ -73,12 +78,14 @@ export function MetadataSearch({
               {r.description && <p className="mt-1 line-clamp-2 text-sm text-fg/80">{r.description}</p>}
             </div>
             <div className="shrink-0 self-center">
-              {r.existingSeriesId ? (
+              {action ? (
+                action(r)
+              ) : r.existingSeriesId ? (
                 <Link to={`/series/${r.existingSeriesId}`}>
                   <Button size="sm">In library</Button>
                 </Link>
               ) : (
-                <Button size="sm" variant="primary" onClick={() => onPick(r)}>
+                <Button size="sm" variant="primary" onClick={() => onPick?.(r)}>
                   Select
                 </Button>
               )}
@@ -166,8 +173,12 @@ function useAddContext() {
   const base = `/add/${moduleId}/${encodeURIComponent(metaId)}`;
   const search = manual ? `?title=${encodeURIComponent(title)}` : "";
   const storageKey = `mangarr.add:${moduleId}:${manual ? title : metaId}`;
+  // adding for a request (from the Requests page): link it when added
+  const fromRequest = Number(params.get("request") ?? 0);
+  if (fromRequest > 0) sessionState.set(storageKey + ":request", fromRequest);
+  const requestId = fromRequest || sessionState.get<number>(storageKey + ":request", 0);
   const titles = [title, ...(meta.data?.altTitles ?? [])].filter(Boolean);
-  return { manual, meta: meta.data ?? null, metaLoading: meta.isLoading, metaError: meta.error, title, titles, base, search, storageKey };
+  return { manual, meta: meta.data ?? null, metaLoading: meta.isLoading, metaError: meta.error, title, titles, base, search, storageKey, requestId };
 }
 
 function usePicked(storageKey: string): [Picked[], (fn: (cur: Picked[]) => Picked[]) => void] {
@@ -341,12 +352,15 @@ export function AddOptionsStep() {
             monitorNew: o.monitorNew as AddRequest["monitorNew"],
             searchMissing: o.searchMissing,
             readingDirection: (o.direction || undefined) as AddRequest["readingDirection"],
+            requestId: ctx.requestId || undefined,
           },
         }),
       );
       sessionState.remove(ctx.storageKey + ":picked");
       sessionState.remove(ctx.storageKey + ":options");
+      sessionState.remove(ctx.storageKey + ":request");
       qc.invalidateQueries({ queryKey: ["series"] });
+      qc.invalidateQueries({ queryKey: ["requests"] });
       toast.success(`${s.title} added`, "Fetching chapters…");
       nav(`/series/${s.id}`);
     } catch (e) {

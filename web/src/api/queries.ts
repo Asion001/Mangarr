@@ -58,3 +58,7 @@ export function usePushCommand() {
     onError: (e) => toast.fromError(e, "Command failed"),
   });
 }
+
+/** usePendingRequests counts requests waiting for a manager. */
+export const usePendingRequests = (enabled: boolean) =>
+  useQuery({ queryKey: ["requests", "count"], queryFn: () => unwrap(api.GET("/api/v1/requests/count")), enabled, staleTime: 60_000 });

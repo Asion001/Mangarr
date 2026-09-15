@@ -20,7 +20,10 @@ const (
 	HealthRestored    = "health.restored"
 	ExtensionUpdate   = "extension.update"
 	ManualInteraction = "manual.required"
-	Test              = "test"
+	RequestCreated    = "request.created"
+	// RequestUpdated goes to the people who asked (their own targets only).
+	RequestUpdated = "request.updated"
+	Test           = "test"
 
 	// ResourceChanged is emitted for UI cache invalidation (SSE), not notifications.
 	ResourceChanged = "resource.changed"
@@ -29,8 +32,12 @@ const (
 // NotificationEvents lists events a notification provider can opt into.
 var NotificationEvents = []string{
 	ChapterImported, ChapterUpgraded, SeriesAdded, SeriesDeleted, DownloadFailed,
-	CleanupDone, HealthIssue, HealthRestored, ExtensionUpdate, ManualInteraction,
+	CleanupDone, HealthIssue, HealthRestored, ExtensionUpdate, ManualInteraction, RequestCreated,
 }
+
+// PersonalEvents are what a user's own notification targets can get: new
+// chapters of series they follow, and news about their requests.
+var PersonalEvents = []string{ChapterImported, RequestUpdated}
 
 type Event struct {
 	Type string    `json:"type"`

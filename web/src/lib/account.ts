@@ -8,6 +8,7 @@ export function useAccount() {
   const { data } = useAuthStatus();
   const account = data?.account;
   const perms = new Set(account?.permissions ?? []);
-  const can = (p: Perm) => perms.has("admin") || perms.has(p);
+  /** can: the account has the permission (any of them, for a list). */
+  const can = (p: Perm | Perm[]) => perms.has("admin") || (Array.isArray(p) ? p : [p]).some((x) => perms.has(x));
   return { account, can, isAdmin: can("admin"), name: account?.displayName || account?.username || "" };
 }

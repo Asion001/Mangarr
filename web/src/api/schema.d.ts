@@ -1271,6 +1271,107 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Requests: yours, or everyone's (all=true, for managers) */
+        get: operations["requests-list"];
+        put?: never;
+        /** Ask for a series found with the series lookup (joins an open request for it) */
+        post: operations["requests-create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requests/count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How many requests wait for a manager */
+        get: operations["requests-count"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requests/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["requests-get"];
+        put?: never;
+        post?: never;
+        delete: operations["requests-delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requests/{id}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["requests-decline"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requests/{id}/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark a request fulfilled by a series already in the library */
+        post: operations["requests-link"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requests/{id}/mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Take back your request (it goes away when nobody else asked) */
+        delete: operations["requests-withdraw"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/rootfolders": {
         parameters: {
             query?: never;
@@ -2366,6 +2467,8 @@ export interface components {
             /** @enum {string} */
             readingDirection?: "rtl" | "ltr" | "vertical" | "webtoon";
             /** Format: int64 */
+            requestId?: number;
+            /** Format: int64 */
             rootFolderId: number;
             searchMissing: boolean;
             sources: components["schemas"]["SourceLink"][];
@@ -3318,6 +3421,12 @@ export interface components {
             enabled: boolean;
             files: components["schemas"]["LogFile"][];
         };
+        LookupRequest: {
+            /** Format: int64 */
+            id: number;
+            mine: boolean;
+            status: string;
+        };
         LookupResult: {
             adult?: boolean;
             also?: components["schemas"]["MetadataRef"][];
@@ -3343,6 +3452,7 @@ export interface components {
             moduleName: string;
             provider: string;
             publisher?: string;
+            request?: components["schemas"]["LookupRequest"];
             status?: string;
             tags?: string[];
             title: string;
@@ -3440,6 +3550,8 @@ export interface components {
             tags: number[];
             /** Format: date-time */
             updatedAt: string;
+            /** Format: int64 */
+            userId?: number;
         };
         "Modules-testRequest": {
             enabled: boolean;
@@ -3963,6 +4075,79 @@ export interface components {
             /** Format: date-time */
             uploadDate?: string;
             webUrl: string;
+        };
+        Request: {
+            /** Format: date-time */
+            availableAt?: string;
+            /** Format: int64 */
+            count: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            handledAt?: string;
+            handledBy?: string;
+            /** Format: int64 */
+            id: number;
+            metadata: components["schemas"]["RequestMetadata"];
+            mine: boolean;
+            reason?: string;
+            requesters: components["schemas"]["Requester"][];
+            /** Format: int64 */
+            seriesId?: number;
+            seriesTitle?: string;
+            /** @enum {string} */
+            status: "pending" | "approved" | "available" | "declined";
+            title: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        RequestMetadata: {
+            adult?: boolean;
+            altTitles?: string[];
+            coverUrl?: string;
+            description?: string;
+            externalIds?: {
+                [key: string]: string;
+            };
+            format?: string;
+            genres?: string[];
+            id?: string;
+            /** Format: int64 */
+            moduleId?: number;
+            provider?: string;
+            status?: string;
+            url?: string;
+            /** Format: int64 */
+            year?: number;
+        };
+        Requester: {
+            /** Format: date-time */
+            at: string;
+            name: string;
+            note?: string;
+            /** Format: int64 */
+            userId: number;
+        };
+        "Requests-countResponse": {
+            /** Format: int64 */
+            pending: number;
+        };
+        "Requests-createRequest": {
+            id: string;
+            /** Format: int64 */
+            moduleId: number;
+            note?: string;
+        };
+        "Requests-createResponse": {
+            joined: boolean;
+            request: components["schemas"]["Request"];
+        };
+        "Requests-declineRequest": {
+            reason?: string;
+        };
+        "Requests-linkRequest": {
+            /** Format: int64 */
+            seriesId: number;
         };
         Result: {
             /** Format: int64 */
@@ -7530,6 +7715,255 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ReadingStatus"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "requests-list": {
+        parameters: {
+            query?: {
+                status?: "pending" | "approved" | "available" | "declined" | "";
+                all?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Request"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "requests-create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Requests-createRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Requests-createResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "requests-count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Requests-countResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "requests-get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Request"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "requests-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "requests-decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Requests-declineRequest"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "requests-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Requests-linkRequest"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "requests-withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {

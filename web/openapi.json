@@ -150,6 +150,10 @@
             ],
             "type": "string"
           },
+          "requestId": {
+            "format": "int64",
+            "type": "integer"
+          },
           "rootFolderId": {
             "format": "int64",
             "type": "integer"
@@ -3238,6 +3242,27 @@
         ],
         "type": "object"
       },
+      "LookupRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "mine": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "mine"
+        ],
+        "type": "object"
+      },
       "LookupResult": {
         "additionalProperties": false,
         "properties": {
@@ -3317,6 +3342,9 @@
           },
           "publisher": {
             "type": "string"
+          },
+          "request": {
+            "$ref": "#/components/schemas/LookupRequest"
           },
           "status": {
             "type": "string"
@@ -3650,6 +3678,10 @@
           "updatedAt": {
             "format": "date-time",
             "type": "string"
+          },
+          "userId": {
+            "format": "int64",
+            "type": "integer"
           }
         },
         "required": [
@@ -5395,6 +5427,239 @@
           "rawNumber",
           "removed",
           "createdAt"
+        ],
+        "type": "object"
+      },
+      "Request": {
+        "additionalProperties": false,
+        "properties": {
+          "availableAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "handledAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "handledBy": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/RequestMetadata"
+          },
+          "mine": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "requesters": {
+            "items": {
+              "$ref": "#/components/schemas/Requester"
+            },
+            "type": "array"
+          },
+          "seriesId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "seriesTitle": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "approved",
+              "available",
+              "declined"
+            ],
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "requesters",
+          "count",
+          "mine",
+          "id",
+          "title",
+          "metadata",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "RequestMetadata": {
+        "additionalProperties": false,
+        "properties": {
+          "adult": {
+            "type": "boolean"
+          },
+          "altTitles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "coverUrl": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "externalIds": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "format": {
+            "type": "string"
+          },
+          "genres": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "moduleId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "year": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "Requester": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "userId": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "userId",
+          "name",
+          "at"
+        ],
+        "type": "object"
+      },
+      "Requests-countResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "pending": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pending"
+        ],
+        "type": "object"
+      },
+      "Requests-createRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "moduleId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "note": {
+            "maxLength": 500,
+            "type": "string"
+          }
+        },
+        "required": [
+          "moduleId",
+          "id"
+        ],
+        "type": "object"
+      },
+      "Requests-createResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "joined": {
+            "type": "boolean"
+          },
+          "request": {
+            "$ref": "#/components/schemas/Request"
+          }
+        },
+        "required": [
+          "request",
+          "joined"
+        ],
+        "type": "object"
+      },
+      "Requests-declineRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Requests-linkRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "seriesId": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "seriesId"
         ],
         "type": "object"
       },
@@ -11416,6 +11681,332 @@
         "summary": "Whether the Komga-compatible API is on, and the address apps should use",
         "tags": [
           "Reading apps"
+        ]
+      }
+    },
+    "/api/v1/requests": {
+      "get": {
+        "operationId": "requests-list",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "enum": [
+                "pending",
+                "approved",
+                "available",
+                "declined",
+                ""
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "all",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Request"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Requests: yours, or everyone's (all=true, for managers)",
+        "tags": [
+          "Requests"
+        ]
+      },
+      "post": {
+        "operationId": "requests-create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Requests-createRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Requests-createResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Ask for a series found with the series lookup (joins an open request for it)",
+        "tags": [
+          "Requests"
+        ]
+      }
+    },
+    "/api/v1/requests/count": {
+      "get": {
+        "operationId": "requests-count",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Requests-countResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "How many requests wait for a manager",
+        "tags": [
+          "Requests"
+        ]
+      }
+    },
+    "/api/v1/requests/{id}": {
+      "delete": {
+        "operationId": "requests-delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Requests"
+        ]
+      },
+      "get": {
+        "operationId": "requests-get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Request"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Requests"
+        ]
+      }
+    },
+    "/api/v1/requests/{id}/decline": {
+      "post": {
+        "operationId": "requests-decline",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Requests-declineRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Requests"
+        ]
+      }
+    },
+    "/api/v1/requests/{id}/link": {
+      "post": {
+        "operationId": "requests-link",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Requests-linkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Mark a request fulfilled by a series already in the library",
+        "tags": [
+          "Requests"
+        ]
+      }
+    },
+    "/api/v1/requests/{id}/mine": {
+      "delete": {
+        "operationId": "requests-withdraw",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Take back your request (it goes away when nobody else asked)",
+        "tags": [
+          "Requests"
         ]
       }
     },
