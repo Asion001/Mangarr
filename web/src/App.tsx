@@ -8,6 +8,7 @@ import { onServerEvent, useLiveUpdates } from "./lib/events";
 import { useToast } from "./lib/toast";
 import { LoginPage } from "./pages/auth/Login";
 import { InvitePage } from "./pages/auth/Invite";
+import { ReaderPage } from "./pages/reader/Reader";
 import { AccountPage } from "./pages/account/Account";
 import { UsersPage } from "./pages/settings/Users";
 import { Need } from "./components/Need";
@@ -70,6 +71,7 @@ export function App() {
 
   return (
     <Routes>
+      <Route path="read/:id" element={<ReaderPage />} />
       <Route element={<Layout />}>
         <Route index element={<SeriesIndex />} />
         <Route path="series/:id" element={<SeriesDetail />} />

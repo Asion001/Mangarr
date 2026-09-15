@@ -1,6 +1,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, ExternalLink, HelpCircle, RotateCcw, Search, Sparkles, Eye } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronRight, ExternalLink, HelpCircle, RotateCcw, Search, Sparkles, Eye } from "lucide-react";
+import { Link } from "react-router";
 import { api, unwrap, type Chapter } from "../../api/client";
 import { useChapters } from "../../api/queries";
 import { Badge, Button, Card, ErrorBox, IconButton, Loading, Modal, Progress, Switch, Table, Td, Th } from "../../components/ui";
@@ -17,6 +18,9 @@ const stateTone: Record<string, "ok" | "warn" | "err" | "info" | "default" | "ac
   processing: "accent",
   cleaned: "default",
 };
+
+/** readable: downloaded, or a source to stream it from. */
+export const readable = (c: Chapter) => !!c.file || c.releases.length > 0;
 
 export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; manage?: boolean }) {
   const { data, isLoading, error } = useChapters(seriesId);
@@ -140,11 +144,23 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
                       {c.number}
                     </Td>
                     <Td>
-                      <button className="flex items-center gap-1 text-left hover:text-accent-2" onClick={() => setExpanded(toggle(expanded, c.id))}>
-                        {open ? <ChevronDown className="size-3.5 shrink-0" /> : <ChevronRight className="size-3.5 shrink-0" />}
-                        <span className="line-clamp-1 min-w-40">{c.title || <span className="text-muted">Chapter {c.number}</span>}</span>
-                        <span className="text-xs text-muted">({c.releases.length})</span>
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button className="flex items-center gap-1 text-left hover:text-accent-2" onClick={() => setExpanded(toggle(expanded, c.id))}>
+                          {open ? <ChevronDown className="size-3.5 shrink-0" /> : <ChevronRight className="size-3.5 shrink-0" />}
+                          <span className="line-clamp-1 min-w-40">{c.title || <span className="text-muted">Chapter {c.number}</span>}</span>
+                          <span className="text-xs text-muted">({c.releases.length})</span>
+                        </button>
+                        {readable(c) && (
+                          <Link
+                            to={`/read/${c.id}`}
+                            title={c.file ? "Read" : "Read (streamed from the source)"}
+                            aria-label={`Read chapter ${c.number}`}
+                            className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted hover:bg-panel-2 hover:text-accent-2"
+                          >
+                            <BookOpen className="size-4" />
+                          </Link>
+                        )}
+                      </div>
                     </Td>
                     <Td className="whitespace-nowrap text-muted">{date(c.releaseDate)}</Td>
                     <Td>
@@ -205,8 +221,8 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
                       </div>
                     </Td>
                     <Td className="text-right">
-                      {manage && <div className="flex justify-end">
-                        {c.state === "cleaned" ? (
+                      <div className="flex justify-end">
+                        {manage && (c.state === "cleaned" ? (
                           <IconButton title="Restore (download again)" onClick={() => restore(c)}>
                             <RotateCcw className="size-4" />
                           </IconButton>
@@ -214,11 +230,13 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
                           <IconButton title="Search this chapter" onClick={() => search([c.id])}>
                             <Search className="size-4" />
                           </IconButton>
+                        ))}
+                        {manage && (
+                          <IconButton title="Why (not) downloaded?" onClick={() => setExplain(c)}>
+                            <HelpCircle className="size-4" />
+                          </IconButton>
                         )}
-                        <IconButton title="Why (not) downloaded?" onClick={() => setExplain(c)}>
-                          <HelpCircle className="size-4" />
-                        </IconButton>
-                      </div>}
+                      </div>
                     </Td>
                   </tr>
                   {open && (

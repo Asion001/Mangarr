@@ -1,0 +1,141 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { api, apiUrl, unwrap } from "../../api/client";
+
+/** Dims are a page's size and the box inside its borders (source pixels). */
+export type Dims = { width: number; height: number; x: number; y: number; w: number; h: number };
+
+export const pageUrl = (chapterId: number, n: number) => apiUrl(`api/v1/read/chapters/${chapterId}/pages/${n}`);
+
+/**
+ * useDims keeps page sizes for a chapter: from the server's bounds (when
+ * cropping or splitting needs them) or from the loaded image.
+ */
+export function useDims(chapterId: number, wantBounds: boolean) {
+  const [dims, setDims] = useState<Record<number, Dims>>({});
+  const asked = useRef(new Set<number>());
+  useEffect(() => {
+    setDims({});
+    asked.current = new Set();
+  }, [chapterId]);
+  /** need asks for the bounds of pages about to be shown. */
+  const need = useCallback(
+    (pages: number[]) => {
+      if (!wantBounds) return;
+      for (const n of pages) {
+        if (asked.current.has(n)) continue;
+        asked.current.add(n);
+        unwrap(api.GET("/api/v1/read/chapters/{id}/pages/{n}/bounds", { params: { path: { id: chapterId, n } } }))
+          .then((b) => setDims((d) => ({ ...d, [n]: b })))
+          .catch(() => undefined);
+      }
+    },
+    [chapterId, wantBounds],
+  );
+  /** natural records a loaded image's size (the whole page is its box). */
+  const natural = useCallback((n: number, width: number, height: number) => {
+    setDims((d) => (d[n] ? d : { ...d, [n]: { width, height, x: 0, y: 0, w: width, h: height } }));
+  }, []);
+  return { dims, need, natural };
+}
+
+export type Half = "left" | "right";
+
+/** boxOf is the part of a page to show (cropped, or one half). */
+export function boxOf(d: Dims | undefined, crop: boolean, sidesOnly: boolean, half?: Half) {
+  if (!d) return null;
+  let b = crop ? { x: d.x, y: sidesOnly ? 0 : d.y, w: d.w, h: sidesOnly ? d.height : d.h } : { x: 0, y: 0, w: d.width, h: d.height };
+  if (half) b = { ...b, w: b.w / 2, x: half === "right" ? b.x + b.w / 2 : b.x };
+  return b;
+}
+
+/** isWide reports a double page (landscape). */
+export const isWide = (d?: Dims) => !!d && d.width > d.height * 1.1;
+
+/** fit sizes a box of aspect (w/h) into the space, by the scale setting. */
+export function fit(aspect: number, availW: number, availH: number, scale: string, naturalW?: number) {
+  switch (scale) {
+    case "width":
+      return { w: availW, h: availW / aspect };
+    case "height":
+      return { w: availH * aspect, h: availH };
+    case "original": {
+      const w = naturalW ?? availW;
+      return { w, h: w / aspect };
+    }
+    default: {
+      const w = Math.min(availW, availH * aspect);
+      return { w, h: w / aspect };
+    }
+  }
+}
+
+/** PageImage shows a page, or the box of it, at a given size. */
+export function PageImage({
+  src,
+  dims,
+  crop,
+  sidesOnly = false,
+  half,
+  width,
+  height,
+  onNatural,
+  eager = false,
+}: {
+  src: string;
+  dims?: Dims;
+  crop: boolean;
+  sidesOnly?: boolean;
+  half?: Half;
+  width: number;
+  height: number;
+  onNatural?: (w: number, h: number) => void;
+  eager?: boolean;
+}) {
+  const [failed, setFailed] = useState(false);
+  const box = boxOf(dims, crop, sidesOnly, half);
+  const load = (e: React.SyntheticEvent<HTMLImageElement>) => onNatural?.(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight);
+  if (failed) {
+    return (
+      <div style={{ width, height }} className="flex items-center justify-center text-sm text-neutral-400">
+        <button type="button" className="rounded border border-neutral-600 px-3 py-1.5" onClick={() => setFailed(false)}>
+          Couldn't load this page — retry
+        </button>
+      </div>
+    );
+  }
+  const common = { src, alt: "", draggable: false, decoding: "async" as const, loading: eager ? ("eager" as const) : ("lazy" as const), onLoad: load, onError: () => setFailed(true) };
+  if (!box || !dims || (!crop && !half)) {
+    return <img {...common} style={{ width, height, maxWidth: "none", objectFit: "contain" }} className="select-none" />;
+  }
+  return (
+    <div style={{ width, height, overflow: "hidden", position: "relative" }}>
+      <img
+        {...common}
+        className="select-none"
+        style={{
+          position: "absolute",
+          maxWidth: "none",
+          width: `${(dims.width / box.w) * 100}%`,
+          height: `${(dims.height / box.h) * 100}%`,
+          left: `${(-box.x / box.w) * 100}%`,
+          top: `${(-box.y / box.h) * 100}%`,
+        }}
+      />
+    </div>
+  );
+}
+
+/** useViewport is the window's size, kept up to date. */
+export function useViewport() {
+  const [size, setSize] = useState({ w: window.innerWidth, h: window.innerHeight });
+  useEffect(() => {
+    const on = () => setSize({ w: window.innerWidth, h: window.innerHeight });
+    window.addEventListener("resize", on);
+    window.visualViewport?.addEventListener("resize", on);
+    return () => {
+      window.removeEventListener("resize", on);
+      window.visualViewport?.removeEventListener("resize", on);
+    };
+  }, []);
+  return size;
+}

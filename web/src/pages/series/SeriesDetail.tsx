@@ -2,15 +2,15 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { BookOpen, ExternalLink, Eye, FilePen, HardDrive, Pencil, RefreshCw, Search, Sparkles, Trash2, FileSearch, BookText } from "lucide-react";
-import { api, apiUrl, unwrap } from "../../api/client";
-import { usePushCommand, useSeries } from "../../api/queries";
+import { api, apiUrl, unwrap, type Chapter, type S } from "../../api/client";
+import { useChapters, usePushCommand, useSeries } from "../../api/queries";
 import { Cover } from "../../components/Cover";
 import { Badge, Button, Confirm, ErrorBox, Loading, Switch } from "../../components/ui";
 import { bytes, relative } from "../../lib/format";
 import { useToast } from "../../lib/toast";
 import { statusTone } from "./SeriesIndex";
 import { SourcesPanel } from "./SourcesPanel";
-import { ChaptersTable } from "./ChaptersTable";
+import { ChaptersTable, readable } from "./ChaptersTable";
 import { EditSeriesModal } from "./EditSeriesModal";
 import { RenameModal } from "./Organize";
 import { useAccount } from "../../lib/account";
@@ -18,6 +18,7 @@ import { useAccount } from "../../lib/account";
 export function SeriesDetail() {
   const id = Number(useParams().id);
   const { data: s, isLoading, error } = useSeries(id);
+  const { data: chapters } = useChapters(id);
   const push = usePushCommand();
   const manage = useAccount().can("library.manage");
   const qc = useQueryClient();
@@ -32,6 +33,7 @@ export function SeriesDetail() {
 
   if (isLoading) return <Loading />;
   if (error || !s) return <ErrorBox error={error ?? "Series not found"} />;
+  const readTarget = readTargetOf(chapters, s.reading?.nextUnread);
 
   const setMonitored = async (v: boolean) => {
     try {
@@ -89,9 +91,14 @@ export function SeriesDetail() {
             <Stat label="Cleaned" value={String(s.stats.cleanedCount)} />
             <Stat label="On disk" value={s.stats.spaceSaved > 0 ? `${bytes(s.stats.sizeOnDisk)} (saved ${bytes(s.stats.spaceSaved)})` : bytes(s.stats.sizeOnDisk)} />
           </div>
+          {readTarget && (
+            <Link to={`/read/${readTarget.id}`} className="mt-3 inline-flex items-center gap-2 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-2">
+              <BookOpen className="size-4" /> {readTarget.label}
+            </Link>
+          )}
           {s.reading && (s.reading.readers.length > 0 || s.reading.webUrl) && (
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-              {s.reading.nextUnread && (
+              {s.reading.nextUnread && !readTarget && (
                 <span className="flex items-center gap-1">
                   <BookOpen className="size-4 text-info" />
                   Continue: ch. {s.reading.nextUnread.number}
@@ -203,4 +210,17 @@ function Stat({ label, value }: { label: string; value: string }) {
       <div className="font-medium">{value}</div>
     </div>
   );
+}
+
+/** readTargetOf picks what the Read button opens: where you left off, or
+ * the first chapter when you haven't started. Nothing when that chapter
+ * can't be read (not downloaded and no source). */
+function readTargetOf(chapters: Chapter[] | undefined, next?: S["NextChapter"]) {
+  if (!chapters) return null;
+  if (next) {
+    const c = chapters.find((c) => c.id === next.chapterId);
+    return c && readable(c) ? { id: c.id, label: `Continue ch. ${c.number}` } : null;
+  }
+  const first = chapters.filter(readable).sort((a, b) => a.numberSort - b.numberSort)[0];
+  return first ? { id: first.id, label: `Start reading ch. ${first.number}` } : null;
 }

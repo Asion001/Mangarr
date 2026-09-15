@@ -173,4 +173,33 @@ func TestReaderSettings(t *testing.T) {
 	if got.Series != nil {
 		t.Fatalf("series settings not cleared: %v", got.Series)
 	}
+
+	// the API key (and logins off) share one set, apart from any account's
+	g, _ := a.Settings.General(context.Background())
+	key := func(method, body string) int {
+		req, _ := http.NewRequest(method, srv.URL+"/api/v1/read/settings?seriesId=7", strings.NewReader(body))
+		req.Header.Set("X-Api-Key", g.APIKey)
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if method == "GET" {
+			got.Defaults, got.Series = nil, nil
+			_ = json.NewDecoder(resp.Body).Decode(&got)
+		}
+		return resp.StatusCode
+	}
+	if code := key("PUT", `{"seriesId":7,"data":{"mode":"paged","crop":true}}`); code != 204 {
+		t.Fatalf("shared save: %d", code)
+	}
+	if key("GET", ""); got.Series["crop"] != true || got.Defaults["direction"] != nil {
+		t.Fatalf("shared settings %+v", got)
+	}
+	got.Defaults, got.Series = nil, nil
+	me.do("GET", "/api/v1/read/settings?seriesId=7", "", &got)
+	if got.Series != nil || got.Defaults["direction"] != "rtl" {
+		t.Fatalf("account's settings mixed with the shared ones: %+v", got)
+	}
 }

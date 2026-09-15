@@ -22,23 +22,30 @@ export function ContinueReading() {
       </h2>
       <div className="flex gap-3 overflow-x-auto pb-2">
         {data.items.map((it) => (
-          <Link key={it.seriesId} to={`/series/${it.seriesId}`} className="group flex w-28 shrink-0 flex-col gap-1.5 sm:w-32" title={it.lastReadAt ? `last read ${relative(it.lastReadAt)}` : undefined}>
-            <div className="relative">
+          <div key={it.seriesId} className="flex w-28 shrink-0 flex-col gap-1.5 sm:w-32" title={it.lastReadAt ? `last read ${relative(it.lastReadAt)}` : undefined}>
+            <Link to={`/read/${it.next.chapterId}`} className="group relative" aria-label={`Read ${it.title} ch. ${it.next.number}`}>
               <Cover src={apiUrl(it.coverUrl)} alt={it.title} className="aspect-[2/3] w-full ring-accent/60 transition group-hover:ring-2" />
+              <div className="absolute inset-0 flex items-center justify-center opacity-0 transition group-hover:opacity-100">
+                <span className="rounded-full bg-black/70 p-2.5 text-white">
+                  <BookOpen className="size-5" />
+                </span>
+              </div>
               {!it.next.available && (
                 <div className="absolute bottom-1.5 left-1.5">
-                  <Badge tone="warn" title="Reading apps stream it from the source and queue the download">
+                  <Badge tone="warn" title="Streamed from the source; the download is queued when you open it">
                     not downloaded
                   </Badge>
                 </div>
               )}
-            </div>
+            </Link>
             <Progress value={it.total ? (100 * it.read) / it.total : 0} tone="ok" />
-            <div className="line-clamp-2 text-xs font-medium leading-tight">{it.title}</div>
+            <Link to={`/series/${it.seriesId}`} className="line-clamp-2 text-xs font-medium leading-tight hover:text-accent-2">
+              {it.title}
+            </Link>
             <div className="-mt-0.5 text-xs text-muted">
               ch. {it.next.number} {it.page > 0 ? `· page ${it.page}` : "next"}
             </div>
-          </Link>
+          </div>
         ))}
       </div>
     </section>

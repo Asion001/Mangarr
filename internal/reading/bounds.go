@@ -86,48 +86,63 @@ func ContentBox(img image.Image) Bounds {
 		return int((299*cr + 587*cg + 114*cb) / 1000 >> 8)
 	}
 	stepX, stepY := max(1, w/300), max(1, h/300)
-	// uniform: nearly every sample is light (>= 225) or nearly every one is dark (<= 30)
-	uniform := func(samples func(yield func(int))) bool {
-		n, light, dark := 0, 0, 0
-		samples(func(l int) {
+	// border kinds: a line where nearly every sample is light (>= 225) or
+	// nearly every one is dark (<= 30)
+	const (
+		none = iota
+		light
+		dark
+	)
+	kind := func(samples func(yield func(int))) int {
+		n, l, d := 0, 0, 0
+		samples(func(v int) {
 			n++
-			if l >= 225 {
-				light++
-			} else if l <= 30 {
-				dark++
+			if v >= 225 {
+				l++
+			} else if v <= 30 {
+				d++
 			}
 		})
 		limit := n - max(1, n/100) // allow 1% specks
-		return light >= limit || dark >= limit
+		switch {
+		case l >= limit:
+			return light
+		case d >= limit:
+			return dark
+		}
+		return none
 	}
-	row := func(y int) bool {
-		return uniform(func(yield func(int)) {
+	row := func(y int) int {
+		return kind(func(yield func(int)) {
 			for x := 0; x < w; x += stepX {
 				yield(luma(x, y))
 			}
 		})
 	}
-	col := func(x, y0, y1 int) bool {
-		return uniform(func(yield func(int)) {
+	col := func(x, y0, y1 int) int {
+		return kind(func(yield func(int)) {
 			for y := y0; y < y1; y += stepY {
 				yield(luma(x, y))
 			}
 		})
 	}
-	top, bottom := 0, h
-	for top < h && row(top) {
-		top++
+	// each edge trims only the colour it starts with, so a white margin
+	// stops at a black frame instead of eating into it
+	trim := func(from, to, step int, line func(int) int) int {
+		k := line(from)
+		if k == none {
+			return from
+		}
+		i := from
+		for i != to && line(i) == k {
+			i += step
+		}
+		return i
 	}
-	for bottom > top && row(bottom-1) {
-		bottom--
-	}
-	left, right := 0, w
-	for left < w && col(left, top, bottom) {
-		left++
-	}
-	for right > left && col(right-1, top, bottom) {
-		right--
-	}
+	top := trim(0, h, 1, row)
+	bottom := trim(h-1, top-1, -1, row) + 1
+	left := trim(0, w, 1, func(x int) int { return col(x, top, bottom) })
+	right := trim(w-1, left-1, -1, func(x int) int { return col(x, top, bottom) }) + 1
 	cw, ch := right-left, bottom-top
 	if cw < w*3/10 || ch < h*3/10 { // blank or nearly blank: leave it
 		return full

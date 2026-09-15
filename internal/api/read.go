@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -268,18 +269,16 @@ func (s *Server) registerRead() {
 		func(ctx context.Context, in *struct {
 			SeriesID int64 `query:"seriesId"`
 		}) (*struct{ Body ReaderSettingsView }, error) {
-			p := access.From(ctx)
-			out := ReaderSettingsView{Defaults: json.RawMessage("{}")}
-			var prefs []model.ReaderPrefs
-			if err := s.app.DB.NewSelect().Model(&prefs).Where("user_id = ? AND series_id IN (0, ?)", p.UserID, in.SeriesID).Scan(ctx); err != nil {
+			prefs, err := s.readerPrefs(ctx, in.SeriesID)
+			if err != nil {
 				return nil, toHTTPError(err)
 			}
-			for _, x := range prefs {
-				if x.SeriesID == 0 {
-					out.Defaults = json.RawMessage(x.Data)
-				} else {
-					out.Series = json.RawMessage(x.Data)
-				}
+			out := ReaderSettingsView{Defaults: json.RawMessage("{}")}
+			if d := prefs[0]; d != "" {
+				out.Defaults = json.RawMessage(d)
+			}
+			if d := prefs[in.SeriesID]; in.SeriesID != 0 && d != "" {
+				out.Series = json.RawMessage(d)
 			}
 			return &struct{ Body ReaderSettingsView }{out}, nil
 		})
@@ -292,21 +291,82 @@ func (s *Server) registerRead() {
 				Data     map[string]any `json:"data,omitempty"`
 			}
 		}) (*struct{}, error) {
-			p := access.From(ctx)
-			if p.Kind != access.KindUser {
-				return nil, huma.Error400BadRequest("sign in as a user to save reader settings")
+			var data []byte
+			if in.Body.Data != nil {
+				var err error
+				if data, err = json.Marshal(in.Body.Data); err != nil || len(data) > 8<<10 {
+					return nil, huma.Error400BadRequest("settings too large")
+				}
 			}
-			if in.Body.Data == nil {
-				_, err := s.app.DB.NewDelete().Model((*model.ReaderPrefs)(nil)).Where("user_id = ? AND series_id = ?", p.UserID, in.Body.SeriesID).Exec(ctx)
-				return nil, toHTTPError(err)
-			}
-			data, err := json.Marshal(in.Body.Data)
-			if err != nil || len(data) > 8<<10 {
-				return nil, huma.Error400BadRequest("settings too large")
-			}
-			pr := &model.ReaderPrefs{UserID: p.UserID, SeriesID: in.Body.SeriesID, Data: string(data), UpdatedAt: time.Now().UTC()}
-			_, err = s.app.DB.NewInsert().Model(pr).On("CONFLICT (user_id, series_id) DO UPDATE").
-				Set("data = EXCLUDED.data").Set("updated_at = EXCLUDED.updated_at").Exec(ctx)
-			return nil, toHTTPError(err)
+			return nil, toHTTPError(s.saveReaderPrefs(ctx, in.Body.SeriesID, data))
 		})
+}
+
+// Callers without an account (auth disabled, the API key) share one set of
+// reader settings, kept in the settings store under this key as
+// {"<seriesId>": {...}} with "0" for the defaults.
+const keySharedReaderPrefs = "reader_prefs"
+
+var sharedPrefsMu sync.Mutex
+
+func prefsOwner(ctx context.Context) int64 {
+	if p := access.From(ctx); p != nil && p.Kind == access.KindUser {
+		return p.UserID
+	}
+	return 0
+}
+
+// readerPrefs are the caller's defaults (series 0) and a series' own settings.
+func (s *Server) readerPrefs(ctx context.Context, seriesID int64) (map[int64]string, error) {
+	out := map[int64]string{}
+	user := prefsOwner(ctx)
+	if user == 0 {
+		shared := map[string]json.RawMessage{}
+		if err := s.app.Settings.Get(ctx, keySharedReaderPrefs, &shared); err != nil {
+			return nil, err
+		}
+		for _, id := range []int64{0, seriesID} {
+			if d, ok := shared[strconv.FormatInt(id, 10)]; ok {
+				out[id] = string(d)
+			}
+		}
+		return out, nil
+	}
+	var prefs []model.ReaderPrefs
+	if err := s.app.DB.NewSelect().Model(&prefs).Where("user_id = ? AND series_id IN (0, ?)", user, seriesID).Scan(ctx); err != nil {
+		return nil, err
+	}
+	for _, x := range prefs {
+		out[x.SeriesID] = x.Data
+	}
+	return out, nil
+}
+
+// saveReaderPrefs stores the caller's settings for a series (0: defaults);
+// nil data removes them.
+func (s *Server) saveReaderPrefs(ctx context.Context, seriesID int64, data []byte) error {
+	user := prefsOwner(ctx)
+	if user == 0 {
+		sharedPrefsMu.Lock()
+		defer sharedPrefsMu.Unlock()
+		shared := map[string]json.RawMessage{}
+		if err := s.app.Settings.Get(ctx, keySharedReaderPrefs, &shared); err != nil {
+			return err
+		}
+		key := strconv.FormatInt(seriesID, 10)
+		if data == nil {
+			delete(shared, key)
+		} else {
+			shared[key] = data
+		}
+		return s.app.Settings.Set(ctx, keySharedReaderPrefs, shared)
+	}
+	if data == nil {
+		_, err := s.app.DB.NewDelete().Model((*model.ReaderPrefs)(nil)).Where("user_id = ? AND series_id = ?", user, seriesID).Exec(ctx)
+		return err
+	}
+	pr := &model.ReaderPrefs{UserID: user, SeriesID: seriesID, Data: string(data), UpdatedAt: time.Now().UTC()}
+	_, err := s.app.DB.NewInsert().Model(pr).On("CONFLICT (user_id, series_id) DO UPDATE").
+		Set("data = EXCLUDED.data").Set("updated_at = EXCLUDED.updated_at").Exec(ctx)
+	return err
 }

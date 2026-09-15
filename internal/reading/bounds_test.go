@@ -45,4 +45,21 @@ func TestContentBox(t *testing.T) {
 	if b := ContentBox(img); b.X < 30 || b.W > 340 {
 		t.Fatalf("black sides %+v", b)
 	}
+	// a white margin around a black frame: only the margin goes
+	framed := image.NewRGBA(image.Rect(0, 0, 400, 600))
+	for y := 0; y < 600; y++ {
+		for x := 0; x < 400; x++ {
+			c := color.RGBA{255, 255, 255, 255}
+			if x >= 40 && x < 360 && y >= 60 && y < 540 {
+				c = color.RGBA{20, 20, 20, 255}
+				if x >= 60 && x < 340 && y >= 80 && y < 520 {
+					c = color.RGBA{120, 160, 200, 255}
+				}
+			}
+			framed.Set(x, y, c)
+		}
+	}
+	if b := ContentBox(framed); b.X != 36 || b.Y != 54 || b.W != 328 || b.H != 492 {
+		t.Fatalf("framed %+v", b)
+	}
 }
