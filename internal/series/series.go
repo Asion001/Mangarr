@@ -23,6 +23,7 @@ import (
 	"github.com/Asion001/mangarr/internal/modules"
 	"github.com/Asion001/mangarr/internal/modules/source"
 	"github.com/Asion001/mangarr/internal/naming"
+	"github.com/Asion001/mangarr/internal/sourcesearch"
 )
 
 var (
@@ -42,7 +43,18 @@ type Service struct {
 	mods  *modules.Manager
 	queue *jobs.Queue
 	log   *slog.Logger
+	// search finds a series at a catalog (set with UseSearch; bulk source
+	// work needs it, the rest of the service doesn't).
+	search Searcher
 }
+
+// Searcher finds a series at chosen catalogs (internal/sourcesearch).
+type Searcher interface {
+	Quick(ctx context.Context, in sourcesearch.QuickSearchInput, opt sourcesearch.QuickOptions) (*sourcesearch.QuickSearchResult, error)
+}
+
+// UseSearch gives the service a catalog search, for adding sources in bulk.
+func (s *Service) UseSearch(q Searcher) { s.search = q }
 
 func New(d *db.DB, bus *events.Bus, lib *library.Library, agg *metadataagg.Aggregator, mods *modules.Manager, q *jobs.Queue, log *slog.Logger) *Service {
 	return &Service{db: d, bus: bus, lib: lib, agg: agg, mods: mods, queue: q, log: log}

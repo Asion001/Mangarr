@@ -144,6 +144,7 @@ series-search POST /api/v1/series/{id}/search -> library.manage
 series-source-link POST /api/v1/series/{id}/sources -> library.manage
 series-source-unlink DELETE /api/v1/series/{id}/sources/{linkId} -> library.manage
 series-source-update PUT /api/v1/series/{id}/sources/{linkId} -> library.manage
+series-sources-bulk POST /api/v1/series/sources/bulk -> library.manage
 series-unfollow DELETE /api/v1/series/{id}/follow -> signedin
 series-update PUT /api/v1/series/{id} -> library.manage
 settings-get-cleanup GET /api/v1/settings/cleanup -> admin

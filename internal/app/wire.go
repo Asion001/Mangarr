@@ -39,9 +39,25 @@ func (a *App) wire(ctx context.Context) error {
 	a.Downloads.Gov = a.Catalogs.Gov
 	a.AddService(a.Downloads)
 	a.Series = series.New(a.DB, a.Bus, a.Library, a.Metadata, a.Modules, a.Queue, log.With("component", "series"))
+	a.Series.UseSearch(a.Search) // adding a source in bulk finds each series at the catalog
 
 	a.Queue.Register(jobs.Definition{Name: "RefreshSources", Description: "Check linked sources that are due for new chapters",
 		Handler: a.Refresher.RefreshDue})
+	a.Queue.Register(jobs.Definition{Name: "SeriesSources", Description: "Add, remove or switch off one catalog across many series",
+		Handler: func(ctx context.Context, r *jobs.Run) error {
+			var req series.BulkRequest
+			if err := r.Body(&req); err != nil {
+				return err
+			}
+			results, err := a.Series.BulkSources(ctx, req, false, func(done, total int) {
+				r.Progress("%d of %d series", done, total)
+			})
+			if err != nil {
+				return err
+			}
+			r.Progress("%s", series.BulkSummary(results))
+			return nil
+		}})
 	a.Queue.Register(jobs.Definition{Name: "RefreshSeries", Description: "Refresh all sources of one series",
 		Handler: func(ctx context.Context, r *jobs.Run) error {
 			var body struct {

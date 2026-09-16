@@ -491,6 +491,66 @@
         ],
         "type": "object"
       },
+      "BulkResult": {
+        "additionalProperties": false,
+        "properties": {
+          "done": {
+            "type": "string"
+          },
+          "match": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "score": {
+            "format": "double",
+            "type": "number"
+          },
+          "seriesId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "seriesId",
+          "title",
+          "done"
+        ],
+        "type": "object"
+      },
+      "BulkSourcesOutput": {
+        "additionalProperties": false,
+        "properties": {
+          "command": {
+            "$ref": "#/components/schemas/Command"
+          },
+          "previewed": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/BulkResult"
+            },
+            "type": "array"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total"
+        ],
+        "type": "object"
+      },
       "CacheStatus": {
         "additionalProperties": false,
         "properties": {
@@ -6320,6 +6380,54 @@
             "type": "array"
           }
         },
+        "type": "object"
+      },
+      "Series-sources-bulkRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "add",
+              "remove",
+              "enable",
+              "disable"
+            ],
+            "type": "string"
+          },
+          "dryRun": {
+            "type": "boolean"
+          },
+          "moduleId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "monitoredOnly": {
+            "type": "boolean"
+          },
+          "rootFolderId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "seriesIds": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "sourceId": {
+            "type": "string"
+          },
+          "tagId": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "action",
+          "moduleId",
+          "sourceId"
+        ],
         "type": "object"
       },
       "SeriesMetadata": {
@@ -13303,6 +13411,47 @@
           }
         },
         "summary": "Files (and folders) that don't match the current naming format",
+        "tags": [
+          "Series"
+        ]
+      }
+    },
+    "/api/v1/series/sources/bulk": {
+      "post": {
+        "operationId": "series-sources-bulk",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Series-sources-bulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkSourcesOutput"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Add a catalog to many series as a fallback source, or remove or switch one off across them",
         "tags": [
           "Series"
         ]

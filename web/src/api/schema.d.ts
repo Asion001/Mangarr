@@ -1658,6 +1658,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/series/sources/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add a catalog to many series as a fallback source, or remove or switch one off across them */
+        post: operations["series-sources-bulk"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/series/{id}": {
         parameters: {
             query?: never;
@@ -2755,6 +2772,25 @@ export interface components {
             /** Format: int64 */
             files: number;
             name: string;
+        };
+        BulkResult: {
+            done: string;
+            match?: string;
+            reason?: string;
+            /** Format: double */
+            score?: number;
+            /** Format: int64 */
+            seriesId: number;
+            title: string;
+            url?: string;
+        };
+        BulkSourcesOutput: {
+            command?: components["schemas"]["Command"];
+            /** Format: int64 */
+            previewed?: number;
+            results?: components["schemas"]["BulkResult"][];
+            /** Format: int64 */
+            total: number;
         };
         CacheStatus: {
             /** Format: int64 */
@@ -4508,6 +4544,20 @@ export interface components {
         };
         "Series-searchRequest": {
             chapterIds?: number[];
+        };
+        "Series-sources-bulkRequest": {
+            /** @enum {string} */
+            action: "add" | "remove" | "enable" | "disable";
+            dryRun?: boolean;
+            /** Format: int64 */
+            moduleId: number;
+            monitoredOnly?: boolean;
+            /** Format: int64 */
+            rootFolderId?: number;
+            seriesIds?: number[];
+            sourceId: string;
+            /** Format: int64 */
+            tagId?: number;
         };
         SeriesMetadata: {
             ageRating?: string;
@@ -8971,6 +9021,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SeriesRename"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "series-sources-bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Series-sources-bulkRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkSourcesOutput"];
                 };
             };
             /** @description Error */

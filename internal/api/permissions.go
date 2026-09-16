@@ -94,6 +94,7 @@ var operationPermissions = map[string][]string{
 	"series-rename-preview":   {access.LibraryManage},
 	"series-search":           {access.LibraryManage},
 	"series-source-link":      {access.LibraryManage},
+	"series-sources-bulk":     {access.LibraryManage},
 	"series-source-unlink":    {access.LibraryManage},
 	"series-source-update":    {access.LibraryManage},
 	"chapter-decision":        {access.LibraryManage},
