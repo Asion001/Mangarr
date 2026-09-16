@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -69,6 +70,32 @@ func seed(t *testing.T, d *db.DB) (*model.Series, time.Time) {
 	if _, err := d.NewInsert().Model(&model.Setting{Key: "general", Value: `{"instanceName":"mangarr"}`, UpdatedAt: now}).Exec(ctx); err != nil {
 		t.Fatal(err)
 	}
+	// accounts, a request and a follow (JSON columns, a NULL series, a
+	// composite key)
+	g := &model.Group{Name: "Friends", Builtin: "", Permissions: []string{"requests.create", "apps"}, IncludeTags: []int64{tag.ID},
+		ExcludeTags: []int64{}, RootFolders: []int64{}, AutoApproveRequests: true, CreatedAt: now}
+	if _, err := d.NewInsert().Model(g).Exec(ctx); err != nil {
+		t.Fatal(err)
+	}
+	u := &model.User{Username: "ann", PasswordHash: "", GroupID: g.ID, ReaderID: r.ID, DisplayName: "Ann", OIDCSubject: "sub-1", CreatedAt: now}
+	if _, err := d.NewInsert().Model(u).Exec(ctx); err != nil {
+		t.Fatal(err)
+	}
+	req := &model.Request{Title: "Blue Lock", Status: model.RequestPending, CreatedAt: now, UpdatedAt: now,
+		Metadata: model.RequestMetadata{ModuleID: 1, Provider: "anilist", ID: "42", Year: 2018, AltTitles: []string{"ブルーロック"},
+			ExternalIDs: map[string]string{"anilist": "42"}}}
+	if _, err := d.NewInsert().Model(req).Exec(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range []any{
+		&model.RequestUser{RequestID: req.ID, UserID: u.ID, Note: "please!", CreatedAt: now},
+		&model.Follow{UserID: u.ID, SeriesID: ser.ID, CreatedAt: now},
+		&model.ReaderPrefs{UserID: u.ID, SeriesID: ser.ID, Data: `{"mode":"webtoon","crop":true}`, UpdatedAt: now},
+	} {
+		if _, err := d.NewInsert().Model(m).Exec(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
 	return ser, now
 }
 
@@ -92,6 +119,30 @@ func check(t *testing.T, d *db.DB, want *model.Series, now time.Time) {
 	_ = d.NewSelect().Model(&p).Limit(1).Scan(ctx)
 	if !p.IsDefault || len(p.Config.PreferredScanlators) != 1 {
 		t.Fatalf("profile %+v", p)
+	}
+	var req model.Request
+	if err := d.NewSelect().Model(&req).Limit(1).Scan(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if req.Status != model.RequestPending || req.SeriesID != nil || req.Metadata.ExternalIDs["anilist"] != "42" ||
+		len(req.Metadata.AltTitles) != 1 || !req.CreatedAt.Equal(now) {
+		t.Fatalf("request %+v", req)
+	}
+	var grp model.Group
+	_ = d.NewSelect().Model(&grp).Where("name = ?", "Friends").Scan(ctx)
+	if !grp.AutoApproveRequests || len(grp.Permissions) != 2 || len(grp.IncludeTags) != 1 {
+		t.Fatalf("group %+v", grp)
+	}
+	var prefs model.ReaderPrefs
+	_ = d.NewSelect().Model(&prefs).Limit(1).Scan(ctx)
+	if !strings.Contains(prefs.Data, "webtoon") {
+		t.Fatalf("reader settings %+v", prefs)
+	}
+	if n, _ := d.NewSelect().Model((*model.Follow)(nil)).Count(ctx); n != 1 {
+		t.Fatalf("follows %d", n)
+	}
+	if n, _ := d.NewSelect().Model((*model.RequestUser)(nil)).Count(ctx); n != 1 {
+		t.Fatalf("requesters %d", n)
 	}
 	// new rows get new ids after the copied ones
 	extra := &model.Tag{Label: "new in " + string(d.Kind)}
