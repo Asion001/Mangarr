@@ -366,6 +366,14 @@ func Manages(p *access.Principal) bool {
 	return p.Can(access.RequestsManage) || p.Can(access.LibraryManage)
 }
 
+// asks is whose requests these are (0 for callers without an account).
+func asks(p *access.Principal) int64 {
+	if p == nil {
+		return 0
+	}
+	return p.UserID
+}
+
 // List returns requests, newest first.
 func (s *Service) List(ctx context.Context, p *access.Principal, f Filter) ([]Request, error) {
 	q := s.DB.NewSelect().Model((*model.Request)(nil)).Order("created_at DESC", "id DESC").Limit(500)
@@ -373,7 +381,7 @@ func (s *Service) List(ctx context.Context, p *access.Principal, f Filter) ([]Re
 		q = q.Where("status = ?", f.Status)
 	}
 	if !f.All || !Manages(p) {
-		q = q.Where("id IN (SELECT request_id FROM request_users WHERE user_id = ?)", p.UserID)
+		q = q.Where("id IN (SELECT request_id FROM request_users WHERE user_id = ?)", asks(p))
 	}
 	var rs []model.Request
 	if err := q.Scan(ctx, &rs); err != nil {
@@ -463,7 +471,7 @@ func (s *Service) views(ctx context.Context, p *access.Principal, rs []model.Req
 				continue
 			}
 			v.Count++
-			mine := ru.UserID == p.UserID
+			mine := ru.UserID == asks(p) && ru.UserID != 0
 			v.Mine = v.Mine || mine
 			if manager || mine { // others' names are theirs
 				v.Requesters = append(v.Requesters, Requester{UserID: ru.UserID, Name: names[ru.UserID], Note: ru.Note, At: ru.CreatedAt})
