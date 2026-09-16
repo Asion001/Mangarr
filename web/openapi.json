@@ -6430,6 +6430,27 @@
         ],
         "type": "object"
       },
+      "Series-sources-switchRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "dryRun": {
+            "type": "boolean"
+          },
+          "fromModuleId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "toModuleId": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "fromModuleId",
+          "toModuleId"
+        ],
+        "type": "object"
+      },
       "SeriesMetadata": {
         "additionalProperties": false,
         "properties": {
@@ -7292,6 +7313,57 @@
         },
         "required": [
           "url"
+        ],
+        "type": "object"
+      },
+      "SwitchRow": {
+        "additionalProperties": false,
+        "properties": {
+          "catalog": {
+            "type": "string"
+          },
+          "links": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "moves": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "series": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sourceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sourceId",
+          "catalog",
+          "links",
+          "series",
+          "moves"
+        ],
+        "type": "object"
+      },
+      "SwitchSourcesOutput": {
+        "additionalProperties": false,
+        "properties": {
+          "command": {
+            "$ref": "#/components/schemas/Command"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/SwitchRow"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "rows"
         ],
         "type": "object"
       },
@@ -13452,6 +13524,47 @@
           }
         },
         "summary": "Add a catalog to many series as a fallback source, or remove or switch one off across them",
+        "tags": [
+          "Series"
+        ]
+      }
+    },
+    "/api/v1/series/sources/switch": {
+      "post": {
+        "operationId": "series-sources-switch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Series-sources-switchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwitchSourcesOutput"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Move a library's source links from one source module to another",
         "tags": [
           "Series"
         ]

@@ -67,7 +67,7 @@ type CommandInput struct {
 // own work; the rest is administration).
 var managerCommands = map[string]bool{
 	"RefreshSeries": true, "RefreshSources": true, "SearchMissing": true, "RefreshMetadata": true,
-	"ProcessExisting": true, "DiskScan": true, "LibraryRescan": true, "SeriesSources": true,
+	"ProcessExisting": true, "DiskScan": true, "LibraryRescan": true, "SeriesSources": true, "SwitchSourceModule": true,
 }
 
 func (s *Server) registerSystem() {

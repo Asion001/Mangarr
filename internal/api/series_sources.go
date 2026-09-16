@@ -10,7 +10,10 @@ import (
 	"github.com/Asion001/mangarr/internal/series"
 )
 
-func init() { register((*Server).registerSeriesSources) }
+func init() {
+	register((*Server).registerSeriesSources)
+	register((*Server).registerSwitchSources)
+}
 
 // BulkSourcesOutput is a preview, or the command doing the work.
 type BulkSourcesOutput struct {
@@ -19,6 +22,14 @@ type BulkSourcesOutput struct {
 	// Previewed is how many series the preview looked at, of Total.
 	Previewed int `json:"previewed,omitempty"`
 	Total     int `json:"total"`
+	// Command is the queued command when this wasn't a preview.
+	Command *model.Command `json:"command,omitempty"`
+}
+
+// SwitchSourcesOutput is a plan, or the command carrying it out.
+type SwitchSourcesOutput struct {
+	// Rows is what would happen to each catalog's links.
+	Rows []series.SwitchRow `json:"rows"`
 	// Command is the queued command when this wasn't a preview.
 	Command *model.Command `json:"command,omitempty"`
 }
@@ -57,5 +68,35 @@ func (s *Server) registerSeriesSources() {
 			}
 			out.Command = cmd
 			return &struct{ Body BulkSourcesOutput }{out}, nil
+		})
+}
+
+func (s *Server) registerSwitchSources() {
+	huma.Register(s.api, huma.Operation{OperationID: "series-sources-switch", Method: http.MethodPost,
+		Path: "/api/v1/series/sources/switch", Tags: []string{"Series"},
+		Summary: "Move a library's source links from one source module to another"},
+		func(ctx context.Context, in *struct {
+			Body struct {
+				series.SwitchRequest
+				// DryRun reports the plan without changing anything.
+				DryRun bool `json:"dryRun,omitempty"`
+			}
+		}) (*struct{ Body SwitchSourcesOutput }, error) {
+			req := in.Body.SwitchRequest
+			rows, err := s.app.Series.SwitchPlan(ctx, req)
+			if err != nil {
+				return nil, seriesError(err)
+			}
+			out := SwitchSourcesOutput{Rows: rows}
+			if in.Body.DryRun {
+				return &struct{ Body SwitchSourcesOutput }{out}, nil
+			}
+			cmd, err := s.app.Queue.Push(ctx, "SwitchSourceModule", map[string]any{
+				"fromModuleId": req.FromModuleID, "toModuleId": req.ToModuleID}, "manual")
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			out.Command = cmd
+			return &struct{ Body SwitchSourcesOutput }{out}, nil
 		})
 }

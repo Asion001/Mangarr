@@ -58,6 +58,26 @@ func (a *App) wire(ctx context.Context) error {
 			r.Progress("%s", series.BulkSummary(results))
 			return nil
 		}})
+	a.Queue.Register(jobs.Definition{Name: "SwitchSourceModule", Description: "Move source links from one source module to another",
+		Handler: func(ctx context.Context, r *jobs.Run) error {
+			var req series.SwitchRequest
+			if err := r.Body(&req); err != nil {
+				return err
+			}
+			rows, err := a.Series.SwitchPlan(ctx, req)
+			if err != nil {
+				return err
+			}
+			r.Progress("%s", series.SwitchSummary(rows))
+			moved, err := a.Series.SwitchSources(ctx, req, func(done, total int) {
+				r.Progress("%d of %d links", done, total)
+			})
+			if err != nil {
+				return err
+			}
+			r.Progress("%d links moved", moved)
+			return nil
+		}})
 	a.Queue.Register(jobs.Definition{Name: "RefreshSeries", Description: "Refresh all sources of one series",
 		Handler: func(ctx context.Context, r *jobs.Run) error {
 			var body struct {

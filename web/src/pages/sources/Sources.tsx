@@ -10,6 +10,7 @@ import { useToast } from "../../lib/toast";
 import { useListParam, useQueryParam } from "../../lib/urlState";
 import { Catalogs } from "./Catalogs";
 import { SourceSettings } from "./SourceSettings";
+import { SwitchEngine } from "./SwitchEngine";
 
 type Tab = "extensions" | "catalogs" | "browse" | "stores";
 
@@ -21,6 +22,7 @@ export function SourcesPage() {
   const mods = modules ?? [];
   const moduleId = Number(params.get("module") ?? 0);
   const current = mods.find((m) => m.id === moduleId) ?? mods[0];
+  const [switching, setSwitching] = useState(false);
 
   if (isLoading) return <Loading />;
   if (!mods.length)
@@ -47,13 +49,16 @@ export function SourcesPage() {
         title="Sources"
         actions={
           mods.length > 1 && (
-            <Select value={current?.id} onChange={(e) => setParams({ module: e.target.value })}>
-              {mods.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
-            </Select>
+            <>
+              <Button onClick={() => setSwitching(true)}>Switch engine…</Button>
+              <Select value={current?.id} onChange={(e) => setParams({ module: e.target.value })}>
+                {mods.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </Select>
+            </>
           )
         }
       />
@@ -62,6 +67,7 @@ export function SourcesPage() {
       {current && tab === "catalogs" && <Catalogs module={current} />}
       {current && tab === "browse" && <Browse module={current} />}
       {current && tab === "stores" && <Stores module={current} />}
+      {switching && current && <SwitchEngine modules={mods} from={current} onClose={() => setSwitching(false)} />}
     </>
   );
 }

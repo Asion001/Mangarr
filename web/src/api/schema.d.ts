@@ -1675,6 +1675,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/series/sources/switch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Move a library's source links from one source module to another */
+        post: operations["series-sources-switch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/series/{id}": {
         parameters: {
             query?: never;
@@ -4559,6 +4576,13 @@ export interface components {
             /** Format: int64 */
             tagId?: number;
         };
+        "Series-sources-switchRequest": {
+            dryRun?: boolean;
+            /** Format: int64 */
+            fromModuleId: number;
+            /** Format: int64 */
+            toModuleId: number;
+        };
         SeriesMetadata: {
             ageRating?: string;
             altTitles?: string[];
@@ -4823,6 +4847,20 @@ export interface components {
         };
         "Stores-addRequest": {
             url: string;
+        };
+        SwitchRow: {
+            catalog: string;
+            /** Format: int64 */
+            links: number;
+            moves: boolean;
+            reason?: string;
+            /** Format: int64 */
+            series: number;
+            sourceId: string;
+        };
+        SwitchSourcesOutput: {
+            command?: components["schemas"]["Command"];
+            rows: components["schemas"]["SwitchRow"][];
         };
         "System-cache-clearRequest": {
             catalogs: boolean;
@@ -9054,6 +9092,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BulkSourcesOutput"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "series-sources-switch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Series-sources-switchRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SwitchSourcesOutput"];
                 };
             };
             /** @description Error */
