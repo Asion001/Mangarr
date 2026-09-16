@@ -18,6 +18,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/Asion001/mangarr/internal/access"
+	"github.com/Asion001/mangarr/internal/apitiming"
 	"github.com/Asion001/mangarr/internal/app"
 	"github.com/Asion001/mangarr/internal/version"
 )
@@ -47,7 +48,7 @@ func Permissions(a *app.App) []string {
 
 func build(a *app.App) (http.Handler, *Server) {
 	r := chi.NewMux()
-	r.Use(middleware.RealIP, middleware.Recoverer, requestLogger(a.Log))
+	r.Use(middleware.RealIP, middleware.RequestID, middleware.Recoverer, apitiming.Middleware, requestLogger(a.Log))
 
 	base := a.Cfg.URLBase
 	sub := chi.NewMux()
@@ -192,10 +193,14 @@ func requestLogger(log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
+			id := middleware.GetReqID(r.Context())
+			if id != "" {
+				w.Header().Set("X-Request-Id", id) // ties a slow request in the browser to the log
+			}
 			ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 			next.ServeHTTP(ww, r)
 			if strings.HasPrefix(r.URL.Path, "/api/") && r.URL.Path != "/api/v1/events" {
-				log.Debug("http", "method", r.Method, "path", r.URL.Path, "status", ww.Status(), "duration", time.Since(start))
+				log.Debug("http", "method", r.Method, "path", r.URL.Path, "status", ww.Status(), "duration", time.Since(start), "request", id)
 			}
 		})
 	}

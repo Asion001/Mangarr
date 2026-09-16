@@ -7,6 +7,7 @@ import (
 	"image"
 	"sync"
 
+	"github.com/Asion001/mangarr/internal/apitiming"
 	"github.com/Asion001/mangarr/internal/imagecheck"
 )
 
@@ -56,6 +57,7 @@ func (s *Service) PageBounds(ctx context.Context, b *BookInfo, n int) (Bounds, e
 	if err != nil {
 		return Bounds{}, err
 	}
+	defer apitiming.Span(ctx, "decode")()
 	var img image.Image
 	if info, _ := imagecheck.Detect(data); info.Format == "jxl" {
 		img, err = decodeJXL(data)

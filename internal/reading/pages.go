@@ -24,6 +24,7 @@ import (
 	_ "golang.org/x/image/webp"
 	"golang.org/x/sync/singleflight"
 
+	"github.com/Asion001/mangarr/internal/apitiming"
 	"github.com/Asion001/mangarr/internal/cbz"
 	"github.com/Asion001/mangarr/internal/imagecheck"
 	"github.com/Asion001/mangarr/internal/model"
@@ -129,6 +130,7 @@ func (s *Service) Pages(ctx context.Context, b *BookInfo) ([]PageInfo, error) {
 // Page returns page n (1-based) of a book.
 func (s *Service) Page(ctx context.Context, b *BookInfo, n int) ([]byte, string, error) {
 	if b.Path != "" {
+		defer apitiming.Span(ctx, "file")()
 		if entries, err := cbz.List(b.Path); err == nil {
 			if n < 1 || n > len(entries) {
 				return nil, "", ErrNotFound
@@ -149,6 +151,7 @@ func (s *Service) Page(ctx context.Context, b *BookInfo, n int) ([]byte, string,
 	}
 	p := st.pages[n-1]
 	key := fmt.Sprintf("%d|%d|%d", b.Chapter.ID, st.release, n)
+	defer apitiming.Span(ctx, "source")()
 	data, _, _, err := s.ImageCache.Get(ctx, PagesBucket, key, pageTTL, func(ctx context.Context) (io.ReadCloser, string, error) {
 		fctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 		defer cancel()

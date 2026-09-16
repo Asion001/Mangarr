@@ -8,13 +8,14 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/Asion001/mangarr/internal/apitiming"
 	"github.com/Asion001/mangarr/internal/reading"
 )
 
 // router builds the API. Routes sit at the root, like Komga's.
 func (s *Service) router() http.Handler {
 	r := chi.NewRouter()
-	r.Use(middleware.RequestID, middleware.RealIP, cors, middleware.StripSlashes, s.logRequests, middleware.Recoverer)
+	r.Use(middleware.RequestID, middleware.RealIP, cors, middleware.StripSlashes, apitiming.Middleware, s.logRequests, middleware.Recoverer)
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) { writeError(w, r, http.StatusNotFound, "Not Found") })
 	r.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusMethodNotAllowed, "Method Not Allowed")
