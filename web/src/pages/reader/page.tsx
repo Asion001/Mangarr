@@ -4,7 +4,21 @@ import { api, apiUrl, unwrap } from "../../api/client";
 /** Dims are a page's size and the box inside its borders (source pixels). */
 export type Dims = { width: number; height: number; x: number; y: number; w: number; h: number };
 
-export const pageUrl = (chapterId: number, n: number) => apiUrl(`api/v1/read/chapters/${chapterId}/pages/${n}`);
+/** Widths the server keeps copies at (internal/imagedeliver). */
+const widths = [320, 720, 1080, 1440, 2160];
+
+/** displayWidth rounds a CSS width (in real pixels) up to a size the server keeps. */
+export function displayWidth(cssWidth: number): number {
+  const want = Math.round(cssWidth * (window.devicePixelRatio || 1));
+  return widths.find((w) => want <= w) ?? 0; // 0: the page as it is
+}
+
+/** pageUrl is a page, optionally at a display size instead of the full scan. */
+export const pageUrl = (chapterId: number, n: number, width = 0) =>
+  apiUrl(`api/v1/read/chapters/${chapterId}/pages/${n}`, width > 0 ? { w: width } : undefined);
+
+/** placeholderUrl is a small copy shown (blurred) until the page arrives. */
+export const placeholderUrl = (chapterId: number, n: number) => pageUrl(chapterId, n, 320);
 
 /**
  * useDims keeps page sizes for a chapter: from the server's bounds (when
@@ -41,12 +55,12 @@ export function useDims(chapterId: number, wantBounds: boolean) {
     unwrap(api.GET("/api/v1/read/chapters/{id}/bounds", { params: { path: { id: chapterId } } }))
       .then((list) => {
         if (!live) return;
+        // mark them here, not inside the updater: React runs updaters later,
+        // and by then the pages would already have been asked for again
+        for (const b of list) asked.current.add(b.number);
         setDims((d) => {
           const next = { ...d };
-          for (const b of list) {
-            asked.current.add(b.number);
-            next[b.number] ??= b;
-          }
+          for (const b of list) next[b.number] ??= b;
           return next;
         });
       })
@@ -126,6 +140,7 @@ export function PageImage({
   height,
   onNatural,
   eager = false,
+  placeholder,
 }: {
   src: string;
   dims?: Dims;
@@ -136,10 +151,16 @@ export function PageImage({
   height: number;
   onNatural?: (w: number, h: number) => void;
   eager?: boolean;
+  /** placeholder is a small copy shown until the page itself is decoded. */
+  placeholder?: string;
 }) {
   const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const box = boxOf(dims, crop, sidesOnly, half);
-  const load = (e: React.SyntheticEvent<HTMLImageElement>) => onNatural?.(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight);
+  const load = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    setLoaded(true);
+    onNatural?.(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight);
+  };
   if (failed) {
     return (
       <div style={{ width, height }} className="flex items-center justify-center text-sm text-neutral-400">
@@ -150,11 +171,28 @@ export function PageImage({
     );
   }
   const common = { src, alt: "", draggable: false, decoding: "async" as const, loading: eager ? ("eager" as const) : ("lazy" as const), onLoad: load, onError: () => setFailed(true) };
+  const blur = placeholder && !loaded && (
+    <img
+      src={placeholder}
+      alt=""
+      aria-hidden
+      draggable={false}
+      className="pointer-events-none absolute inset-0 size-full select-none blur-sm"
+      style={{ objectFit: "contain" }}
+    />
+  );
   if (!box || !dims || (!crop && !half)) {
-    return <img {...common} style={{ width, height, maxWidth: "none", objectFit: "contain" }} className="select-none" />;
+    if (!blur) return <img {...common} style={{ width, height, maxWidth: "none", objectFit: "contain" }} className="select-none" />;
+    return (
+      <div style={{ width, height, position: "relative" }}>
+        {blur}
+        <img {...common} style={{ width, height, maxWidth: "none", objectFit: "contain", position: "relative" }} className="select-none" />
+      </div>
+    );
   }
   return (
     <div style={{ width, height, overflow: "hidden", position: "relative" }}>
+      {blur}
       <img
         {...common}
         className="select-none"

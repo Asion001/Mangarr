@@ -2,7 +2,7 @@
 #
 # One image for every role (MANGARR_MODE=integrated|server|upscaler).
 #
-#   target full (default, :latest)  Debian + Mesa Vulkan + avifenc/cjxl + the
+#   target full (default, :latest)  Debian + Mesa Vulkan + avifenc/cjxl/cjpeg + the
 #                                   ncnn upscalers (amd64; arm64 has everything
 #                                   but the upscalers, which are x86-only)
 #   target slim (:slim)             distroless server only (~35 MB); re-encodes
@@ -72,7 +72,7 @@ ENTRYPOINT ["/mangarr"]
 FROM debian:trixie-slim AS full
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates tzdata libvulkan1 mesa-vulkan-drivers libgomp1 vulkan-tools \
-      webp libavif-bin libjxl-tools \
+      webp libavif-bin libjxl-tools libjpeg-progs \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --system --uid 65532 --gid 0 --home /config mangarr \
     && mkdir -p /config && chown 65532:0 /config

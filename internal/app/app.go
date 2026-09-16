@@ -17,6 +17,7 @@ import (
 	"github.com/Asion001/mangarr/internal/diskcache"
 	"github.com/Asion001/mangarr/internal/envcfg"
 	"github.com/Asion001/mangarr/internal/events"
+	"github.com/Asion001/mangarr/internal/imagedeliver"
 	"github.com/Asion001/mangarr/internal/imageenc"
 	"github.com/Asion001/mangarr/internal/imports"
 	"github.com/Asion001/mangarr/internal/jobs"
@@ -46,6 +47,8 @@ type App struct {
 	SourceCache *sourcecache.Cache
 	// ImageCache holds thumbnails, covers and extension icons on disk.
 	ImageCache *diskcache.Store
+	// ImageDeliver makes display-sized copies of pages for readers.
+	ImageDeliver *imagedeliver.Deliverer
 	// Search searches catalogs through SourceCache.
 	Search *sourcesearch.Service
 	// Encoder re-encodes pages (set before New to override engine detection in tests).
@@ -124,6 +127,7 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger, ring *loggin
 		g, _ := a.Settings.General(context.Background())
 		return int64(g.ImageCacheMaxMB) << 20
 	}, log.With("component", "imagecache"))
+	a.ImageDeliver = imagedeliver.New(a.ImageCache, log.With("component", "images"))
 	a.Search = &sourcesearch.Service{Catalogs: a.Catalogs, Cache: a.SourceCache, Modules: a.Modules, Settings: a.Settings}
 	if err := a.Catalogs.Load(ctx); err != nil {
 		return nil, err

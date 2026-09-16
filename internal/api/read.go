@@ -1,9 +1,11 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"mime"
 	"net/http"
@@ -18,6 +20,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/Asion001/mangarr/internal/access"
+	"github.com/Asion001/mangarr/internal/imagedeliver"
 	"github.com/Asion001/mangarr/internal/model"
 	"github.com/Asion001/mangarr/internal/reading"
 )
@@ -191,6 +194,7 @@ func (s *Server) registerRead() {
 		func(ctx context.Context, in *struct {
 			ID          int64  `path:"id"`
 			N           int    `path:"n" minimum:"1"`
+			Width       int    `query:"w" doc:"Serve a copy at most this many pixels wide (for phones and tablets)"`
 			IfNoneMatch string `header:"If-None-Match"`
 		}) (*huma.StreamResponse, error) {
 			b, err := book(ctx, in.ID)
@@ -200,6 +204,9 @@ func (s *Server) registerRead() {
 			page, err := s.app.Reading.PageReader(ctx, b, in.N)
 			if err != nil {
 				return nil, readError(err)
+			}
+			if small := s.smallerPage(ctx, b, in.N, page, in.Width); small != nil {
+				page = small
 			}
 			return streamImage(page, in.IfNoneMatch, "private, max-age=86400"), nil
 		})
@@ -435,4 +442,28 @@ func streamImage(p *reading.PageContent, ifNoneMatch, cacheControl string) *huma
 		hctx.SetStatus(http.StatusOK)
 		_, _ = io.Copy(hctx.BodyWriter(), p.Body)
 	}}
+}
+
+// smallerPage is a display-sized copy of a page, or nil to send the page as
+// it is (the client asked for no size, resizing is off, or the copy wouldn't
+// be smaller).
+func (s *Server) smallerPage(ctx context.Context, b *reading.BookInfo, n int, page *reading.PageContent, want int) *reading.PageContent {
+	width := imagedeliver.Width(want)
+	if width == 0 || page.ETag == "" {
+		return nil
+	}
+	if cfg, err := s.app.Settings.Reading(ctx); err != nil || !cfg.ResizePages {
+		return nil
+	}
+	data, ct, ok := s.app.ImageDeliver.Variant(ctx, page.ETag, width, func(ctx context.Context) ([]byte, error) {
+		raw, _, err := s.app.Reading.Page(ctx, b, n)
+		return raw, err
+	})
+	if !ok {
+		return nil
+	}
+	_ = page.Body.Close() // the copy replaces it
+	etag := strings.TrimSuffix(page.ETag, `"`) + fmt.Sprintf(`-w%d"`, width)
+	return &reading.PageContent{Body: io.NopCloser(bytes.NewReader(data)), Size: int64(len(data)), ContentType: ct,
+		ETag: etag, ModTime: page.ModTime}
 }

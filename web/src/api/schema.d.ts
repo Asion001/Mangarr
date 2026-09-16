@@ -4244,6 +4244,7 @@ export interface components {
             readAhead: components["schemas"]["ReadAhead"];
             /** Format: int64 */
             readerId: number;
+            resizePages: boolean;
         };
         "Reading-keys-createRequest": {
             /** @description Device name, e.g. "Mihon phone" */
@@ -7845,7 +7846,10 @@ export interface operations {
     };
     "read-page": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Serve a copy at most this many pixels wide (for phones and tablets) */
+                w?: number;
+            };
             header?: {
                 "If-None-Match"?: string;
             };

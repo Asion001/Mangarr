@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { S } from "../../api/client";
 import type { ReaderSettings } from "./settings";
 import { tapAction } from "./zones";
-import { PageImage, pageUrl, useViewport, type Dims } from "./page";
+import { displayWidth, PageImage, pageUrl, placeholderUrl, useViewport, type Dims } from "./page";
 import { Transition } from "./Transition";
 
 type Chapter = S["ReadChapter"];
@@ -184,7 +184,8 @@ export function WebtoonViewer({
             >
               {near.has(p.number) ? (
                 <PageImage
-                  src={pageUrl(chapter.id, p.number)}
+                  src={pageUrl(chapter.id, p.number, displayWidth(width))}
+                  placeholder={placeholderUrl(chapter.id, p.number)}
                   dims={d}
                   crop={s.crop}
                   sidesOnly

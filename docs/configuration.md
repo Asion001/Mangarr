@@ -138,6 +138,7 @@ Lists are comma-separated (`a,b,c`) or JSON; key/value settings use `key=value,k
 | `MANGARR_READING_READER_ID` | int | `0` | Reader whose progress Komga apps read and write (0 = the first reader). |
 | `MANGARR_READING_PUBLIC_URL` | string | `` | Address Komga apps should use, e.g. https://manga.example.com:25600 (for the setup guides). |
 | `MANGARR_READING_DOWNLOAD_ON_OPEN` | bool | `true` | Queue a download when an app opens a chapter that isn't downloaded yet. |
+| `MANGARR_READING_RESIZE_PAGES` | bool | `true` | Serve phones and tablets a copy of the page at their screen size instead of the full scan. |
 | `MANGARR_READING_READ_AHEAD_ENABLED` | bool | `true` | Monitor and download the next chapters after the one a reader is on. |
 | `MANGARR_READING_READ_AHEAD_CHAPTERS` | int | `3` | How many chapters to keep downloaded ahead of the reader. |
 

@@ -68,6 +68,10 @@ export function ReadingAppsPage() {
                 </p>
                 {st?.error && <ErrorBox error={`The API can't listen: ${st.error}`} />}
                 <Switch env={lock("downloadOnOpen")} checked={r.downloadOnOpen} onChange={(v) => patch({ downloadOnOpen: v })} label="Download chapters opened before they're downloaded" />
+                <div>
+                  <Switch env={lock("resizePages")} checked={r.resizePages} onChange={(v) => patch({ resizePages: v })} label="Send phones a page at their screen size" />
+                  <p className="mt-1 text-xs text-muted">A copy of each page is made once and kept in the image cache; turn it off to always send the full scan.</p>
+                </div>
                 <p className="-mt-2 text-xs text-muted">Chapters that aren't downloaded are streamed from the source meanwhile.</p>
                 <Switch
                   env={lock("readAhead.enabled")}

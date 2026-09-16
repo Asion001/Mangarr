@@ -6,7 +6,7 @@ import clsx from "clsx";
 import { api, apiUrl, basePath, unwrap } from "../../api/client";
 import { ErrorBox, Spinner } from "../../components/ui";
 import { useReaderSettings } from "./settings";
-import { pageUrl, useDims, useViewport, type Half } from "./page";
+import { displayWidth, pageUrl, useDims, useViewport, type Half } from "./page";
 import { buildViews, indexOf, PagedViewer } from "./PagedViewer";
 import { WebtoonViewer } from "./WebtoonViewer";
 import { SettingsPanel } from "./SettingsPanel";
@@ -86,13 +86,14 @@ function Reader({ chapterId }: { chapterId: number }) {
   // preload the next pages, and near the end the next chapter
   useEffect(() => {
     if (!ch || s.mode !== "paged") return;
-    for (let k = page + 1; k <= Math.min(count, page + s.preload); k++) new Image().src = pageUrl(ch.id, k);
+    const w = displayWidth(vp.w);
+    for (let k = page + 1; k <= Math.min(count, page + s.preload); k++) new Image().src = pageUrl(ch.id, k, w);
     if (ch.next && page >= count - 2) {
       const next = ch.next.id;
       void qc.prefetchQuery(chapterQuery(next));
-      for (const k of [1, 2]) new Image().src = pageUrl(next, k);
+      for (const k of [1, 2]) new Image().src = pageUrl(next, k, w);
     }
-  }, [ch, page, count, s.mode, s.preload, qc]);
+  }, [ch, page, count, s.mode, s.preload, vp.w, qc]);
 
   // save progress (debounced; right away when leaving)
   const saved = useRef(0);

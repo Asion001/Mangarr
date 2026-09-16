@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import type { S } from "../../api/client";
 import type { ReaderSettings } from "./settings";
 import { tapAction } from "./zones";
-import { fit, isWide, PageImage, pageUrl, useViewport, type Dims, type Half } from "./page";
+import { displayWidth, fit, isWide, PageImage, pageUrl, placeholderUrl, useViewport, type Dims, type Half } from "./page";
 import { Transition } from "./Transition";
 
 type Chapter = S["ReadChapter"];
@@ -168,7 +168,8 @@ export function PagedViewer({
           return (
             <PageImage
               key={`${chapter.id}-${p}-${view.half ?? ""}`}
-              src={pageUrl(chapter.id, p)}
+              src={pageUrl(chapter.id, p, displayWidth(size.w))}
+              placeholder={placeholderUrl(chapter.id, p)}
               dims={d}
               crop={s.crop}
               half={view.half}

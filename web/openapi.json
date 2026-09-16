@@ -5368,6 +5368,9 @@
           "readerId": {
             "format": "int64",
             "type": "integer"
+          },
+          "resizePages": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -5375,6 +5378,7 @@
           "readerId",
           "publicUrl",
           "downloadOnOpen",
+          "resizePages",
           "readAhead"
         ],
         "type": "object"
@@ -11810,6 +11814,17 @@
             "schema": {
               "format": "int64",
               "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Serve a copy at most this many pixels wide (for phones and tablets)",
+            "explode": false,
+            "in": "query",
+            "name": "w",
+            "schema": {
+              "description": "Serve a copy at most this many pixels wide (for phones and tablets)",
+              "format": "int64",
               "type": "integer"
             }
           },
