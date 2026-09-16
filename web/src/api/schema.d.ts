@@ -2636,6 +2636,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the machines that do work for this server */
+        get: operations["workers-list"];
+        put?: never;
+        /** Add a worker and issue its key */
+        post: operations["workers-create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Rename a worker, change its roles or switch it off */
+        put: operations["workers-update"];
+        post?: never;
+        /** Remove a worker and its key */
+        delete: operations["workers-delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3891,6 +3927,10 @@ export interface components {
             /** Format: int64 */
             userId?: number;
         };
+        NewWorkerOutput: {
+            key: string;
+            worker: components["schemas"]["Worker"];
+        };
         NextChapter: {
             available: boolean;
             /** Format: int64 */
@@ -5091,6 +5131,80 @@ export interface components {
             error?: string;
             /** Format: date-time */
             lastEventAt?: string;
+        };
+        Worker: {
+            /** Format: double */
+            busySeconds: number;
+            /** Format: int64 */
+            bytesIn: number;
+            /** Format: int64 */
+            bytesOut: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: int64 */
+            createdBy?: number;
+            enabled: boolean;
+            /** Format: int64 */
+            id: number;
+            info: {
+                [key: string]: unknown;
+            };
+            lastIp: string;
+            /** Format: date-time */
+            lastSeenAt?: string;
+            name: string;
+            /** Format: int64 */
+            pagesDone: number;
+            platform: string;
+            prefix: string;
+            roles: string[];
+            /** Format: int64 */
+            tasksDone: number;
+            /** Format: int64 */
+            tasksFailed: number;
+            version: string;
+        };
+        WorkerResource: {
+            /** Format: double */
+            busySeconds: number;
+            /** Format: int64 */
+            bytesIn: number;
+            /** Format: int64 */
+            bytesOut: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: int64 */
+            createdBy?: number;
+            enabled: boolean;
+            /** Format: int64 */
+            id: number;
+            info: {
+                [key: string]: unknown;
+            };
+            lastIp: string;
+            /** Format: date-time */
+            lastSeenAt?: string;
+            name: string;
+            online: boolean;
+            /** Format: int64 */
+            pagesDone: number;
+            platform: string;
+            prefix: string;
+            roles: string[];
+            /** Format: int64 */
+            tasksDone: number;
+            /** Format: int64 */
+            tasksFailed: number;
+            version: string;
+        };
+        "Workers-createRequest": {
+            name: string;
+            roles: string[];
+        };
+        "Workers-updateRequest": {
+            enabled?: boolean;
+            name?: string;
+            roles?: string[];
         };
     };
     responses: never;
@@ -11510,6 +11624,132 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["WantedPage"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "workers-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerResource"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "workers-create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Workers-createRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewWorkerOutput"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "workers-update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Workers-updateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Worker"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "workers-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {

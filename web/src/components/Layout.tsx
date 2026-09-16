@@ -87,6 +87,7 @@ export function Layout() {
       children: [
         { to: "/system/status", label: "Status" },
         { to: "/system/tasks", label: "Tasks" },
+        { to: "/system/workers", label: "Workers" },
         { to: "/system/backups", label: "Backups" },
         { to: "/system/database", label: "Database" },
         { to: "/system/logs", label: "Logs" },

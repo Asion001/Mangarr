@@ -4089,6 +4089,22 @@
         ],
         "type": "object"
       },
+      "NewWorkerOutput": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "worker": {
+            "$ref": "#/components/schemas/Worker"
+          }
+        },
+        "required": [
+          "worker",
+          "key"
+        ],
+        "type": "object"
+      },
       "NextChapter": {
         "additionalProperties": false,
         "properties": {
@@ -8102,6 +8118,232 @@
           "accountId",
           "connected"
         ],
+        "type": "object"
+      },
+      "Worker": {
+        "additionalProperties": false,
+        "properties": {
+          "busySeconds": {
+            "format": "double",
+            "type": "number"
+          },
+          "bytesIn": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "bytesOut": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdBy": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "info": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "lastIp": {
+            "type": "string"
+          },
+          "lastSeenAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "pagesDone": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "platform": {
+            "type": "string"
+          },
+          "prefix": {
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "tasksDone": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "tasksFailed": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "prefix",
+          "roles",
+          "enabled",
+          "version",
+          "platform",
+          "info",
+          "lastIp",
+          "createdAt",
+          "tasksDone",
+          "tasksFailed",
+          "pagesDone",
+          "bytesIn",
+          "bytesOut",
+          "busySeconds"
+        ],
+        "type": "object"
+      },
+      "WorkerResource": {
+        "additionalProperties": false,
+        "properties": {
+          "busySeconds": {
+            "format": "double",
+            "type": "number"
+          },
+          "bytesIn": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "bytesOut": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdBy": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "info": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "lastIp": {
+            "type": "string"
+          },
+          "lastSeenAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "online": {
+            "type": "boolean"
+          },
+          "pagesDone": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "platform": {
+            "type": "string"
+          },
+          "prefix": {
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "tasksDone": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "tasksFailed": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "online",
+          "id",
+          "name",
+          "prefix",
+          "roles",
+          "enabled",
+          "version",
+          "platform",
+          "info",
+          "lastIp",
+          "createdAt",
+          "tasksDone",
+          "tasksFailed",
+          "pagesDone",
+          "bytesIn",
+          "bytesOut",
+          "busySeconds"
+        ],
+        "type": "object"
+      },
+      "Workers-createRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "roles"
+        ],
+        "type": "object"
+      },
+      "Workers-updateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
         "type": "object"
       }
     },
@@ -16690,6 +16932,164 @@
         "summary": "Monitored chapters of monitored series without a file",
         "tags": [
           "Activity"
+        ]
+      }
+    },
+    "/api/v1/workers": {
+      "get": {
+        "operationId": "workers-list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WorkerResource"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List the machines that do work for this server",
+        "tags": [
+          "Workers"
+        ]
+      },
+      "post": {
+        "operationId": "workers-create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Workers-createRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewWorkerOutput"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Add a worker and issue its key",
+        "tags": [
+          "Workers"
+        ]
+      }
+    },
+    "/api/v1/workers/{id}": {
+      "delete": {
+        "operationId": "workers-delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Remove a worker and its key",
+        "tags": [
+          "Workers"
+        ]
+      },
+      "put": {
+        "operationId": "workers-update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Workers-updateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Worker"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Rename a worker, change its roles or switch it off",
+        "tags": [
+          "Workers"
         ]
       }
     }

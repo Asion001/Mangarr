@@ -37,6 +37,7 @@ import { TasksPage } from "./pages/system/Tasks";
 import { BackupsPage } from "./pages/system/Backups";
 import { LogsPage } from "./pages/system/Logs";
 import { DatabasePage } from "./pages/system/Database";
+import { WorkersPage } from "./pages/system/Workers";
 import { ImportsPage } from "./pages/import/Imports";
 import { ImportDetailPage } from "./pages/import/ImportDetail";
 
@@ -111,6 +112,7 @@ export function App() {
         <Route path="system" element={<Navigate to="/system/status" replace />} />
         <Route path="system/status" element={<Need perm="admin"><StatusPage /></Need>} />
         <Route path="system/tasks" element={<Need perm="admin"><TasksPage /></Need>} />
+        <Route path="system/workers" element={<Need perm="admin"><WorkersPage /></Need>} />
         <Route path="system/backups" element={<Need perm="admin"><BackupsPage /></Need>} />
         <Route path="system/logs" element={<Need perm="admin"><LogsPage /></Need>} />
         <Route path="system/database" element={<Need perm="admin"><DatabasePage /></Need>} />

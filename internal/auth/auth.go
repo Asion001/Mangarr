@@ -40,6 +40,9 @@ type Service struct {
 
 	mu    sync.Mutex
 	cache map[string]cached // session id -> principal
+
+	// workers caches worker keys (see workers.go).
+	workers workers
 }
 
 type cached struct {
@@ -364,6 +367,14 @@ func (s *Service) Authenticate(r *http.Request) *access.Principal {
 		}
 	}
 	if key != "" {
+		if strings.HasPrefix(key, WorkerKeyPrefix) {
+			w, ok := s.WorkerByKey(ctx, key)
+			if !ok || !w.Enabled {
+				return nil
+			}
+			s.touchWorker(w.ID, access.ClientFrom(ctx).IP)
+			return WorkerPrincipal(w)
+		}
 		g, err := s.settings.General(ctx)
 		if err == nil && g.APIKey != "" && subtle.ConstantTimeCompare([]byte(key), []byte(g.APIKey)) == 1 {
 			return access.AdminPrincipal(access.KindAPIKey)

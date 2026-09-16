@@ -172,12 +172,23 @@ func clientOf(r *http.Request) access.Client {
 
 // authMiddleware resolves the principal; API calls without one get 401
 // (the operations themselves check permissions).
+// workerPathPrefix is the only place a worker key is accepted.
+const workerPathPrefix = "/api/v1/worker/"
+
 func (s *Server) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r = r.WithContext(access.WithClient(r.Context(), clientOf(r)))
 		p := s.app.Auth.Authenticate(r)
 		if p != nil {
 			r = r.WithContext(access.With(r.Context(), p))
+		}
+		// a worker key opens the worker endpoints and nothing else, whatever
+		// the operation's own rule says
+		if p != nil && p.Kind == access.KindWorker && !strings.HasPrefix(r.URL.Path, workerPathPrefix) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"title":"Forbidden","status":403,"detail":"a worker key is only for /api/v1/worker/"}`))
+			return
 		}
 		if p == nil && !isPublic(r.URL.Path) {
 			w.Header().Set("Content-Type", "application/json")

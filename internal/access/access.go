@@ -96,6 +96,7 @@ const (
 	KindUser      = "user"
 	KindAPIKey    = "apikey"    // the admin API key
 	KindAnonymous = "anonymous" // MANGARR_AUTH_DISABLED (an auth proxy in front)
+	KindWorker    = "worker"    // a machine holding a worker key
 )
 
 // Principal is who a request is from.
@@ -112,6 +113,8 @@ type Principal struct {
 	Scope     Scope
 	// SessionID is the web session used (empty for API keys).
 	SessionID string
+	// WorkerID is the worker a key belongs to (only with KindWorker).
+	WorkerID int64
 }
 
 // AdminPrincipal is the admin API key or a disabled login.

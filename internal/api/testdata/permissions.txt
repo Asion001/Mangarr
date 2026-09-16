@@ -202,3 +202,7 @@ users-password POST /api/v1/users/{id}/password -> admin
 users-signout POST /api/v1/users/{id}/signout -> admin
 users-update PUT /api/v1/users/{id} -> admin
 wanted-missing GET /api/v1/wanted/missing -> library.manage
+workers-create POST /api/v1/workers -> admin
+workers-delete DELETE /api/v1/workers/{id} -> admin
+workers-list GET /api/v1/workers -> admin
+workers-update PUT /api/v1/workers/{id} -> admin

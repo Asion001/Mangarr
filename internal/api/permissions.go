@@ -13,7 +13,8 @@ import (
 // Permission requirements beyond the ones in internal/access.
 const (
 	permPublic   = "public"   // no login
-	permSignedIn = "signedin" // any signed-in user
+	permSignedIn = "signedin" // any signed-in account (never a worker)
+	permWorker   = "worker"   // a machine holding a worker key
 )
 
 // operationPermissions lists the operations people without the admin
@@ -144,8 +145,16 @@ func allowed(p *access.Principal, need []string) bool {
 		switch {
 		case n == permPublic:
 			return true
-		case n == permSignedIn && p != nil:
-			return true
+		case n == permSignedIn:
+			// a worker is not a signed-in account: its key opens the worker
+			// endpoints and nothing else
+			if p != nil && p.Kind != access.KindWorker {
+				return true
+			}
+		case n == permWorker:
+			if p != nil && p.Kind == access.KindWorker {
+				return true
+			}
 		case p.Can(n):
 			return true
 		}
