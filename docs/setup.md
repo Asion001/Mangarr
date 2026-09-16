@@ -33,6 +33,12 @@ Behind Traefik, route only mangarr (and Komga) publicly; mangarr has its own
 login and API key. With an auth proxy in front you may set
 `MANGARR_AUTH_DISABLED=true`.
 
+Let the proxy terminate TLS: browsers only use HTTP/2 over HTTPS, and it's
+worth having — over plain HTTP/1.1 a browser opens about six connections per
+site and the live-updates stream holds one of them, which the reader feels
+when it loads pages. mangarr itself speaks HTTP/1.1 and cleartext HTTP/2
+(h2c), so Traefik, Caddy and nginx can forward either.
+
 ## 3. First run
 
 1. Create the admin account in the UI.

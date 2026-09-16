@@ -16,6 +16,9 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
+
 	"github.com/Asion001/mangarr/internal/auth"
 	"github.com/Asion001/mangarr/internal/db"
 	"github.com/Asion001/mangarr/internal/events"
@@ -122,7 +125,7 @@ func (s *Service) Reconcile(ctx context.Context) {
 		return
 	}
 	base, cancel := context.WithCancel(context.Background())
-	srv := &http.Server{Handler: s.handler, ReadHeaderTimeout: 15 * time.Second, BaseContext: func(net.Listener) context.Context { return base }}
+	srv := &http.Server{Handler: h2c.NewHandler(s.handler, &http2.Server{}), ReadHeaderTimeout: 15 * time.Second, BaseContext: func(net.Listener) context.Context { return base }}
 	s.srv, s.boundTo, s.lastErr, s.cancel = srv, ln.Addr().String(), "", cancel
 	s.deps.Log.Info("Komga-compatible API listening", "addr", s.boundTo)
 	go func() {

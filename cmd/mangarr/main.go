@@ -16,6 +16,9 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
+
 	"github.com/Asion001/mangarr/internal/api"
 	"github.com/Asion001/mangarr/internal/app"
 	"github.com/Asion001/mangarr/internal/config"
@@ -112,7 +115,9 @@ func run() error {
 
 	// Request contexts derive from ctx so long-lived SSE streams end on SIGTERM
 	// instead of holding Shutdown until its timeout.
-	srv := &http.Server{Addr: cfg.Listen, Handler: api.New(a), ReadHeaderTimeout: 10 * time.Second,
+	// h2c: a reverse proxy in front (which is where TLS lives) can then speak
+	// HTTP/2 to us and multiplex a reader's page requests over one connection.
+	srv := &http.Server{Addr: cfg.Listen, Handler: h2c.NewHandler(api.New(a), &http2.Server{}), ReadHeaderTimeout: 10 * time.Second,
 		BaseContext: func(net.Listener) context.Context { return ctx }}
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.ListenAndServe() }()
