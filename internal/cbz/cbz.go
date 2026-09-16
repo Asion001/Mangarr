@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -188,21 +189,98 @@ func List(path string) ([]Entry, error) {
 
 // ReadEntry reads one file of a CBZ by its path inside the archive.
 func ReadEntry(path, name string) ([]byte, error) {
-	zr, err := zip.OpenReader(path)
+	rc, _, err := OpenEntry(path, name)
 	if err != nil {
 		return nil, err
 	}
-	defer zr.Close()
+	defer rc.Close()
+	return io.ReadAll(io.LimitReader(rc, 128<<20))
+}
+
+// OpenEntry opens one file of a CBZ for reading and reports its size, so a
+// page can be streamed to a reader instead of being held in memory. Closing
+// the reader closes the archive.
+func OpenEntry(path, name string) (io.ReadCloser, int64, error) {
+	zr, err := zip.OpenReader(path)
+	if err != nil {
+		return nil, 0, err
+	}
 	for _, f := range zr.File {
 		if f.Name != name {
 			continue
 		}
 		rc, err := f.Open()
 		if err != nil {
-			return nil, err
+			zr.Close()
+			return nil, 0, err
 		}
-		defer rc.Close()
-		return io.ReadAll(io.LimitReader(rc, 128<<20))
+		return entryReader{rc, zr}, int64(f.UncompressedSize64), nil
 	}
-	return nil, fs.ErrNotExist
+	zr.Close()
+	return nil, 0, fs.ErrNotExist
+}
+
+// entryReader closes the archive with the entry.
+type entryReader struct {
+	io.ReadCloser
+	zr *zip.ReadCloser
+}
+
+func (e entryReader) Close() error {
+	err := e.ReadCloser.Close()
+	if zerr := e.zr.Close(); err == nil {
+		err = zerr
+	}
+	return err
+}
+
+// listCache remembers the page list of recently read archives, so serving a
+// page opens the file once instead of once to list it and once to read it.
+var listCache = struct {
+	sync.Mutex
+	m map[string]cachedList
+}{m: map[string]cachedList{}}
+
+type cachedList struct {
+	entries []Entry
+	mod     time.Time
+	size    int64
+	used    time.Time
+}
+
+const listCacheMax = 256
+
+// Entries is List with a cache keyed by the file's size and modification
+// time, so a rewritten archive (an upgrade, a re-encode) is read again.
+func Entries(path string) ([]Entry, error) {
+	st, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	listCache.Lock()
+	if c, ok := listCache.m[path]; ok && c.mod.Equal(st.ModTime()) && c.size == st.Size() {
+		c.used = time.Now()
+		listCache.m[path] = c
+		listCache.Unlock()
+		return c.entries, nil
+	}
+	listCache.Unlock()
+
+	entries, err := List(path)
+	if err != nil {
+		return nil, err
+	}
+	listCache.Lock()
+	defer listCache.Unlock()
+	if len(listCache.m) >= listCacheMax {
+		oldest, at := "", time.Now()
+		for k, c := range listCache.m {
+			if c.used.Before(at) {
+				oldest, at = k, c.used
+			}
+		}
+		delete(listCache.m, oldest)
+	}
+	listCache.m[path] = cachedList{entries: entries, mod: st.ModTime(), size: st.Size(), used: time.Now()}
+	return entries, nil
 }

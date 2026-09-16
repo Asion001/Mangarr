@@ -178,18 +178,19 @@ func (s *Server) registerRead() {
 	huma.Register(s.api, huma.Operation{OperationID: "read-page", Method: http.MethodGet, Path: "/api/v1/read/chapters/{id}/pages/{n}", Tags: tags,
 		Summary: "A page image (from the file, or streamed from the source)"},
 		func(ctx context.Context, in *struct {
-			ID int64 `path:"id"`
-			N  int   `path:"n" minimum:"1"`
-		}) (*imageOutput, error) {
+			ID          int64  `path:"id"`
+			N           int    `path:"n" minimum:"1"`
+			IfNoneMatch string `header:"If-None-Match"`
+		}) (*huma.StreamResponse, error) {
 			b, err := book(ctx, in.ID)
 			if err != nil {
 				return nil, err
 			}
-			data, ct, err := s.app.Reading.Page(ctx, b, in.N)
+			page, err := s.app.Reading.PageReader(ctx, b, in.N)
 			if err != nil {
 				return nil, readError(err)
 			}
-			return &imageOutput{ContentType: ct, CacheControl: "private, max-age=86400", Body: data}, nil
+			return streamImage(page, in.IfNoneMatch, "private, max-age=86400"), nil
 		})
 
 	huma.Register(s.api, huma.Operation{OperationID: "read-page-bounds", Method: http.MethodGet, Path: "/api/v1/read/chapters/{id}/pages/{n}/bounds", Tags: tags,
@@ -369,4 +370,29 @@ func (s *Server) saveReaderPrefs(ctx context.Context, seriesID int64, data []byt
 	_, err := s.app.DB.NewInsert().Model(pr).On("CONFLICT (user_id, series_id) DO UPDATE").
 		Set("data = EXCLUDED.data").Set("updated_at = EXCLUDED.updated_at").Exec(ctx)
 	return err
+}
+
+// streamImage sends a page without holding it in memory, with what a browser
+// needs to cache it: its length, an ETag and a 304 when it already has it.
+func streamImage(p *reading.PageContent, ifNoneMatch, cacheControl string) *huma.StreamResponse {
+	return &huma.StreamResponse{Body: func(hctx huma.Context) {
+		defer p.Body.Close()
+		hctx.SetHeader("Cache-Control", cacheControl)
+		if p.ETag != "" {
+			hctx.SetHeader("ETag", p.ETag)
+		}
+		if !p.ModTime.IsZero() {
+			hctx.SetHeader("Last-Modified", p.ModTime.UTC().Format(http.TimeFormat))
+		}
+		if reading.ETagMatches(ifNoneMatch, p.ETag) {
+			hctx.SetStatus(http.StatusNotModified)
+			return
+		}
+		hctx.SetHeader("Content-Type", p.ContentType)
+		if p.Size > 0 {
+			hctx.SetHeader("Content-Length", strconv.FormatInt(p.Size, 10))
+		}
+		hctx.SetStatus(http.StatusOK)
+		_, _ = io.Copy(hctx.BodyWriter(), p.Body)
+	}}
 }

@@ -107,7 +107,7 @@ func (s *Service) CachedPageCount(chapterID int64) int {
 // also queues the chapter's download when downloadOnOpen is on).
 func (s *Service) Pages(ctx context.Context, b *BookInfo) ([]PageInfo, error) {
 	if b.Path != "" {
-		if entries, err := cbz.List(b.Path); err == nil {
+		if entries, err := cbz.Entries(b.Path); err == nil {
 			out := make([]PageInfo, len(entries))
 			for i, e := range entries {
 				out[i] = PageInfo{Number: i + 1, FileName: e.Name, MediaType: mediaType(e.Name), Size: e.Size}
@@ -131,7 +131,7 @@ func (s *Service) Pages(ctx context.Context, b *BookInfo) ([]PageInfo, error) {
 func (s *Service) Page(ctx context.Context, b *BookInfo, n int) ([]byte, string, error) {
 	if b.Path != "" {
 		defer apitiming.Span(ctx, "file")()
-		if entries, err := cbz.List(b.Path); err == nil {
+		if entries, err := cbz.Entries(b.Path); err == nil {
 			if n < 1 || n > len(entries) {
 				return nil, "", ErrNotFound
 			}
@@ -173,6 +173,80 @@ func (s *Service) Page(ctx context.Context, b *BookInfo, n int) ([]byte, string,
 		return nil, "", err
 	}
 	return data, contentType(data, ""), nil
+}
+
+// PageContent is a page ready to send: a stream, its size, and what a
+// client needs to cache it.
+type PageContent struct {
+	Body        io.ReadCloser
+	Size        int64
+	ContentType string
+	// ETag changes when the page's bytes change (a new file, another release).
+	ETag    string
+	ModTime time.Time
+}
+
+// PageReader opens page n (1-based) for streaming. A downloaded page comes
+// straight out of its CBZ; a page of a chapter that isn't downloaded is
+// streamed from the source once and then served from the cache.
+func (s *Service) PageReader(ctx context.Context, b *BookInfo, n int) (*PageContent, error) {
+	if b.Path != "" {
+		defer apitiming.Span(ctx, "file")()
+		if entries, err := cbz.Entries(b.Path); err == nil {
+			if n < 1 || n > len(entries) {
+				return nil, ErrNotFound
+			}
+			e := entries[n-1]
+			rc, size, err := cbz.OpenEntry(b.Path, e.Path)
+			if err != nil {
+				return nil, err
+			}
+			out := &PageContent{Body: rc, Size: size, ContentType: mediaType(e.Name), ETag: fileETag(b, n)}
+			if st, err := os.Stat(b.Path); err == nil {
+				out.ModTime = st.ModTime()
+			}
+			return out, nil
+		}
+	}
+	data, ct, err := s.Page(ctx, b, n)
+	if err != nil {
+		return nil, err
+	}
+	st, err := s.stream(ctx, b)
+	release := int64(0)
+	if err == nil {
+		release = st.release
+	}
+	return &PageContent{Body: io.NopCloser(bytes.NewReader(data)), Size: int64(len(data)), ContentType: ct,
+		ETag: fmt.Sprintf("%q", fmt.Sprintf("s%d-%d-%d", b.Chapter.ID, release, n))}, nil
+}
+
+// fileETag identifies a downloaded page: its file, when it was imported, and
+// the page number.
+func fileETag(b *BookInfo, n int) string {
+	if b.File != nil {
+		return fmt.Sprintf("%q", fmt.Sprintf("f%d-%d-%d", b.File.ID, b.File.ImportedAt.Unix(), n))
+	}
+	st, err := os.Stat(b.Path)
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%q", fmt.Sprintf("p%d-%d-%d", st.ModTime().UnixNano(), st.Size(), n))
+}
+
+// ETagMatches reports whether an If-None-Match header covers etag, so a
+// caller can answer 304 instead of sending the page again.
+func ETagMatches(header, etag string) bool {
+	if header == "" || etag == "" {
+		return false
+	}
+	for _, want := range strings.Split(header, ",") {
+		want = strings.TrimSpace(want)
+		if want == "*" || strings.TrimPrefix(want, "W/") == strings.TrimPrefix(etag, "W/") {
+			return true
+		}
+	}
+	return false
 }
 
 // PageThumbnail is a small JPEG of page n (from the thumbnail cache).

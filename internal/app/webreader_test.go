@@ -59,6 +59,21 @@ func TestWebReader(t *testing.T) {
 		}
 		return resp.StatusCode, resp.Header
 	}
+	callWith := func(method, path string, headers map[string]string) (int, http.Header) {
+		t.Helper()
+		req, _ := http.NewRequest(method, srv.URL+path, nil)
+		req.Header.Set("X-Api-Key", g.APIKey)
+		for k, v := range headers {
+			req.Header.Set(k, v)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		_, _ = io.Copy(io.Discard, resp.Body)
+		return resp.StatusCode, resp.Header
+	}
 	c1, c2 := sid(chs[0].ID), sid(chs[1].ID)
 
 	var ch api.ReadChapter
@@ -68,8 +83,20 @@ func TestWebReader(t *testing.T) {
 	if !ch.Downloaded || len(ch.Pages) != 3 || ch.Next == nil || ch.Next.ID != chs[1].ID || ch.Prev != nil || ch.SeriesTitle != "Web" || !ch.CanDownload {
 		t.Fatalf("chapter %+v", ch)
 	}
-	if code, h := call("GET", "/api/v1/read/chapters/"+c1+"/pages/1", "", nil); code != 200 || !strings.HasPrefix(h.Get("Content-Type"), "image/") {
+	code, h := call("GET", "/api/v1/read/chapters/"+c1+"/pages/1", "", nil)
+	if code != 200 || !strings.HasPrefix(h.Get("Content-Type"), "image/") {
 		t.Fatalf("page: %d %s", code, h.Get("Content-Type"))
+	}
+	// the browser gets what it needs to cache the page and skip it next time
+	etag := h.Get("ETag")
+	if etag == "" || h.Get("Content-Length") == "" || h.Get("Cache-Control") == "" {
+		t.Fatalf("page headers: %v", h)
+	}
+	if code, _ := callWith("GET", "/api/v1/read/chapters/"+c1+"/pages/1", map[string]string{"If-None-Match": etag}); code != 304 {
+		t.Fatalf("page the client already has: %d", code)
+	}
+	if code, _ := callWith("GET", "/api/v1/read/chapters/"+c1+"/pages/1", map[string]string{"If-None-Match": `"something-else"`}); code != 200 {
+		t.Fatalf("page with a stale etag: %d", code)
 	}
 	var bd map[string]int
 	if code, _ := call("GET", "/api/v1/read/chapters/"+c1+"/pages/1/bounds", "", &bd); code != 200 || bd["width"] == 0 || bd["w"] == 0 {

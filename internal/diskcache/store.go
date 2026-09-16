@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+
+	"golang.org/x/sync/singleflight"
 	"time"
 
 	"github.com/Asion001/mangarr/internal/thumbs"
@@ -40,6 +42,7 @@ type Store struct {
 	size     atomic.Int64
 	trimming atomic.Bool
 	mu       sync.Mutex // serializes Compact, Clear and Trim
+	fetching singleflight.Group
 }
 
 // NewStore opens the cache at root and measures it.
@@ -86,7 +89,25 @@ func (s *Store) Get(ctx context.Context, bucket, key string, ttl time.Duration, 
 			return data, ct, false, nil
 		}
 	}
-	data, ct, err = fetchImage(ctx, fetch)
+	// one fetch per key: a burst of readers on a cold page (a chapter being
+	// streamed to several devices) must not hit the source once each
+	type result struct {
+		data []byte
+		ct   string
+	}
+	v, err, _ := s.fetching.Do(bucket+"|"+key, func() (any, error) {
+		data, ct, err := fetchImage(ctx, fetch)
+		if err != nil {
+			return nil, err
+		}
+		if Normalized[bucket] {
+			if out, nct, _ := thumbs.Normalize(data, thumbs.MaxWidth, thumbs.Quality); nct != "" {
+				data, ct = out, nct
+			}
+		}
+		s.write(p, data, ct)
+		return result{data, ct}, nil
+	})
 	if err != nil {
 		if statErr == nil {
 			if data, ct, ok := readCached(); ok {
@@ -95,13 +116,8 @@ func (s *Store) Get(ctx context.Context, bucket, key string, ttl time.Duration, 
 		}
 		return nil, "", false, err
 	}
-	if Normalized[bucket] {
-		if out, nct, _ := thumbs.Normalize(data, thumbs.MaxWidth, thumbs.Quality); nct != "" {
-			data, ct = out, nct
-		}
-	}
-	s.write(p, data, ct)
-	return data, ct, false, nil
+	r := v.(result)
+	return r.data, r.ct, false, nil
 }
 
 func (s *Store) write(p string, data []byte, ct string) {

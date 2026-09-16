@@ -11,6 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -113,5 +115,32 @@ func TestStoreCompact(t *testing.T) {
 	s.Trim(time.Hour, 0)
 	if b, _ := os.ReadFile(filepath.Join(root, ".format")); strings.TrimSpace(string(b)) != Format {
 		t.Fatal("format marker was trimmed")
+	}
+}
+
+// TestStoreFetchesOncePerKey: a burst of readers on a cold page (a chapter
+// streamed to several devices at once) makes one fetch, not one each.
+func TestStoreFetchesOncePerKey(t *testing.T) {
+	s := NewStore(t.TempDir(), nil, nil)
+	var fetches atomic.Int32
+	fetch := func(ctx context.Context) (io.ReadCloser, string, error) {
+		fetches.Add(1)
+		time.Sleep(20 * time.Millisecond) // long enough for the others to pile up
+		return io.NopCloser(bytes.NewReader([]byte("page-bytes"))), "image/jpeg", nil
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			data, ct, _, err := s.Get(context.Background(), "pages", "ch1|7", time.Hour, fetch)
+			if err != nil || string(data) != "page-bytes" || ct != "image/jpeg" {
+				t.Errorf("get: %v %q %q", err, data, ct)
+			}
+		}()
+	}
+	wg.Wait()
+	if n := fetches.Load(); n != 1 {
+		t.Fatalf("fetched %d times", n)
 	}
 }

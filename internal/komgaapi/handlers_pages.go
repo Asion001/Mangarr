@@ -3,6 +3,7 @@ package komgaapi
 import (
 	"errors"
 	"fmt"
+	"io"
 	"mime"
 	"net/http"
 	"path/filepath"
@@ -88,12 +89,12 @@ func (h *pageHandlers) image(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	data, ct, err := h.s.deps.Reading.Page(r.Context(), b, pageNumber(r))
-	if err != nil {
-		pageError(w, r, err)
-		return
-	}
 	if to := r.URL.Query().Get("convert"); to == "png" || to == "jpeg" || to == "jpg" {
+		data, ct, err := h.s.deps.Reading.Page(r.Context(), b, pageNumber(r))
+		if err != nil {
+			pageError(w, r, err)
+			return
+		}
 		if ct != "image/"+to && !(to == "jpg" && ct == "image/jpeg") {
 			out, oct, err := reading.Convert(data, to)
 			if err != nil {
@@ -102,8 +103,16 @@ func (h *pageHandlers) image(w http.ResponseWriter, r *http.Request) {
 			}
 			data, ct = out, oct
 		}
+		writeImage(w, ct, data)
+		return
 	}
-	writeImage(w, ct, data)
+	page, err := h.s.deps.Reading.PageReader(r.Context(), b, pageNumber(r))
+	if err != nil {
+		pageError(w, r, err)
+		return
+	}
+	defer page.Body.Close()
+	streamPage(w, r, page)
 }
 
 // pageThumbnail is GET /api/v1/books/{id}/pages/{n}/thumbnail.
@@ -157,4 +166,25 @@ func (h *pageHandlers) file(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "private, max-age=0")
 	w.Header().Set("ETag", fmt.Sprintf(`"%x-%x"`, st.ModTime().Unix(), st.Size()))
 	http.ServeContent(w, r, name, st.ModTime(), f)
+}
+
+// streamPage sends a page without holding it in memory, with its length and
+// an ETag so an app can skip pages it already has.
+func streamPage(w http.ResponseWriter, r *http.Request, p *reading.PageContent) {
+	w.Header().Set("Cache-Control", "private, max-age=86400")
+	if p.ETag != "" {
+		w.Header().Set("ETag", p.ETag)
+	}
+	if !p.ModTime.IsZero() {
+		w.Header().Set("Last-Modified", p.ModTime.UTC().Format(http.TimeFormat))
+	}
+	if reading.ETagMatches(r.Header.Get("If-None-Match"), p.ETag) {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	w.Header().Set("Content-Type", p.ContentType)
+	if p.Size > 0 {
+		w.Header().Set("Content-Length", strconv.FormatInt(p.Size, 10))
+	}
+	_, _ = io.Copy(w, p.Body)
 }
