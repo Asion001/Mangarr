@@ -94,6 +94,17 @@ type Results struct {
 	HasNext bool
 }
 
+// Has reports whether a result for this manga is already in the list, so a
+// site scraping a page with repeated links doesn't return it twice.
+func (r *Results) Has(url string) bool {
+	for _, m := range r.Mangas {
+		if m.URL == url {
+			return true
+		}
+	}
+	return false
+}
+
 // Site is what a site implements. Everything optional is a separate
 // interface, so a small site stays small.
 type Site interface {
