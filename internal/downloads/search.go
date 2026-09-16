@@ -53,6 +53,14 @@ func (s *Searcher) load(ctx context.Context, seriesID int64, chapterIDs []int64)
 	if err := q.Order("number_sort").Scan(ctx); err != nil {
 		return nil, err
 	}
+	// The queue is read before the files on purpose: a job stays active until
+	// the transaction that inserts its file completes it, so reading it first
+	// means a chapter that finishes importing mid-load is seen as queued (and
+	// skipped) rather than as missing (and grabbed a second time).
+	var err error
+	if st.queued, err = s.queue.ActiveChapters(ctx, seriesID); err != nil {
+		return nil, err
+	}
 	var sources []model.SeriesSource
 	if err := s.db.NewSelect().Model(&sources).Where("series_id = ?", seriesID).Scan(ctx); err != nil {
 		return nil, err
@@ -80,10 +88,6 @@ func (s *Searcher) load(ctx context.Context, seriesID int64, chapterIDs []int64)
 	}
 	for i := range files {
 		st.files[files[i].ChapterID] = &files[i]
-	}
-	var err error
-	if st.queued, err = s.queue.ActiveChapters(ctx, seriesID); err != nil {
-		return nil, err
 	}
 	var bl []model.Blocklist
 	if err := s.db.NewSelect().Model(&bl).Where("series_id = ?", seriesID).Scan(ctx); err != nil {

@@ -874,6 +874,12 @@ func (m *Manager) importChapter(ctx context.Context, jc *jobCtx, proc ProcessRes
 			file.Upscaled, file.UpscaleModel = jc.file.Upscaled, jc.file.UpscaleModel
 		}
 	}
+	// Writing the very same bytes back (a re-import, or processing that turned
+	// out to change nothing) keeps the existing row: its id is what reader
+	// servers hang book ids and read progress on.
+	if jc.file != nil && jc.file.RelativePath == rel && jc.file.SHA256 == res.SHA256 {
+		file.ID, file.ImportedAt = jc.file.ID, jc.file.ImportedAt
+	}
 	event := model.HistoryImported
 	if jc.file != nil {
 		event = model.HistoryUpgraded
@@ -882,11 +888,17 @@ func (m *Manager) importChapter(ctx context.Context, jc *jobCtx, proc ProcessRes
 		}
 	}
 	err = m.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		if _, err := tx.NewDelete().Model((*model.ChapterFile)(nil)).Where("chapter_id = ?", jc.chapter.ID).Exec(ctx); err != nil {
-			return err
-		}
-		if _, err := tx.NewInsert().Model(file).Exec(ctx); err != nil {
-			return err
+		if file.ID != 0 {
+			if _, err := tx.NewUpdate().Model(file).WherePK().Exec(ctx); err != nil {
+				return err
+			}
+		} else {
+			if _, err := tx.NewDelete().Model((*model.ChapterFile)(nil)).Where("chapter_id = ?", jc.chapter.ID).Exec(ctx); err != nil {
+				return err
+			}
+			if _, err := tx.NewInsert().Model(file).Exec(ctx); err != nil {
+				return err
+			}
 		}
 		if _, err := tx.NewUpdate().Model((*model.Chapter)(nil)).Set("file_id = ?", file.ID).Set("state = ?", model.ChapterImported).
 			Set("cleaned_at = NULL").Set("updated_at = ?", now).Where("id = ?", jc.chapter.ID).Exec(ctx); err != nil {

@@ -2,11 +2,13 @@ package app_test
 
 import (
 	"bytes"
+	"fmt"
 	"image"
 	"io"
 	"log/slog"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -154,7 +156,7 @@ func TestReprocessWithNothingToDo(t *testing.T) {
 
 	after := e.chapterFiles(t, ser.ID)["1"]
 	if after.ID != before.ID || after.SHA256 != before.SHA256 || after.Upscaled {
-		t.Fatalf("file was rewritten: before %+v after %+v", before, after)
+		t.Fatalf("file was rewritten: before %+v after %+v\n%s", before, after, jobsAndHistory(t, e, ser.ID))
 	}
 	if after.ProcessState != model.ProcessDone {
 		t.Fatalf("file should be marked processed: %+v", after)
@@ -214,4 +216,25 @@ func TestBackgroundAVIF(t *testing.T) {
 	if n, _ := e.App.DB.NewSelect().Model((*model.DownloadJob)(nil)).Where("kind = ? AND status = ?", model.JobKindReprocess, model.JobQueued).Count(e.Ctx); n != 0 {
 		t.Fatalf("%d jobs queued again", n)
 	}
+}
+
+// jobsAndHistory describes what ran for a series, so a test that finds an
+// unexpected rewrite can say which job did it.
+func jobsAndHistory(t *testing.T, e *testEnv, seriesID int64) string {
+	t.Helper()
+	var out strings.Builder
+	var jobs []model.DownloadJob
+	_ = e.App.DB.NewSelect().Model(&jobs).Where("series_id = ?", seriesID).Order("id").Scan(e.Ctx)
+	out.WriteString("jobs:\n")
+	for _, j := range jobs {
+		fmt.Fprintf(&out, "  #%d %s %s upgrade=%v priority=%d created=%s error=%q\n",
+			j.ID, j.Kind, j.Status, j.IsUpgrade, j.Priority, j.CreatedAt.Format(time.TimeOnly), j.Error)
+	}
+	var events []model.History
+	_ = e.App.DB.NewSelect().Model(&events).Where("series_id = ?", seriesID).Order("id").Scan(e.Ctx)
+	out.WriteString("history:\n")
+	for _, h := range events {
+		fmt.Fprintf(&out, "  %s %s %v\n", h.CreatedAt.Format(time.TimeOnly), h.EventType, h.Data)
+	}
+	return out.String()
 }
