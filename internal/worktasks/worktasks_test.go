@@ -1,0 +1,264 @@
+package worktasks_test
+
+import (
+	"context"
+	"io"
+	"log/slog"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/Asion001/mangarr/internal/db"
+	"github.com/Asion001/mangarr/internal/dbtest"
+	"github.com/Asion001/mangarr/internal/model"
+	"github.com/Asion001/mangarr/internal/worktasks"
+)
+
+// each runs a test against both dialects: the hand-out is a
+// compare-and-set, and it has to be one on both.
+func each(t *testing.T, run func(t *testing.T, d *db.DB)) {
+	t.Run("sqlite", func(t *testing.T) { run(t, dbtest.SQLite(t)) })
+	t.Run("postgres", func(t *testing.T) { run(t, dbtest.Postgres(t)) })
+}
+
+func ledger(d *db.DB) *worktasks.Ledger {
+	return worktasks.New(d, slog.New(slog.NewTextHandler(io.Discard, nil)))
+}
+
+// seedJob makes the download job tasks hang off, and the series and chapter
+// it needs to exist at all.
+func seedJob(t *testing.T, d *db.DB) int64 {
+	t.Helper()
+	ctx := context.Background()
+	now := time.Now().UTC()
+	root := &model.RootFolder{Path: t.TempDir(), CreatedAt: now}
+	profile := &model.Profile{Name: "test", CreatedAt: now, UpdatedAt: now}
+	for _, m := range []any{root, profile} {
+		if _, err := d.NewInsert().Model(m).Exec(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ser := &model.Series{Title: "Series", SortTitle: "series", RootFolderID: root.ID, ProfileID: profile.ID,
+		Path: "Series", AddedAt: now, UpdatedAt: now}
+	if _, err := d.NewInsert().Model(ser).Exec(ctx); err != nil {
+		t.Fatal(err)
+	}
+	ch := &model.Chapter{SeriesID: ser.ID, NumberKey: "1", NumberSort: 1, State: model.ChapterMissing,
+		FirstSeenAt: now, UpdatedAt: now}
+	if _, err := d.NewInsert().Model(ch).Exec(ctx); err != nil {
+		t.Fatal(err)
+	}
+	job := &model.DownloadJob{Kind: model.JobKindDownload, Status: model.JobQueued, SeriesID: ser.ID, ChapterID: ch.ID,
+		NotBefore: now, CreatedAt: now, UpdatedAt: now}
+	if _, err := d.NewInsert().Model(job).Exec(ctx); err != nil {
+		t.Fatal(err)
+	}
+	return job.ID
+}
+
+func seedWorker(t *testing.T, d *db.DB, name string) int64 {
+	t.Helper()
+	w := &model.Worker{Name: name, KeyHash: "hash-" + name, Prefix: "mgw_" + name, Roles: []string{model.RoleDownload},
+		Enabled: true, Info: map[string]any{}, CreatedAt: time.Now().UTC()}
+	if _, err := d.NewInsert().Model(w).Exec(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	return w.ID
+}
+
+// TestOneWorkerWins: two workers reaching for the same task at the same
+// moment, fifty times over — exactly one gets each task.
+func TestOneWorkerWins(t *testing.T) {
+	each(t, func(t *testing.T, d *db.DB) {
+		ctx := context.Background()
+		l := ledger(d)
+		job := seedJob(t, d)
+		a, b := seedWorker(t, d, "a"), seedWorker(t, d, "b")
+		const tasks = 50
+		for i := range tasks {
+			if err := l.Add(ctx, &model.WorkerTask{JobID: job, Kind: model.TaskDownload, Seq: i}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		var mu sync.Mutex
+		got := map[int64]int{}
+		var wg sync.WaitGroup
+		for _, id := range []int64{a, b} {
+			wg.Add(1)
+			go func(worker int64) {
+				defer wg.Done()
+				for {
+					task, err := l.Claim(ctx, worker, []string{model.TaskDownload})
+					if err != nil {
+						t.Error(err)
+						return
+					}
+					if task == nil {
+						return
+					}
+					mu.Lock()
+					got[task.ID]++
+					mu.Unlock()
+				}
+			}(id)
+		}
+		wg.Wait()
+		if len(got) != tasks {
+			t.Fatalf("%d of %d tasks were handed out", len(got), tasks)
+		}
+		for id, n := range got {
+			if n != 1 {
+				t.Fatalf("task %d went to %d workers", id, n)
+			}
+		}
+	})
+}
+
+// TestLeaseComesBack: a worker that goes quiet loses its task, and a task
+// nobody finishes is given up on rather than handed out forever.
+func TestLeaseComesBack(t *testing.T) {
+	each(t, func(t *testing.T, d *db.DB) {
+		ctx := context.Background()
+		l := ledger(d)
+		job := seedJob(t, d)
+		worker := seedWorker(t, d, "quiet")
+		if err := l.Add(ctx, &model.WorkerTask{JobID: job, Kind: model.TaskDownload}); err != nil {
+			t.Fatal(err)
+		}
+		expire := func(id int64) {
+			t.Helper()
+			if _, err := d.NewUpdate().Model((*model.WorkerTask)(nil)).Set("lease_until = ?", time.Now().UTC().Add(-time.Minute)).
+				Where("id = ?", id).Exec(ctx); err != nil {
+				t.Fatal(err)
+			}
+		}
+		var last *model.WorkerTask
+		for attempt := 1; attempt <= worktasks.MaxAttempts; attempt++ {
+			task, err := l.Claim(ctx, worker, []string{model.TaskDownload})
+			if err != nil || task == nil {
+				t.Fatalf("attempt %d: %v %+v", attempt, err, task)
+			}
+			if task.Attempt != attempt {
+				t.Fatalf("attempt counted as %d", task.Attempt)
+			}
+			last = task
+			expire(task.ID)
+			requeued, abandoned, err := l.Reap(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if attempt < worktasks.MaxAttempts && (requeued != 1 || abandoned != 0) {
+				t.Fatalf("attempt %d: requeued %d abandoned %d", attempt, requeued, abandoned)
+			}
+			if attempt == worktasks.MaxAttempts && abandoned != 1 {
+				t.Fatalf("a task nobody finished was not given up on: requeued %d abandoned %d", requeued, abandoned)
+			}
+		}
+		// and its worker can no longer report on it
+		if _, err := l.Heartbeat(ctx, last.ID, worker, worktasks.Progress{}); err != worktasks.ErrNotYours {
+			t.Fatalf("heartbeat on an abandoned task: %v", err)
+		}
+		if err := l.Finish(ctx, last.ID, worker, worktasks.Progress{}); err != worktasks.ErrNotYours {
+			t.Fatalf("finishing an abandoned task: %v", err)
+		}
+	})
+}
+
+// TestFinishCountsOnTheWorker: what a task did is added to its worker in
+// the same transaction that closes it, so the totals can't drift.
+func TestFinishCountsOnTheWorker(t *testing.T) {
+	each(t, func(t *testing.T, d *db.DB) {
+		ctx := context.Background()
+		l := ledger(d)
+		job := seedJob(t, d)
+		worker := seedWorker(t, d, "busy")
+		for i := range 2 {
+			if err := l.Add(ctx, &model.WorkerTask{JobID: job, Kind: model.TaskDownload, Seq: i}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		done, _ := l.Claim(ctx, worker, []string{model.TaskDownload})
+		failed, _ := l.Claim(ctx, worker, []string{model.TaskDownload})
+		if done == nil || failed == nil {
+			t.Fatal("expected two tasks")
+		}
+		// a heartbeat keeps the lease and reports progress
+		if cancelled, err := l.Heartbeat(ctx, done.ID, worker, worktasks.Progress{PagesDone: 5, PagesTotal: 20}); err != nil || cancelled {
+			t.Fatalf("heartbeat: %v %v", err, cancelled)
+		}
+		if err := l.Finish(ctx, done.ID, worker, worktasks.Progress{PagesDone: 20, PagesTotal: 20, BytesIn: 1000, BytesOut: 900}); err != nil {
+			t.Fatal(err)
+		}
+		if err := l.Fail(ctx, failed.ID, worker, "the site said no", worktasks.Progress{PagesDone: 1, BytesIn: 10}); err != nil {
+			t.Fatal(err)
+		}
+		var w model.Worker
+		if err := d.NewSelect().Model(&w).Where("id = ?", worker).Scan(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if w.TasksDone != 1 || w.TasksFailed != 1 || w.PagesDone != 21 || w.BytesIn != 1010 || w.BytesOut != 900 {
+			t.Fatalf("worker totals: %+v", w)
+		}
+		if w.BusySeconds <= 0 {
+			t.Fatalf("no time counted: %+v", w)
+		}
+		// nothing is left for anyone to pick up
+		if open, err := l.OpenJobs(ctx); err != nil || len(open) != 0 {
+			t.Fatalf("open jobs: %v %+v", err, open)
+		}
+	})
+}
+
+// TestCancel: removing a job drops what nobody started and asks whoever
+// holds the rest to stop.
+func TestCancel(t *testing.T) {
+	each(t, func(t *testing.T, d *db.DB) {
+		ctx := context.Background()
+		l := ledger(d)
+		job := seedJob(t, d)
+		worker := seedWorker(t, d, "runner")
+		for i := range 2 {
+			if err := l.Add(ctx, &model.WorkerTask{JobID: job, Kind: model.TaskDownload, Seq: i}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		held, _ := l.Claim(ctx, worker, []string{model.TaskDownload})
+		if err := l.Cancel(ctx, job); err != nil {
+			t.Fatal(err)
+		}
+		cancelled, err := l.Heartbeat(ctx, held.ID, worker, worktasks.Progress{})
+		if err != nil || !cancelled {
+			t.Fatalf("the worker was not told to stop: %v %v", err, cancelled)
+		}
+		if next, err := l.Claim(ctx, worker, []string{model.TaskDownload}); err != nil || next != nil {
+			t.Fatalf("a cancelled job still handed out work: %v %+v", err, next)
+		}
+	})
+}
+
+// TestPrune keeps the ledger to recent history.
+func TestPrune(t *testing.T) {
+	each(t, func(t *testing.T, d *db.DB) {
+		ctx := context.Background()
+		l := ledger(d)
+		job := seedJob(t, d)
+		worker := seedWorker(t, d, "old")
+		if err := l.Add(ctx, &model.WorkerTask{JobID: job, Kind: model.TaskUpscale}); err != nil {
+			t.Fatal(err)
+		}
+		task, _ := l.Claim(ctx, worker, []string{model.TaskUpscale})
+		if err := l.Finish(ctx, task.ID, worker, worktasks.Progress{}); err != nil {
+			t.Fatal(err)
+		}
+		if n, err := l.Prune(ctx, 14*24*time.Hour); err != nil || n != 0 {
+			t.Fatalf("a task from just now was pruned: %v %d", err, n)
+		}
+		if _, err := d.NewUpdate().Model((*model.WorkerTask)(nil)).Set("finished_at = ?", time.Now().UTC().Add(-30*24*time.Hour)).
+			Where("id = ?", task.ID).Exec(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if n, err := l.Prune(ctx, 14*24*time.Hour); err != nil || n != 1 {
+			t.Fatalf("prune: %v %d", err, n)
+		}
+	})
+}

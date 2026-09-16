@@ -12,6 +12,7 @@ import (
 	"github.com/Asion001/mangarr/internal/model"
 	"github.com/Asion001/mangarr/internal/refresh"
 	"github.com/Asion001/mangarr/internal/series"
+	"github.com/Asion001/mangarr/internal/worktasks"
 )
 
 // Services created by wire.
@@ -35,8 +36,12 @@ func (a *App) wire(ctx context.Context) error {
 	a.Refresher = refresh.New(a.DB, a.Bus, a.Modules, a.Settings, a.Searcher, a.Library, log.With("component", "refresh"))
 	a.Refresher.Gov = a.Catalogs.Gov
 	a.Refresher.Cache, a.Refresher.Gen = a.SourceCache, a.Catalogs.Generation
+	a.Tasks = worktasks.New(a.DB, log.With("component", "worktasks"))
+	a.Tasks.Changed = func(jobID int64) { a.DLQueue.Wake() }
+	a.AddService(a.Tasks)
 	a.Downloads = downloads.NewManager(a.DB, a.Bus, a.Modules, a.Settings, a.Library, a.DLQueue, a.Searcher, log.With("component", "downloads"), a.Cfg.DataDir)
 	a.Downloads.Gov = a.Catalogs.Gov
+	a.Downloads.Tasks = a.Tasks
 	a.AddService(a.Downloads)
 	a.Series = series.New(a.DB, a.Bus, a.Library, a.Metadata, a.Modules, a.Queue, log.With("component", "series"))
 	a.Series.UseSearch(a.Search) // adding a source in bulk finds each series at the catalog

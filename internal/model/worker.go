@@ -62,3 +62,58 @@ func (w *Worker) HasRole(role string) bool {
 	}
 	return false
 }
+
+// Worker task kinds and states.
+const (
+	TaskDownload = "download"
+	TaskUpscale  = "upscale"
+	TaskEncode   = "encode"
+
+	// TaskPending is waiting for a worker to take it.
+	TaskPending = "pending"
+	// TaskLeased is being worked on; the lease is renewed by heartbeats.
+	TaskLeased = "leased"
+	TaskDone   = "done"
+	TaskFailed = "failed"
+	// TaskAbandoned: nobody finished it after several tries.
+	TaskAbandoned = "abandoned"
+)
+
+// WorkerTask is one piece of a download job handed to a worker: fetching a
+// chapter's pages, or processing a slice of them. Its finished rows are the
+// history the worker statistics are counted from.
+type WorkerTask struct {
+	bun.BaseModel `bun:"table:worker_tasks"`
+	ID            int64 `bun:"id,pk,autoincrement" json:"id"`
+	JobID         int64 `bun:"job_id,notnull" json:"jobId"`
+	// WorkerID is who holds it (0 while it waits).
+	WorkerID int64  `bun:"worker_id,nullzero" json:"workerId,omitempty"`
+	Kind     string `bun:"kind,notnull" json:"kind"`
+	// Seq orders the tasks of one job (chunk 0, 1, 2...).
+	Seq   int    `bun:"seq,notnull" json:"seq"`
+	State string `bun:"state,notnull" json:"state"`
+	// Spec is what the worker needs to do it: page URLs and headers for a
+	// download, the processing settings for the rest.
+	Spec map[string]any `bun:"spec,type:jsonb,notnull" json:"spec"`
+	// NotBefore keeps a task waiting (the source's own pacing).
+	NotBefore time.Time `bun:"not_before,notnull" json:"notBefore"`
+	// LeaseUntil is when the task returns to the queue unless the worker
+	// says it is still alive.
+	LeaseUntil  *time.Time `bun:"lease_until" json:"leaseUntil,omitempty"`
+	HeartbeatAt *time.Time `bun:"heartbeat_at" json:"heartbeatAt,omitempty"`
+	// Cancel asks the worker to stop at its next heartbeat.
+	Cancel bool `bun:"cancel,notnull" json:"cancel"`
+	// Attempt counts how often this task has been handed out.
+	Attempt    int        `bun:"attempt,notnull" json:"attempt"`
+	PagesTotal int        `bun:"pages_total,notnull" json:"pagesTotal"`
+	PagesDone  int        `bun:"pages_done,notnull" json:"pagesDone"`
+	BytesIn    int64      `bun:"bytes_in,notnull" json:"bytesIn"`
+	BytesOut   int64      `bun:"bytes_out,notnull" json:"bytesOut"`
+	Error      string     `bun:"error,notnull" json:"error"`
+	CreatedAt  time.Time  `bun:"created_at,notnull" json:"createdAt"`
+	StartedAt  *time.Time `bun:"started_at" json:"startedAt,omitempty"`
+	FinishedAt *time.Time `bun:"finished_at" json:"finishedAt,omitempty"`
+}
+
+// Open reports whether the task still has to be done.
+func (t *WorkerTask) Open() bool { return t.State == TaskPending || t.State == TaskLeased }

@@ -1,0 +1,327 @@
+// Package worktasks is the ledger of work handed to workers: what is
+// waiting, who holds it, and what became of it. Workers pull from it (they
+// never listen on a port), so every hand-out is a compare-and-set on one
+// row — which both SQLite and PostgreSQL do without row locks.
+package worktasks
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"time"
+
+	"github.com/uptrace/bun"
+
+	"github.com/Asion001/mangarr/internal/db"
+	"github.com/Asion001/mangarr/internal/model"
+)
+
+// Lease is how long a worker holds a task before it has to say it is still
+// alive, and how long the reaper waits before taking it back.
+const Lease = 2 * time.Minute
+
+// MaxAttempts is how often a task is handed out before it is given up on.
+// A worker that dies mid-chapter costs one attempt.
+const MaxAttempts = 3
+
+// ErrNotYours is returned when a worker acts on a task it doesn't hold —
+// its lease expired and someone else has it now. The worker drops the task
+// and asks for another.
+var ErrNotYours = errors.New("this task is not leased to you")
+
+// Ledger stores and hands out worker tasks.
+type Ledger struct {
+	db  *db.DB
+	log *slog.Logger
+	// Changed (optional) is called whenever a task's state changes, so the
+	// download manager can look at the job again without waiting for a tick.
+	Changed func(jobID int64)
+}
+
+func New(d *db.DB, log *slog.Logger) *Ledger {
+	return &Ledger{db: d, log: log}
+}
+
+// Add stores a task to be picked up. Kind, JobID and Spec must be set.
+func (l *Ledger) Add(ctx context.Context, t *model.WorkerTask) error {
+	now := time.Now().UTC()
+	t.State = model.TaskPending
+	t.CreatedAt = now
+	if t.NotBefore.IsZero() {
+		t.NotBefore = now
+	}
+	if t.Spec == nil {
+		t.Spec = map[string]any{}
+	}
+	if _, err := l.db.NewInsert().Model(t).Exec(ctx); err != nil {
+		return err
+	}
+	l.changed(t.JobID)
+	return nil
+}
+
+// Claim hands one waiting task to a worker: the first it may do, oldest
+// first. It returns nil when there is nothing for it.
+func (l *Ledger) Claim(ctx context.Context, workerID int64, kinds []string) (*model.WorkerTask, error) {
+	if len(kinds) == 0 {
+		return nil, nil
+	}
+	now := time.Now().UTC()
+	var waiting []model.WorkerTask
+	err := l.db.NewSelect().Model(&waiting).
+		Where("state = ? AND not_before <= ?", model.TaskPending, now).
+		Where("kind IN (?)", bun.In(kinds)).
+		Order("id").Limit(20).Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, t := range waiting {
+		until := now.Add(Lease)
+		// the compare-and-set: only one worker can move a row out of pending
+		res, err := l.db.NewUpdate().Model((*model.WorkerTask)(nil)).
+			Set("state = ?", model.TaskLeased).Set("worker_id = ?", workerID).
+			Set("lease_until = ?", until).Set("heartbeat_at = ?", now).Set("started_at = COALESCE(started_at, ?)", now).
+			Set("attempt = attempt + 1").Set("cancel = ?", false).
+			Where("id = ? AND state = ?", t.ID, model.TaskPending).Exec(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if n, _ := res.RowsAffected(); n != 1 {
+			continue // another worker was quicker
+		}
+		got := t
+		got.State, got.WorkerID, got.LeaseUntil, got.Attempt = model.TaskLeased, workerID, &until, t.Attempt+1
+		got.HeartbeatAt, got.Cancel = &now, false
+		l.changed(got.JobID)
+		return &got, nil
+	}
+	return nil, nil
+}
+
+// Progress is what a worker reports while it works.
+type Progress struct {
+	PagesDone  int
+	PagesTotal int
+	BytesIn    int64
+	BytesOut   int64
+}
+
+// Heartbeat renews a lease and records progress. It reports whether the
+// task has been cancelled meanwhile, which is how a worker is told to stop.
+func (l *Ledger) Heartbeat(ctx context.Context, taskID, workerID int64, p Progress) (cancelled bool, err error) {
+	now := time.Now().UTC()
+	res, err := l.db.NewUpdate().Model((*model.WorkerTask)(nil)).
+		Set("heartbeat_at = ?", now).Set("lease_until = ?", now.Add(Lease)).
+		Set("pages_done = ?", p.PagesDone).Set("pages_total = ?", p.PagesTotal).
+		Set("bytes_in = ?", p.BytesIn).Set("bytes_out = ?", p.BytesOut).
+		Where("id = ? AND worker_id = ? AND state = ?", taskID, workerID, model.TaskLeased).Exec(ctx)
+	if err != nil {
+		return false, err
+	}
+	if n, _ := res.RowsAffected(); n != 1 {
+		return false, ErrNotYours
+	}
+	var t model.WorkerTask
+	if err := l.db.NewSelect().Model(&t).Column("cancel", "job_id").Where("id = ?", taskID).Scan(ctx); err != nil {
+		return false, err
+	}
+	l.changed(t.JobID)
+	return t.Cancel, nil
+}
+
+// Held returns a task if this worker still holds it (and nothing else).
+func (l *Ledger) Held(ctx context.Context, taskID, workerID int64) (*model.WorkerTask, error) {
+	var t model.WorkerTask
+	err := l.db.NewSelect().Model(&t).Where("id = ? AND worker_id = ? AND state = ?", taskID, workerID, model.TaskLeased).Scan(ctx)
+	if err != nil {
+		return nil, ErrNotYours
+	}
+	return &t, nil
+}
+
+// Finish closes a task the worker did, and counts it on the worker.
+func (l *Ledger) Finish(ctx context.Context, taskID, workerID int64, p Progress) error {
+	return l.close(ctx, taskID, workerID, model.TaskDone, "", p)
+}
+
+// Fail closes a task the worker could not do. The job it belongs to decides
+// what that means (a retry, or a failed download).
+func (l *Ledger) Fail(ctx context.Context, taskID, workerID int64, reason string, p Progress) error {
+	return l.close(ctx, taskID, workerID, model.TaskFailed, reason, p)
+}
+
+func (l *Ledger) close(ctx context.Context, taskID, workerID int64, state, reason string, p Progress) error {
+	now := time.Now().UTC()
+	var t model.WorkerTask
+	if err := l.db.NewSelect().Model(&t).Where("id = ?", taskID).Scan(ctx); err != nil {
+		return err
+	}
+	err := l.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		res, err := tx.NewUpdate().Model((*model.WorkerTask)(nil)).
+			Set("state = ?", state).Set("error = ?", reason).Set("finished_at = ?", now).
+			Set("pages_done = ?", p.PagesDone).Set("pages_total = ?", p.PagesTotal).
+			Set("bytes_in = ?", p.BytesIn).Set("bytes_out = ?", p.BytesOut).
+			Set("lease_until = NULL").
+			Where("id = ? AND worker_id = ? AND state = ?", taskID, workerID, model.TaskLeased).Exec(ctx)
+		if err != nil {
+			return err
+		}
+		if n, _ := res.RowsAffected(); n != 1 {
+			return ErrNotYours
+		}
+		if workerID == 0 {
+			return nil
+		}
+		// the same transaction counts it on the worker, so the totals can't
+		// drift from the tasks they come from
+		q := tx.NewUpdate().Model((*model.Worker)(nil)).
+			Set("pages_done = pages_done + ?", p.PagesDone).
+			Set("bytes_in = bytes_in + ?", p.BytesIn).Set("bytes_out = bytes_out + ?", p.BytesOut).
+			Where("id = ?", workerID)
+		if state == model.TaskDone {
+			q = q.Set("tasks_done = tasks_done + 1")
+		} else {
+			q = q.Set("tasks_failed = tasks_failed + 1")
+		}
+		if t.StartedAt != nil {
+			q = q.Set("busy_seconds = busy_seconds + ?", now.Sub(*t.StartedAt).Seconds())
+		}
+		_, err = q.Exec(ctx)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	l.changed(t.JobID)
+	return nil
+}
+
+// Cancel asks whoever holds these tasks to stop, and drops the ones nobody
+// has started. Used when a job is removed from the queue.
+func (l *Ledger) Cancel(ctx context.Context, jobID int64) error {
+	now := time.Now().UTC()
+	if _, err := l.db.NewUpdate().Model((*model.WorkerTask)(nil)).
+		Set("state = ?", model.TaskAbandoned).Set("finished_at = ?", now).Set("error = ?", "cancelled").
+		Where("job_id = ? AND state = ?", jobID, model.TaskPending).Exec(ctx); err != nil {
+		return err
+	}
+	_, err := l.db.NewUpdate().Model((*model.WorkerTask)(nil)).Set("cancel = ?", true).
+		Where("job_id = ? AND state = ?", jobID, model.TaskLeased).Exec(ctx)
+	return err
+}
+
+// Reap takes back tasks whose worker went quiet, and gives up on the ones
+// that have been tried too often.
+func (l *Ledger) Reap(ctx context.Context) (requeued, abandoned int, err error) {
+	now := time.Now().UTC()
+	var expired []model.WorkerTask
+	if err := l.db.NewSelect().Model(&expired).
+		Where("state = ? AND lease_until IS NOT NULL AND lease_until < ?", model.TaskLeased, now).
+		Limit(100).Scan(ctx); err != nil {
+		return 0, 0, err
+	}
+	for _, t := range expired {
+		state, reason := model.TaskPending, ""
+		if t.Attempt >= MaxAttempts {
+			state, reason = model.TaskAbandoned, fmt.Sprintf("no worker finished it in %d tries", t.Attempt)
+		}
+		q := l.db.NewUpdate().Model((*model.WorkerTask)(nil)).
+			Set("state = ?", state).Set("lease_until = NULL").Set("worker_id = NULL").Set("error = ?", reason).
+			Where("id = ? AND state = ?", t.ID, model.TaskLeased)
+		if state == model.TaskAbandoned {
+			q = q.Set("finished_at = ?", now)
+		}
+		res, err := q.Exec(ctx)
+		if err != nil {
+			return requeued, abandoned, err
+		}
+		if n, _ := res.RowsAffected(); n != 1 {
+			continue
+		}
+		if state == model.TaskAbandoned {
+			abandoned++
+		} else {
+			requeued++
+		}
+		l.log.Info("a worker task came back", "task", t.ID, "job", t.JobID, "attempt", t.Attempt, "state", state)
+		l.changed(t.JobID)
+	}
+	return requeued, abandoned, nil
+}
+
+// OfJob lists a job's tasks, oldest first.
+func (l *Ledger) OfJob(ctx context.Context, jobID int64) ([]model.WorkerTask, error) {
+	var out []model.WorkerTask
+	err := l.db.NewSelect().Model(&out).Where("job_id = ?", jobID).Order("id").Scan(ctx)
+	return out, err
+}
+
+// OpenJobs is the set of jobs with a task still to be done, so the download
+// manager leaves them alone.
+func (l *Ledger) OpenJobs(ctx context.Context) (map[int64]bool, error) {
+	var ids []int64
+	err := l.db.NewSelect().Model((*model.WorkerTask)(nil)).Column("job_id").
+		Where("state IN (?)", bun.In([]string{model.TaskPending, model.TaskLeased})).Scan(ctx, &ids)
+	out := map[int64]bool{}
+	for _, id := range ids {
+		out[id] = true
+	}
+	return out, err
+}
+
+// Prune deletes finished tasks older than keep, so the ledger stays the
+// recent history and not the whole of it.
+func (l *Ledger) Prune(ctx context.Context, keep time.Duration) (int, error) {
+	cutoff := time.Now().UTC().Add(-keep)
+	res, err := l.db.NewDelete().Model((*model.WorkerTask)(nil)).
+		Where("state IN (?) AND finished_at < ?", bun.In([]string{model.TaskDone, model.TaskFailed, model.TaskAbandoned}), cutoff).
+		Exec(ctx)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return int(n), nil
+}
+
+func (l *Ledger) changed(jobID int64) {
+	if l.Changed != nil && jobID != 0 {
+		l.Changed(jobID)
+	}
+}
+
+// reapEvery is how often expired leases are looked for. It has to be well
+// under Lease, or a worker that died holds its task for much longer than
+// the lease says.
+const reapEvery = 30 * time.Second
+
+// keepFinished is how long finished tasks stay as history.
+const keepFinished = 14 * 24 * time.Hour
+
+// Start runs the reaper: tasks whose worker went quiet come back, and old
+// finished ones are dropped once a day.
+func (l *Ledger) Start(ctx context.Context) error {
+	go func() {
+		reap := time.NewTicker(reapEvery)
+		defer reap.Stop()
+		prune := time.NewTicker(24 * time.Hour)
+		defer prune.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-reap.C:
+				if _, _, err := l.Reap(ctx); err != nil && ctx.Err() == nil {
+					l.log.Warn("could not take back expired worker tasks", "err", err)
+				}
+			case <-prune.C:
+				if n, err := l.Prune(ctx, keepFinished); err != nil && ctx.Err() == nil {
+					l.log.Warn("could not prune worker tasks", "err", err)
+				} else if n > 0 {
+					l.log.Info("pruned finished worker tasks", "count", n)
+				}
+			}
+		}
+	}()
+	return nil
+}

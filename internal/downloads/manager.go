@@ -32,6 +32,7 @@ import (
 	"github.com/Asion001/mangarr/internal/quiet"
 	"github.com/Asion001/mangarr/internal/settings"
 	"github.com/Asion001/mangarr/internal/sourcegov"
+	"github.com/Asion001/mangarr/internal/worktasks"
 )
 
 // PageFile is a validated page on disk.
@@ -87,6 +88,9 @@ type Manager struct {
 	Live *Live
 	// Gov (optional) paces chapters per catalog and defers throttled catalogs.
 	Gov *sourcegov.Governor
+	// Tasks (optional) is the ledger of work handed to workers. Jobs with a
+	// task still open belong to a worker, not to this process.
+	Tasks *worktasks.Ledger
 
 	mu          sync.Mutex
 	running     map[int64]context.CancelFunc
@@ -105,17 +109,63 @@ func NewManager(d *db.DB, bus *events.Bus, mods *modules.Manager, st *settings.S
 		Live: NewLive(bus)}
 }
 
-// Start recovers interrupted jobs and starts the scheduling loop.
+// Start recovers interrupted jobs and starts the scheduling loop. Jobs a
+// worker still holds are left alone: the restart was ours, not theirs, and
+// their pages are still arriving in staging.
 func (m *Manager) Start(ctx context.Context) error {
-	now := time.Now().UTC()
-	if _, err := m.db.NewUpdate().Model((*model.DownloadJob)(nil)).
-		Set("status = ?", model.JobQueued).Set("not_before = ?", now).Set("updated_at = ?", now).
-		Where("status IN (?)", bun.In([]string{model.JobDownloading, model.JobProcessing, model.JobImporting})).Exec(ctx); err != nil {
+	live, err := m.openJobs(ctx)
+	if err != nil {
 		return err
 	}
-	_ = os.RemoveAll(filepath.Join(m.dataDir, "staging"))
+	now := time.Now().UTC()
+	q := m.db.NewUpdate().Model((*model.DownloadJob)(nil)).
+		Set("status = ?", model.JobQueued).Set("not_before = ?", now).Set("updated_at = ?", now).
+		Where("status IN (?)", bun.In([]string{model.JobDownloading, model.JobProcessing, model.JobImporting}))
+	if len(live) > 0 {
+		q = q.Where("id NOT IN (?)", bun.In(keys(live)))
+	}
+	if _, err := q.Exec(ctx); err != nil {
+		return err
+	}
+	m.pruneStaging(ctx, live)
 	go m.loop(ctx)
 	return nil
+}
+
+// openJobs is the jobs a worker is still busy with.
+func (m *Manager) openJobs(ctx context.Context) (map[int64]bool, error) {
+	if m.Tasks == nil {
+		return nil, nil
+	}
+	return m.Tasks.OpenJobs(ctx)
+}
+
+func keys(m map[int64]bool) []int64 {
+	out := make([]int64, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
+}
+
+// pruneStaging drops the working directories of jobs nobody is doing any
+// more, and keeps the ones a worker is still uploading into.
+func (m *Manager) pruneStaging(ctx context.Context, live map[int64]bool) {
+	staging := filepath.Join(m.dataDir, "staging")
+	if len(live) == 0 {
+		_ = os.RemoveAll(staging)
+		return
+	}
+	entries, err := os.ReadDir(staging)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		id, err := strconv.ParseInt(strings.TrimPrefix(e.Name(), "job-"), 10, 64)
+		if err != nil || !live[id] {
+			_ = os.RemoveAll(filepath.Join(staging, e.Name()))
+		}
+	}
 }
 
 // Hold stops starting jobs (true) or starts again (false).
@@ -142,13 +192,19 @@ func (m *Manager) Running() int {
 	return len(m.running)
 }
 
-// Cancel stops a running job (used when the user removes it from the queue).
+// Cancel stops a running job (used when the user removes it from the queue),
+// here and on whichever worker is doing it.
 func (m *Manager) Cancel(jobID int64) {
 	m.mu.Lock()
 	if c, ok := m.running[jobID]; ok {
 		c()
 	}
 	m.mu.Unlock()
+	if m.Tasks != nil {
+		if err := m.Tasks.Cancel(context.Background(), jobID); err != nil {
+			m.log.Warn("could not cancel a job's worker tasks", "job", jobID, "err", err)
+		}
+	}
 }
 
 func (m *Manager) loop(ctx context.Context) {
@@ -205,6 +261,11 @@ func (m *Manager) dispatch(ctx context.Context) {
 		}
 		return
 	}
+	// jobs a worker holds are not ours to run
+	onWorkers, err := m.openJobs(ctx)
+	if err != nil {
+		m.log.Warn("could not read the worker tasks", "err", err)
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.held {
@@ -216,6 +277,9 @@ func (m *Manager) dispatch(ctx context.Context) {
 			break
 		}
 		if _, ok := m.running[j.ID]; ok {
+			continue
+		}
+		if onWorkers[j.ID] {
 			continue
 		}
 		if (j.Kind == model.JobKindDownload && quietNow.PauseDownloads) || (j.Kind == model.JobKindReprocess && quietNow.PauseProcessing) {

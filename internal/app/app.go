@@ -31,6 +31,7 @@ import (
 	"github.com/Asion001/mangarr/internal/settings"
 	"github.com/Asion001/mangarr/internal/sourcecache"
 	"github.com/Asion001/mangarr/internal/sourcesearch"
+	"github.com/Asion001/mangarr/internal/worktasks"
 )
 
 type App struct {
@@ -64,6 +65,8 @@ type App struct {
 	FanOut *FanOut
 	// ReadAhead batches progress before downloading the next chapters.
 	ReadAhead *Debouncer
+	// Tasks is the ledger of work handed to workers.
+	Tasks     *worktasks.Ledger
 	Queue     *jobs.Queue
 	Scheduler *jobs.Scheduler
 	HTTP      *http.Client
