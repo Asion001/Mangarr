@@ -20,6 +20,9 @@ type fakeSite struct {
 	base  string
 	lang  string
 	pages []sourcekit.PageImage
+	// pageRef is what the adapter asked pages for, so a test can check that
+	// the site's own ids came back to it.
+	pageRef sourcekit.PageRef
 }
 
 func (f *fakeSite) Info() sourcekit.Info {
@@ -30,7 +33,7 @@ func (f *fakeSite) Search(_ context.Context, q string, _ int) (sourcekit.Results
 	if q == "nothing" {
 		return sourcekit.Results{}, nil
 	}
-	return sourcekit.Results{Mangas: []sourcekit.Manga{{URL: "/m/1", Title: "Fake Manga", CoverURL: f.base + "/cover.jpg"}}, HasNext: true}, nil
+	return sourcekit.Results{Mangas: []sourcekit.Manga{{URL: "/m/1", ID: "m-1", Title: "Fake Manga", CoverURL: f.base + "/cover.jpg"}}, HasNext: true}, nil
 }
 
 func (f *fakeSite) Popular(ctx context.Context, page int) (sourcekit.Results, error) {
@@ -44,17 +47,20 @@ func (f *fakeSite) Details(_ context.Context, ref sourcekit.Ref) (sourcekit.Deta
 	if ref.URL != "/m/1" {
 		return sourcekit.Details{}, sourcekit.ErrNotFound
 	}
-	return sourcekit.Details{Manga: sourcekit.Manga{URL: "/m/1", Title: "Fake Manga", CoverURL: f.base + "/cover.jpg"},
+	return sourcekit.Details{Manga: sourcekit.Manga{URL: "/m/1", ID: "m-1", Title: "Fake Manga", CoverURL: f.base + "/cover.jpg"},
 		Author: "A", Artist: "B", Description: "About it", Genres: []string{"Action"}, Status: sourcekit.StatusOngoing,
 		WebURL: f.base + "/m/1"}, nil
 }
 
 func (f *fakeSite) Chapters(context.Context, sourcekit.Ref) ([]sourcekit.Chapter, error) {
 	at := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
-	return []sourcekit.Chapter{{URL: "/c/2", Name: "Ch. 2", Number: 2, Scanlator: "Group", UploadedAt: &at}}, nil
+	return []sourcekit.Chapter{{URL: "/c/2", ID: "c-2", Name: "Ch. 2", Number: 2, Scanlator: "Group", UploadedAt: &at}}, nil
 }
 
-func (f *fakeSite) Pages(context.Context, string) ([]sourcekit.PageImage, error) { return f.pages, nil }
+func (f *fakeSite) Pages(_ context.Context, ch sourcekit.PageRef) ([]sourcekit.PageImage, error) {
+	f.pageRef = ch
+	return f.pages, nil
+}
 
 func (f *fakeSite) Options() []sourcekit.Option {
 	return []sourcekit.Option{{Key: "lang", Title: "Language", Type: "select", Value: f.lang,
@@ -90,7 +96,7 @@ func TestModuleServesASite(t *testing.T) {
 	}))
 	defer srv.Close()
 	pages := []sourcekit.PageImage{{Index: 0, URL: srv.URL + "/p/1.jpg", Headers: map[string]string{"Referer": srv.URL + "/"}}}
-	m, _ := newModule(t, srv.URL, pages)
+	m, site := newModule(t, srv.URL, pages)
 	ctx := context.Background()
 
 	cats, err := m.Sources(ctx)
@@ -105,9 +111,13 @@ func TestModuleServesASite(t *testing.T) {
 	if err != nil || d.Author != "A" || d.Status != source.StatusOngoing || len(chs) != 1 || chs[0].Number != 2 {
 		t.Fatalf("manga: %v %+v %+v", err, d, chs)
 	}
-	got, err := m.Pages(ctx, source.ChapterRef{Manga: d.MangaRef, URL: chs[0].URL})
+	got, err := m.Pages(ctx, source.ChapterRef{Manga: d.MangaRef, URL: chs[0].URL, EngineRef: chs[0].EngineRef})
 	if err != nil || len(got) != 1 || got[0].SourceID != "fake" {
 		t.Fatalf("pages: %v %+v", err, got)
+	}
+	// sites that address a chapter by id get their own ids back
+	if site.pageRef.ID != "c-2" || site.pageRef.Manga.ID != "m-1" || site.pageRef.Manga.URL != "/m/1" {
+		t.Fatalf("the site was asked for pages with %+v", site.pageRef)
 	}
 
 	// a page can be fetched here, or handed to a worker with the same headers

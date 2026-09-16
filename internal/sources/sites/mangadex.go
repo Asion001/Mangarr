@@ -15,9 +15,9 @@ import (
 // MangaDex speaks the site's official API, so there is nothing to scrape and
 // pages come from its image servers directly.
 //
-// The id is the one Mihon's MangaDex (English) extension uses, so a library
+// The id is the one Mihon's MangaDex (English) extension has, so a library
 // imported from a Mihon backup links to this site instead of an unknown one.
-const mangadexID = "2499283573021220255"
+var mangadexID = sourcekit.KeiyoushiID("MangaDex", "en", 1)
 
 const (
 	mangadexAPI  = "https://api.mangadex.org"
@@ -345,10 +345,10 @@ func chapterName(volume, chapter, title string) string {
 	return name + " – " + title
 }
 
-func (m *mangadex) Pages(ctx context.Context, chapterURL string) ([]sourcekit.PageImage, error) {
-	id := strings.TrimPrefix(sourcekit.Path(chapterURL), "/chapter/")
+func (m *mangadex) Pages(ctx context.Context, ch sourcekit.PageRef) ([]sourcekit.PageImage, error) {
+	id := strings.TrimPrefix(sourcekit.Path(ch.URL), "/chapter/")
 	if id == "" || strings.Contains(id, "/") {
-		return nil, fmt.Errorf("%q is not a chapter url", chapterURL)
+		return nil, fmt.Errorf("%q is not a chapter url", ch.URL)
 	}
 	var out struct {
 		BaseURL string `json:"baseUrl"`

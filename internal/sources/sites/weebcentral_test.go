@@ -105,7 +105,7 @@ func TestWeebCentral(t *testing.T) {
 		t.Fatalf("chapter %+v", chs[0])
 	}
 
-	pages, err := w.Pages(ctx, "/chapters/01CH2")
+	pages, err := w.Pages(ctx, sourcekit.PageRef{URL: "/chapters/01CH2"})
 	if err != nil || len(pages) != 2 {
 		t.Fatalf("pages: %v %+v", err, pages)
 	}

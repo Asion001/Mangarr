@@ -14,9 +14,9 @@ import (
 )
 
 // WeebCentral has no API, so this reads its pages. The id is the one Mihon's
-// WeebCentral extension uses, so a library imported from a Mihon backup links
-// here instead of to an unknown catalog.
-const weebcentralID = "1919127968357063315"
+// "Weeb Central" extension has, so a library imported from a Mihon backup
+// links here instead of to an unknown catalog.
+var weebcentralID = sourcekit.KeiyoushiID("Weeb Central", "en", 1)
 
 const weebcentralSite = "https://weebcentral.com"
 
@@ -233,10 +233,10 @@ func chapterNumber(name string) float64 {
 	return -1
 }
 
-func (w *weebcentral) Pages(ctx context.Context, chapterURL string) ([]sourcekit.PageImage, error) {
-	path := sourcekit.Path(chapterURL)
+func (w *weebcentral) Pages(ctx context.Context, ch sourcekit.PageRef) ([]sourcekit.PageImage, error) {
+	path := sourcekit.Path(ch.URL)
 	if !strings.HasPrefix(path, "/chapters/") {
-		return nil, fmt.Errorf("%q is not a chapter url", chapterURL)
+		return nil, fmt.Errorf("%q is not a chapter url", ch.URL)
 	}
 	q := url.Values{"is_prev": {"False"}, "current_page": {"1"}, "reading_style": {"long_strip"}}
 	doc, err := w.c.Document(ctx, sourcekit.Request{URL: w.base + path + "/images", Query: q, Headers: w.headers(w.base + path)})

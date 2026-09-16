@@ -1,6 +1,7 @@
 package sourcekit
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -78,13 +79,15 @@ func looksChallenged(body string) bool {
 	return false
 }
 
-// Request describes one request to a site.
+// Request describes one request to a site. Body is kept as bytes, not a
+// reader, so a request that has to be retried (through the challenge solver)
+// can be sent again unchanged.
 type Request struct {
 	Method  string
 	URL     string
 	Headers map[string]string
 	Query   url.Values
-	Body    io.Reader
+	Body    []byte
 }
 
 // Do performs a request, retrying once through the challenge solver when the
@@ -129,7 +132,11 @@ func (c *Client) do(ctx context.Context, r Request) ([]byte, error) {
 		}
 		u += sep + r.Query.Encode()
 	}
-	req, err := http.NewRequestWithContext(ctx, method, u, r.Body)
+	var send io.Reader
+	if len(r.Body) > 0 {
+		send = bytes.NewReader(r.Body)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, u, send)
 	if err != nil {
 		return nil, err
 	}
@@ -169,11 +176,11 @@ func (c *Client) JSON(ctx context.Context, r Request, out any) error {
 	if _, ok := r.Headers["Accept"]; !ok {
 		r.Headers["Accept"] = "application/json"
 	}
-	body, err := c.Do(ctx, r)
+	data, err := c.Do(ctx, r)
 	if err != nil {
 		return err
 	}
-	if err := json.Unmarshal(body, out); err != nil {
+	if err := json.Unmarshal(data, out); err != nil {
 		return fmt.Errorf("%s: %w", r.URL, err)
 	}
 	return nil

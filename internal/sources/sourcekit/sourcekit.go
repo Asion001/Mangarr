@@ -6,8 +6,13 @@ package sourcekit
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/binary"
 	"errors"
+	"math"
 	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -35,13 +40,19 @@ type Info struct {
 // Ref identifies a manga at a site by its path or URL ("/manga/<id>").
 type Ref struct {
 	URL string
+	// ID is the site's own id for the manga, kept alongside the URL for APIs
+	// that only speak ids. mangarr stores it, but a site must still work from
+	// the URL alone: a stored id can be missing or stale.
+	ID string
 	// Title helps a site re-find a manga whose URL changed.
 	Title string
 }
 
 // Manga is one search or browse result.
 type Manga struct {
-	URL      string
+	URL string
+	// ID is the site's own id, when it has one (see Ref.ID).
+	ID       string
 	Title    string
 	CoverURL string
 	// Chapters is the chapter count when the site already knows it.
@@ -70,7 +81,9 @@ type Details struct {
 
 // Chapter is one chapter of a manga.
 type Chapter struct {
-	URL       string
+	URL string
+	// ID is the site's own id for the chapter (see Ref.ID).
+	ID        string
 	Name      string
 	Scanlator string
 	// Number as the site reports it (-1 when it doesn't).
@@ -105,6 +118,15 @@ func (r *Results) Has(url string) bool {
 	return false
 }
 
+// PageRef says which chapter to list pages for. It carries the manga as
+// well, because several sites address a chapter as (manga, chapter) and
+// nothing else.
+type PageRef struct {
+	Manga Ref
+	URL   string
+	ID    string
+}
+
 // Site is what a site implements. Everything optional is a separate
 // interface, so a small site stays small.
 type Site interface {
@@ -112,7 +134,7 @@ type Site interface {
 	Search(ctx context.Context, query string, page int) (Results, error)
 	Details(ctx context.Context, ref Ref) (Details, error)
 	Chapters(ctx context.Context, ref Ref) ([]Chapter, error)
-	Pages(ctx context.Context, chapterURL string) ([]PageImage, error)
+	Pages(ctx context.Context, ch PageRef) ([]PageImage, error)
 }
 
 // Browser is implemented by sites with popular and latest listings.
@@ -153,6 +175,16 @@ type Politeness struct {
 // Polite is implemented by sites that know their own limits.
 type Polite interface {
 	Politeness() Politeness
+}
+
+// KeiyoushiID is the id Mihon and Tachiyomi give an extension: the first
+// eight bytes of md5("<name lowercased>/<lang>/<version>"), big-endian and
+// made positive. A site declared with the same name, language and version as
+// the Keiyoushi extension for it therefore gets the same id, which is what
+// keeps a Mihon backup import linking here instead of to an unknown catalog.
+func KeiyoushiID(name, lang string, version int) string {
+	sum := md5.Sum([]byte(strings.ToLower(name) + "/" + lang + "/" + strconv.Itoa(version)))
+	return strconv.FormatUint(binary.BigEndian.Uint64(sum[:8])&math.MaxInt64, 10)
 }
 
 // Builder makes a site. Sites register one in init().

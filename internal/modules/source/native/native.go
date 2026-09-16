@@ -163,7 +163,7 @@ func (m *Module) page(sourceID string, res sourcekit.Results) *source.MangaPage 
 	out := &source.MangaPage{Mangas: make([]source.Manga, 0, len(res.Mangas)), HasNext: res.HasNext}
 	for _, x := range res.Mangas {
 		out.Mangas = append(out.Mangas, source.Manga{
-			MangaRef:     source.MangaRef{SourceID: sourceID, URL: x.URL, TitleHint: x.Title},
+			MangaRef:     source.MangaRef{SourceID: sourceID, URL: x.URL, EngineRef: x.ID, TitleHint: x.Title},
 			Title:        x.Title,
 			ThumbnailURL: x.CoverURL,
 			ChapterCount: x.Chapters,
@@ -177,12 +177,12 @@ func (m *Module) Manga(ctx context.Context, ref source.MangaRef, withChapters bo
 	if err != nil {
 		return nil, nil, err
 	}
-	d, err := s.Details(ctx, sourcekit.Ref{URL: ref.URL, Title: ref.TitleHint})
+	d, err := s.Details(ctx, sourcekit.Ref{URL: ref.URL, ID: ref.EngineRef, Title: ref.TitleHint})
 	if err != nil {
 		return nil, nil, err
 	}
 	details := &source.MangaDetails{
-		Manga: source.Manga{MangaRef: source.MangaRef{SourceID: ref.SourceID, URL: d.URL, TitleHint: d.Title},
+		Manga: source.Manga{MangaRef: source.MangaRef{SourceID: ref.SourceID, URL: d.URL, EngineRef: d.ID, TitleHint: d.Title},
 			Title: d.Title, ThumbnailURL: d.CoverURL, ChapterCount: d.Chapters},
 		Author: d.Author, Artist: d.Artist, Description: d.Description, Genres: d.Genres,
 		Status: status(d.Status), WebURL: d.WebURL,
@@ -193,13 +193,13 @@ func (m *Module) Manga(ctx context.Context, ref source.MangaRef, withChapters bo
 	if !withChapters {
 		return details, nil, nil
 	}
-	chapters, err := s.Chapters(ctx, sourcekit.Ref{URL: details.URL, Title: details.Title})
+	chapters, err := s.Chapters(ctx, sourcekit.Ref{URL: details.URL, ID: details.EngineRef, Title: details.Title})
 	if err != nil {
 		return nil, nil, err
 	}
 	out := make([]source.Chapter, 0, len(chapters))
 	for _, c := range chapters {
-		out = append(out, source.Chapter{URL: c.URL, Name: c.Name, Scanlator: c.Scanlator, Number: c.Number,
+		out = append(out, source.Chapter{URL: c.URL, EngineRef: c.ID, Name: c.Name, Scanlator: c.Scanlator, Number: c.Number,
 			UploadDate: c.UploadedAt, WebURL: c.WebURL})
 	}
 	return details, out, nil
@@ -224,7 +224,8 @@ func (m *Module) Pages(ctx context.Context, ref source.ChapterRef) ([]source.Pag
 	if err != nil {
 		return nil, err
 	}
-	pages, err := s.Pages(ctx, ref.URL)
+	pages, err := s.Pages(ctx, sourcekit.PageRef{URL: ref.URL, ID: ref.EngineRef,
+		Manga: sourcekit.Ref{URL: ref.Manga.URL, ID: ref.Manga.EngineRef, Title: ref.Manga.TitleHint}})
 	if err != nil {
 		return nil, err
 	}
@@ -292,7 +293,7 @@ func (m *Module) Thumbnail(ctx context.Context, ref source.MangaRef) (io.ReadClo
 	if err != nil {
 		return nil, "", err
 	}
-	d, err := s.Details(ctx, sourcekit.Ref{URL: ref.URL, Title: ref.TitleHint})
+	d, err := s.Details(ctx, sourcekit.Ref{URL: ref.URL, ID: ref.EngineRef, Title: ref.TitleHint})
 	if err != nil {
 		return nil, "", err
 	}

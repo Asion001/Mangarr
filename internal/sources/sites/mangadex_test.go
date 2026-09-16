@@ -94,7 +94,7 @@ func TestMangaDex(t *testing.T) {
 		t.Fatalf("second chapter %+v", chs[1])
 	}
 
-	pages, err := m.Pages(ctx, chs[0].URL)
+	pages, err := m.Pages(ctx, sourcekit.PageRef{URL: chs[0].URL})
 	if err != nil || len(pages) != 3 {
 		t.Fatalf("pages: %v %+v", err, pages)
 	}
@@ -111,7 +111,7 @@ func TestMangaDexNotFound(t *testing.T) {
 	if err == nil || !errorsAs(err, new(*sourcekit.StatusError)) && err.Error() == "" {
 		t.Fatalf("details of a missing manga: %v", err)
 	}
-	if _, err := m.Pages(context.Background(), "/not-a-chapter"); err == nil {
+	if _, err := m.Pages(context.Background(), sourcekit.PageRef{URL: "/not-a-chapter"}); err == nil {
 		t.Fatal("a url that isn't a chapter should be refused")
 	}
 }
