@@ -28,11 +28,17 @@ import (
 	_ "github.com/Asion001/mangarr/internal/modules/all"
 	"github.com/Asion001/mangarr/internal/upscaler"
 	"github.com/Asion001/mangarr/internal/version"
+	"github.com/Asion001/mangarr/internal/worker"
 )
 
 func main() {
-	if mode, err := config.ModeFromEnv(); err == nil && mode == config.ModeUpscaler {
-		os.Exit(runNode())
+	if mode, err := config.ModeFromEnv(); err == nil {
+		switch mode {
+		case config.ModeUpscaler:
+			os.Exit(runNode())
+		case config.ModeWorker:
+			os.Exit(runWorker())
+		}
 	}
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
@@ -266,6 +272,40 @@ func runNode() int {
 	defer stop()
 	log, _ := logging.Setup(os.Getenv("MANGARR_LOG_LEVEL"), os.Stdout)
 	if err := upscaler.RunNode(ctx, cfg, log); err != nil {
+		fmt.Fprintln(os.Stderr, "fatal:", err)
+		return 1
+	}
+	return 0
+}
+
+// runWorker runs this process as a worker (MANGARR_MODE=worker): it asks a
+// server for tasks and does them. There is no listener, so "healthcheck"
+// only says whether the process is up.
+func runWorker() int {
+	cfg, err := worker.LoadConfig(os.Getenv)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "healthcheck":
+			return 0
+		case "version":
+			fmt.Println(version.Version, version.Commit)
+			return 0
+		}
+	}
+	log, _ := logging.Setup(os.Getenv("MANGARR_LOG_LEVEL"), os.Stdout)
+	cfg.Log, cfg.Version = log, version.Version
+	w, err := worker.New(cfg)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := w.Run(ctx); err != nil {
 		fmt.Fprintln(os.Stderr, "fatal:", err)
 		return 1
 	}

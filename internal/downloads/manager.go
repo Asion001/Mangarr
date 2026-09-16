@@ -318,7 +318,15 @@ func (m *Manager) dispatch(ctx context.Context) {
 				m.progressMu.Unlock()
 				m.queue.signal()
 			}()
-			m.run(jctx, job)
+			// a worker with the right role takes downloads off this machine;
+			// anything it can't have runs here
+			handed, err := m.offload(jctx, job)
+			if err != nil {
+				m.log.Warn("could not hand a chapter to the workers", "job", job.ID, "err", err)
+			}
+			if !handed {
+				m.run(jctx, job)
+			}
 		}(j.DownloadJob, src)
 	}
 	// Queue drained: run module housekeeping (e.g. clear engine page caches).
@@ -483,7 +491,14 @@ func (m *Manager) run(ctx context.Context, job model.DownloadJob) {
 		m.fail(ctx, &job, jc, err)
 		return
 	}
+	m.finish(ctx, job, jc, pages, workDir)
+}
 
+// finish is the second half of a download: processing and import. Pages
+// reach it either from here or from a worker that uploaded them, and
+// everything after this point is the same either way.
+func (m *Manager) finish(ctx context.Context, job model.DownloadJob, jc *jobCtx, pages []PageFile, workDir string) {
+	log := m.log.With("job", job.ID, "chapterId", job.ChapterID)
 	// processing (upscale / re-encode)
 	cfg := jc.profile.Config
 	params := cfg.ProcessParams()

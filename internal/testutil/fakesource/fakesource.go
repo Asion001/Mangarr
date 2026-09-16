@@ -12,6 +12,9 @@ import (
 	"image/color"
 	"image/png"
 	"io"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -64,6 +67,12 @@ type Scenario struct {
 	// Extensions makes the module an extension manager: installing one
 	// adds its catalogs to Sources.
 	Extensions []Extension
+	// PageBase, when set, is an address another machine can fetch this
+	// scenario's pages from (see ServePages): it makes the module Fetchable,
+	// which is what lets a worker download for it.
+	PageBase string
+	// Served counts pages fetched over HTTP rather than in process.
+	Served int
 }
 
 // Extension is an installable package offering catalogs.
@@ -247,9 +256,7 @@ func (m *Module) Pages(ctx context.Context, ref source.ChapterRef) ([]source.Pag
 func (m *Module) FetchPage(ctx context.Context, p source.Page) (io.ReadCloser, string, error) {
 	m.sc.mu.Lock()
 	m.sc.Fetches++
-	w := m.sc.PageWidth
 	delay := m.sc.PageDelay
-	noise := m.sc.PageNoise
 	m.sc.mu.Unlock()
 	if delay > 0 {
 		select {
@@ -258,10 +265,39 @@ func (m *Module) FetchPage(ctx context.Context, p source.Page) (io.ReadCloser, s
 		case <-time.After(delay):
 		}
 	}
+	data, err := m.sc.PagePNG(p.Index)
+	if err != nil {
+		return nil, "", err
+	}
+	return io.NopCloser(bytes.NewReader(data)), "image/png", nil
+}
+
+// PageRequest makes the module Fetchable when the scenario serves its pages
+// over HTTP, which is how a worker is handed a chapter to download.
+func (m *Module) PageRequest(ctx context.Context, p source.Page) (source.PageRequest, error) {
+	m.sc.mu.Lock()
+	base := m.sc.PageBase
+	m.sc.mu.Unlock()
+	if base == "" {
+		return source.PageRequest{}, source.ErrUnsupported
+	}
+	return source.PageRequest{URL: fmt.Sprintf("%s/page/%d", base, p.Index), Method: "GET",
+		Headers: map[string]string{"X-Fake-Source": "1"}}, nil
+}
+
+// PagePNG renders one page of this scenario.
+func (s *Scenario) PagePNG(index int) ([]byte, error) {
+	s.mu.Lock()
+	w := s.PageWidth
+	noise := s.PageNoise
+	s.mu.Unlock()
+	if w == 0 {
+		w = 64
+	}
 	img := image.NewRGBA(image.Rect(0, 0, w, w*3/2))
 	img.Set(0, 0, color.Black)
 	if noise {
-		seed := uint32(p.Index*7919 + 17)
+		seed := uint32(index*7919 + 17)
 		for y := 0; y < w*3/2; y++ {
 			for x := 0; x < w; x++ {
 				seed = seed*1664525 + 1013904223
@@ -275,9 +311,43 @@ func (m *Module) FetchPage(ctx context.Context, p source.Page) (io.ReadCloser, s
 	}
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, img); err != nil {
-		return nil, "", err
+		return nil, err
 	}
-	return io.NopCloser(&buf), "image/png", nil
+	return buf.Bytes(), nil
+}
+
+// ServePages puts this scenario's pages on an HTTP server and points the
+// module at it, so another process can fetch them. The caller closes it.
+func (s *Scenario) ServePages() *httptest.Server {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Fake-Source") == "" {
+			http.Error(w, "this site expects the headers the module asked for", http.StatusForbidden)
+			return
+		}
+		index, err := strconv.Atoi(strings.TrimPrefix(r.URL.Path, "/page/"))
+		if err != nil {
+			http.Error(w, "no such page", http.StatusNotFound)
+			return
+		}
+		data, err := s.PagePNG(index)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		s.mu.Lock()
+		s.Served++
+		delay := s.PageDelay
+		s.mu.Unlock()
+		if delay > 0 {
+			time.Sleep(delay)
+		}
+		w.Header().Set("Content-Type", "image/png")
+		_, _ = w.Write(data)
+	}))
+	s.mu.Lock()
+	s.PageBase = srv.URL
+	s.mu.Unlock()
+	return srv
 }
 
 // ErrForbidden is a convenient page failure.

@@ -353,9 +353,6 @@ func (s *Service) Sessions(ctx context.Context, userID int64) ([]model.Session, 
 // Authenticate returns the principal for a request, or nil when it has no
 // valid credentials.
 func (s *Service) Authenticate(r *http.Request) *access.Principal {
-	if s.disabled {
-		return access.AdminPrincipal(access.KindAnonymous)
-	}
 	ctx := r.Context()
 	key := r.Header.Get("X-Api-Key")
 	if key == "" {
@@ -366,15 +363,21 @@ func (s *Service) Authenticate(r *http.Request) *access.Principal {
 			key = strings.TrimPrefix(h, "Bearer ")
 		}
 	}
-	if key != "" {
-		if strings.HasPrefix(key, WorkerKeyPrefix) {
-			w, ok := s.WorkerByKey(ctx, key)
-			if !ok || !w.Enabled {
-				return nil
-			}
-			s.touchWorker(w.ID, access.ClientFrom(ctx).IP)
-			return WorkerPrincipal(w)
+	// A worker key names a machine, and it does so even where logins are
+	// switched off for people (an auth proxy in front): the worker protocol
+	// has to know which worker it is talking to.
+	if strings.HasPrefix(key, WorkerKeyPrefix) {
+		w, ok := s.WorkerByKey(ctx, key)
+		if !ok || !w.Enabled {
+			return nil
 		}
+		s.touchWorker(w.ID, access.ClientFrom(ctx).IP)
+		return WorkerPrincipal(w)
+	}
+	if s.disabled {
+		return access.AdminPrincipal(access.KindAnonymous)
+	}
+	if key != "" {
 		g, err := s.settings.General(ctx)
 		if err == nil && g.APIKey != "" && subtle.ConstantTimeCompare([]byte(key), []byte(g.APIKey)) == 1 {
 			return access.AdminPrincipal(access.KindAPIKey)

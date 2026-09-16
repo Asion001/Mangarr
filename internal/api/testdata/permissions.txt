@@ -202,6 +202,13 @@ users-password POST /api/v1/users/{id}/password -> admin
 users-signout POST /api/v1/users/{id}/signout -> admin
 users-update PUT /api/v1/users/{id} -> admin
 wanted-missing GET /api/v1/wanted/missing -> library.manage
+worker-bye POST /api/v1/worker/bye -> worker
+worker-complete POST /api/v1/worker/tasks/{id}/complete -> worker
+worker-fail POST /api/v1/worker/tasks/{id}/fail -> worker
+worker-heartbeat POST /api/v1/worker/tasks/{id}/heartbeat -> worker
+worker-hello POST /api/v1/worker/hello -> worker
+worker-lease POST /api/v1/worker/lease -> worker
+worker-page PUT /api/v1/worker/tasks/{id}/pages/{n} -> worker
 workers-create POST /api/v1/workers -> admin
 workers-delete DELETE /api/v1/workers/{id} -> admin
 workers-list GET /api/v1/workers -> admin

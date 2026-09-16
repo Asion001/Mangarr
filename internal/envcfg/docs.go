@@ -10,6 +10,7 @@ import (
 	"github.com/Asion001/mangarr/internal/modules"
 	"github.com/Asion001/mangarr/internal/settings"
 	"github.com/Asion001/mangarr/internal/upscaler"
+	"github.com/Asion001/mangarr/internal/worker"
 )
 
 // WriteText prints the variables as a table, marking the ones that are set.
@@ -47,7 +48,14 @@ func WriteMarkdown(w io.Writer) {
 		p("| `%s` | `%s` | %s |\n", v.Name, mdEscape(v.Default), mdEscape(v.Description))
 	}
 
-	p("\n## Processing nodes (`MANGARR_MODE=upscaler`)\n\n")
+	p("\n## Workers (`MANGARR_MODE=worker`)\n\n")
+	p("A worker holds a key of its own and asks the server for work, so it needs no port and no inbound access.\n\n")
+	p("| Variable | Default | Description |\n|---|---|---|\n")
+	for _, v := range worker.Vars {
+		p("| `%s` | `%s` | %s |\n", v[0], mdEscape(v[2]), mdEscape(worker.Help[v[0]]))
+	}
+
+	p("\n## Processing nodes (`MANGARR_MODE=upscaler`, deprecated)\n\n")
 	p("| Variable | Old name | Default | Description |\n|---|---|---|---|\n")
 	nodeDesc := map[string]string{
 		"MANGARR_UPSCALER_LISTEN": "Worker listen address.", "MANGARR_UPSCALER_TOOLS_DIR": "Folder with the ncnn upscalers.",

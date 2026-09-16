@@ -1572,6 +1572,10 @@
             "format": "int64",
             "type": "integer"
           },
+          "maxConcurrentPerWorker": {
+            "format": "int64",
+            "type": "integer"
+          },
           "maxPerSource": {
             "format": "int64",
             "type": "integer"
@@ -1583,6 +1587,13 @@
           "pageRetries": {
             "format": "int64",
             "type": "integer"
+          },
+          "workerPlacement": {
+            "type": "string"
+          },
+          "workerPrefetch": {
+            "format": "int64",
+            "type": "integer"
           }
         },
         "required": [
@@ -1591,7 +1602,10 @@
           "pageConcurrency",
           "pageRetries",
           "maxAttempts",
-          "defaultCheckIntervalMinutes"
+          "defaultCheckIntervalMinutes",
+          "workerPlacement",
+          "maxConcurrentPerWorker",
+          "workerPrefetch"
         ],
         "type": "object"
       },
@@ -8212,6 +8226,135 @@
         ],
         "type": "object"
       },
+      "Worker-byeRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "taskIds": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "Worker-completeRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "bytesIn": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "bytesOut": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "pages": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pages",
+          "bytesIn",
+          "bytesOut"
+        ],
+        "type": "object"
+      },
+      "Worker-failRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "pages": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "type": "object"
+      },
+      "Worker-heartbeatRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "bytesIn": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "bytesOut": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "pagesDone": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "pagesTotal": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pagesDone",
+          "pagesTotal",
+          "bytesIn",
+          "bytesOut"
+        ],
+        "type": "object"
+      },
+      "Worker-heartbeatResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "cancel": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "cancel"
+        ],
+        "type": "object"
+      },
+      "Worker-leaseRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "kinds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "kinds"
+        ],
+        "type": "object"
+      },
+      "WorkerHello": {
+        "additionalProperties": false,
+        "properties": {
+          "info": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "platform": {
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "WorkerResource": {
         "additionalProperties": false,
         "properties": {
@@ -8305,6 +8448,162 @@
           "bytesIn",
           "bytesOut",
           "busySeconds"
+        ],
+        "type": "object"
+      },
+      "WorkerTask": {
+        "additionalProperties": false,
+        "properties": {
+          "attempt": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "bytesIn": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "bytesOut": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "cancel": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "finishedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "heartbeatAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "jobId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "leaseUntil": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "notBefore": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "pagesDone": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "pagesTotal": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "seq": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "spec": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "workerId": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "jobId",
+          "kind",
+          "seq",
+          "state",
+          "spec",
+          "notBefore",
+          "cancel",
+          "attempt",
+          "pagesTotal",
+          "pagesDone",
+          "bytesIn",
+          "bytesOut",
+          "error",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "WorkerTaskOutput": {
+        "additionalProperties": false,
+        "properties": {
+          "task": {
+            "$ref": "#/components/schemas/WorkerTask"
+          }
+        },
+        "type": "object"
+      },
+      "WorkerWelcome": {
+        "additionalProperties": false,
+        "properties": {
+          "concurrent": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "leaseSeconds": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "pollSeconds": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "prefetch": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "serverTime": {
+            "type": "string"
+          },
+          "workerId": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "workerId",
+          "name",
+          "roles",
+          "leaseSeconds",
+          "pollSeconds",
+          "prefetch",
+          "concurrent",
+          "serverTime"
         ],
         "type": "object"
       },
@@ -16932,6 +17231,321 @@
         "summary": "Monitored chapters of monitored series without a file",
         "tags": [
           "Activity"
+        ]
+      }
+    },
+    "/api/v1/worker/bye": {
+      "post": {
+        "operationId": "worker-bye",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Worker-byeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Hand back everything this worker holds",
+        "tags": [
+          "Workers"
+        ]
+      }
+    },
+    "/api/v1/worker/hello": {
+      "post": {
+        "operationId": "worker-hello",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkerHello"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkerWelcome"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Announce a worker and learn what it may do",
+        "tags": [
+          "Workers"
+        ]
+      }
+    },
+    "/api/v1/worker/lease": {
+      "post": {
+        "operationId": "worker-lease",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Worker-leaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkerTaskOutput"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Ask for a task (waits a while when there is none)",
+        "tags": [
+          "Workers"
+        ]
+      }
+    },
+    "/api/v1/worker/tasks/{id}/complete": {
+      "post": {
+        "operationId": "worker-complete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Worker-completeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Say a task is done",
+        "tags": [
+          "Workers"
+        ]
+      }
+    },
+    "/api/v1/worker/tasks/{id}/fail": {
+      "post": {
+        "operationId": "worker-fail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Worker-failRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Say a task could not be done",
+        "tags": [
+          "Workers"
+        ]
+      }
+    },
+    "/api/v1/worker/tasks/{id}/heartbeat": {
+      "post": {
+        "operationId": "worker-heartbeat",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Worker-heartbeatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Worker-heartbeatResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Report progress and keep the task",
+        "tags": [
+          "Workers"
+        ]
+      }
+    },
+    "/api/v1/worker/tasks/{id}/pages/{n}": {
+      "put": {
+        "operationId": "worker-page",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "n",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "contentMediaType": "application/octet-stream",
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Upload one finished page of a download task",
+        "tags": [
+          "Workers"
         ]
       }
     },

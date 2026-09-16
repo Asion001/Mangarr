@@ -129,6 +129,15 @@ var operationPermissions = map[string][]string{
 	"commands-push":           {access.LibraryManage}, // non-admins: managerCommands only
 	"commands-list":           {access.LibraryManage},
 	"commands-get":            {access.LibraryManage},
+
+	// the worker protocol: a worker key and nothing else
+	"worker-hello":     {permWorker},
+	"worker-lease":     {permWorker},
+	"worker-page":      {permWorker},
+	"worker-heartbeat": {permWorker},
+	"worker-complete":  {permWorker},
+	"worker-fail":      {permWorker},
+	"worker-bye":       {permWorker},
 }
 
 // permissionsFor returns what an operation needs (admin when unlisted).

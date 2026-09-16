@@ -23,7 +23,20 @@ Lists are comma-separated (`a,b,c`) or JSON; key/value settings use `key=value,k
 | `MANGARR_KOMGA_LISTEN` | `:25600` | Listen address of the Komga-compatible API for reading apps (when enabled in Settings → Reading apps). |
 | `MANGARR_ROOT_FOLDERS` | `` | Root folders to create and lock, comma-separated; append \|lang to set a language (/data/manga/ja\|ja). |
 
-## Processing nodes (`MANGARR_MODE=upscaler`)
+## Workers (`MANGARR_MODE=worker`)
+
+A worker holds a key of its own and asks the server for work, so it needs no port and no inbound access.
+
+| Variable | Default | Description |
+|---|---|---|
+| `MANGARR_SERVER_URL` | `` | The mangarr server this worker asks for work. |
+| `MANGARR_WORKER_KEY` | `` | This worker's own key, from System → Workers. |
+| `MANGARR_WORKER_ROLES` | `download,upscale,encode` | What it offers to do (the server narrows this to what the worker may do). |
+| `MANGARR_WORKER_CONCURRENT` | `0` | Tasks it takes at once (0 = what the server says). |
+| `MANGARR_WORKER_PREFETCH` | `0` | Pages it fetches ahead of its uploads (0 = what the server says). |
+| `MANGARR_WORKER_PAGE_CONCURRENCY` | `4` | Pages it fetches at a time. |
+
+## Processing nodes (`MANGARR_MODE=upscaler`, deprecated)
 
 | Variable | Old name | Default | Description |
 |---|---|---|---|
@@ -79,6 +92,9 @@ Lists are comma-separated (`a,b,c`) or JSON; key/value settings use `key=value,k
 | `MANGARR_DOWNLOADS_PAGE_RETRIES` | int | `3` | Retries per page before the attempt fails. |
 | `MANGARR_DOWNLOADS_MAX_ATTEMPTS` | int | `3` | Attempts per release before it is blocklisted. |
 | `MANGARR_DOWNLOADS_DEFAULT_CHECK_INTERVAL_MINUTES` | int | `360` | Minutes between checks of ongoing series. |
+| `MANGARR_DOWNLOADS_WORKER_PLACEMENT` | string | `auto` | Where chapters are downloaded: auto, workers or local. |
+| `MANGARR_DOWNLOADS_MAX_CONCURRENT_PER_WORKER` | int | `2` | Chapters one worker downloads at a time. |
+| `MANGARR_DOWNLOADS_WORKER_PREFETCH` | int | `50` | Pages a worker fetches ahead of what it has uploaded. |
 
 ### cleanup
 

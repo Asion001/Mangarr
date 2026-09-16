@@ -73,7 +73,24 @@ type Downloads struct {
 	MaxAttempts int `json:"maxAttempts" desc:"Attempts per release before it is blocklisted."`
 	// DefaultCheckIntervalMinutes for ongoing series.
 	DefaultCheckIntervalMinutes int `json:"defaultCheckIntervalMinutes" desc:"Minutes between checks of ongoing series."`
+	// WorkerPlacement decides where a chapter is downloaded: "auto" hands it
+	// to a worker when one is online and takes it back when none is,
+	// "workers" waits for one, "local" never uses them.
+	WorkerPlacement string `json:"workerPlacement" desc:"Where chapters are downloaded: auto, workers or local."`
+	// MaxConcurrentPerWorker is how many chapters one worker downloads at a
+	// time.
+	MaxConcurrentPerWorker int `json:"maxConcurrentPerWorker" desc:"Chapters one worker downloads at a time."`
+	// WorkerPrefetch is how many pages a worker fetches ahead of what it has
+	// uploaded.
+	WorkerPrefetch int `json:"workerPrefetch" desc:"Pages a worker fetches ahead of what it has uploaded."`
 }
+
+// Placements a chapter's download can be given.
+const (
+	PlaceAuto    = "auto"
+	PlaceWorkers = "workers"
+	PlaceLocal   = "local"
+)
 
 // Cleanup holds global read-based cleanup rules (off by default).
 type Cleanup struct {
@@ -234,7 +251,8 @@ func DefaultMediaManagement() MediaManagement {
 }
 
 func DefaultDownloads() Downloads {
-	return Downloads{MaxConcurrent: 3, MaxPerSource: 1, PageConcurrency: 3, PageRetries: 3, MaxAttempts: 3, DefaultCheckIntervalMinutes: 360}
+	return Downloads{MaxConcurrent: 3, MaxPerSource: 1, PageConcurrency: 3, PageRetries: 3, MaxAttempts: 3, DefaultCheckIntervalMinutes: 360,
+		WorkerPlacement: PlaceAuto, MaxConcurrentPerWorker: 2, WorkerPrefetch: 50}
 }
 
 func DefaultCleanup() Cleanup {

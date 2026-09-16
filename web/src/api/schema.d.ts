@@ -2636,6 +2636,125 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/worker/bye": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Hand back everything this worker holds */
+        post: operations["worker-bye"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/worker/hello": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Announce a worker and learn what it may do */
+        post: operations["worker-hello"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/worker/lease": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask for a task (waits a while when there is none) */
+        post: operations["worker-lease"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/worker/tasks/{id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Say a task is done */
+        post: operations["worker-complete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/worker/tasks/{id}/fail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Say a task could not be done */
+        post: operations["worker-fail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/worker/tasks/{id}/heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Report progress and keep the task */
+        post: operations["worker-heartbeat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/worker/tasks/{id}/pages/{n}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Upload one finished page of a download task */
+        put: operations["worker-page"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workers": {
         parameters: {
             query?: never;
@@ -3167,11 +3286,16 @@ export interface components {
             /** Format: int64 */
             maxConcurrent: number;
             /** Format: int64 */
+            maxConcurrentPerWorker: number;
+            /** Format: int64 */
             maxPerSource: number;
             /** Format: int64 */
             pageConcurrency: number;
             /** Format: int64 */
             pageRetries: number;
+            workerPlacement: string;
+            /** Format: int64 */
+            workerPrefetch: number;
         };
         DsnBodyBody: {
             /** @description postgres://user:password@host:5432/database?sslmode=disable, or sqlite:///path/file.db */
@@ -5164,6 +5288,46 @@ export interface components {
             tasksFailed: number;
             version: string;
         };
+        "Worker-byeRequest": {
+            taskIds?: number[];
+        };
+        "Worker-completeRequest": {
+            /** Format: int64 */
+            bytesIn: number;
+            /** Format: int64 */
+            bytesOut: number;
+            /** Format: int64 */
+            pages: number;
+        };
+        "Worker-failRequest": {
+            /** Format: int64 */
+            pages?: number;
+            reason: string;
+        };
+        "Worker-heartbeatRequest": {
+            /** Format: int64 */
+            bytesIn: number;
+            /** Format: int64 */
+            bytesOut: number;
+            /** Format: int64 */
+            pagesDone: number;
+            /** Format: int64 */
+            pagesTotal: number;
+        };
+        "Worker-heartbeatResponse": {
+            cancel: boolean;
+        };
+        "Worker-leaseRequest": {
+            kinds: string[];
+        };
+        WorkerHello: {
+            info?: {
+                [key: string]: unknown;
+            };
+            platform?: string;
+            roles?: string[];
+            version?: string;
+        };
         WorkerResource: {
             /** Format: double */
             busySeconds: number;
@@ -5196,6 +5360,63 @@ export interface components {
             /** Format: int64 */
             tasksFailed: number;
             version: string;
+        };
+        WorkerTask: {
+            /** Format: int64 */
+            attempt: number;
+            /** Format: int64 */
+            bytesIn: number;
+            /** Format: int64 */
+            bytesOut: number;
+            cancel: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            error: string;
+            /** Format: date-time */
+            finishedAt?: string;
+            /** Format: date-time */
+            heartbeatAt?: string;
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            jobId: number;
+            kind: string;
+            /** Format: date-time */
+            leaseUntil?: string;
+            /** Format: date-time */
+            notBefore: string;
+            /** Format: int64 */
+            pagesDone: number;
+            /** Format: int64 */
+            pagesTotal: number;
+            /** Format: int64 */
+            seq: number;
+            spec: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            startedAt?: string;
+            state: string;
+            /** Format: int64 */
+            workerId?: number;
+        };
+        WorkerTaskOutput: {
+            task?: components["schemas"]["WorkerTask"];
+        };
+        WorkerWelcome: {
+            /** Format: int64 */
+            concurrent: number;
+            /** Format: int64 */
+            leaseSeconds: number;
+            name: string;
+            /** Format: int64 */
+            pollSeconds: number;
+            /** Format: int64 */
+            prefetch: number;
+            roles: string[];
+            serverTime: string;
+            /** Format: int64 */
+            workerId: number;
         };
         "Workers-createRequest": {
             name: string;
@@ -11624,6 +11845,238 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["WantedPage"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "worker-bye": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Worker-byeRequest"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "worker-hello": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkerHello"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerWelcome"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "worker-lease": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Worker-leaseRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerTaskOutput"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "worker-complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Worker-completeRequest"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "worker-fail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Worker-failRequest"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "worker-heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Worker-heartbeatRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Worker-heartbeatResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "worker-page": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {

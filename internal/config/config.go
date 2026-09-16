@@ -66,6 +66,8 @@ const (
 	ModeIntegrated = "integrated"
 	ModeServer     = "server"
 	ModeUpscaler   = "upscaler"
+	// ModeWorker pulls tasks from a server: it listens on nothing.
+	ModeWorker = "worker"
 )
 
 // ModeFromEnv returns the process mode; a binary named mangarr-upscaler is a node.
@@ -74,10 +76,10 @@ func ModeFromEnv() (string, error) {
 		return ModeUpscaler, nil
 	}
 	switch m := strings.ToLower(env("MANGARR_MODE", ModeIntegrated)); m {
-	case ModeIntegrated, ModeServer, ModeUpscaler:
+	case ModeIntegrated, ModeServer, ModeUpscaler, ModeWorker:
 		return m, nil
 	default:
-		return "", fmt.Errorf("MANGARR_MODE must be integrated, server or upscaler (got %q)", m)
+		return "", fmt.Errorf("MANGARR_MODE must be integrated, server, worker or upscaler (got %q)", m)
 	}
 }
 

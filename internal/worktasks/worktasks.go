@@ -211,6 +211,23 @@ func (l *Ledger) Cancel(ctx context.Context, jobID int64) error {
 	return err
 }
 
+// HandBack returns tasks a worker is giving up on (it is shutting down), so
+// another worker can have them at once instead of after a lease.
+func (l *Ledger) HandBack(ctx context.Context, workerID int64, taskIDs []int64) (int, error) {
+	q := l.db.NewUpdate().Model((*model.WorkerTask)(nil)).
+		Set("state = ?", model.TaskPending).Set("lease_until = NULL").Set("worker_id = NULL").
+		Where("worker_id = ? AND state = ?", workerID, model.TaskLeased)
+	if len(taskIDs) > 0 {
+		q = q.Where("id IN (?)", bun.In(taskIDs))
+	}
+	res, err := q.Exec(ctx)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return int(n), nil
+}
+
 // Reap takes back tasks whose worker went quiet, and gives up on the ones
 // that have been tried too often.
 func (l *Ledger) Reap(ctx context.Context) (requeued, abandoned int, err error) {
