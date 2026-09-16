@@ -480,6 +480,10 @@ const (
 	JobKindReprocess = "reprocess" // re-run processing (e.g. upscale) on an existing file
 )
 
+// PriorityReading is the queue priority of a chapter someone opened: it goes
+// before everything queued in the background.
+const PriorityReading = 100
+
 type DownloadJob struct {
 	bun.BaseModel `bun:"table:download_jobs"`
 	ID            int64  `bun:"id,pk,autoincrement" json:"id"`

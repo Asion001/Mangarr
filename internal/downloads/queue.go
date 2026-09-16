@@ -54,6 +54,9 @@ func (q *Queue) EnqueuePriority(ctx context.Context, seriesID, chapterID int64, 
 	var existing model.DownloadJob
 	err := q.db.NewSelect().Model(&existing).Where("chapter_id = ?", chapterID).Where("status IN (?)", bun.In(activeStatuses)).Limit(1).Scan(ctx)
 	if err == nil {
+		if err := q.Raise(ctx, chapterID, priority); err != nil {
+			return nil, false, err
+		}
 		return &existing, false, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
@@ -286,4 +289,23 @@ func BlocklistRelease(ctx context.Context, db bun.IDB, releaseID int64, reason s
 func isUniqueViolation(err error) bool {
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "unique") || strings.Contains(msg, "duplicate key")
+}
+
+// Raise lifts a chapter's queued job to priority when that is higher, so a
+// chapter someone just opened passes work queued in the background. It does
+// nothing once the job started.
+func (q *Queue) Raise(ctx context.Context, chapterID int64, priority int) error {
+	if priority <= 0 {
+		return nil
+	}
+	res, err := q.db.NewUpdate().Model((*model.DownloadJob)(nil)).
+		Set("priority = ?", priority).Set("updated_at = ?", time.Now().UTC()).
+		Where("chapter_id = ? AND status = ? AND priority < ?", chapterID, model.JobQueued, priority).Exec(ctx)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		q.signal()
+	}
+	return nil
 }

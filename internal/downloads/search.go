@@ -115,6 +115,12 @@ func (st *seriesState) input(ch model.Chapter, explicit bool) decision.Input {
 // chapterIDs is empty). explicit=true means a user-initiated search, which
 // ignores monitoring and cleaned state.
 func (s *Searcher) Evaluate(ctx context.Context, seriesID int64, chapterIDs []int64, explicit bool) (int, error) {
+	return s.EvaluateAt(ctx, seriesID, chapterIDs, explicit, 0)
+}
+
+// EvaluateAt is Evaluate with a queue priority: what someone is reading now
+// goes before the backlog (PriorityReading), background work after it.
+func (s *Searcher) EvaluateAt(ctx context.Context, seriesID int64, chapterIDs []int64, explicit bool, priority int) (int, error) {
 	st, err := s.load(ctx, seriesID, chapterIDs)
 	if err != nil {
 		return 0, err
@@ -124,12 +130,19 @@ func (s *Searcher) Evaluate(ctx context.Context, seriesID int64, chapterIDs []in
 		if !explicit && ch.FileID == nil && ch.State == model.ChapterCleaned {
 			continue
 		}
+		if st.queued[ch.ID] {
+			// already waiting: all this can do is move it up the queue
+			if err := s.queue.Raise(ctx, ch.ID, priority); err != nil {
+				return grabbed, err
+			}
+			continue
+		}
 		d := decision.Decide(st.input(ch, explicit), st.releases[ch.ID])
 		if d.Approved == nil {
 			continue
 		}
 		rid := d.Approved.Release.ID
-		job, created, err := s.queue.Enqueue(ctx, seriesID, ch.ID, &rid, model.JobKindDownload, d.IsUpgrade)
+		job, created, err := s.queue.EnqueuePriority(ctx, seriesID, ch.ID, &rid, model.JobKindDownload, d.IsUpgrade, priority)
 		if err != nil {
 			return grabbed, err
 		}

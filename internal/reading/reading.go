@@ -44,6 +44,9 @@ type Service struct {
 	Log        *slog.Logger
 	// Downloads queues chapters opened before they're downloaded.
 	Downloads Grabber
+	// Staged finds a page the downloader has already fetched for a chapter
+	// being downloaded now ("" when there is none).
+	Staged func(ctx context.Context, chapterID int64, n int) string
 
 	streams streams
 	bounds  boundsCache

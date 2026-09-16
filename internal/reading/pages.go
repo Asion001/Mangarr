@@ -38,6 +38,8 @@ var ErrNoSource = errors.New("chapter isn't downloaded and no enabled source has
 // Grabber queues downloads (the download searcher).
 type Grabber interface {
 	Evaluate(ctx context.Context, seriesID int64, chapterIDs []int64, explicit bool) (int, error)
+	// EvaluateAt is Evaluate with a queue priority (higher runs first).
+	EvaluateAt(ctx context.Context, seriesID int64, chapterIDs []int64, explicit bool, priority int) (int, error)
 }
 
 // PageInfo is one page of a book.
@@ -208,6 +210,19 @@ func (s *Service) PageReader(ctx context.Context, b *BookInfo, n int) (*PageCont
 			return out, nil
 		}
 	}
+	// the downloader may already have this page on disk: don't ask the source
+	// for it a second time
+	if s.Staged != nil {
+		if path := s.Staged(ctx, b.Chapter.ID, n); path != "" {
+			if f, err := os.Open(path); err == nil {
+				if st, err := f.Stat(); err == nil {
+					return &PageContent{Body: f, Size: st.Size(), ContentType: mediaType(path),
+						ETag: fmt.Sprintf("%q", fmt.Sprintf("d%d-%d-%d", b.Chapter.ID, st.ModTime().UnixNano(), n)), ModTime: st.ModTime()}, nil
+				}
+				f.Close()
+			}
+		}
+	}
 	data, ct, err := s.Page(ctx, b, n)
 	if err != nil {
 		return nil, err
@@ -361,7 +376,7 @@ func (s *Service) downloadOnOpen(ctx context.Context, b *BookInfo) {
 	if err != nil || !cfg.DownloadOnOpen {
 		return
 	}
-	n, err := s.Downloads.Evaluate(ctx, b.Chapter.SeriesID, []int64{b.Chapter.ID}, true)
+	n, err := s.Downloads.EvaluateAt(ctx, b.Chapter.SeriesID, []int64{b.Chapter.ID}, true, model.PriorityReading)
 	if err != nil {
 		s.Log.Warn("download on open failed", "chapter", b.Chapter.ID, "error", err)
 		return

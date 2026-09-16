@@ -384,7 +384,7 @@ func (m *Manager) run(ctx context.Context, job model.DownloadJob) {
 		m.fail(ctx, &job, nil, err)
 		return
 	}
-	workDir := filepath.Join(m.dataDir, "staging", "job-"+strconv.FormatInt(job.ID, 10))
+	workDir := m.workDir(job.ID)
 	defer os.RemoveAll(workDir)
 	if err := os.MkdirAll(workDir, 0o775); err != nil {
 		m.fail(ctx, &job, jc, infraError{err})
@@ -726,7 +726,13 @@ func (m *Manager) fetchPage(ctx context.Context, mod source.Module, p source.Pag
 		}
 		name := cbz.PageName(i, imagecheck.Ext(info.Format))
 		path := filepath.Join(workDir, name)
-		if err := os.WriteFile(path, data, 0o664); err != nil {
+		// written through a temporary name: the reader serves pages out of
+		// this folder while the chapter downloads and must never see half a page
+		tmp := path + ".part"
+		if err := os.WriteFile(tmp, data, 0o664); err != nil {
+			return PageFile{}, infraError{err}
+		}
+		if err := os.Rename(tmp, path); err != nil {
 			return PageFile{}, infraError{err}
 		}
 		return PageFile{Name: name, Path: path, Format: info.Format, Width: info.Width, Height: info.Height}, nil
@@ -1090,6 +1096,36 @@ func firstNonEmpty(xs ...string) string {
 	for _, x := range xs {
 		if x != "" {
 			return x
+		}
+	}
+	return ""
+}
+
+// workDir is where a job's pages are written while it runs.
+func (m *Manager) workDir(jobID int64) string {
+	return filepath.Join(m.dataDir, "staging", "job-"+strconv.FormatInt(jobID, 10))
+}
+
+// StagedPage is the path of page n of a chapter being downloaded right now,
+// so a reader waiting for it gets the page the downloader already fetched
+// instead of asking the source for it a second time. It returns "" when
+// there's no such page yet.
+func (m *Manager) StagedPage(ctx context.Context, chapterID int64, n int) string {
+	if n < 1 {
+		return ""
+	}
+	var job model.DownloadJob
+	err := m.db.NewSelect().Model(&job).Column("id", "status").
+		Where("chapter_id = ? AND status = ?", chapterID, model.JobDownloading).Limit(1).Scan(ctx)
+	if err != nil {
+		return ""
+	}
+	dir := m.workDir(job.ID)
+	for _, format := range []string{"jpeg", "png", "webp", "avif", "jxl", "gif"} {
+		ext := imagecheck.Ext(format)
+		path := filepath.Join(dir, cbz.PageName(n-1, ext))
+		if st, err := os.Stat(path); err == nil && st.Size() > 0 {
+			return path
 		}
 	}
 	return ""
