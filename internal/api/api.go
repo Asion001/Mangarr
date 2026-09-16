@@ -132,10 +132,12 @@ func register(fn func(*Server)) { extraRoutes = append(extraRoutes, fn) }
 
 // publicPaths don't need a login (the UI's own files don't either).
 var publicPaths = map[string]bool{
-	"/api/v1/auth/status": true,
-	"/api/v1/auth/login":  true,
-	"/api/v1/auth/setup":  true,
-	"/ping":               true,
+	"/api/v1/auth/status":        true,
+	"/api/v1/auth/login":         true,
+	"/api/v1/auth/setup":         true,
+	"/api/v1/auth/oidc/login":    true,
+	"/api/v1/auth/oidc/callback": true,
+	"/ping":                      true,
 }
 
 // publicPrefixes are public path prefixes (invites).
@@ -160,7 +162,11 @@ func clientOf(r *http.Request) access.Client {
 		ip = host
 	}
 	secure := r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
-	return access.Client{IP: ip, UserAgent: r.UserAgent(), Secure: secure}
+	host := r.Host
+	if h := r.Header.Get("X-Forwarded-Host"); h != "" {
+		host = h
+	}
+	return access.Client{IP: ip, UserAgent: r.UserAgent(), Secure: secure, Host: host}
 }
 
 // authMiddleware resolves the principal; API calls without one get 401

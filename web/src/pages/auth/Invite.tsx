@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { LogIn } from "lucide-react";
 import { api, basePath, unwrap } from "../../api/client";
+import { useAuthStatus } from "../../api/queries";
 import { Button, ErrorBox, Field, Input, Loading } from "../../components/ui";
 
 /** InvitePage lets someone with an invite link create their account. */
@@ -10,6 +12,9 @@ export function InvitePage({ token }: { token: string }) {
     queryFn: () => unwrap(api.GET("/api/v1/invites/redeem/{token}", { params: { path: { token } } })),
     retry: false,
   });
+  const { data: status } = useAuthStatus();
+  const sso = status?.sso;
+  const passwords = status?.passwordLogin ?? true;
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
@@ -57,6 +62,21 @@ export function InvitePage({ token }: { token: string }) {
           <form onSubmit={submit} className="flex flex-col gap-4">
             {info.data.note && <p className="text-sm">{info.data.note}</p>}
             <p className="text-sm text-muted">Choose how you sign in. Your reading progress is your own.</p>
+            {sso && (
+              <>
+                <a href={`${basePath}/api/v1/auth/oidc/login?invite=${encodeURIComponent(token)}`}>
+                  <Button variant="primary" type="button" className="w-full" icon={<LogIn className="size-4" />}>
+                    {sso.label}
+                  </Button>
+                </a>
+                {passwords && (
+                  <div className="flex items-center gap-3 text-xs text-muted">
+                    <span className="h-px flex-1 bg-border" /> or make an account here <span className="h-px flex-1 bg-border" />
+                  </div>
+                )}
+              </>
+            )}
+            {passwords && <>
             <Field label="Username">
               <Input autoFocus autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} required />
             </Field>
@@ -70,9 +90,10 @@ export function InvitePage({ token }: { token: string }) {
               <Input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
             </Field>
             {error !== null && <ErrorBox error={error} />}
-            <Button variant="primary" type="submit" loading={loading}>
+            <Button variant={sso ? "secondary" : "primary"} type="submit" loading={loading}>
               Create account
             </Button>
+            </>}
           </form>
         )}
       </div>

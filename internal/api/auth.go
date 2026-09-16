@@ -33,6 +33,16 @@ type AuthStatus struct {
 	User          string   `json:"user,omitempty"`
 	Account       *Account `json:"account,omitempty"`
 	AuthDisabled  bool     `json:"authDisabled"`
+	// SSO is set when signing in with a provider is on.
+	SSO *SSOLogin `json:"sso,omitempty"`
+	// PasswordLogin: passwords still work for everyone (off: administrators only).
+	PasswordLogin bool `json:"passwordLogin"`
+}
+
+// SSOLogin is the login page's single sign-on button.
+type SSOLogin struct {
+	Label string `json:"label"`
+	URL   string `json:"url"`
 }
 
 func accountOf(p *access.Principal) *Account {
@@ -69,7 +79,15 @@ func (s *Server) registerAuth() {
 				return nil, toHTTPError(err)
 			}
 			p := access.From(ctx)
-			st := AuthStatus{NeedsSetup: needs && !s.app.Auth.Disabled(), Authenticated: p != nil, AuthDisabled: s.app.Auth.Disabled(), Account: accountOf(p)}
+			st := AuthStatus{NeedsSetup: needs && !s.app.Auth.Disabled(), Authenticated: p != nil, AuthDisabled: s.app.Auth.Disabled(), Account: accountOf(p),
+				PasswordLogin: true}
+			if cfg, err := s.app.Settings.SSO(ctx); err == nil && cfg.Enabled && cfg.Issuer != "" && cfg.ClientID != "" {
+				st.SSO = &SSOLogin{Label: cfg.ButtonLabel, URL: s.app.Cfg.URLBase + "/api/v1/auth/oidc/login"}
+				if st.SSO.Label == "" {
+					st.SSO.Label = "Sign in with SSO"
+				}
+				st.PasswordLogin = cfg.PasswordLogin
+			}
 			if p != nil {
 				st.User = p.Username
 			}
@@ -109,6 +127,10 @@ func (s *Server) registerAuth() {
 					s.app.Log.Info("failed login", "ip", c.IP, "username", in.Body.Username)
 				}
 				return nil, huma.Error401Unauthorized(err.Error())
+			}
+			if err := s.passwordAllowed(ctx, u); err != nil {
+				_ = s.app.Auth.EndSession(ctx, cookie.Value)
+				return nil, err
 			}
 			return s.sessionOutput(ctx, u.ID, cookie)
 		})
@@ -206,4 +228,22 @@ func (s *Server) sessionOutput(ctx context.Context, userID int64, c *http.Cookie
 		return nil, toHTTPError(err)
 	}
 	return &loginOutput{SetCookie: *c, Body: AuthStatus{Authenticated: true, User: p.Username, Account: accountOf(p)}}, nil
+}
+
+// passwordAllowed refuses password logins when single sign-on replaced
+// them. Administrators keep theirs, to get back in when the provider is
+// down.
+func (s *Server) passwordAllowed(ctx context.Context, u *model.User) error {
+	cfg, err := s.app.Settings.SSO(ctx)
+	if err != nil || !cfg.Enabled || cfg.PasswordLogin {
+		return nil
+	}
+	p, err := s.app.Auth.UserPrincipal(ctx, u.ID)
+	if err != nil {
+		return toHTTPError(err)
+	}
+	if p == nil || !p.IsAdmin() {
+		return huma.Error403Forbidden("sign in with single sign-on")
+	}
+	return nil
 }

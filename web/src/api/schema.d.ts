@@ -36,6 +36,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/oidc/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Where the single sign-on provider sends people back */
+        get: operations["auth-oidc-callback"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/oidc/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Start signing in with the single sign-on provider (redirects there) */
+        get: operations["auth-oidc-login"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/password": {
         parameters: {
             query?: never;
@@ -1965,6 +1999,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/settings/sso": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["settings-get-sso"];
+        /** Save single sign-on settings (send the masked secret to keep the stored one) */
+        put: operations["settings-put-sso"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sources": {
         parameters: {
             query?: never;
@@ -2603,6 +2654,8 @@ export interface components {
             authDisabled: boolean;
             authenticated: boolean;
             needsSetup: boolean;
+            passwordLogin: boolean;
+            sso?: components["schemas"]["SSOLogin"];
             user?: string;
         };
         BackupBackup: {
@@ -4342,6 +4395,46 @@ export interface components {
             moveFiles: boolean;
             path: string;
         };
+        SSO: {
+            buttonLabel: string;
+            clientId: string;
+            clientSecret: string;
+            createUsers: boolean;
+            enabled: boolean;
+            groups: components["schemas"]["SSOGroup"][];
+            groupsClaim: string;
+            issuer: string;
+            linkByUsername: boolean;
+            onlyMapped: boolean;
+            passwordLogin: boolean;
+            scopes: string[];
+            usernameClaim: string;
+        };
+        SSOGroup: {
+            claim: string;
+            /** Format: int64 */
+            groupId: number;
+        };
+        SSOLogin: {
+            label: string;
+            url: string;
+        };
+        SSOSettings: {
+            buttonLabel: string;
+            clientId: string;
+            clientSecret: string;
+            createUsers: boolean;
+            enabled: boolean;
+            groups: components["schemas"]["SSOGroup"][];
+            groupsClaim: string;
+            issuer: string;
+            linkByUsername: boolean;
+            onlyMapped: boolean;
+            passwordLogin: boolean;
+            readonly redirectUrl: string;
+            scopes: string[];
+            usernameClaim: string;
+        };
         Schedule: {
             timezone: string;
             windows: components["schemas"]["ScheduleWindow"][];
@@ -4932,6 +5025,76 @@ export interface operations {
             /** @description No Content */
             204: {
                 headers: {
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "auth-oidc-callback": {
+        parameters: {
+            query?: {
+                code?: string;
+                state?: string;
+                error?: string;
+                error_description?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                mangarr_oidc?: string;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    Location?: string;
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "auth-oidc-login": {
+        parameters: {
+            query?: {
+                /** @description Invite token to redeem with the provider's account */
+                invite?: string;
+                /** @description Where to go afterwards (a path on this server) */
+                next?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    Location?: string;
                     "Set-Cookie"?: string;
                     [name: string]: unknown;
                 };
@@ -9817,6 +9980,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Sources"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "settings-get-sso": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSOSettings"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "settings-put-sso": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SSO"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSOSettings"];
                 };
             };
             /** @description Error */

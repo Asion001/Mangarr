@@ -218,6 +218,12 @@
           "needsSetup": {
             "type": "boolean"
           },
+          "passwordLogin": {
+            "type": "boolean"
+          },
+          "sso": {
+            "$ref": "#/components/schemas/SSOLogin"
+          },
           "user": {
             "type": "string"
           }
@@ -225,7 +231,8 @@
         "required": [
           "needsSetup",
           "authenticated",
-          "authDisabled"
+          "authDisabled",
+          "passwordLogin"
         ],
         "type": "object"
       },
@@ -5915,6 +5922,176 @@
         ],
         "type": "object"
       },
+      "SSO": {
+        "additionalProperties": false,
+        "properties": {
+          "buttonLabel": {
+            "type": "string"
+          },
+          "clientId": {
+            "type": "string"
+          },
+          "clientSecret": {
+            "type": "string"
+          },
+          "createUsers": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/SSOGroup"
+            },
+            "type": "array"
+          },
+          "groupsClaim": {
+            "type": "string"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "linkByUsername": {
+            "type": "boolean"
+          },
+          "onlyMapped": {
+            "type": "boolean"
+          },
+          "passwordLogin": {
+            "type": "boolean"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "usernameClaim": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "enabled",
+          "issuer",
+          "clientId",
+          "clientSecret",
+          "scopes",
+          "buttonLabel",
+          "usernameClaim",
+          "groupsClaim",
+          "groups",
+          "onlyMapped",
+          "createUsers",
+          "linkByUsername",
+          "passwordLogin"
+        ],
+        "type": "object"
+      },
+      "SSOGroup": {
+        "additionalProperties": false,
+        "properties": {
+          "claim": {
+            "type": "string"
+          },
+          "groupId": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "claim",
+          "groupId"
+        ],
+        "type": "object"
+      },
+      "SSOLogin": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "url"
+        ],
+        "type": "object"
+      },
+      "SSOSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "buttonLabel": {
+            "type": "string"
+          },
+          "clientId": {
+            "type": "string"
+          },
+          "clientSecret": {
+            "type": "string"
+          },
+          "createUsers": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/SSOGroup"
+            },
+            "type": "array"
+          },
+          "groupsClaim": {
+            "type": "string"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "linkByUsername": {
+            "type": "boolean"
+          },
+          "onlyMapped": {
+            "type": "boolean"
+          },
+          "passwordLogin": {
+            "type": "boolean"
+          },
+          "redirectUrl": {
+            "readOnly": true,
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "usernameClaim": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "redirectUrl",
+          "enabled",
+          "issuer",
+          "clientId",
+          "clientSecret",
+          "scopes",
+          "buttonLabel",
+          "usernameClaim",
+          "groupsClaim",
+          "groups",
+          "onlyMapped",
+          "createUsers",
+          "linkByUsername",
+          "passwordLogin"
+        ],
+        "type": "object"
+      },
       "Schedule": {
         "additionalProperties": false,
         "properties": {
@@ -7789,6 +7966,143 @@
             "description": "Error"
           }
         },
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/v1/auth/oidc/callback": {
+      "get": {
+        "operationId": "auth-oidc-callback",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "code",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "state",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "error_description",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "mangarr_oidc",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [],
+        "summary": "Where the single sign-on provider sends people back",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/v1/auth/oidc/login": {
+      "get": {
+        "operationId": "auth-oidc-login",
+        "parameters": [
+          {
+            "description": "Invite token to redeem with the provider's account",
+            "explode": false,
+            "in": "query",
+            "name": "invite",
+            "schema": {
+              "description": "Invite token to redeem with the provider's account",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Where to go afterwards (a path on this server)",
+            "explode": false,
+            "in": "query",
+            "name": "next",
+            "schema": {
+              "description": "Where to go afterwards (a path on this server)",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [],
+        "summary": "Start signing in with the single sign-on provider (redirects there)",
         "tags": [
           "Auth"
         ]
@@ -14257,6 +14571,75 @@
             "description": "Error"
           }
         },
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
+    "/api/v1/settings/sso": {
+      "get": {
+        "operationId": "settings-get-sso",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SSOSettings"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Settings"
+        ]
+      },
+      "put": {
+        "operationId": "settings-put-sso",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SSO"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SSOSettings"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Save single sign-on settings (send the masked secret to keep the stored one)",
         "tags": [
           "Settings"
         ]

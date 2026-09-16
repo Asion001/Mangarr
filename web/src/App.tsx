@@ -12,6 +12,7 @@ import { ReaderPage } from "./pages/reader/Reader";
 import { RequestsPage } from "./pages/requests/Requests";
 import { AccountPage } from "./pages/account/Account";
 import { UsersPage } from "./pages/settings/Users";
+import { SingleSignOnPage } from "./pages/settings/SingleSignOn";
 import { Need } from "./components/Need";
 import { SeriesIndex } from "./pages/series/SeriesIndex";
 import { SeriesDetail } from "./pages/series/SeriesDetail";
@@ -101,6 +102,7 @@ export function App() {
         <Route path="settings/library" element={<Need perm="admin"><ModulesPage kind="library" /></Need>} />
         <Route path="settings/notifications" element={<Need perm="admin"><ModulesPage kind="notify" /></Need>} />
         <Route path="settings/upscalers" element={<Need perm="admin"><ModulesPage kind="upscale" /></Need>} />
+        <Route path="settings/sso" element={<Need perm="admin"><SingleSignOnPage /></Need>} />
         <Route path="settings/users" element={<Need perm="admin"><UsersPage /></Need>} />
         <Route path="settings/readers" element={<Need perm="admin"><ReadersPage /></Need>} />
         <Route path="settings/reading" element={<Need perm="admin"><ReadingAppsPage /></Need>} />

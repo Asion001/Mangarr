@@ -71,6 +71,7 @@ export function Layout() {
         { to: "/settings/notifications", label: "Notifications" },
         { to: "/settings/upscalers", label: "Upscalers" },
         { to: "/settings/users", label: "Users & groups" },
+        { to: "/settings/sso", label: "Single sign-on" },
         { to: "/settings/readers", label: "Readers" },
         { to: "/settings/reading", label: "Reading apps" },
         { to: "/settings/downloads", label: "Downloads" },

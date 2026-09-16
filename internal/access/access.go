@@ -172,6 +172,8 @@ type Client struct {
 	UserAgent string
 	// Secure: the request came over HTTPS (for cookie flags).
 	Secure bool
+	// Host is the address the browser asked for (for redirect URLs).
+	Host string
 }
 
 type clientKey struct{}

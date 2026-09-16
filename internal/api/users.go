@@ -392,6 +392,9 @@ func (s *Server) registerUsers() {
 			if _, locked := s.app.Auth.Limiter.Locked("ip:" + c.IP); locked {
 				return nil, huma.Error429TooManyRequests("too many attempts; try again later")
 			}
+			if cfg, err := s.app.Settings.SSO(ctx); err == nil && cfg.Enabled && !cfg.PasswordLogin {
+				return nil, huma.Error400BadRequest("redeem the invite with single sign-on")
+			}
 			u, err := s.app.Auth.Redeem(ctx, in.Token, auth.NewUser{Username: in.Body.Username, Password: in.Body.Password, DisplayName: in.Body.DisplayName})
 			switch {
 			case errors.Is(err, auth.ErrInviteInvalid):

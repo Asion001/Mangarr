@@ -27,6 +27,8 @@ var operationPermissions = map[string][]string{
 	"auth-setup":                {permPublic},
 	"invite-get":                {permPublic},
 	"invite-redeem":             {permPublic},
+	"auth-oidc-login":           {permPublic},
+	"auth-oidc-callback":        {permPublic},
 	"auth-logout":               {permSignedIn},
 	"auth-password":             {permSignedIn},
 	"me-sessions":               {permSignedIn},
