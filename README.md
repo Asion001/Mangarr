@@ -52,6 +52,26 @@ which mangarr tells to rescan after every change.
   smaller) or lossless JPEG XL (~20%, reversible). Chapters are readable right
   away and processed in the background, at the same path; mangarr checks that
   Komga can read the new format before continuing.
+- **Share it with friends** — accounts with their own progress, devices and
+  notifications on one shared library. Groups carry permissions (manage the
+  library, handle requests, request series, reading apps, downloads) and what
+  part of the library their members see (tags, root folders); invite links,
+  sessions you can end, login protection, and optional **single sign-on**
+  (OpenID Connect: Authentik, Authelia, Keycloak, Google, ...) with group
+  mapping.
+- **Requests** (Jellyseerr-style) — friends search the metadata providers and
+  ask for a series; whoever handles requests adds it in the usual flow,
+  links it to a series that's already there, or declines with a reason. A
+  group's requests can be added automatically when Quick search finds a
+  confident source. Requesters follow the series and hear when it arrives.
+- **Follow series and your own notifications** — follow what you care about
+  and get its new chapters on your own ntfy, Discord, Telegram, Gotify,
+  Apprise or webhook, next to news about your requests.
+- **Web reader** — read in the browser with Mihon's comforts: right to left,
+  left to right, vertical and webtoon modes, two-page spreads, split double
+  pages, crop borders, tap zones, keyboard and swipes, chapter transitions
+  with auto-advance, and settings kept per series. Progress is shared with
+  everything else.
 - **Read from mangarr in Komga apps** (off by default) — Mihon's Komga
   extension, KMReader and Paperback connect to mangarr's Komga-compatible
   API and see the whole library. Chapters that aren't downloaded are
@@ -69,7 +89,9 @@ which mangarr tells to rescan after every change.
   review how each manga maps to your catalogs (exact for Keiyoushi sources,
   missing extensions installed for you), and import it with read chapters,
   categories and trackers; monitoring starts after the last chapter you read.
-- SQLite by default, **PostgreSQL** optional. Single ~30 MB static binary
+- SQLite by default, **PostgreSQL** with one button (System → Database
+  copies everything and restarts on it; backups hold the whole database
+  either way and restore into either). Single ~30 MB static binary
   (distroless image) with the web UI embedded. OpenAPI docs at `/api/docs`.
 
 ## Quick start (Docker)

@@ -50,6 +50,25 @@ services:
     restart: unless-stopped
     depends_on: [suwayomi]
 
+  # Optional: PostgreSQL. You don't need it to start — mangarr runs on SQLite
+  # and System → Database moves the data over (and back) while it runs. Add
+  # the service, then enter these details on that page; set MANGARR_DB above
+  # only if you'd rather pin the address yourself.
+  # db:
+  #   image: postgres:17-alpine
+  #   container_name: mangarr-db
+  #   environment:
+  #     POSTGRES_USER: mangarr
+  #     POSTGRES_PASSWORD: secret
+  #     POSTGRES_DB: mangarr
+  #     TZ: Europe/Madrid
+  #   volumes:
+  #     - ./postgres:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U mangarr"]
+  #     interval: 10s
+  #   restart: unless-stopped
+
   # Headless engine for Keiyoushi extensions. No published port and no access
   # to the library; mangarr manages its settings (updater off, FlareSolverr).
   suwayomi:
