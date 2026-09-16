@@ -166,6 +166,21 @@ var (
 	ErrUnsupported = errors.New("operation not supported by this source module")
 )
 
+// PageRequest is everything needed to fetch a page image, so another
+// process (a download worker) can do it instead of the server.
+type PageRequest struct {
+	URL     string            `json:"url"`
+	Method  string            `json:"method,omitempty"`
+	Headers map[string]string `json:"headers,omitempty"`
+}
+
+// Fetchable is implemented by modules whose pages another machine can fetch:
+// the request must carry everything the site needs (referer, user agent,
+// credentials). Modules without it are fetched through the server.
+type Fetchable interface {
+	PageRequest(ctx context.Context, p Page) (PageRequest, error)
+}
+
 // Thumbnails is implemented by modules that can proxy cover thumbnails.
 type Thumbnails interface {
 	Thumbnail(ctx context.Context, ref MangaRef) (body io.ReadCloser, contentType string, err error)

@@ -497,6 +497,20 @@ func (m *Module) FetchPage(ctx context.Context, p source.Page) (io.ReadCloser, s
 	return resp.Body, resp.Header.Get("Content-Type"), nil
 }
 
+// PageRequest lets another machine fetch a page. Suwayomi serves the images
+// itself, so the request points at Suwayomi (with its credentials) rather
+// than at the site: a worker needs to reach Suwayomi for these.
+func (m *Module) PageRequest(ctx context.Context, p source.Page) (source.PageRequest, error) {
+	if p.URL == "" {
+		return source.PageRequest{}, source.ErrNotFound
+	}
+	req := source.PageRequest{URL: m.c.url(p.URL), Method: http.MethodGet, Headers: map[string]string{}}
+	if h := m.c.authHeader(); h != "" {
+		req.Headers["Authorization"] = h
+	}
+	return req, nil
+}
+
 func (m *Module) Thumbnail(ctx context.Context, ref source.MangaRef) (io.ReadCloser, string, error) {
 	id, err := m.resolveManga(ctx, ref, false)
 	if err != nil {

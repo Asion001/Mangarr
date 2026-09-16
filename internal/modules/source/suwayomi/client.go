@@ -3,6 +3,7 @@ package suwayomi
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -113,6 +114,15 @@ func (c *client) url(path string) string {
 	u.Path = strings.TrimRight(u.Path, "/") + p
 	u.RawQuery = q
 	return u.String()
+}
+
+// authHeader is the Authorization header value for Suwayomi ("" when it
+// needs none), so a request can be handed to another process.
+func (c *client) authHeader() string {
+	if c.username == "" {
+		return ""
+	}
+	return "Basic " + base64.StdEncoding.EncodeToString([]byte(c.username+":"+c.password))
 }
 
 func (c *client) auth(r *http.Request) {

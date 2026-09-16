@@ -167,6 +167,13 @@ MANGARR_MODULE_KOMGA_URL=http://komga:25600
 MANGARR_MODULE_KOMGA_API_KEY=...
 ```
 
+### `source/native` — mangarr sources
+
+| Suffix | Type | Description |
+|---|---|---|
+| `_FLARE_SOLVERR_URL` | string | FlareSolverr URL. Only needed for sites behind a browser check |
+| `_REQUEST_TIMEOUT_SECONDS` | int | Request timeout (seconds) |
+
 ### `source/suwayomi` — Suwayomi (Keiyoushi extensions)
 
 | Suffix | Type | Description |

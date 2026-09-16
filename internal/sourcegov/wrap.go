@@ -20,6 +20,7 @@ type Governed struct {
 	g        *Governor
 	latest   source.Latest
 	thumbs   source.Thumbnails
+	fetch    source.Fetchable
 }
 
 // Decorator returns a modules.Decorator that wraps source modules.
@@ -32,6 +33,7 @@ func Decorator(g *Governor) modules.Decorator {
 		w := &Governed{inner: m, moduleID: def.ID, g: g}
 		w.latest, _ = inst.(source.Latest)
 		w.thumbs, _ = inst.(source.Thumbnails)
+		w.fetch, _ = inst.(source.Fetchable)
 		return w
 	}
 }
@@ -140,3 +142,12 @@ var (
 	_ source.Latest     = (*Governed)(nil)
 	_ source.Thumbnails = (*Governed)(nil)
 )
+
+// PageRequest passes through to the module, so a worker can be handed a page
+// to fetch itself. The request costs nothing at the site, so it isn't paced.
+func (w *Governed) PageRequest(ctx context.Context, p source.Page) (source.PageRequest, error) {
+	if w.fetch == nil {
+		return source.PageRequest{}, source.ErrUnsupported
+	}
+	return w.fetch.PageRequest(ctx, p)
+}
