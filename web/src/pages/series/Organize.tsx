@@ -12,6 +12,7 @@ import {
   Switch,
 } from "../../components/ui";
 import { useToast } from "../../lib/toast";
+import { BulkSourcesModal } from "./BulkSources";
 
 /** RenameModal previews and applies renames to the current naming format. */
 export function RenameModal({
@@ -136,6 +137,7 @@ export function MassEditBar({
   const { data: tags } = useTags();
   const [moving, setMoving] = useState(false);
   const [renaming, setRenaming] = useState(false);
+  const [sourcing, setSourcing] = useState(false);
   const [rootId, setRootId] = useState(0);
   const [moveFiles, setMoveFiles] = useState(true);
   const edit = async (body: Editor, done?: string) => {
@@ -207,6 +209,9 @@ export function MassEditBar({
           <Button size="sm" onClick={() => setRenaming(true)}>
             Rename files…
           </Button>
+          <Button size="sm" onClick={() => setSourcing(true)}>
+            Sources…
+          </Button>
           <Button
             size="sm"
             variant="ghost"
@@ -217,6 +222,7 @@ export function MassEditBar({
           </Button>
         </div>
       </div>
+      {sourcing && <BulkSourcesModal ids={ids} onClose={() => setSourcing(false)} />}
       {moving && (
         <Modal
           open

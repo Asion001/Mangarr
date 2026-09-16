@@ -1,12 +1,13 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, TimerReset } from "lucide-react";
+import { ArrowDown, ArrowUp, Settings2, TimerReset } from "lucide-react";
 import { api, apiUrl, unwrap, type Catalog, type ModuleResource, type S } from "../../api/client";
 import { useCatalogs } from "../../api/queries";
 import { Badge, Button, Card, EmptyState, ErrorBox, IconButton, Input, Loading, Select, Switch, Table, Td, Th } from "../../components/ui";
 import { useToast } from "../../lib/toast";
 import { useListParam, useQueryParam } from "../../lib/urlState";
 import { useSettingsDoc } from "../settings/useSettingsDoc";
+import { SourceSettings } from "./SourceSettings";
 
 type Patch = { enabled?: boolean; priority?: number; throttle?: S["ThrottleConfig"]; clearCooldown?: boolean };
 const key = (c: Catalog) => `${c.moduleId}:${c.id}`;
@@ -19,6 +20,8 @@ export function Catalogs({ module }: { module: ModuleResource }) {
   const src = useSettingsDoc<S["Sources"]>("sources");
   const [q, setQ] = useQueryParam("catalog", "");
   const [lang, setLang] = useListParam("lang", "");
+  // the catalog whose own settings are open
+  const [settings, setSettings] = useState<Catalog | null>(null);
 
   const mine = useMemo(() => (data?.items ?? []).filter((c) => c.moduleId === module.id), [data, module.id]);
   const langs = useMemo(() => Array.from(new Set(mine.map((c) => c.lang))).sort(), [mine]);
@@ -164,10 +167,15 @@ export function Catalogs({ module }: { module: ModuleResource }) {
                     <option value="fast">fast</option>
                   </Select>
                 </Td>
-                <Td className="text-right">
+                <Td className="text-right whitespace-nowrap">
                   {c.cooldownUntil && (
                     <IconButton title="Resume now" onClick={() => update({ [key(c)]: { clearCooldown: true } })}>
                       <TimerReset className="size-4" />
+                    </IconButton>
+                  )}
+                  {module.capabilities.includes("preferences") && (
+                    <IconButton title="Catalog settings" onClick={() => setSettings(c)}>
+                      <Settings2 className="size-4" />
                     </IconButton>
                   )}
                 </Td>
@@ -176,6 +184,9 @@ export function Catalogs({ module }: { module: ModuleResource }) {
           </tbody>
         </Table>
       </div>
+      {settings && (
+        <SourceSettings moduleId={settings.moduleId} sourceId={settings.id} title={settings.displayName} onClose={() => setSettings(null)} />
+      )}
     </>
   );
 }
