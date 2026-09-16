@@ -43,6 +43,18 @@ export function useQueryParam(name: string, def = ""): [string, (v: string, opts
   return [value, set];
 }
 
+/**
+ * useListParam keeps a list's sorting, filtering or page in the URL and adds a
+ * history entry, so going back restores the list the way it was. Use it for
+ * what someone picks (a filter, a sort, a page); useQueryParam suits values
+ * that change as they type.
+ */
+export function useListParam(name: string, def = ""): [string, (v: string) => void] {
+  const [value, set] = useQueryParam(name, def);
+  const push = useCallback((v: string) => set(v, { replace: false }), [set]);
+  return [value, push];
+}
+
 /** sessionState stores small JSON values per browser tab. */
 export const sessionState = {
   get<T>(key: string, fallback: T): T {

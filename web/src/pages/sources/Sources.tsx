@@ -7,6 +7,7 @@ import { useModules, useSources } from "../../api/queries";
 import { Cover } from "../../components/Cover";
 import { Badge, Button, Card, EmptyState, ErrorBox, IconButton, Input, Loading, Modal, PageHeader, Select, Switch, Tabs } from "../../components/ui";
 import { useToast } from "../../lib/toast";
+import { useListParam, useQueryParam } from "../../lib/urlState";
 import { Catalogs } from "./Catalogs";
 
 type Tab = "extensions" | "catalogs" | "browse" | "stores";
@@ -72,10 +73,12 @@ function Extensions({ module }: { module: ModuleResource }) {
     queryKey: ["extensions", module.id, refresh],
     queryFn: () => unwrap(api.GET("/api/v1/modules/{id}/extensions", { params: { path: { id: module.id }, query: { refresh } } })),
   });
-  const [q, setQ] = useState("");
-  const [lang, setLang] = useState("");
-  const [show, setShow] = useState<"all" | "installed" | "updates">("all");
-  const [nsfw, setNsfw] = useState(false);
+  const [q, setQ] = useQueryParam("ext", "");
+  const [lang, setLang] = useListParam("lang", "");
+  const [showParam, setShow] = useListParam("show", "all");
+  const show = showParam as "all" | "installed" | "updates";
+  const [nsfwParam, setNsfw] = useListParam("nsfw", "");
+  const nsfw = nsfwParam === "1";
   const [busy, setBusy] = useState<string>("");
 
   const langs = useMemo(() => Array.from(new Set((data ?? []).map((e) => e.lang))).sort(), [data]);
@@ -113,12 +116,12 @@ function Extensions({ module }: { module: ModuleResource }) {
             <option key={l}>{l}</option>
           ))}
         </Select>
-        <Select className="w-40" value={show} onChange={(e) => setShow(e.target.value as typeof show)}>
+        <Select className="w-40" value={show} onChange={(e) => setShow(e.target.value)}>
           <option value="all">All</option>
           <option value="installed">Installed</option>
           <option value="updates">Updates</option>
         </Select>
-        <Switch checked={nsfw} onChange={setNsfw} label="Show NSFW extensions" />
+        <Switch checked={nsfw} onChange={(v) => setNsfw(v ? "1" : "")} label="Show NSFW extensions" />
         <Button className="ml-auto" icon={<RefreshCw className="size-4" />} loading={isFetching && refresh} onClick={() => (setRefresh(true), qc.invalidateQueries({ queryKey: ["extensions"] }))}>
           Refresh from stores
         </Button>
@@ -168,10 +171,12 @@ function Browse({ module }: { module: ModuleResource }) {
   const { data: sources } = useSources();
   const nav = useNavigate();
   const mine = (sources ?? []).filter((s) => s.moduleId === module.id);
-  const [sourceId, setSourceId] = useState("");
-  const [type, setType] = useState<"popular" | "latest" | "search">("popular");
-  const [q, setQ] = useState("");
-  const [page, setPage] = useState(1);
+  const [sourceId, setSourceId] = useListParam("catalog", "");
+  const [typeParam, setType] = useListParam("show", "popular");
+  const type = typeParam as "popular" | "latest" | "search";
+  const [q, setQ] = useListParam("q", "");
+  const [pageParam, setPage] = useListParam("page", "1");
+  const page = Math.max(1, Number(pageParam) || 1);
   const [prefs, setPrefs] = useState<SourceInfo | null>(null);
   const src = mine.find((s) => s.id === sourceId) ?? mine[0];
   const { data, isFetching, error } = useQuery({
@@ -183,14 +188,14 @@ function Browse({ module }: { module: ModuleResource }) {
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Select className="max-w-xs" value={src?.id} onChange={(e) => (setSourceId(e.target.value), setPage(1))}>
+        <Select className="max-w-xs" value={src?.id} onChange={(e) => (setSourceId(e.target.value), setPage("1"))}>
           {mine.map((s) => (
             <option key={s.id} value={s.id}>
               {s.displayName}
             </option>
           ))}
         </Select>
-        <Select className="w-32" value={type} onChange={(e) => (setType(e.target.value as typeof type), setPage(1))}>
+        <Select className="w-32" value={type} onChange={(e) => (setType(e.target.value), setPage("1"))}>
           <option value="popular">Popular</option>
           <option value="latest" disabled={!src?.supportsLatest}>
             Latest
@@ -202,7 +207,7 @@ function Browse({ module }: { module: ModuleResource }) {
             onSubmit={(e) => {
               e.preventDefault();
               setQ(new FormData(e.currentTarget).get("q") as string);
-              setPage(1);
+              setPage("1");
             }}
           >
             <Input name="q" placeholder="Search…" defaultValue={q} />
@@ -231,10 +236,10 @@ function Browse({ module }: { module: ModuleResource }) {
             ))}
           </div>
           <div className="mt-4 flex justify-center gap-2">
-            <Button size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+            <Button size="sm" disabled={page <= 1} onClick={() => setPage(String(page - 1))}>
               Previous
             </Button>
-            <Button size="sm" disabled={!data.hasNext} onClick={() => setPage(page + 1)}>
+            <Button size="sm" disabled={!data.hasNext} onClick={() => setPage(String(page + 1))}>
               Next
             </Button>
           </div>

@@ -8,6 +8,7 @@ import { Badge, Button, Card, ErrorBox, IconButton, Loading, Modal, Progress, Sw
 import { bytes, date, relative } from "../../lib/format";
 import { useToast } from "../../lib/toast";
 import { eta } from "../../lib/liveProgress";
+import { useListParam } from "../../lib/urlState";
 
 const stateTone: Record<string, "ok" | "warn" | "err" | "info" | "default" | "accent"> = {
   imported: "ok",
@@ -29,7 +30,8 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [explain, setExplain] = useState<Chapter | null>(null);
-  const [filter, setFilter] = useState<"all" | "missing" | "downloaded">("all");
+  const [filterParam, setFilter] = useListParam("chapters", "all");
+  const filter = filterParam as "all" | "missing" | "downloaded";
 
   const list = useMemo(() => {
     const l = data ?? [];
@@ -95,7 +97,7 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
               </Button>
             </>
           )}
-          <select className="rounded-md border border-border bg-bg px-2 py-1 text-xs" value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)}>
+          <select className="rounded-md border border-border bg-bg px-2 py-1 text-xs" value={filter} onChange={(e) => setFilter(e.target.value)}>
             <option value="all">All</option>
             <option value="missing">Missing</option>
             <option value="downloaded">Downloaded</option>

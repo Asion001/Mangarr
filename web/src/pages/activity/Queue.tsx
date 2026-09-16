@@ -6,7 +6,7 @@ import { api, unwrap, type Job } from "../../api/client";
 import { useQueue } from "../../api/queries";
 import { Badge, Button, Confirm, EmptyState, ErrorBox, IconButton, Input, Loading, PageHeader, Progress, Select, Switch, Table, Td, Th } from "../../components/ui";
 import { relative } from "../../lib/format";
-import { useQueryParam } from "../../lib/urlState";
+import { useListParam, useQueryParam } from "../../lib/urlState";
 import { useToast } from "../../lib/toast";
 import { describe, useLiveProgress } from "../../lib/liveProgress";
 
@@ -18,11 +18,11 @@ const PAGE = 100;
 export function QueuePage() {
   const qc = useQueryClient();
   const toast = useToast();
-  const [status, setStatus] = useQueryParam("status");
-  const [kind, setKind] = useQueryParam("kind");
+  const [status, setStatus] = useListParam("status");
+  const [kind, setKind] = useListParam("kind");
   const [q, setQ] = useQueryParam("q");
-  const [pageStr, setPage] = useQueryParam("page", "1");
-  const [group, setGroup] = useQueryParam("group");
+  const [pageStr, setPage] = useListParam("page", "1");
+  const [group, setGroup] = useListParam("group");
   const page = Number(pageStr) || 1;
   const filter = { status: status ? status.split(",") : undefined, kind: (kind || undefined) as "download" | "reprocess" | undefined, q: q || undefined, includeDone: true };
   const { data, isLoading, error } = useQueue({ ...filter, page, pageSize: PAGE });
@@ -329,13 +329,13 @@ export function QueuePage() {
       )}
       {total > PAGE && (
         <div className="mt-4 flex items-center justify-center gap-3 text-sm">
-          <Button size="sm" disabled={page <= 1} onClick={() => setPage(String(page - 1), { replace: false })}>
+          <Button size="sm" disabled={page <= 1} onClick={() => setPage(String(page - 1))}>
             Previous
           </Button>
           <span className="text-muted">
             Page {page} of {Math.ceil(total / PAGE)}
           </span>
-          <Button size="sm" disabled={page * PAGE >= total} onClick={() => setPage(String(page + 1), { replace: false })}>
+          <Button size="sm" disabled={page * PAGE >= total} onClick={() => setPage(String(page + 1))}>
             Next
           </Button>
         </div>

@@ -8,6 +8,7 @@ import { Badge, Button, Card, Confirm, EmptyState, ErrorBox, Field, IconButton, 
 import { useAccount } from "../../lib/account";
 import { dateTime, relative } from "../../lib/format";
 import { useToast } from "../../lib/toast";
+import { useListParam } from "../../lib/urlState";
 
 type User = S["UserView"];
 type Group = S["GroupView"];
@@ -19,7 +20,8 @@ const useGroups = () => useQuery({ queryKey: ["users", "groups"], queryFn: () =>
 const usePermissions = () => useQuery({ queryKey: ["permissions"], queryFn: () => unwrap(api.GET("/api/v1/permissions")), staleTime: Infinity });
 
 export function UsersPage() {
-  const [tab, setTab] = useState<Tab>("users");
+  const [tabParam, setTab] = useListParam("tab", "users");
+  const tab = tabParam as Tab;
   return (
     <>
       <PageHeader title="Users & groups" subtitle="Share the library: everyone reads the same series, with their own progress. Groups decide what members can do and see." />

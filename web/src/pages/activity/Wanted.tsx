@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Link } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
@@ -6,9 +5,11 @@ import { api, unwrap } from "../../api/client";
 import { usePushCommand } from "../../api/queries";
 import { Badge, Button, EmptyState, ErrorBox, IconButton, Loading, PageHeader, Table, Td, Th } from "../../components/ui";
 import { date } from "../../lib/format";
+import { useListParam } from "../../lib/urlState";
 
 export function WantedPage() {
-  const [page, setPage] = useState(1);
+  const [pageParam, setPage] = useListParam("page", "1");
+  const page = Math.max(1, Number(pageParam) || 1);
   const push = usePushCommand();
   const { data, isLoading, error } = useQuery({
     queryKey: ["wanted", page],
@@ -71,13 +72,13 @@ export function WantedPage() {
             </tbody>
           </Table>
           <div className="mt-3 flex items-center justify-end gap-2 text-sm">
-            <Button size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+            <Button size="sm" disabled={page <= 1} onClick={() => setPage(String(page - 1))}>
               Previous
             </Button>
             <span className="text-muted">
               {page} / {pages}
             </span>
-            <Button size="sm" disabled={page >= pages} onClick={() => setPage(page + 1)}>
+            <Button size="sm" disabled={page >= pages} onClick={() => setPage(String(page + 1))}>
               Next
             </Button>
           </div>

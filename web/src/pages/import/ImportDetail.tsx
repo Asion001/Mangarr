@@ -7,7 +7,7 @@ import { useProfiles, useReaders, useRootFolders } from "../../api/queries";
 import { Cover } from "../../components/Cover";
 import { Badge, Button, Card, Confirm, ErrorBox, Field, Input, Loading, Modal, PageHeader, Select, Spinner, Switch, Table, Td, Th } from "../../components/ui";
 import { date } from "../../lib/format";
-import { useQueryParam } from "../../lib/urlState";
+import { useListParam, useQueryParam } from "../../lib/urlState";
 import { useToast } from "../../lib/toast";
 import { MetadataSearch } from "../series/AddSeries";
 import { SourceSearchModal } from "../series/SourceSearch";
@@ -59,9 +59,9 @@ export function ImportDetailPage() {
   const id = Number(useParams().id);
   const qc = useQueryClient();
   const toast = useToast();
-  const [state, setState] = useQueryParam("state");
+  const [state, setState] = useListParam("state");
   const [q, setQ] = useQueryParam("q");
-  const [pageStr, setPage] = useQueryParam("page", "1");
+  const [pageStr, setPage] = useListParam("page", "1");
   const page = Number(pageStr) || 1;
   const imp = useQuery({ queryKey: ["import", id], queryFn: () => unwrap(api.GET("/api/v1/imports/{id}", { params: { path: { id } } })) });
   const entries = useQuery({
@@ -228,13 +228,13 @@ export function ImportDetailPage() {
       </Table>
       {pages > 1 && (
         <div className="mt-3 flex items-center justify-center gap-2 text-sm">
-          <Button size="sm" disabled={page <= 1} onClick={() => setPage(String(page - 1), { replace: false })}>
+          <Button size="sm" disabled={page <= 1} onClick={() => setPage(String(page - 1))}>
             Previous
           </Button>
           <span className="text-muted">
             {page} / {pages}
           </span>
-          <Button size="sm" disabled={page >= pages} onClick={() => setPage(String(page + 1), { replace: false })}>
+          <Button size="sm" disabled={page >= pages} onClick={() => setPage(String(page + 1))}>
             Next
           </Button>
         </div>

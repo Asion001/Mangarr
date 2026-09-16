@@ -1,10 +1,10 @@
-import { useState } from "react";
 import { Link } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { api, unwrap } from "../../api/client";
 import { useSeriesList } from "../../api/queries";
 import { Badge, Button, ErrorBox, Loading, PageHeader, Select, Table, Td, Th } from "../../components/ui";
 import { dateTime } from "../../lib/format";
+import { useListParam } from "../../lib/urlState";
 
 const tone: Record<string, "ok" | "warn" | "err" | "info" | "default" | "accent"> = {
   imported: "ok",
@@ -24,8 +24,9 @@ const tone: Record<string, "ok" | "warn" | "err" | "info" | "default" | "accent"
 };
 
 export function HistoryPage() {
-  const [page, setPage] = useState(1);
-  const [eventType, setEventType] = useState("");
+  const [pageParam, setPage] = useListParam("page", "1");
+  const [eventType, setEventType] = useListParam("event");
+  const page = Math.max(1, Number(pageParam) || 1);
   const { data: series } = useSeriesList();
   const titles = new Map((series ?? []).map((s) => [s.id, s.title]));
   const { data, isLoading, error } = useQuery({
@@ -38,7 +39,7 @@ export function HistoryPage() {
       <PageHeader
         title="History"
         actions={
-          <Select className="w-44" value={eventType} onChange={(e) => (setEventType(e.target.value), setPage(1))}>
+          <Select className="w-44" value={eventType} onChange={(e) => (setEventType(e.target.value), setPage("1"))}>
             <option value="">All events</option>
             {Object.keys(tone).map((t) => (
               <option key={t} value={t}>
@@ -86,13 +87,13 @@ export function HistoryPage() {
             </tbody>
           </Table>
           <div className="mt-3 flex items-center justify-end gap-2 text-sm">
-            <Button size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+            <Button size="sm" disabled={page <= 1} onClick={() => setPage(String(page - 1))}>
               Previous
             </Button>
             <span className="text-muted">
               {page} / {pages}
             </span>
-            <Button size="sm" disabled={page >= pages} onClick={() => setPage(page + 1)}>
+            <Button size="sm" disabled={page >= pages} onClick={() => setPage(String(page + 1))}>
               Next
             </Button>
           </div>

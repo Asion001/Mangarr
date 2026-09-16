@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, TimerReset } from "lucide-react";
 import { api, apiUrl, unwrap, type Catalog, type ModuleResource, type S } from "../../api/client";
 import { useCatalogs } from "../../api/queries";
 import { Badge, Button, Card, EmptyState, ErrorBox, IconButton, Input, Loading, Select, Switch, Table, Td, Th } from "../../components/ui";
 import { useToast } from "../../lib/toast";
+import { useListParam, useQueryParam } from "../../lib/urlState";
 import { useSettingsDoc } from "../settings/useSettingsDoc";
 
 type Patch = { enabled?: boolean; priority?: number; throttle?: S["ThrottleConfig"]; clearCooldown?: boolean };
@@ -16,8 +17,8 @@ export function Catalogs({ module }: { module: ModuleResource }) {
   const toast = useToast();
   const { data, isLoading, error } = useCatalogs();
   const src = useSettingsDoc<S["Sources"]>("sources");
-  const [q, setQ] = useState("");
-  const [lang, setLang] = useState("");
+  const [q, setQ] = useQueryParam("catalog", "");
+  const [lang, setLang] = useListParam("lang", "");
 
   const mine = useMemo(() => (data?.items ?? []).filter((c) => c.moduleId === module.id), [data, module.id]);
   const langs = useMemo(() => Array.from(new Set(mine.map((c) => c.lang))).sort(), [mine]);

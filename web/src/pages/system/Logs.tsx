@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
 import { Copy, Download, FileText, LifeBuoy, RefreshCw } from "lucide-react";
@@ -6,9 +5,11 @@ import { api, apiUrl, unwrap } from "../../api/client";
 import { Button, Loading, PageHeader, Select } from "../../components/ui";
 import { bytes, relative } from "../../lib/format";
 import { useToast } from "../../lib/toast";
+import { useListParam } from "../../lib/urlState";
 
 export function LogsPage() {
-  const [level, setLevel] = useState<"debug" | "info" | "warn" | "error">("info");
+  const [levelParam, setLevel] = useListParam("level", "info");
+  const level = levelParam as "debug" | "info" | "warn" | "error";
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ["logs", level],
     queryFn: () => unwrap(api.GET("/api/v1/system/logs", { params: { query: { level, limit: 1000 } } })),
@@ -33,7 +34,7 @@ export function LogsPage() {
         title="Logs"
         actions={
           <>
-            <Select className="w-32" value={level} onChange={(e) => setLevel(e.target.value as typeof level)}>
+            <Select className="w-32" value={level} onChange={(e) => setLevel(e.target.value)}>
               <option value="debug">debug</option>
               <option value="info">info</option>
               <option value="warn">warn</option>
