@@ -193,8 +193,6 @@ tags-create POST /api/v1/tags -> library.manage
 tags-delete DELETE /api/v1/tags/{id} -> library.manage
 tags-list GET /api/v1/tags -> signedin
 upscaler-info GET /api/v1/modules/{id}/upscaler-info -> admin
-upscaler-nodes-heartbeat POST /api/v1/upscaler-nodes/heartbeat -> admin
-upscaler-nodes-list GET /api/v1/upscaler-nodes -> admin
 users-create POST /api/v1/users -> admin
 users-delete DELETE /api/v1/users/{id} -> admin
 users-list GET /api/v1/users -> admin
@@ -207,7 +205,9 @@ worker-complete POST /api/v1/worker/tasks/{id}/complete -> worker
 worker-fail POST /api/v1/worker/tasks/{id}/fail -> worker
 worker-heartbeat POST /api/v1/worker/tasks/{id}/heartbeat -> worker
 worker-hello POST /api/v1/worker/hello -> worker
+worker-input GET /api/v1/worker/tasks/{id}/input -> worker
 worker-lease POST /api/v1/worker/lease -> worker
+worker-output POST /api/v1/worker/tasks/{id}/output -> worker
 worker-page PUT /api/v1/worker/tasks/{id}/pages/{n} -> worker
 workers-create POST /api/v1/workers -> admin
 workers-delete DELETE /api/v1/workers/{id} -> admin

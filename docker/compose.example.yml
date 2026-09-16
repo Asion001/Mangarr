@@ -2,8 +2,8 @@
 # Komga (serves the library to Mihon, Paperback, Panels, KOReader...).
 #
 # ghcr.io/asion001/mangarr:latest is one image for every role: the server
-# (with a built-in upscaler when it gets a GPU) and processing nodes
-# (MANGARR_MODE=upscaler, e.g. on a desktop with a better GPU).
+# (with a built-in upscaler when it gets a GPU) and workers
+# (MANGARR_MODE=worker, e.g. on a desktop with a better GPU).
 # ghcr.io/asion001/mangarr:slim is the server only (~40 MB).
 #
 #   docker compose -f docker/compose.example.yml up -d
@@ -104,17 +104,16 @@ services:
       - "25600:25600"
     restart: unless-stopped
 
-  # Optional: a processing node on another machine (or here, for a second GPU).
-  # It registers itself with mangarr and is used while it's online.
-  # mangarr-node:
+  # Optional: a worker on another machine (or here, for a second GPU). It
+  # asks mangarr for work, so it needs no port and no inbound access — it
+  # only has to reach the server. Make its key in System → Workers and give
+  # it the roles it should do there.
+  # mangarr-worker:
   #   image: ghcr.io/asion001/mangarr:latest
-  #   hostname: gaming-pc            # how mangarr reaches the node
   #   environment:
-  #     MANGARR_MODE: upscaler
+  #     MANGARR_MODE: worker
   #     MANGARR_SERVER_URL: http://mangarr:8787
-  #     MANGARR_API_KEY: ${MANGARR_API_KEY}   # Settings → General on the server
+  #     MANGARR_WORKER_KEY: ${MANGARR_WORKER_KEY}   # System → Workers
   #   devices:
-  #     - /dev/dri:/dev/dri
-  #   ports:
-  #     - "8788:8788"                # when mangarr runs on another host
+  #     - /dev/dri:/dev/dri           # only needed for upscaling
   #   restart: unless-stopped

@@ -1772,37 +1772,6 @@
         ],
         "type": "object"
       },
-      "Engine": {
-        "additionalProperties": false,
-        "properties": {
-          "description": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "noiseLevels": {
-            "items": {
-              "format": "int64",
-              "type": "integer"
-            },
-            "type": "array"
-          },
-          "scales": {
-            "items": {
-              "format": "int64",
-              "type": "integer"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "name",
-          "description",
-          "scales"
-        ],
-        "type": "object"
-      },
       "EngineInfo": {
         "additionalProperties": false,
         "properties": {
@@ -2277,34 +2246,6 @@
         "required": [
           "checks",
           "checkedAt"
-        ],
-        "type": "object"
-      },
-      "Heartbeat": {
-        "additionalProperties": false,
-        "properties": {
-          "info": {
-            "$ref": "#/components/schemas/Info"
-          },
-          "name": {
-            "type": "string"
-          },
-          "nodeId": {
-            "type": "string"
-          },
-          "token": {
-            "type": "string"
-          },
-          "url": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "nodeId",
-          "name",
-          "url",
-          "token",
-          "info"
         ],
         "type": "object"
       },
@@ -2888,44 +2829,6 @@
             "type": "array"
           }
         },
-        "type": "object"
-      },
-      "Info": {
-        "additionalProperties": false,
-        "properties": {
-          "devices": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "formats": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "models": {
-            "items": {
-              "$ref": "#/components/schemas/Engine"
-            },
-            "type": "array"
-          },
-          "queued": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "version": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "version",
-          "devices",
-          "models",
-          "formats",
-          "queued"
-        ],
         "type": "object"
       },
       "Invite-redeemRequest": {
@@ -4140,44 +4043,6 @@
           "chapterId",
           "number",
           "available"
-        ],
-        "type": "object"
-      },
-      "NodeStatus": {
-        "additionalProperties": false,
-        "properties": {
-          "info": {
-            "$ref": "#/components/schemas/Info"
-          },
-          "lastSeen": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "moduleId": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "name": {
-            "type": "string"
-          },
-          "nodeId": {
-            "type": "string"
-          },
-          "online": {
-            "type": "boolean"
-          },
-          "url": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "nodeId",
-          "name",
-          "url",
-          "moduleId",
-          "lastSeen",
-          "online",
-          "info"
         ],
         "type": "object"
       },
@@ -16876,81 +16741,6 @@
         ]
       }
     },
-    "/api/v1/upscaler-nodes": {
-      "get": {
-        "operationId": "upscaler-nodes-list",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/NodeStatus"
-                  },
-                  "type": "array"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "summary": "Self-registered processing nodes and whether they're online",
-        "tags": [
-          "Processing"
-        ]
-      }
-    },
-    "/api/v1/upscaler-nodes/heartbeat": {
-      "post": {
-        "operationId": "upscaler-nodes-heartbeat",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Heartbeat"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/NodeStatus"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "summary": "Processing nodes (MANGARR_MODE=upscaler with MANGARR_SERVER_URL) register themselves here every 30 s",
-        "tags": [
-          "Processing"
-        ]
-      }
-    },
     "/api/v1/users": {
       "get": {
         "operationId": "users-list",
@@ -17487,6 +17277,88 @@
           }
         },
         "summary": "Report progress and keep the task",
+        "tags": [
+          "Workers"
+        ]
+      }
+    },
+    "/api/v1/worker/tasks/{id}/input": {
+      "get": {
+        "operationId": "worker-input",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Download what a processing task works on",
+        "tags": [
+          "Workers"
+        ]
+      }
+    },
+    "/api/v1/worker/tasks/{id}/output": {
+      "post": {
+        "operationId": "worker-output",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/zip": {
+              "schema": {
+                "contentMediaType": "application/octet-stream",
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Upload what a processing task produced",
         "tags": [
           "Workers"
         ]

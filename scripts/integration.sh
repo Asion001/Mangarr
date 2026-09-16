@@ -1,29 +1,21 @@
 #!/usr/bin/env bash
 # Starts real services in Docker and runs the integration tests against them:
 #   - Suwayomi (pinned) + Keiyoushi MangaDex extension (needs internet)
-#   - the full mangarr image in MANGARR_MODE=upscaler (built locally, lavapipe CPU Vulkan, amd64)
 #   - Komga (claimed with a throwaway admin)
 #
 #   scripts/integration.sh            # all
-#   SKIP_UPSCALER=1 scripts/integration.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 SUWAYOMI_IMAGE=ghcr.io/suwayomi/suwayomi-server:v2.3.2243
 net=mangarr-it
 lib=$(mktemp -d)
-cleanup() { docker rm -f mangarr-it-suwayomi mangarr-it-upscaler mangarr-it-komga >/dev/null 2>&1 || true; rm -rf "$lib"; }
+cleanup() { docker rm -f mangarr-it-suwayomi mangarr-it-komga >/dev/null 2>&1 || true; rm -rf "$lib"; }
 trap cleanup EXIT
 cleanup
 
 docker run -d --name mangarr-it-suwayomi -p 14567:4567 -e WEB_UI_ENABLED=false -e KCEF_ENABLED=false "$SUWAYOMI_IMAGE" >/dev/null
 export MANGARR_IT_SUWAYOMI=http://localhost:14567
-
-if [ -z "${SKIP_UPSCALER:-}" ]; then
-  docker build --platform linux/amd64 -q -f docker/Dockerfile --target full -t mangarr-full:it . >/dev/null
-  docker run -d --platform linux/amd64 --name mangarr-it-upscaler -p 18788:8788 -e MANGARR_MODE=upscaler -e MANGARR_UPSCALER_TOKEN=it mangarr-full:it >/dev/null
-  export MANGARR_IT_UPSCALER=http://localhost:18788 MANGARR_IT_UPSCALER_TOKEN=it
-fi
 
 docker run -d --name mangarr-it-komga -p 25601:25600 -v "$lib":/data/manga:ro gotson/komga:latest >/dev/null
 echo "waiting for services…"

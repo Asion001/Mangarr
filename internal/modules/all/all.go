@@ -14,5 +14,5 @@ import (
 	_ "github.com/Asion001/mangarr/internal/modules/source/native"
 	_ "github.com/Asion001/mangarr/internal/modules/source/suwayomi"
 	_ "github.com/Asion001/mangarr/internal/modules/upscale/local"
-	_ "github.com/Asion001/mangarr/internal/modules/upscale/ncnnworker"
+	_ "github.com/Asion001/mangarr/internal/modules/upscale/workers"
 )

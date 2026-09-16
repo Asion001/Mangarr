@@ -34,9 +34,11 @@ import (
 func main() {
 	if mode, err := config.ModeFromEnv(); err == nil {
 		switch mode {
-		case config.ModeUpscaler:
-			os.Exit(runNode())
 		case config.ModeWorker:
+			os.Exit(runWorker())
+		case config.ModeUpscaler:
+			// the old processing node: it is a worker now, and needs a key
+			fmt.Fprintln(os.Stderr, "MANGARR_MODE=upscaler is deprecated: use MANGARR_MODE=worker with a key from System → Workers")
 			os.Exit(runWorker())
 		}
 	}
@@ -248,36 +250,6 @@ func bench(args []string) int {
 	return 0
 }
 
-// runNode runs a processing node (MANGARR_MODE=upscaler).
-func runNode() int {
-	cfg, err := upscaler.LoadNodeConfig(os.Getenv)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	if len(os.Args) > 1 {
-		switch os.Args[1] {
-		case "healthcheck":
-			resp, err := http.Get("http://127.0.0.1" + cfg.Listen + "/healthz")
-			if err != nil || resp.StatusCode != 200 {
-				return 1
-			}
-			return 0
-		case "version":
-			fmt.Println(version.Version, version.Commit)
-			return 0
-		}
-	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	log, _ := logging.Setup(os.Getenv("MANGARR_LOG_LEVEL"), os.Stdout)
-	if err := upscaler.RunNode(ctx, cfg, log); err != nil {
-		fmt.Fprintln(os.Stderr, "fatal:", err)
-		return 1
-	}
-	return 0
-}
-
 // runWorker runs this process as a worker (MANGARR_MODE=worker): it asks a
 // server for tasks and does them. There is no listener, so "healthcheck"
 // only says whether the process is up.
@@ -298,6 +270,11 @@ func runWorker() int {
 	}
 	log, _ := logging.Setup(os.Getenv("MANGARR_LOG_LEVEL"), os.Stdout)
 	cfg.Log, cfg.Version = log, version.Version
+	// the upscaling engine is the same one the old node ran, configured the
+	// same way; a worker without the tools simply doesn't offer to upscale
+	if engine, err := upscaler.LoadEngineConfig(os.Getenv); err == nil {
+		cfg.Upscaler = upscaler.NewEngine(engine, log)
+	}
 	w, err := worker.New(cfg)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

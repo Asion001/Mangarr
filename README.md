@@ -117,11 +117,13 @@ See [docker/compose.example.yml](docker/compose.example.yml) and the full
 
 | Image | Arch | Notes |
 |---|---|---|
-| `ghcr.io/asion001/mangarr:latest` | amd64, arm64 | Every role (`MANGARR_MODE=integrated`, `server`, `upscaler`): Mesa Vulkan, avifenc/cjxl and — on amd64 — the ncnn upscalers |
+| `ghcr.io/asion001/mangarr:latest` | amd64, arm64 | Every role (`MANGARR_MODE=integrated`, `server`, `worker`): Mesa Vulkan, avifenc/cjxl and — on amd64 — the ncnn upscalers |
 | `ghcr.io/asion001/mangarr:slim` | amd64, arm64 | Distroless server only (~40 MB); re-encodes with the slower built-in AVIF encoder |
 
-The old `mangarr-upscaler` image is replaced by `mangarr:latest` with
-`MANGARR_MODE=upscaler` (the `UPSCALER_*` variables still work).
+A second machine that downloads, upscales or re-encodes is the same image
+with `MANGARR_MODE=worker`, a server address and a key from System →
+Workers. It asks the server for work, so it needs no port of its own.
+(`MANGARR_MODE=upscaler` still starts it, and says so.)
 
 ## Configuration
 
@@ -152,8 +154,7 @@ make web          # build the UI (uses Docker if npm is not installed)
 make web-types    # regenerate web/src/api/schema.d.ts from the OpenAPI document
 make test         # unit + app tests (SQLite)
 make test-pg      # also against Postgres (MANGARR_TEST_POSTGRES)
-scripts/integration.sh   # real Suwayomi + upscaler + Komga in Docker
-scripts/upscale-bench.sh http://worker:8788 <token> chapter.cbz   # pick upscaler models for your GPU
+scripts/integration.sh   # real Suwayomi + Komga in Docker
 ```
 
 Design notes and the implementation plan: [docs/PLAN.md](docs/PLAN.md).

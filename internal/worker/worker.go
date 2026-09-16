@@ -14,9 +14,12 @@ import (
 	"log/slog"
 	"net/http"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Asion001/mangarr/internal/upscaler"
 )
 
 // Config is what a worker is started with.
@@ -36,7 +39,9 @@ type Config struct {
 	Prefetch int
 	// PageConcurrency is how many pages it fetches at a time.
 	PageConcurrency int
-	Log             *slog.Logger
+	// Upscaler is the engine this machine upscales with (nil: it can't).
+	Upscaler *upscaler.Server
+	Log      *slog.Logger
 	// HTTP talks to the server; Fetch talks to the manga sites (they are
 	// separate so a proxy can be put in front of one and not the other).
 	HTTP  *http.Client
@@ -48,6 +53,9 @@ type Worker struct {
 	cfg     Config
 	log     *slog.Logger
 	welcome Welcome
+
+	// up is the upscaling engine on this machine (nil when it has none).
+	up *upscaler.Server
 
 	mu   sync.Mutex
 	held map[int64]bool // tasks in progress, for a clean goodbye
@@ -100,7 +108,11 @@ func New(cfg Config) (*Worker, error) {
 		cfg.Fetch = &http.Client{Timeout: 2 * time.Minute}
 	}
 	cfg.ServerURL = strings.TrimRight(cfg.ServerURL, "/")
-	return &Worker{cfg: cfg, log: cfg.Log, held: map[int64]bool{}}, nil
+	w := &Worker{cfg: cfg, log: cfg.Log, held: map[int64]bool{}}
+	if slices.Contains(cfg.Roles, "upscale") && cfg.Upscaler != nil {
+		w.up = cfg.Upscaler
+	}
+	return w, nil
 }
 
 // Run says hello and then takes tasks until the context ends.
@@ -152,10 +164,23 @@ func (w *Worker) Run(ctx context.Context) error {
 // hello announces the worker, retrying until the server answers: a worker
 // that starts before its server should wait for it, not give up.
 func (w *Worker) hello(ctx context.Context) error {
+	info := map[string]any{"cpus": runtime.NumCPU()}
+	roles := w.cfg.Roles
+	if w.up != nil {
+		up := w.up.Info()
+		info["models"], info["devices"], info["formats"] = up.Models, up.Devices, up.Formats
+		if len(up.Models) == 0 {
+			// no engine on this machine: don't offer to upscale
+			roles = without(roles, "upscale")
+			w.up = nil
+		}
+	} else {
+		roles = without(roles, "upscale")
+	}
 	body := map[string]any{
 		"version": w.cfg.Version, "platform": runtime.GOOS + "/" + runtime.GOARCH,
-		"roles": w.cfg.Roles,
-		"info":  map[string]any{"cpus": runtime.NumCPU()},
+		"roles": roles,
+		"info":  info,
 	}
 	wait := time.Second
 	for {
@@ -216,6 +241,8 @@ func (w *Worker) do(ctx context.Context, t Task) {
 	switch t.Kind {
 	case "download":
 		res, err = w.download(ctx, t)
+	case "upscale":
+		res, err = w.upscale(ctx, t)
 	default:
 		err = fmt.Errorf("this worker doesn't know how to %q", t.Kind)
 	}
@@ -330,4 +357,15 @@ func (w *Worker) upload(ctx context.Context, taskID int64, number int, data []by
 	}
 	_, _ = io.Copy(io.Discard, resp.Body)
 	return nil
+}
+
+// without is a role list with one role left out.
+func without(roles []string, role string) []string {
+	out := make([]string, 0, len(roles))
+	for _, r := range roles {
+		if r != role {
+			out = append(out, r)
+		}
+	}
+	return out
 }

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, Pencil, PlugZap } from "lucide-react";
 import { api, unwrap, type Implementation, type ModuleResource } from "../../api/client";
 import { useModules, useSchema } from "../../api/queries";
@@ -50,12 +50,6 @@ export type Draft = {
 export function ModulesPage({ kind }: { kind: string }) {
   const { data: mods, isLoading, error } = useModules(kind);
   const { data: impls } = useSchema(kind);
-  const { data: nodes } = useQuery({
-    queryKey: ["upscaler-nodes"],
-    queryFn: () => unwrap(api.GET("/api/v1/upscaler-nodes")),
-    enabled: kind === "upscale",
-    refetchInterval: 30_000,
-  });
   const qc = useQueryClient();
   const toast = useToast();
   const [picking, setPicking] = useState(false);
@@ -140,14 +134,6 @@ export function ModulesPage({ kind }: { kind: string }) {
                   env
                 </Badge>
               )}
-              {m.managedBy?.startsWith("node:") &&
-                (nodes?.find((n) => n.moduleId === m.id)?.online ? (
-                  <Badge tone="ok" title="Processing node that registered itself">
-                    node online
-                  </Badge>
-                ) : (
-                  <Badge title="Processing node that registered itself; chapters wait while it's off">node offline</Badge>
-                ))}
               <Badge>priority {m.priority}</Badge>
               {m.capabilities.map((c) => (
                 <Badge key={c} tone="info">

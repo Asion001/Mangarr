@@ -10,6 +10,7 @@ import (
 	"github.com/Asion001/mangarr/internal/library"
 	"github.com/Asion001/mangarr/internal/metadataagg"
 	"github.com/Asion001/mangarr/internal/model"
+	upscaleworkers "github.com/Asion001/mangarr/internal/modules/upscale/workers"
 	"github.com/Asion001/mangarr/internal/refresh"
 	"github.com/Asion001/mangarr/internal/series"
 	"github.com/Asion001/mangarr/internal/worktasks"
@@ -37,6 +38,7 @@ func (a *App) wire(ctx context.Context) error {
 	a.Refresher.Gov = a.Catalogs.Gov
 	a.Refresher.Cache, a.Refresher.Gen = a.SourceCache, a.Catalogs.Generation
 	a.Tasks = worktasks.New(a.DB, log.With("component", "worktasks"))
+	upscaleworkers.Use(a.DB, a.Tasks, a.Cfg.DataDir) // the "mangarr workers" upscaler hands batches to them
 	a.Tasks.Changed = func(jobID int64) { a.DLQueue.Wake() }
 	a.AddService(a.Tasks)
 	a.Downloads = downloads.NewManager(a.DB, a.Bus, a.Modules, a.Settings, a.Library, a.DLQueue, a.Searcher, log.With("component", "downloads"), a.Cfg.DataDir)

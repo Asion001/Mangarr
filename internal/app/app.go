@@ -55,7 +55,6 @@ type App struct {
 	// Encoder re-encodes pages (set before New to override engine detection in tests).
 	Encoder    *imageenc.Encoder
 	Processing *processing.Processor
-	Nodes      *Nodes
 	Organize   *organize.Service
 	Imports    *imports.Service
 	// Reading is the library as reading apps see it; Komga serves it.

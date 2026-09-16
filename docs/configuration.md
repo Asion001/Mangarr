@@ -36,23 +36,19 @@ A worker holds a key of its own and asks the server for work, so it needs no por
 | `MANGARR_WORKER_PREFETCH` | `0` | Pages it fetches ahead of its uploads (0 = what the server says). |
 | `MANGARR_WORKER_PAGE_CONCURRENCY` | `4` | Pages it fetches at a time. |
 
-## Processing nodes (`MANGARR_MODE=upscaler`, deprecated)
+## The upscaling engine
+
+Read wherever the engine runs: in the server, or on a worker with the upscale role.
 
 | Variable | Old name | Default | Description |
 |---|---|---|---|
-| `MANGARR_UPSCALER_LISTEN` | UPSCALER_LISTEN | `:8788` | Worker listen address. |
 | `MANGARR_UPSCALER_TOOLS_DIR` | UPSCALER_TOOLS_DIR | `/opt/upscalers` | Folder with the ncnn upscalers. |
 | `MANGARR_UPSCALER_GPU` | UPSCALER_GPU | `auto` | Vulkan device (auto or index). |
 | `MANGARR_UPSCALER_THREADS` | UPSCALER_THREADS | `` | ncnn load:proc:save threads. |
 | `MANGARR_UPSCALER_TILE` | UPSCALER_TILE | `0` | Tile size (0 = auto; lower on small GPUs). |
-| `MANGARR_UPSCALER_TOKEN` | UPSCALER_TOKEN | `` | Bearer token required by the worker (generated when registering). |
 | `MANGARR_UPSCALER_TIMEOUT` | UPSCALER_TIMEOUT | `30m` | Maximum time per batch. |
 | `MANGARR_UPSCALER_TMP_DIR` | UPSCALER_TMP_DIR | `` | Scratch folder. |
 | `MANGARR_UPSCALER_CWEBP` | UPSCALER_CWEBP | `` | Path to cwebp. |
-| `MANGARR_SERVER_URL` |  | `` | mangarr server to register with (optional). |
-| `MANGARR_API_KEY` |  | `` | The server's API key (for registration). |
-| `MANGARR_NODE_NAME` |  | `` | Name shown in mangarr (default: host name). |
-| `MANGARR_NODE_URL` |  | `` | How the server reaches this node (default http://&lt;name&gt;:8788). |
 
 ## Settings
 
@@ -298,11 +294,9 @@ MANGARR_MODULE_KOMGA_API_KEY=...
 | `_TILE` | int | Tile size. 0 = automatic; lower it when the GPU runs out of memory |
 | `_TOOLS_DIR` | string | Tools folder. Where the waifu2x/Real-CUGAN/Real-ESRGAN ncnn binaries are (included in the full image) |
 
-### `upscale/ncnn-worker` — mangarr-upscaler (ncnn/Vulkan)
+### `upscale/workers` — mangarr workers
 
 | Suffix | Type | Description |
 |---|---|---|
-| `_TIMEOUT` | int | Timeout per chapter (min) |
-| `_TOKEN` | string | Token. Value of UPSCALER_TOKEN on the worker |
-| `_URL` | string | Worker URL |
+| `_TIMEOUT_MINUTES` | int | Give up after (minutes) |
 

@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -80,6 +83,11 @@ func (s *Server) registerWorkerProtocol() {
 				return nil, toHTTPError(err)
 			}
 			s.app.Auth.InvalidateWorkers()
+			if w.HasRole(model.RoleUpscale) {
+				// a GPU box only has to be given a key: the module that hands
+				// batches to the workers appears with the first one
+				s.app.OfferWorkersUpscaler(ctx)
+			}
 			dl, _ := s.app.Settings.Downloads(ctx)
 			welcome := WorkerWelcome{WorkerID: w.ID, Name: w.Name, Roles: allowedRoles(w, in.Body.Roles),
 				LeaseSeconds: int(worktasks.Lease / time.Second), PollSeconds: int(workerPoll / time.Second),
@@ -143,6 +151,63 @@ func (s *Server) registerWorkerProtocol() {
 			return &struct{}{}, nil
 		})
 
+	huma.Register(s.api, huma.Operation{OperationID: "worker-input", Method: http.MethodGet, Path: "/api/v1/worker/tasks/{id}/input", Tags: tags,
+		Summary: "Download what a processing task works on"},
+		func(ctx context.Context, in *struct {
+			ID int64 `path:"id"`
+		}) (*huma.StreamResponse, error) {
+			w, err := s.worker(ctx)
+			if err != nil {
+				return nil, err
+			}
+			task, err := s.app.Tasks.Held(ctx, in.ID, w.ID)
+			if err != nil {
+				return nil, huma.Error409Conflict("this task is not yours any more")
+			}
+			path, _ := task.Spec["input"].(string)
+			f, err := os.Open(path)
+			if err != nil {
+				return nil, huma.Error404NotFound("this task's pages are gone")
+			}
+			st, _ := f.Stat()
+			return &huma.StreamResponse{Body: func(hctx huma.Context) {
+				defer f.Close()
+				hctx.SetHeader("Content-Type", "application/zip")
+				if st != nil {
+					hctx.SetHeader("Content-Length", strconv.FormatInt(st.Size(), 10))
+				}
+				_, _ = io.Copy(hctx.BodyWriter(), f)
+			}}, nil
+		})
+
+	huma.Register(s.api, huma.Operation{OperationID: "worker-output", Method: http.MethodPost, Path: "/api/v1/worker/tasks/{id}/output", Tags: tags,
+		Summary: "Upload what a processing task produced", DefaultStatus: http.StatusNoContent, MaxBodyBytes: 1 << 30},
+		func(ctx context.Context, in *struct {
+			ID      int64  `path:"id"`
+			RawBody []byte `contentType:"application/zip"`
+		}) (*struct{}, error) {
+			w, err := s.worker(ctx)
+			if err != nil {
+				return nil, err
+			}
+			task, err := s.app.Tasks.Held(ctx, in.ID, w.ID)
+			if err != nil {
+				return nil, huma.Error409Conflict("this task is not yours any more")
+			}
+			path, _ := task.Spec["output"].(string)
+			if path == "" {
+				return nil, huma.Error422UnprocessableEntity("this task takes no output")
+			}
+			tmp := path + ".part"
+			if err := os.WriteFile(tmp, in.RawBody, 0o664); err != nil {
+				return nil, toHTTPError(err)
+			}
+			if err := os.Rename(tmp, path); err != nil {
+				return nil, toHTTPError(err)
+			}
+			return &struct{}{}, nil
+		})
+
 	huma.Register(s.api, huma.Operation{OperationID: "worker-heartbeat", Method: http.MethodPost, Path: "/api/v1/worker/tasks/{id}/heartbeat", Tags: tags,
 		Summary: "Report progress and keep the task"},
 		func(ctx context.Context, in *struct {
@@ -202,14 +267,18 @@ func (s *Server) registerWorkerProtocol() {
 			if err := s.app.Tasks.Finish(ctx, in.ID, w.ID, p); err != nil {
 				return nil, workerConflict(err)
 			}
-			// the import runs here, and takes as long as it takes: the worker
-			// is free as soon as its pages are in
-			go func() {
-				bg := context.WithoutCancel(ctx)
-				if err := s.app.Downloads.TaskDone(bg, *task); err != nil {
-					s.app.Log.Warn("could not finish a chapter a worker downloaded", "task", task.ID, "job", task.JobID, "err", err)
-				}
-			}()
+			// A chapter's pages are now all here, so the rest of the download
+			// (processing, import) runs on this machine — and takes as long as
+			// it takes: the worker is free as soon as its pages are in. Other
+			// kinds of task are awaited by whoever asked for them.
+			if task.Kind == model.TaskDownload {
+				go func() {
+					bg := context.WithoutCancel(ctx)
+					if err := s.app.Downloads.TaskDone(bg, *task); err != nil {
+						s.app.Log.Warn("could not finish a chapter a worker downloaded", "task", task.ID, "job", task.JobID, "err", err)
+					}
+				}()
+			}
 			return &struct{}{}, nil
 		})
 
@@ -237,7 +306,9 @@ func (s *Server) registerWorkerProtocol() {
 			if err := s.app.Tasks.Fail(ctx, in.ID, w.ID, reason, worktasks.Progress{PagesDone: in.Body.Pages, PagesTotal: task.PagesTotal}); err != nil {
 				return nil, workerConflict(err)
 			}
-			s.app.Downloads.TaskFailed(context.WithoutCancel(ctx), *task, reason)
+			if task.Kind == model.TaskDownload {
+				s.app.Downloads.TaskFailed(context.WithoutCancel(ctx), *task, reason)
+			}
 			return &struct{}{}, nil
 		})
 

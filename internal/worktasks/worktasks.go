@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/uptrace/bun"
@@ -37,6 +38,9 @@ type Ledger struct {
 	// Changed (optional) is called whenever a task's state changes, so the
 	// download manager can look at the job again without waiting for a tick.
 	Changed func(jobID int64)
+
+	waitMu  sync.Mutex
+	waiting map[int64]chan error
 }
 
 func New(d *db.DB, log *slog.Logger) *Ledger {
@@ -193,6 +197,11 @@ func (l *Ledger) close(ctx context.Context, taskID, workerID int64, state, reaso
 	if err != nil {
 		return err
 	}
+	if state == model.TaskDone {
+		l.settle(taskID, nil)
+	} else {
+		l.settle(taskID, fmt.Errorf("%w: %s", ErrGivenUp, reason))
+	}
 	l.changed(t.JobID)
 	return nil
 }
@@ -201,6 +210,13 @@ func (l *Ledger) close(ctx context.Context, taskID, workerID int64, state, reaso
 // has started. Used when a job is removed from the queue.
 func (l *Ledger) Cancel(ctx context.Context, jobID int64) error {
 	now := time.Now().UTC()
+	if pending, err := l.OfJob(ctx, jobID); err == nil {
+		for _, t := range pending {
+			if t.State == model.TaskPending {
+				l.settle(t.ID, ErrGivenUp)
+			}
+		}
+	}
 	if _, err := l.db.NewUpdate().Model((*model.WorkerTask)(nil)).
 		Set("state = ?", model.TaskAbandoned).Set("finished_at = ?", now).Set("error = ?", "cancelled").
 		Where("job_id = ? AND state = ?", jobID, model.TaskPending).Exec(ctx); err != nil {
@@ -258,6 +274,7 @@ func (l *Ledger) Reap(ctx context.Context) (requeued, abandoned int, err error) 
 		}
 		if state == model.TaskAbandoned {
 			abandoned++
+			l.settle(t.ID, ErrGivenUp)
 		} else {
 			requeued++
 		}
@@ -341,4 +358,79 @@ func (l *Ledger) Start(ctx context.Context) error {
 		}
 	}()
 	return nil
+}
+
+// ---- waiting for a task -----------------------------------------------------
+
+// ErrGivenUp is delivered to whoever is waiting when a task was abandoned:
+// no worker finished it, so the caller should do the work itself.
+var ErrGivenUp = errors.New("no worker finished this task")
+
+// Await says that someone is waiting for this task's outcome. The channel
+// carries nil when a worker finished it and an error when it was given up
+// on; nothing is sent while the task is simply passed to another worker.
+// The caller must call Forget when it stops waiting.
+func (l *Ledger) Await(taskID int64) <-chan error {
+	ch := make(chan error, 1)
+	l.waitMu.Lock()
+	if l.waiting == nil {
+		l.waiting = map[int64]chan error{}
+	}
+	l.waiting[taskID] = ch
+	l.waitMu.Unlock()
+	return ch
+}
+
+// Forget drops the interest registered by Await.
+func (l *Ledger) Forget(taskID int64) {
+	l.waitMu.Lock()
+	delete(l.waiting, taskID)
+	l.waitMu.Unlock()
+}
+
+// settle tells whoever waits for a task how it ended.
+func (l *Ledger) settle(taskID int64, err error) {
+	l.waitMu.Lock()
+	ch, ok := l.waiting[taskID]
+	delete(l.waiting, taskID)
+	l.waitMu.Unlock()
+	if ok {
+		ch <- err
+		close(ch)
+	}
+}
+
+// CancelTask asks whoever holds one task to stop, or drops it if nobody has
+// started it.
+func (l *Ledger) CancelTask(ctx context.Context, taskID int64) error {
+	now := time.Now().UTC()
+	res, err := l.db.NewUpdate().Model((*model.WorkerTask)(nil)).
+		Set("state = ?", model.TaskAbandoned).Set("finished_at = ?", now).Set("error = ?", "cancelled").
+		Where("id = ? AND state = ?", taskID, model.TaskPending).Exec(ctx)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 1 {
+		l.settle(taskID, ErrGivenUp)
+		return nil
+	}
+	_, err = l.db.NewUpdate().Model((*model.WorkerTask)(nil)).Set("cancel = ?", true).
+		Where("id = ? AND state = ?", taskID, model.TaskLeased).Exec(ctx)
+	return err
+}
+
+// ---- which job a piece of work belongs to ------------------------------------
+
+type jobKey struct{}
+
+// WithJob marks a context as belonging to a download job, so work started
+// deeper in the pipeline (upscaling a batch, say) can be attached to it.
+func WithJob(ctx context.Context, jobID int64) context.Context {
+	return context.WithValue(ctx, jobKey{}, jobID)
+}
+
+// JobFrom is the job a context belongs to (0 when it belongs to none).
+func JobFrom(ctx context.Context) int64 {
+	id, _ := ctx.Value(jobKey{}).(int64)
+	return id
 }

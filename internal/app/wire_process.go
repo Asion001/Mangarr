@@ -34,7 +34,7 @@ func (a *App) wireProcess(ctx context.Context) error {
 	a.Processing.Guard = processing.NewGuard(a.Settings, a.Modules, a.Bus, a.Log.With("component", "processing"))
 	a.Downloads.Processor = a.Processing
 	a.Health.AddCheck(a.processingHealth)
-	if err := a.wireNodes(ctx); err != nil {
+	if err := a.wireUpscalers(ctx); err != nil {
 		return err
 	}
 	if err := a.wireOrganize(ctx); err != nil {

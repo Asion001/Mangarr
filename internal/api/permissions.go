@@ -134,6 +134,8 @@ var operationPermissions = map[string][]string{
 	"worker-hello":     {permWorker},
 	"worker-lease":     {permWorker},
 	"worker-page":      {permWorker},
+	"worker-input":     {permWorker},
+	"worker-output":    {permWorker},
 	"worker-heartbeat": {permWorker},
 	"worker-complete":  {permWorker},
 	"worker-fail":      {permWorker},

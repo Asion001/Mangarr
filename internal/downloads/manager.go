@@ -449,6 +449,7 @@ func (m *Manager) run(ctx context.Context, job model.DownloadJob) {
 	m.Live.Start(job.ID, job.Kind)
 	defer m.Live.Finish(job.ID)
 	ctx = progress.With(ctx, m.Live.Reporter(job.ID))
+	ctx = worktasks.WithJob(ctx, job.ID) // work started deeper in belongs to this job
 	log := m.log.With("job", job.ID, "chapterId", job.ChapterID)
 	jc, err := m.load(ctx, &job)
 	if err != nil {
@@ -499,6 +500,7 @@ func (m *Manager) run(ctx context.Context, job model.DownloadJob) {
 // everything after this point is the same either way.
 func (m *Manager) finish(ctx context.Context, job model.DownloadJob, jc *jobCtx, pages []PageFile, workDir string) {
 	log := m.log.With("job", job.ID, "chapterId", job.ChapterID)
+	ctx = worktasks.WithJob(ctx, job.ID)
 	// processing (upscale / re-encode)
 	cfg := jc.profile.Config
 	params := cfg.ProcessParams()

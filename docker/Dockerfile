@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 #
-# One image for every role (MANGARR_MODE=integrated|server|upscaler).
+# One image for every role (MANGARR_MODE=integrated|server|worker).
 #
 #   target full (default, :latest)  Debian + Mesa Vulkan + avifenc/cjxl/cjpeg + the
 #                                   ncnn upscalers (amd64; arm64 has everything
@@ -78,13 +78,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && mkdir -p /config && chown 65532:0 /config
 COPY --from=tools /opt/upscalers /opt/upscalers
 COPY --from=build /out/mangarr /usr/local/bin/mangarr
-RUN ln -s mangarr /usr/local/bin/mangarr-upscaler
+RUN ln -s mangarr /usr/local/bin/mangarr-worker
 ENV MANGARR_DATA_DIR=/config \
     MANGARR_LISTEN=:8787 \
     MANGARR_MODE=integrated \
-    MANGARR_UPSCALER_TOOLS_DIR=/opt/upscalers \
-    MANGARR_UPSCALER_LISTEN=:8788
-EXPOSE 8787 8788 25600
+    MANGARR_UPSCALER_TOOLS_DIR=/opt/upscalers
+EXPOSE 8787 25600
 VOLUME ["/config"]
 USER 65532
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s CMD ["mangarr", "healthcheck"]

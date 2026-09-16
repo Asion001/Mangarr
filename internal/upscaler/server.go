@@ -4,8 +4,6 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
-	"crypto/subtle"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
@@ -28,7 +26,6 @@ import (
 )
 
 type Config struct {
-	Token   string
 	TmpDir  string
 	CWebP   string // path to cwebp; empty = look up in PATH
 	Timeout time.Duration
@@ -70,27 +67,6 @@ type Info struct {
 	Queued  int      `json:"queued"`
 }
 
-func (s *Server) Handler() http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
-	mux.HandleFunc("GET /v1/info", s.auth(s.handleInfo))
-	mux.HandleFunc("POST /v1/upscale", s.auth(s.handleUpscale))
-	return mux
-}
-
-func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if s.cfg.Token != "" {
-			got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-			if subtle.ConstantTimeCompare([]byte(got), []byte(s.cfg.Token)) != 1 {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
-				return
-			}
-		}
-		next(w, r)
-	}
-}
-
 func (s *Server) Info() Info {
 	info := Info{Version: s.cfg.Version, Devices: devices(), Models: []Engine{}, Formats: []string{"png", "jpeg"}, Queued: int(s.queued.Load())}
 	if s.cfg.CWebP != "" {
@@ -102,11 +78,6 @@ func (s *Server) Info() Info {
 		}
 	}
 	return info
-}
-
-func (s *Server) handleInfo(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(s.Info())
 }
 
 // Devices lists the Vulkan devices (via vulkaninfo, when installed).
@@ -168,46 +139,6 @@ func parseParams(r *http.Request) (Params, error) {
 		p.Quality = 90
 	}
 	return p, nil
-}
-
-func (s *Server) handleUpscale(w http.ResponseWriter, r *http.Request) {
-	p, err := parseParams(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	body, err := io.ReadAll(io.LimitReader(r.Body, s.cfg.MaxBody))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	images, err := unzipImages(body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	start := time.Now()
-	out, err := s.Process(r.Context(), p, images)
-	if err != nil {
-		var bad badRequest
-		if errors.As(err, &bad) {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		if r.Context().Err() == nil {
-			s.log.Warn("upscale failed", "model", p.Model, "err", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-		return
-	}
-	data, err := zipImages(out)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("X-Upscale-Duration-Ms", strconv.FormatInt(time.Since(start).Milliseconds(), 10))
-	_, _ = w.Write(data)
 }
 
 // Image is a page in memory.

@@ -2516,40 +2516,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/upscaler-nodes": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Self-registered processing nodes and whether they're online */
-        get: operations["upscaler-nodes-list"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/upscaler-nodes/heartbeat": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Processing nodes (MANGARR_MODE=upscaler with MANGARR_SERVER_URL) register themselves here every 30 s */
-        post: operations["upscaler-nodes-heartbeat"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/users": {
         parameters: {
             query?: never;
@@ -2732,6 +2698,40 @@ export interface paths {
         put?: never;
         /** Report progress and keep the task */
         post: operations["worker-heartbeat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/worker/tasks/{id}/input": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download what a processing task works on */
+        get: operations["worker-input"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/worker/tasks/{id}/output": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload what a processing task produced */
+        post: operations["worker-output"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3342,12 +3342,6 @@ export interface components {
             /** Format: int64 */
             speed: number;
         };
-        Engine: {
-            description: string;
-            name: string;
-            noiseLevels?: number[];
-            scales: number[];
-        };
         EngineInfo: {
             format: string;
             name: string;
@@ -3496,13 +3490,6 @@ export interface components {
             /** Format: date-time */
             checkedAt: string;
             checks: components["schemas"]["HealthCheck"][];
-        };
-        Heartbeat: {
-            info: components["schemas"]["Info"];
-            name: string;
-            nodeId: string;
-            token: string;
-            url: string;
         };
         History: {
             /** Format: int64 */
@@ -3676,14 +3663,6 @@ export interface components {
         };
         "Imports-remapRequest": {
             ids?: number[];
-        };
-        Info: {
-            devices: string[];
-            formats: string[];
-            models: components["schemas"]["Engine"][];
-            /** Format: int64 */
-            queued: number;
-            version: string;
         };
         "Invite-redeemRequest": {
             displayName?: string;
@@ -4061,17 +4040,6 @@ export interface components {
             chapterId: number;
             number: string;
             title?: string;
-        };
-        NodeStatus: {
-            info: components["schemas"]["Info"];
-            /** Format: date-time */
-            lastSeen: string;
-            /** Format: int64 */
-            moduleId: number;
-            name: string;
-            nodeId: string;
-            online: boolean;
-            url: string;
         };
         OwnTargetInput: {
             enabled: boolean;
@@ -11577,68 +11545,6 @@ export interface operations {
             };
         };
     };
-    "upscaler-nodes-list": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["NodeStatus"][];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "upscaler-nodes-heartbeat": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["Heartbeat"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["NodeStatus"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
     "users-list": {
         parameters: {
             query?: never;
@@ -12043,6 +11949,68 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Worker-heartbeatResponse"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "worker-input": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "worker-output": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/zip": string;
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {
