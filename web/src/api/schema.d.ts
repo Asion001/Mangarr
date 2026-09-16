@@ -1169,6 +1169,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/read/chapters/{id}/bounds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The border boxes of a chapter's pages, in one request (pages still being measured come back later) */
+        get: operations["read-chapter-bounds"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/read/chapters/{id}/file": {
         parameters: {
             query?: never;
@@ -3856,6 +3873,22 @@ export interface components {
             pageSize: number;
             /** Format: int64 */
             total: number;
+        };
+        PageBounds: {
+            /** Format: int64 */
+            h: number;
+            /** Format: int64 */
+            height: number;
+            /** Format: int64 */
+            number: number;
+            /** Format: int64 */
+            w: number;
+            /** Format: int64 */
+            width: number;
+            /** Format: int64 */
+            x: number;
+            /** Format: int64 */
+            y: number;
         };
         Patch: {
             clearCooldown?: boolean;
@@ -7749,6 +7782,38 @@ export interface operations {
             };
         };
     };
+    "read-chapter-bounds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageBounds"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "read-file": {
         parameters: {
             query?: never;
@@ -7781,7 +7846,9 @@ export interface operations {
     "read-page": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "If-None-Match"?: string;
+            };
             path: {
                 id: number;
                 n: number;
@@ -7793,13 +7860,9 @@ export interface operations {
             /** @description OK */
             200: {
                 headers: {
-                    "Cache-Control"?: string;
-                    "Content-Type"?: string;
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": string;
-                };
+                content?: never;
             };
             /** @description Error */
             default: {

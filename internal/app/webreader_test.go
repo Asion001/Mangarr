@@ -102,6 +102,14 @@ func TestWebReader(t *testing.T) {
 	if code, _ := call("GET", "/api/v1/read/chapters/"+c1+"/pages/1/bounds", "", &bd); code != 200 || bd["width"] == 0 || bd["w"] == 0 {
 		t.Fatalf("bounds: %d %v", code, bd)
 	}
+	// the reader asks for every page's box in one request
+	var boxes []struct {
+		Number int `json:"number"`
+		W      int `json:"w"`
+	}
+	if code, _ := call("GET", "/api/v1/read/chapters/"+c1+"/bounds", "", &boxes); code != 200 || len(boxes) != 3 || boxes[0].Number != 1 || boxes[2].W == 0 {
+		t.Fatalf("chapter bounds: %d %+v", code, boxes)
+	}
 	if code, h := call("GET", "/api/v1/read/chapters/"+c1+"/file", "", nil); code != 200 || !strings.Contains(h.Get("Content-Disposition"), ".cbz") {
 		t.Fatalf("file: %d %v", code, h)
 	}

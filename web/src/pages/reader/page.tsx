@@ -13,23 +13,69 @@ export const pageUrl = (chapterId: number, n: number) => apiUrl(`api/v1/read/cha
 export function useDims(chapterId: number, wantBounds: boolean) {
   const [dims, setDims] = useState<Record<number, Dims>>({});
   const asked = useRef(new Set<number>());
+  // pages wanted before the chapter's bounds answered; asked for afterwards
+  const waiting = useRef<number[]>([]);
+  const ready = useRef(false);
   useEffect(() => {
     setDims({});
     asked.current = new Set();
+    waiting.current = [];
+    ready.current = false;
   }, [chapterId]);
+
+  const ask = useCallback(
+    (n: number) => {
+      if (asked.current.has(n)) return;
+      asked.current.add(n);
+      unwrap(api.GET("/api/v1/read/chapters/{id}/pages/{n}/bounds", { params: { path: { id: chapterId, n } } }))
+        .then((b) => setDims((d) => ({ ...d, [n]: b })))
+        .catch(() => undefined);
+    },
+    [chapterId],
+  );
+
+  // one request for the whole chapter, instead of one per page
+  useEffect(() => {
+    if (!wantBounds) return;
+    let live = true;
+    unwrap(api.GET("/api/v1/read/chapters/{id}/bounds", { params: { path: { id: chapterId } } }))
+      .then((list) => {
+        if (!live) return;
+        setDims((d) => {
+          const next = { ...d };
+          for (const b of list) {
+            asked.current.add(b.number);
+            next[b.number] ??= b;
+          }
+          return next;
+        });
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!live) return;
+        ready.current = true;
+        for (const n of waiting.current) ask(n); // the server hadn't measured these yet
+        waiting.current = [];
+      });
+    return () => {
+      live = false;
+    };
+  }, [chapterId, wantBounds, ask]);
+
   /** need asks for the bounds of pages about to be shown. */
   const need = useCallback(
     (pages: number[]) => {
       if (!wantBounds) return;
       for (const n of pages) {
         if (asked.current.has(n)) continue;
-        asked.current.add(n);
-        unwrap(api.GET("/api/v1/read/chapters/{id}/pages/{n}/bounds", { params: { path: { id: chapterId, n } } }))
-          .then((b) => setDims((d) => ({ ...d, [n]: b })))
-          .catch(() => undefined);
+        if (!ready.current) {
+          if (!waiting.current.includes(n)) waiting.current.push(n);
+          continue;
+        }
+        ask(n);
       }
     },
-    [chapterId, wantBounds],
+    [wantBounds, ask],
   );
   /** natural records a loaded image's size (the whole page is its box). */
   const natural = useCallback((n: number, width: number, height: number) => {

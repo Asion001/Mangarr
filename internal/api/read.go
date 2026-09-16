@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -61,6 +62,16 @@ type ReadProgress struct {
 	Page      int  `json:"page"`
 	Completed bool `json:"completed"`
 }
+
+// PageBounds is one page's border box, for the whole-chapter request.
+type PageBounds struct {
+	Number int `json:"number"`
+	reading.Bounds
+}
+
+// boundsBudget caps how long measuring a chapter's pages may take; the reader
+// asks for what's missing page by page.
+const boundsBudget = 3 * time.Second
 
 // ReaderSettingsView is the account's reader settings: defaults and the
 // series' own (nil when it has none). The objects belong to the UI.
@@ -214,6 +225,35 @@ func (s *Server) registerRead() {
 				CacheControl string `header:"Cache-Control"`
 				Body         reading.Bounds
 			}{"private, max-age=86400", bd}, nil
+		})
+
+	huma.Register(s.api, huma.Operation{OperationID: "read-chapter-bounds", Method: http.MethodGet, Path: "/api/v1/read/chapters/{id}/bounds", Tags: tags,
+		Summary: "The border boxes of a chapter's pages, in one request (pages still being measured come back later)"},
+		func(ctx context.Context, in *IDPath) (*struct {
+			CacheControl string `header:"Cache-Control"`
+			Body         []PageBounds
+		}, error) {
+			b, err := book(ctx, in.ID)
+			if err != nil {
+				return nil, err
+			}
+			pages, err := s.app.Reading.Pages(ctx, b)
+			if err != nil {
+				return nil, readError(err)
+			}
+			numbers := make([]int, len(pages))
+			for i := range pages {
+				numbers[i] = i + 1
+			}
+			out := []PageBounds{}
+			for n, bd := range s.app.Reading.PageBoundsMany(ctx, b, numbers, boundsBudget) {
+				out = append(out, PageBounds{Number: n, Bounds: bd})
+			}
+			sort.Slice(out, func(i, j int) bool { return out[i].Number < out[j].Number })
+			return &struct {
+				CacheControl string `header:"Cache-Control"`
+				Body         []PageBounds
+			}{"private, max-age=86400", out}, nil
 		})
 
 	huma.Register(s.api, huma.Operation{OperationID: "read-progress", Method: http.MethodPut, Path: "/api/v1/read/chapters/{id}/progress", Tags: tags,

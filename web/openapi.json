@@ -4152,6 +4152,49 @@
         ],
         "type": "object"
       },
+      "PageBounds": {
+        "additionalProperties": false,
+        "properties": {
+          "h": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "height": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "number": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "w": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "width": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "x": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "y": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "number",
+          "width",
+          "height",
+          "x",
+          "y",
+          "w",
+          "h"
+        ],
+        "type": "object"
+      },
       "Patch": {
         "additionalProperties": false,
         "properties": {
@@ -11660,6 +11703,58 @@
         ]
       }
     },
+    "/api/v1/read/chapters/{id}/bounds": {
+      "get": {
+        "operationId": "read-chapter-bounds",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PageBounds"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "The border boxes of a chapter's pages, in one request (pages still being measured come back later)",
+        "tags": [
+          "Reader"
+        ]
+      }
+    },
     "/api/v1/read/chapters/{id}/file": {
       "get": {
         "operationId": "read-file",
@@ -11717,31 +11812,18 @@
               "minimum": 1,
               "type": "integer"
             }
+          },
+          {
+            "in": "header",
+            "name": "If-None-Match",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
           "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "contentEncoding": "base64",
-                  "type": "string"
-                }
-              }
-            },
-            "description": "OK",
-            "headers": {
-              "Cache-Control": {
-                "schema": {
-                  "type": "string"
-                }
-              },
-              "Content-Type": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
+            "description": "OK"
           },
           "default": {
             "content": {

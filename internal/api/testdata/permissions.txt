@@ -94,6 +94,7 @@ queue-remove DELETE /api/v1/queue/{id} -> library.manage
 queue-resume POST /api/v1/queue/resume -> library.manage
 queue-retry POST /api/v1/queue/{id}/retry -> library.manage
 read-chapter GET /api/v1/read/chapters/{id} -> signedin
+read-chapter-bounds GET /api/v1/read/chapters/{id}/bounds -> signedin
 read-file GET /api/v1/read/chapters/{id}/file -> download
 read-page GET /api/v1/read/chapters/{id}/pages/{n} -> signedin
 read-page-bounds GET /api/v1/read/chapters/{id}/pages/{n}/bounds -> signedin

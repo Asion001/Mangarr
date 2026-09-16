@@ -5,7 +5,9 @@ import (
 	"context"
 	"fmt"
 	"image"
+	"runtime"
 	"sync"
+	"time"
 
 	"github.com/Asion001/mangarr/internal/apitiming"
 	"github.com/Asion001/mangarr/internal/imagecheck"
@@ -44,12 +46,18 @@ func (c *boundsCache) put(k string, b Bounds) {
 	c.m[k] = b
 }
 
+// boundsKey identifies a page's bounds: its file (and when it was imported)
+// or, for a chapter that isn't downloaded, the chapter itself.
+func boundsKey(b *BookInfo, n int) string {
+	if b.File != nil {
+		return fmt.Sprintf("f%d|%d|%d", b.File.ID, b.File.ImportedAt.Unix(), n)
+	}
+	return fmt.Sprintf("ch%d|%d", b.Chapter.ID, n)
+}
+
 // PageBounds returns page n's size and content box.
 func (s *Service) PageBounds(ctx context.Context, b *BookInfo, n int) (Bounds, error) {
-	key := fmt.Sprintf("ch%d|%d", b.Chapter.ID, n)
-	if b.File != nil {
-		key = fmt.Sprintf("f%d|%d|%d", b.File.ID, b.File.ImportedAt.Unix(), n)
-	}
+	key := boundsKey(b, n)
 	if bd, ok := s.bounds.get(key); ok {
 		return bd, nil
 	}
@@ -154,4 +162,56 @@ func ContentBox(img image.Image) Bounds {
 	left, top = max(0, left-mx), max(0, top-my)
 	right, bottom = min(w, right+mx), min(h, bottom+my)
 	return Bounds{Width: w, Height: h, X: left, Y: top, W: right - left, H: bottom - top}
+}
+
+// PageBoundsMany returns the bounds of several pages at once, so the reader
+// asks once per chapter instead of once per page. Pages already measured come
+// back immediately; the rest are decoded in parallel until budget runs out,
+// and whatever is missing can still be asked for one page at a time.
+func (s *Service) PageBoundsMany(ctx context.Context, b *BookInfo, pages []int, budget time.Duration) map[int]Bounds {
+	out := make(map[int]Bounds, len(pages))
+	var todo []int
+	for _, n := range pages {
+		if bd, ok := s.bounds.get(boundsKey(b, n)); ok {
+			out[n] = bd
+		} else {
+			todo = append(todo, n)
+		}
+	}
+	if len(todo) == 0 || budget <= 0 {
+		return out
+	}
+	ctx, cancel := context.WithTimeout(ctx, budget)
+	defer cancel()
+	workers := max(1, min(runtime.NumCPU()/2, 4)) // decoding is CPU heavy; leave room for the rest
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	work := make(chan int)
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for n := range work {
+				bd, err := s.PageBounds(ctx, b, n)
+				if err != nil {
+					continue // out of budget, or a page that can't be decoded
+				}
+				mu.Lock()
+				out[n] = bd
+				mu.Unlock()
+			}
+		}()
+	}
+	for _, n := range todo {
+		select {
+		case work <- n:
+		case <-ctx.Done():
+		}
+		if ctx.Err() != nil {
+			break
+		}
+	}
+	close(work)
+	wg.Wait()
+	return out
 }
