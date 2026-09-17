@@ -49,6 +49,10 @@ var operationPermissions = map[string][]string{
 	"series-follow":             {permSignedIn},
 	"series-unfollow":           {permSignedIn},
 
+	"source-priorities-list":    {access.LibraryManage},
+	"source-priorities-save":    {access.LibraryManage},
+	"source-priorities-inherit": {access.LibraryManage},
+
 	// reading the library (limited to the series the group sees)
 	"series-list":         {permSignedIn},
 	"series-get":          {permSignedIn},

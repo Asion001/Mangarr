@@ -108,7 +108,8 @@ func (s *Service) SearchMany(ctx context.Context, query string, targets []catalo
 }
 
 type QuickSearchInput struct {
-	Query string `json:"query" minLength:"1"`
+	RootFolderID int64  `json:"rootFolderId,omitempty"`
+	Query        string `json:"query" minLength:"1"`
 	// Titles are other names of the series (metadata title, alternative titles).
 	Titles []string `json:"titles,omitempty"`
 	Scope  string   `json:"scope,omitempty" enum:"active,all,"`
@@ -222,7 +223,7 @@ func (s *Service) Quick(ctx context.Context, in QuickSearchInput, opt QuickOptio
 	if scope == "" {
 		scope = catalogs.ScopeActive
 	}
-	targets, _ := s.Catalogs.Select(ctx, catalogs.Filter{Scope: scope, Lang: in.Lang, Keys: in.Sources})
+	targets, _ := s.Catalogs.Select(ctx, catalogs.Filter{Scope: scope, Lang: in.Lang, Keys: in.Sources, RootFolderID: in.RootFolderID})
 	titles := append([]string{in.Query}, in.Titles...)
 	res := &QuickSearchResult{Top: []QuickCandidate{}, Searched: []QuickSearched{}, Remaining: []string{}, Groups: []SearchResultGroup{},
 		Threshold: threshold, Generation: s.Catalogs.Generation()}

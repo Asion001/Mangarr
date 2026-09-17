@@ -4292,6 +4292,34 @@
         ],
         "type": "object"
       },
+      "PriorityPreview": {
+        "additionalProperties": false,
+        "properties": {
+          "previousMode": {
+            "type": "string"
+          },
+          "seriesId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SeriesSource"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "seriesId",
+          "title",
+          "previousMode",
+          "sources"
+        ],
+        "type": "object"
+      },
       "ProcessEstimate": {
         "additionalProperties": false,
         "properties": {
@@ -4782,6 +4810,10 @@
           "query": {
             "minLength": 1,
             "type": "string"
+          },
+          "rootFolderId": {
+            "format": "int64",
+            "type": "integer"
           },
           "scope": {
             "enum": [
@@ -6565,6 +6597,13 @@
           "sortTitle": {
             "type": "string"
           },
+          "sourcePriorityMode": {
+            "enum": [
+              "inherit",
+              "custom"
+            ],
+            "type": "string"
+          },
           "sources": {
             "items": {
               "$ref": "#/components/schemas/SeriesSource"
@@ -6596,6 +6635,7 @@
           "stats",
           "coverUrl",
           "following",
+          "sourcePriorityMode",
           "id",
           "title",
           "sortTitle",
@@ -6633,6 +6673,10 @@
           "createdAt": {
             "format": "date-time",
             "type": "string"
+          },
+          "effectivePriority": {
+            "format": "int64",
+            "type": "integer"
           },
           "enabled": {
             "type": "boolean"
@@ -6897,6 +6941,49 @@
           "position",
           "type",
           "value"
+        ],
+        "type": "object"
+      },
+      "Source-priorities-inheritRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "dryRun": {
+            "type": "boolean"
+          },
+          "seriesIds": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "seriesIds",
+          "dryRun"
+        ],
+        "type": "object"
+      },
+      "Source-priorities-saveRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "scope": {
+            "maxLength": 80,
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "type": "array"
+          }
+        },
+        "required": [
+          "scope",
+          "sources"
         ],
         "type": "object"
       },
@@ -7166,6 +7253,25 @@
           "title",
           "value",
           "visible"
+        ],
+        "type": "object"
+      },
+      "SourcePriorityList": {
+        "additionalProperties": false,
+        "properties": {
+          "scope": {
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "scope",
+          "sources"
         ],
         "type": "object"
       },
@@ -7586,6 +7692,13 @@
           "rootFolderId": {
             "format": "int64",
             "type": "integer"
+          },
+          "sourcePriorityMode": {
+            "enum": [
+              "inherit",
+              "custom"
+            ],
+            "type": "string"
           },
           "status": {
             "enum": [
@@ -15637,6 +15750,120 @@
         "summary": "Save single sign-on settings (send the masked secret to keep the stored one)",
         "tags": [
           "Settings"
+        ]
+      }
+    },
+    "/api/v1/source-priorities": {
+      "get": {
+        "operationId": "source-priorities-list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SourcePriorityList"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Sources"
+        ]
+      },
+      "put": {
+        "operationId": "source-priorities-save",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Source-priorities-saveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourcePriorityList"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Sources"
+        ]
+      }
+    },
+    "/api/v1/source-priorities/inherit": {
+      "post": {
+        "operationId": "source-priorities-inherit",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Source-priorities-inheritRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PriorityPreview"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Sources"
         ]
       }
     },

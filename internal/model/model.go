@@ -290,21 +290,22 @@ const (
 )
 
 type Series struct {
-	bun.BaseModel    `bun:"table:series"`
-	ID               int64          `bun:"id,pk,autoincrement" json:"id"`
-	Title            string         `bun:"title,notnull" json:"title"`
-	SortTitle        string         `bun:"sort_title,notnull" json:"sortTitle"`
-	Status           string         `bun:"status,notnull" json:"status"`
-	Monitored        bool           `bun:"monitored,notnull" json:"monitored"`
-	MonitorNew       string         `bun:"monitor_new,notnull" json:"monitorNew"` // "all" | "none"
-	RootFolderID     int64          `bun:"root_folder_id,notnull" json:"rootFolderId"`
-	Path             string         `bun:"path,notnull" json:"path"` // folder name under the root folder
-	ProfileID        int64          `bun:"profile_id,notnull" json:"profileId"`
-	Language         string         `bun:"language,notnull" json:"language"`
-	ReadingDirection string         `bun:"reading_direction,notnull" json:"readingDirection"` // rtl | ltr | vertical | webtoon
-	Tags             []int64        `bun:"tags,notnull" json:"tags"`
-	Metadata         SeriesMetadata `bun:"metadata,notnull" json:"metadata"`
-	AddOptions       AddOptions     `bun:"add_options,notnull" json:"addOptions"`
+	bun.BaseModel      `bun:"table:series"`
+	ID                 int64          `bun:"id,pk,autoincrement" json:"id"`
+	Title              string         `bun:"title,notnull" json:"title"`
+	SortTitle          string         `bun:"sort_title,notnull" json:"sortTitle"`
+	Status             string         `bun:"status,notnull" json:"status"`
+	Monitored          bool           `bun:"monitored,notnull" json:"monitored"`
+	MonitorNew         string         `bun:"monitor_new,notnull" json:"monitorNew"` // "all" | "none"
+	RootFolderID       int64          `bun:"root_folder_id,notnull" json:"rootFolderId"`
+	Path               string         `bun:"path,notnull" json:"path"` // folder name under the root folder
+	ProfileID          int64          `bun:"profile_id,notnull" json:"profileId"`
+	Language           string         `bun:"language,notnull" json:"language"`
+	SourcePriorityMode string         `bun:"source_priority_mode,notnull,default:'custom'" json:"sourcePriorityMode" enum:"inherit,custom"`
+	ReadingDirection   string         `bun:"reading_direction,notnull" json:"readingDirection"` // rtl | ltr | vertical | webtoon
+	Tags               []int64        `bun:"tags,notnull" json:"tags"`
+	Metadata           SeriesMetadata `bun:"metadata,notnull" json:"metadata"`
+	AddOptions         AddOptions     `bun:"add_options,notnull" json:"addOptions"`
 	// BlockedScanlators are scanlator names never downloaded for this series
 	// (in addition to the profile's patterns).
 	BlockedScanlators   []string   `bun:"blocked_scanlators,notnull" json:"blockedScanlators,omitempty"`
@@ -384,6 +385,7 @@ type SeriesSource struct {
 	BackoffUntil         *time.Time `bun:"backoff_until" json:"backoffUntil,omitempty"`
 	LastError            string     `bun:"last_error,notnull" json:"lastError"`
 	CreatedAt            time.Time  `bun:"created_at,notnull" json:"createdAt"`
+	EffectivePriority    *int       `bun:"-" json:"effectivePriority,omitempty"`
 }
 
 // ---- Chapters ---------------------------------------------------------------

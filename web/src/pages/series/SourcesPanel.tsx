@@ -13,7 +13,17 @@ export function SourcesPanel({ series }: { series: Series }) {
   const toast = useToast();
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<SeriesSource | null>(null);
-  const sources = [...(series.sources ?? [])].sort((a, b) => a.priority - b.priority || a.id - b.id);
+  const inherited = series.sourcePriorityMode === "inherit";
+  const sources = [...(series.sources ?? [])].sort((a, b) => (a.effectivePriority ?? a.priority) - (b.effectivePriority ?? b.priority) || a.id - b.id);
+
+  const setMode = async (sourcePriorityMode: "inherit" | "custom") => {
+    try {
+      await unwrap(api.PUT("/api/v1/series/{id}", { params: { path: { id: series.id } }, body: { sourcePriorityMode } }));
+      await qc.invalidateQueries({ queryKey: ["series", series.id] });
+    } catch (error) {
+      toast.fromError(error, t("Could not update source priority mode"));
+    }
+  };
 
   const update = async (ss: SeriesSource, body: { priority?: number; enabled?: boolean }) => {
     try {
@@ -50,9 +60,19 @@ export function SourcesPanel({ series }: { series: Series }) {
       title={`Sources (${sources.length})`}
       className="mb-6"
       actions={
-        <Button size="sm" icon={<Plus className="size-3.5" />} onClick={() => setAdding(true)}>{t("Link source")}</Button>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" onClick={() => setMode(inherited ? "custom" : "inherit")}>
+            {inherited ? t("Use custom order") : t("Inherit priority")}
+          </Button>
+          <Button size="sm" icon={<Plus className="size-3.5" />} onClick={() => setAdding(true)}>{t("Link source")}</Button>
+        </div>
       }
     >
+      <p className="mb-3 text-xs text-muted">
+        {inherited
+          ? t("Order is inherited from this library, then the series language, then global catalog priority.")
+          : t("This series keeps its own source order. Switching to inherited priority will preserve the links and downloaded files.")}
+      </p>
       {sources.length === 0 ? (
         <p className="text-sm text-muted">{t("No source is linked. Link one to receive chapters.")}</p>
       ) : (
@@ -75,10 +95,10 @@ export function SourcesPanel({ series }: { series: Series }) {
                 <Td>
                   <div className="flex items-center gap-0.5">
                     <span className="w-5 text-center text-muted">{i + 1}</span>
-                    <IconButton title={t("Higher priority")} disabled={i === 0} onClick={() => move(i, -1)}>
+                    <IconButton title={inherited ? t("Switch to custom order to reorder") : t("Higher priority")} disabled={inherited || i === 0} onClick={() => move(i, -1)}>
                       <ArrowUp className="size-3.5" />
                     </IconButton>
-                    <IconButton title={t("Lower priority")} disabled={i === sources.length - 1} onClick={() => move(i, 1)}>
+                    <IconButton title={inherited ? t("Switch to custom order to reorder") : t("Lower priority")} disabled={inherited || i === sources.length - 1} onClick={() => move(i, 1)}>
                       <ArrowDown className="size-3.5" />
                     </IconButton>
                   </div>
@@ -132,6 +152,8 @@ export function SourcesPanel({ series }: { series: Series }) {
       {adding && (
         <SourceSearchModal
           initialQuery={series.title}
+          initialLang={series.language}
+          rootFolderId={series.rootFolderId}
           titles={[series.title, ...(series.metadata?.altTitles ?? [])]}
           title={t("Link a source")}
           onClose={() => setAdding(false)}

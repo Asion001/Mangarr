@@ -2083,6 +2083,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/source-priorities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["source-priorities-list"];
+        put: operations["source-priorities-save"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/source-priorities/inherit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["source-priorities-inherit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sources": {
         parameters: {
             query?: never;
@@ -4132,6 +4164,13 @@ export interface components {
             seconds: number;
             token: string;
         };
+        PriorityPreview: {
+            previousMode: string;
+            /** Format: int64 */
+            seriesId: number;
+            sources: components["schemas"]["SeriesSource"][];
+            title: string;
+        };
         ProcessEstimate: {
             /** Format: int64 */
             bytes: number;
@@ -4284,6 +4323,8 @@ export interface components {
         QuickSearchInput: {
             lang?: string;
             query: string;
+            /** Format: int64 */
+            rootFolderId?: number;
             /** @enum {string} */
             scope?: "active" | "all" | "";
             sources?: string[];
@@ -4800,6 +4841,8 @@ export interface components {
             /** Format: int64 */
             rootFolderId: number;
             sortTitle: string;
+            /** @enum {string} */
+            sourcePriorityMode: "inherit" | "custom";
             sources?: components["schemas"]["SeriesSource"][];
             stats: components["schemas"]["SeriesStats"];
             status: string;
@@ -4817,6 +4860,8 @@ export interface components {
             consecutiveFailures: number;
             /** Format: date-time */
             createdAt: string;
+            /** Format: int64 */
+            effectivePriority?: number;
             enabled: boolean;
             /** Format: int64 */
             id: number;
@@ -4905,6 +4950,14 @@ export interface components {
             type: string;
             value: unknown;
         };
+        "Source-priorities-inheritRequest": {
+            dryRun: boolean;
+            seriesIds: number[];
+        };
+        "Source-priorities-saveRequest": {
+            scope: string;
+            sources: string[];
+        };
         SourceChapter: {
             engineRef?: string;
             name: string;
@@ -4981,6 +5034,10 @@ export interface components {
             type: string;
             value: unknown;
             visible: boolean;
+        };
+        SourcePriorityList: {
+            scope: string;
+            sources: string[];
         };
         SourceUpdate: {
             /** Format: int64 */
@@ -5107,6 +5164,8 @@ export interface components {
             readingDirection?: "rtl" | "ltr" | "vertical" | "webtoon";
             /** Format: int64 */
             rootFolderId?: number;
+            /** @enum {string} */
+            sourcePriorityMode?: "inherit" | "custom";
             /** @enum {string} */
             status?: "unknown" | "ongoing" | "completed" | "hiatus" | "cancelled";
             tags?: number[];
@@ -10694,6 +10753,101 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SSOSettings"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "source-priorities-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourcePriorityList"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "source-priorities-save": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Source-priorities-saveRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourcePriorityList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "source-priorities-inherit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Source-priorities-inheritRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriorityPreview"][];
                 };
             };
             /** @description Error */

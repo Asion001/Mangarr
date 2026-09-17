@@ -17,7 +17,7 @@ import (
 // Tables are mangarr's tables in an order that satisfies foreign keys
 // (TestTablesCoverSchema keeps it complete).
 var Tables = []string{
-	"groups", "readers", "users", "user_ui_preferences", "sessions", "invites",
+	"groups", "readers", "users", "user_ui_preferences", "source_priority_lists", "sessions", "invites",
 	"settings", "tags", "root_folders", "profiles", "provider_definitions", "catalog_prefs",
 	"series", "series_sources", "chapters", "chapter_releases", "chapter_files",
 	"download_jobs", "history", "blocklist", "commands", "scheduled_tasks",

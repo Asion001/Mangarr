@@ -23,6 +23,7 @@ import (
 	"github.com/Asion001/mangarr/internal/naming"
 	"github.com/Asion001/mangarr/internal/organize"
 	"github.com/Asion001/mangarr/internal/series"
+	"github.com/Asion001/mangarr/internal/sourcepriority"
 )
 
 func init() { register((*Server).registerSeries) }
@@ -262,6 +263,12 @@ func (s *Server) seriesResource(ctx context.Context, ser model.Series, stats map
 		CoverURL: "api/v1/series/" + strconv.FormatInt(ser.ID, 10) + "/cover?v=" + strconv.FormatInt(ser.UpdatedAt.Unix(), 10)}
 	if detail {
 		_ = s.app.DB.NewSelect().Model(&r.Sources).Where("series_id = ?", ser.ID).Order("priority", "id").Scan(ctx)
+		if ranks, err := sourcepriority.Ranks(ctx, s.app.DB, ser, r.Sources); err == nil {
+			for i := range r.Sources {
+				rank := ranks[r.Sources[i].ID]
+				r.Sources[i].EffectivePriority = &rank
+			}
+		}
 		r.FullPath, _ = s.app.Library.SeriesDir(ctx, &ser)
 		r.Reading = s.readingInfo(ctx, &ser, r.FullPath)
 	}
