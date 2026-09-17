@@ -1,3 +1,4 @@
+import { useUIMode } from "../../lib/uiPreferences";
 import { t as tr, t } from "../../lib/i18n/core";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
@@ -22,7 +23,8 @@ export function SeriesDetail() {
   const { data: chapters } = useChapters(id);
   const push = usePushCommand();
   const { can, account } = useAccount();
-  const manage = can("library.manage");
+  const { editing } = useUIMode();
+  const manage = can("library.manage") && editing;
   const qc = useQueryClient();
   const toast = useToast();
   const nav = useNavigate();
@@ -160,12 +162,12 @@ export function SeriesDetail() {
       </div>
 
       {manage && <SourcesPanel series={s} />}
-      <ChaptersTable seriesId={id} manage={manage} />
+      <ChaptersTable key={String(manage)} seriesId={id} manage={manage} />
 
-      {edit && <EditSeriesModal series={s} onClose={() => setEdit(false)} />}
-      {renaming && <RenameModal seriesIds={[id]} onClose={() => setRenaming(false)} />}
+      {manage && edit && <EditSeriesModal series={s} onClose={() => setEdit(false)} />}
+      {manage && renaming && <RenameModal seriesIds={[id]} onClose={() => setRenaming(false)} />}
       <Confirm
-        open={del}
+        open={manage && del}
         title={t("Delete series")}
         danger
         confirmLabel={t("Delete")}
@@ -180,9 +182,9 @@ export function SeriesDetail() {
           <Switch checked={deleteFiles} onChange={setDeleteFiles} label={t("Also move its folder to the recycle bin")} />
         </div>
       </Confirm>
-      <div className="mt-6 text-xs text-muted">
+      {manage && <div className="mt-6 text-xs text-muted">
         <Link to="/activity/history" className="hover:text-fg">{t("View history →")}</Link>
-      </div>
+      </div>}
     </>
   );
 }

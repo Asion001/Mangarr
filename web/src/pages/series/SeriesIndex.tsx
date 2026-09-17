@@ -1,5 +1,6 @@
+import { useUIMode } from "../../lib/uiPreferences";
 import { t } from "../../lib/i18n/core";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { CheckSquare, LayoutGrid, List, PlusCircle, RefreshCw, Search } from "lucide-react";
 import { apiUrl, type Series } from "../../api/client";
@@ -38,7 +39,8 @@ function ReadBar({ s }: { s: Series }) {
 
 export function SeriesIndex() {
   const { data, isLoading, error } = useSeriesList();
-  const manage = useAccount().can("library.manage");
+  const { editing } = useUIMode();
+  const manage = useAccount().can("library.manage") && editing;
   const push = usePushCommand();
   const [q, setQ] = useQueryParam("q");
   const [filterParam, setFilter] = useListParam("filter", "all");
@@ -47,6 +49,7 @@ export function SeriesIndex() {
   const sort = sortParam as Sort;
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  useEffect(()=>{if(!manage){setSelecting(false);setSelected(new Set());}},[manage]);
   const toggle = (id: number) =>
     setSelected((cur) => {
       const n = new Set(cur);
@@ -142,7 +145,7 @@ export function SeriesIndex() {
       {isLoading && <Loading />}
       {error && <ErrorBox error={error} />}
       {data && data.length === 0 && (
-        <EmptyState title={t("No series yet")}>{t("Add a source module (Settings → Source modules), a root folder (Settings → Media management), then add your first series.")}</EmptyState>
+        <EmptyState title={t("No series yet")}>{manage?t("Add a source module (Settings → Source modules), a root folder (Settings → Media management), then add your first series."):t("No series available yet.")}</EmptyState>
       )}
       {view === "posters" ? (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-4">
@@ -162,8 +165,8 @@ export function SeriesIndex() {
               >
                 <div className="relative">
                   <Cover src={apiUrl(s.coverUrl)} alt={s.title} className="aspect-[2/3] w-full ring-accent/60 transition group-hover:ring-2" />
-                  {!s.monitored && <div className="absolute left-1.5 top-1.5"><Badge>{t("unmonitored")}</Badge></div>}
-                  {s.stats.missingCount > 0 && (
+                  {manage && !s.monitored && <div className="absolute left-1.5 top-1.5"><Badge>{t("unmonitored")}</Badge></div>}
+                  {manage && s.stats.missingCount > 0 && (
                     <div className="absolute right-1.5 top-1.5">
                       <Badge tone="warn">{s.stats.missingCount}{" " + t("missing")}</Badge>
                     </div>
@@ -204,7 +207,7 @@ export function SeriesIndex() {
                   <Link to={`/series/${s.id}`} className="font-medium hover:text-accent-2">
                     {s.title}
                   </Link>
-                  {!s.monitored && <span className="ml-2"><Badge>{t("unmonitored")}</Badge></span>}
+                  {manage && !s.monitored && <span className="ml-2"><Badge>{t("unmonitored")}</Badge></span>}
                 </Td>
                 <Td>
                   <Badge tone={statusTone(s.status)}>{s.status}</Badge>

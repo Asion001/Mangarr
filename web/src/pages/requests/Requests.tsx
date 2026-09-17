@@ -1,3 +1,4 @@
+import { useUIMode } from "../../lib/uiPreferences";
 import { t as tr, t } from "../../lib/i18n/core";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
@@ -28,9 +29,11 @@ function useRequests(all: boolean, status: string) {
 /** RequestsPage: ask for series (Jellyseerr style), and handle requests. */
 export function RequestsPage() {
   const { can } = useAccount();
-  const manager = can(["requests.manage", "library.manage"]);
+  const { editing } = useUIMode();
+  const manager = editing && can(["requests.manage", "library.manage"]);
   const asker = can("requests.create");
-  const [tab, setTab] = useQueryParam("tab", manager ? "manage" : "ask");
+  const [requestedTab, setTab] = useQueryParam("tab", manager ? "manage" : "ask");
+  const tab = requestedTab === "manage" && !manager ? "ask" : requestedTab;
   return (
     <>
       <PageHeader title={t("Requests")} subtitle={t("Ask for series to be added to the library; you'll be told when they arrive.")} />

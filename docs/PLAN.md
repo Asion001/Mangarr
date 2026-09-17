@@ -477,3 +477,5 @@ Each part is committed separately on `codex/phase-2`. Existing permission checks
 
 P1 validation: API, schema coverage and database-copy tests passed against SQLite and local PostgreSQL; locale unit tests passed.
 Browser validation: Chromium switched Russian/Ukrainian and retained the anonymous preference after reload. Production build and 1,097-message static coverage check passed.
+
+P2 implemented: reading is the default even for administrators, with explicit editing controls and permission-aware direct links. Desktop navigation collapses to a saved icon rail; mobile navigation scrolls independently of the account footer and supports focus trapping, Escape and focus restoration. Chromium tests cover both modes, denied access, persistence and a 390×600 expanded menu; frontend typecheck/build and locale checks passed.
