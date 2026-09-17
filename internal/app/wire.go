@@ -40,6 +40,11 @@ func (a *App) wire(ctx context.Context) error {
 	a.Tasks.DataDir = a.Cfg.DataDir
 	worktasks.SetDefault(a.Tasks) // the "mangarr workers" upscaler hands batches to it
 	a.Tasks.Changed = func(jobID int64) { a.DLQueue.Wake() }
+	a.Tasks.Abandoned = func(t model.WorkerTask) {
+		if t.Kind == model.TaskDownload {
+			a.Downloads.TaskAbandoned(context.WithoutCancel(ctx), t, t.Error)
+		}
+	}
 	a.AddService(a.Tasks)
 	a.Downloads = downloads.NewManager(a.DB, a.Bus, a.Modules, a.Settings, a.Library, a.DLQueue, a.Searcher, log.With("component", "downloads"), a.Cfg.DataDir)
 	a.Downloads.Gov = a.Catalogs.Gov

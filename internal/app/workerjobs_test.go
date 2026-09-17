@@ -122,3 +122,73 @@ func TestRestartLeavesWorkerJobs(t *testing.T) {
 		t.Fatalf("still open: %v %+v", err, open)
 	}
 }
+
+// TestAbandonedDownloadComesBack: when no worker finishes a chapter, the
+// job doesn't sit there forever. It is failed as an infrastructure problem
+// — the release is fine, the machine that was going to fetch it wasn't — so
+// it is retried later and nothing is blocklisted.
+func TestAbandonedDownloadComesBack(t *testing.T) {
+	sc := fakesource.NewScenario("worker-abandoned")
+	sc.Sources = []source.SourceInfo{{ID: "A", Name: "Source A", Lang: "en"}}
+	sc.AddManga(&fakesource.Manga{SourceID: "A", URL: "/m", Title: "Nobody Finished", Status: source.StatusOngoing,
+		Chapters: []fakesource.Chapter{{URL: "/c1", Name: "Chapter 1", Number: 1, Uploaded: time.Now()}}})
+
+	e := newTestApp(t, dbtest.DSNs(t)["sqlite"])
+	mod := e.addFakeModule(t, "worker-abandoned")
+	ser, err := e.App.Series.Add(e.Ctx, series.AddRequest{Title: "Nobody Finished", RootFolderID: e.RFID, Monitor: model.MonitorNone, NoRefresh: true,
+		Sources: []series.SourceLink{{ModuleID: mod, SourceID: "A", URL: "/m", SourceName: "Source A", Lang: "en"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.runCommand(t, "RefreshSeries", map[string]any{"seriesId": ser.ID})
+	var chapter model.Chapter
+	if err := e.App.DB.NewSelect().Model(&chapter).Where("series_id = ?", ser.ID).Limit(1).Scan(e.Ctx); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	job := &model.DownloadJob{Kind: model.JobKindDownload, Status: model.JobDownloading, SeriesID: ser.ID, ChapterID: chapter.ID,
+		NotBefore: now, CreatedAt: now, UpdatedAt: now}
+	if _, err := e.App.DB.NewInsert().Model(job).Exec(e.Ctx); err != nil {
+		t.Fatal(err)
+	}
+	worker := &model.Worker{Name: "vanishing", KeyHash: "h2", Prefix: "mgw_y", Roles: []string{model.RoleDownload},
+		Enabled: true, Info: map[string]any{}, CreatedAt: now}
+	if _, err := e.App.DB.NewInsert().Model(worker).Exec(e.Ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.App.Tasks.Add(e.Ctx, &model.WorkerTask{JobID: job.ID, Kind: model.TaskDownload}); err != nil {
+		t.Fatal(err)
+	}
+	// it is handed out, and each time the worker goes quiet before finishing
+	for range worktasks.MaxAttempts {
+		task, err := e.App.Tasks.Claim(e.Ctx, worker.ID, []string{model.TaskDownload})
+		if err != nil || task == nil {
+			t.Fatalf("claim: %v %+v", err, task)
+		}
+		if _, err := e.App.DB.NewUpdate().Model((*model.WorkerTask)(nil)).Set("lease_until = ?", time.Now().UTC().Add(-time.Minute)).
+			Where("id = ?", task.ID).Exec(e.Ctx); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := e.App.Tasks.Reap(e.Ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	waitFor(t, 10*time.Second, "the job to come back to the queue", func() bool {
+		var j model.DownloadJob
+		if err := e.App.DB.NewSelect().Model(&j).Where("id = ?", job.ID).Scan(e.Ctx); err != nil {
+			return false
+		}
+		return j.Status == model.JobQueued && j.Attempt > 0
+	})
+	var j model.DownloadJob
+	if err := e.App.DB.NewSelect().Model(&j).Where("id = ?", job.ID).Scan(e.Ctx); err != nil {
+		t.Fatal(err)
+	}
+	if !j.NotBefore.After(time.Now()) || j.Error == "" {
+		t.Fatalf("the job should wait a while before being tried again: %+v", j)
+	}
+	if n, _ := e.App.DB.NewSelect().Model((*model.Blocklist)(nil)).Count(e.Ctx); n != 0 {
+		t.Fatalf("a worker going away blocklisted %d releases", n)
+	}
+}

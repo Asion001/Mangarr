@@ -231,6 +231,25 @@ func (m *Manager) TaskFailed(ctx context.Context, task model.WorkerTask, reason 
 	m.fail(ctx, &job, jc, classify(errors.New(reason)))
 }
 
+// TaskAbandoned fails a job whose task nobody finished. It counts as an
+// infrastructure failure: the release is fine, the machine that was going
+// to fetch it wasn't, so it is retried and never blocklisted.
+func (m *Manager) TaskAbandoned(ctx context.Context, task model.WorkerTask, reason string) {
+	var job model.DownloadJob
+	if err := m.db.NewSelect().Model(&job).Where("id = ?", task.JobID).Scan(ctx); err != nil {
+		return
+	}
+	if job.Status == model.JobCompleted || job.Status == model.JobFailed {
+		return
+	}
+	jc, _ := m.load(ctx, &job)
+	_ = os.RemoveAll(m.workDir(job.ID))
+	if reason == "" {
+		reason = "no worker finished this chapter"
+	}
+	m.fail(ctx, &job, jc, infraError{errors.New(reason)})
+}
+
 // TaskProgress reports what a worker has done so far against its job, so
 // the queue shows the same numbers a local download would.
 func (m *Manager) TaskProgress(task model.WorkerTask, done, total int) {

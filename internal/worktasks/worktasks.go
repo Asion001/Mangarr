@@ -42,6 +42,9 @@ type Ledger struct {
 	// Changed (optional) is called whenever a task's state changes, so the
 	// download manager can look at the job again without waiting for a tick.
 	Changed func(jobID int64)
+	// Abandoned (optional) is called when a task is given up on, so the job
+	// it belongs to isn't left waiting for a worker that never comes back.
+	Abandoned func(task model.WorkerTask)
 
 	waitMu  sync.Mutex
 	waiting map[int64]chan error
@@ -293,6 +296,8 @@ func (l *Ledger) Reap(ctx context.Context) (requeued, abandoned int, err error) 
 		if state == model.TaskAbandoned {
 			abandoned++
 			l.settle(t.ID, ErrGivenUp)
+			t.State, t.Error = model.TaskAbandoned, reason
+			l.givenUp(t)
 		} else {
 			requeued++
 		}
@@ -334,6 +339,13 @@ func (l *Ledger) Prune(ctx context.Context, keep time.Duration) (int, error) {
 	}
 	n, _ := res.RowsAffected()
 	return int(n), nil
+}
+
+// givenUp tells the job's owner that nobody is going to do this task.
+func (l *Ledger) givenUp(t model.WorkerTask) {
+	if l.Abandoned != nil {
+		l.Abandoned(t)
+	}
 }
 
 func (l *Ledger) changed(jobID int64) {
