@@ -1,3 +1,4 @@
+import { t } from "../../lib/i18n/core";
 import { useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { LogIn } from "lucide-react";
@@ -46,22 +47,20 @@ export function InvitePage({ token }: { token: string }) {
           <img src="./favicon.svg" className="size-10" alt="" />
           <div>
             <h1 className="text-lg font-semibold">{info.data?.instance || "mangarr"}</h1>
-            <p className="text-sm text-muted">You're invited to read here</p>
+            <p className="text-sm text-muted">{t("You're invited to read here")}</p>
           </div>
         </div>
         {info.isLoading && <Loading />}
         {info.error && (
           <div className="flex flex-col gap-4">
             <ErrorBox error={info.error} />
-            <a href={basePath + "/"} className="text-sm text-accent-2 hover:underline">
-              Sign in instead
-            </a>
+            <a href={basePath + "/"} className="text-sm text-accent-2 hover:underline">{t("Sign in instead")}</a>
           </div>
         )}
         {info.data && (
           <form onSubmit={submit} className="flex flex-col gap-4">
             {info.data.note && <p className="text-sm">{info.data.note}</p>}
-            <p className="text-sm text-muted">Choose how you sign in. Your reading progress is your own.</p>
+            <p className="text-sm text-muted">{t("Choose how you sign in. Your reading progress is your own.")}</p>
             {sso && (
               <>
                 <a href={`${basePath}/api/v1/auth/oidc/login?invite=${encodeURIComponent(token)}`}>
@@ -71,28 +70,26 @@ export function InvitePage({ token }: { token: string }) {
                 </a>
                 {passwords && (
                   <div className="flex items-center gap-3 text-xs text-muted">
-                    <span className="h-px flex-1 bg-border" /> or make an account here <span className="h-px flex-1 bg-border" />
+                    <span className="h-px flex-1 bg-border" />{" " + t("or make an account here") + " "}<span className="h-px flex-1 bg-border" />
                   </div>
                 )}
               </>
             )}
             {passwords && <>
-            <Field label="Username">
+            <Field label={t("Username")}>
               <Input autoFocus autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} required />
             </Field>
-            <Field label="Name to show" help="Optional; others see this instead of your username.">
+            <Field label={t("Name to show")} help={t("Optional; others see this instead of your username.")}>
               <Input autoComplete="nickname" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
             </Field>
-            <Field label="Password" help="At least 8 characters.">
+            <Field label={t("Password")} help={t("At least 8 characters.")}>
               <Input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
             </Field>
-            <Field label="Confirm password">
+            <Field label={t("Confirm password")}>
               <Input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
             </Field>
             {error !== null && <ErrorBox error={error} />}
-            <Button variant={sso ? "secondary" : "primary"} type="submit" loading={loading}>
-              Create account
-            </Button>
+            <Button variant={sso ? "secondary" : "primary"} type="submit" loading={loading}>{t("Create account")}</Button>
             </>}
           </form>
         )}

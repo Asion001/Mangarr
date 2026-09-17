@@ -1,3 +1,4 @@
+import { t as tr, t } from "../../lib/i18n/core";
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Settings2, TimerReset } from "lucide-react";
@@ -38,7 +39,7 @@ export function Catalogs({ module }: { module: ModuleResource }) {
       qc.invalidateQueries({ queryKey: ["catalogs"] });
       qc.invalidateQueries({ queryKey: ["sources"] });
     } catch (e) {
-      toast.fromError(e, "Could not update catalogs");
+      toast.fromError(e, tr("Could not update catalogs"));
     }
   };
 
@@ -66,20 +67,20 @@ export function Catalogs({ module }: { module: ModuleResource }) {
 
   if (isLoading) return <Loading />;
   if (error) return <ErrorBox error={error} />;
-  if (!mine.length) return <EmptyState title="No catalogs">Install an extension first.</EmptyState>;
+  if (!mine.length) return <EmptyState title={t("No catalogs")}>{t("Install an extension first.")}</EmptyState>;
   return (
     <>
       {s && (
-        <Card title="Defaults" className="mb-4">
+        <Card title={t("Defaults")} className="mb-4">
           <div className="flex flex-col gap-3">
             <Switch
               checked={s.hideNsfw}
               env={src.lock("hideNsfw")}
               onChange={(v) => setSources({ hideNsfw: v })}
-              label="Hide NSFW catalogs everywhere (search, browse, add series)"
+              label={t("Hide NSFW catalogs everywhere (search, browse, add series)")}
             />
             <div className="flex flex-wrap items-center gap-1.5 text-sm">
-              <span className="mr-1 text-muted">Search languages by default:</span>
+              <span className="mr-1 text-muted">{t("Search languages by default:")}</span>
               {langs.map((l) => {
                 const on = (s.defaultLanguages ?? []).includes(l);
                 return (
@@ -93,39 +94,33 @@ export function Catalogs({ module }: { module: ModuleResource }) {
                   </button>
                 );
               })}
-              {!(s.defaultLanguages ?? []).length && <span className="text-xs text-muted">(none selected = all languages)</span>}
+              {!(s.defaultLanguages ?? []).length && <span className="text-xs text-muted">{t("(none selected = all languages)")}</span>}
             </div>
           </div>
         </Card>
       )}
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <Input className="max-w-xs" placeholder="Filter catalogs…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <Input className="max-w-xs" placeholder={t("Filter catalogs…")} value={q} onChange={(e) => setQ(e.target.value)} />
         <Select className="w-32" value={lang} onChange={(e) => setLang(e.target.value)}>
-          <option value="">all langs</option>
+          <option value="">{t("all langs")}</option>
           {langs.map((l) => (
             <option key={l}>{l}</option>
           ))}
         </Select>
         <div className="ml-auto flex gap-2">
-          <Button size="sm" onClick={() => update(Object.fromEntries(list.map((c) => [key(c), { enabled: true }])))}>
-            Enable shown
-          </Button>
-          <Button size="sm" onClick={() => update(Object.fromEntries(list.map((c) => [key(c), { enabled: false }])))}>
-            Disable shown
-          </Button>
+          <Button size="sm" onClick={() => update(Object.fromEntries(list.map((c) => [key(c), { enabled: true }])))}>{t("Enable shown")}</Button>
+          <Button size="sm" onClick={() => update(Object.fromEntries(list.map((c) => [key(c), { enabled: false }])))}>{t("Disable shown")}</Button>
         </div>
       </div>
-      <p className="mb-3 text-xs text-muted">
-        Searches go through enabled catalogs from the top down. Disabled catalogs are still searchable with “All sources”; hidden NSFW catalogs never are.
-      </p>
+      <p className="mb-3 text-xs text-muted">{t("Searches go through enabled catalogs from the top down. Disabled catalogs are still searchable with “All sources”; hidden NSFW catalogs never are.")}</p>
       <div className="overflow-x-auto">
         <Table>
           <thead>
             <tr>
-              <Th>Order</Th>
-              <Th>Catalog</Th>
-              <Th>Enabled</Th>
-              <Th>Throttling</Th>
+              <Th>{t("Order")}</Th>
+              <Th>{t("Catalog")}</Th>
+              <Th>{t("Enabled")}</Th>
+              <Th>{t("Throttling")}</Th>
               <Th></Th>
             </tr>
           </thead>
@@ -133,10 +128,10 @@ export function Catalogs({ module }: { module: ModuleResource }) {
             {list.map((c, i) => (
               <tr key={key(c)} className={c.hidden || !c.enabled ? "opacity-60" : undefined}>
                 <Td className="whitespace-nowrap">
-                  <IconButton title="Move up" disabled={i === 0} onClick={() => move(i, -1)}>
+                  <IconButton title={t("Move up")} disabled={i === 0} onClick={() => move(i, -1)}>
                     <ArrowUp className="size-4" />
                   </IconButton>
-                  <IconButton title="Move down" disabled={i === list.length - 1} onClick={() => move(i, 1)}>
+                  <IconButton title={t("Move down")} disabled={i === list.length - 1} onClick={() => move(i, 1)}>
                     <ArrowDown className="size-4" />
                   </IconButton>
                 </Td>
@@ -144,10 +139,9 @@ export function Catalogs({ module }: { module: ModuleResource }) {
                   <div className="flex items-center gap-2">
                     {c.iconUrl && <img src={apiUrl(`api/v1/modules/${module.id}/asset`, { path: c.iconUrl })} alt="" className="size-6 rounded" loading="lazy" />}
                     <span className="font-medium">{c.displayName}</span>
-                    {c.nsfw && <Badge tone={c.hidden ? "err" : "warn"}>{c.hidden ? "18+ hidden" : "18+"}</Badge>}
+                    {c.nsfw && <Badge tone={c.hidden ? "err" : "warn"}>{c.hidden ? tr("18+ hidden") : "18+"}</Badge>}
                     {c.cooldownUntil && (
-                      <Badge tone="warn" title={c.cooldownReason}>
-                        paused until {new Date(c.cooldownUntil).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      <Badge tone="warn" title={c.cooldownReason}>{t("paused until") + " "}{new Date(c.cooldownUntil).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                       </Badge>
                     )}
                   </div>
@@ -161,20 +155,20 @@ export function Catalogs({ module }: { module: ModuleResource }) {
                     value={c.throttle?.preset ?? ""}
                     onChange={(e) => update({ [key(c)]: { throttle: { ...c.throttle, preset: e.target.value as S["ThrottleConfig"]["preset"] } } })}
                   >
-                    <option value="">default</option>
-                    <option value="gentle">gentle</option>
-                    <option value="normal">normal</option>
-                    <option value="fast">fast</option>
+                    <option value="">{t("default")}</option>
+                    <option value="gentle">{t("gentle")}</option>
+                    <option value="normal">{t("normal")}</option>
+                    <option value="fast">{t("fast")}</option>
                   </Select>
                 </Td>
                 <Td className="text-right whitespace-nowrap">
                   {c.cooldownUntil && (
-                    <IconButton title="Resume now" onClick={() => update({ [key(c)]: { clearCooldown: true } })}>
+                    <IconButton title={t("Resume now")} onClick={() => update({ [key(c)]: { clearCooldown: true } })}>
                       <TimerReset className="size-4" />
                     </IconButton>
                   )}
                   {module.capabilities.includes("preferences") && (
-                    <IconButton title="Catalog settings" onClick={() => setSettings(c)}>
+                    <IconButton title={t("Catalog settings")} onClick={() => setSettings(c)}>
                       <Settings2 className="size-4" />
                     </IconButton>
                   )}

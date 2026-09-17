@@ -1,3 +1,4 @@
+import { t as tr, t } from "../../lib/i18n/core";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap } from "../../api/client";
@@ -43,8 +44,8 @@ export function RenameModal({
         api.POST("/api/v1/series/rename", { body: { seriesIds, folders } }),
       );
       toast.success(
-        "Renaming in the background",
-        "Reader progress is restored on library servers afterwards.",
+        tr("Renaming in the background"),
+        tr("Reader progress is restored on library servers afterwards."),
       );
       onClose();
     } catch (e) {
@@ -57,18 +58,17 @@ export function RenameModal({
     <Modal
       open
       onClose={onClose}
-      title="Rename files"
+      title={t("Rename files")}
       size="xl"
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
+          <Button onClick={onClose}>{t("Cancel")}</Button>
           <Button
             variant="primary"
             loading={applying}
             disabled={!files && !dirs}
             onClick={apply}
-          >
-            Rename {files} files{dirs ? ` and ${dirs} folders` : ""}
+          >{t("Rename") + " "}{files}{" " + t("files")}{dirs ? ` and ${dirs} folders` : ""}
           </Button>
         </>
       }
@@ -76,19 +76,13 @@ export function RenameModal({
       <Switch
         checked={folders}
         onChange={setFolders}
-        label="Also rename series folders to the folder format"
+        label={t("Also rename series folders to the folder format")}
       />
-      <p className="mb-3 mt-2 text-xs text-muted">
-        Names follow Settings → Media management. Library servers may treat
-        renamed files as new books; mangarr restores readers' progress
-        afterwards.
-      </p>
+      <p className="mb-3 mt-2 text-xs text-muted">{t("Names follow Settings → Media management. Library servers may treat renamed files as new books; mangarr restores readers' progress afterwards.")}</p>
       {isLoading && <Loading />}
       {error && <ErrorBox error={error} />}
       {data && data.length === 0 && (
-        <p className="text-sm text-muted">
-          Everything already matches the naming format.
-        </p>
+        <p className="text-sm text-muted">{t("Everything already matches the naming format.")}</p>
       )}
       <div className="flex max-h-[55vh] flex-col gap-3 overflow-y-auto">
         {data?.map((s) => (
@@ -161,13 +155,9 @@ export function MassEditBar({
     <>
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-panel/95 px-4 py-3 shadow-lg backdrop-blur md:left-56">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-medium">{ids.length} selected</span>
-          <Button size="sm" onClick={() => edit({ monitored: true })}>
-            Monitor
-          </Button>
-          <Button size="sm" onClick={() => edit({ monitored: false })}>
-            Unmonitor
-          </Button>
+          <span className="text-sm font-medium">{ids.length}{" " + t("selected")}</span>
+          <Button size="sm" onClick={() => edit({ monitored: true })}>{t("Monitor")}</Button>
+          <Button size="sm" onClick={() => edit({ monitored: false })}>{t("Unmonitor")}</Button>
           <Select
             className="w-40"
             value=""
@@ -175,7 +165,7 @@ export function MassEditBar({
               e.target.value && edit({ profileId: Number(e.target.value) })
             }
           >
-            <option value="">Set profile…</option>
+            <option value="">{t("Set profile…")}</option>
             {profiles?.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -191,7 +181,7 @@ export function MassEditBar({
                 edit({ tags: [Number(id)], tagMode: mode as "add" | "remove" });
             }}
           >
-            <option value="">Tags…</option>
+            <option value="">{t("Tags…")}</option>
             {tags?.map((t) => (
               <option key={"a" + t.id} value={`add:${t.id}`}>
                 + {t.label}
@@ -203,23 +193,15 @@ export function MassEditBar({
               </option>
             ))}
           </Select>
-          <Button size="sm" onClick={() => setMoving(true)}>
-            Move…
-          </Button>
-          <Button size="sm" onClick={() => setRenaming(true)}>
-            Rename files…
-          </Button>
-          <Button size="sm" onClick={() => setSourcing(true)}>
-            Sources…
-          </Button>
+          <Button size="sm" onClick={() => setMoving(true)}>{t("Move…")}</Button>
+          <Button size="sm" onClick={() => setRenaming(true)}>{t("Rename files…")}</Button>
+          <Button size="sm" onClick={() => setSourcing(true)}>{t("Sources…")}</Button>
           <Button
             size="sm"
             variant="ghost"
             className="ml-auto"
             onClick={onClear}
-          >
-            Clear selection
-          </Button>
+          >{t("Clear selection")}</Button>
         </div>
       </div>
       {sourcing && <BulkSourcesModal ids={ids} onClose={() => setSourcing(false)} />}
@@ -230,7 +212,7 @@ export function MassEditBar({
           title={`Move ${ids.length} series`}
           footer={
             <>
-              <Button onClick={() => setMoving(false)}>Cancel</Button>
+              <Button onClick={() => setMoving(false)}>{t("Cancel")}</Button>
               <Button
                 variant="primary"
                 disabled={!rootId}
@@ -241,18 +223,16 @@ export function MassEditBar({
                   );
                   setMoving(false);
                 }}
-              >
-                Move
-              </Button>
+              >{t("Move")}</Button>
             </>
           }
         >
-          <Field label="Root folder">
+          <Field label={t("Root folder")}>
             <Select
               value={rootId}
               onChange={(e) => setRootId(Number(e.target.value))}
             >
-              <option value={0}>Choose…</option>
+              <option value={0}>{t("Choose…")}</option>
               {roots?.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.path}
@@ -264,14 +244,10 @@ export function MassEditBar({
             <Switch
               checked={moveFiles}
               onChange={setMoveFiles}
-              label="Move the files (off: they were already moved by hand)"
+              label={t("Move the files (off: they were already moved by hand)")}
             />
           </div>
-          <p className="mt-3 text-xs text-muted">
-            Moving to a root folder in another Komga/Kavita library resets read
-            progress there; mangarr writes readers' progress back once the
-            server has scanned the new location (readers need linked accounts).
-          </p>
+          <p className="mt-3 text-xs text-muted">{t("Moving to a root folder in another Komga/Kavita library resets read progress there; mangarr writes readers' progress back once the server has scanned the new location (readers need linked accounts).")}</p>
         </Modal>
       )}
       {renaming && (

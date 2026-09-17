@@ -65,6 +65,8 @@ me-notifications-update PUT /api/v1/me/notifications/{id} -> signedin
 me-sessions GET /api/v1/me/sessions -> signedin
 me-sessions-revoke DELETE /api/v1/me/sessions/{id} -> signedin
 me-sessions-revoke-others POST /api/v1/me/sessions/revoke-others -> signedin
+me-ui-preferences GET /api/v1/me/ui-preferences -> signedin
+me-ui-preferences-save PUT /api/v1/me/ui-preferences -> signedin
 modules-asset GET /api/v1/modules/{id}/asset -> library.manage
 modules-create POST /api/v1/modules -> admin
 modules-delete DELETE /api/v1/modules/{id} -> admin

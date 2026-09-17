@@ -1,3 +1,4 @@
+import { t } from "../../lib/i18n/core";
 import { Link } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { api, unwrap } from "../../api/client";
@@ -37,10 +38,10 @@ export function HistoryPage() {
   return (
     <>
       <PageHeader
-        title="History"
+        title={t("History")}
         actions={
           <Select className="w-44" value={eventType} onChange={(e) => (setEventType(e.target.value), setPage("1"))}>
-            <option value="">All events</option>
+            <option value="">{t("All events")}</option>
             {Object.keys(tone).map((t) => (
               <option key={t} value={t}>
                 {t}
@@ -56,11 +57,11 @@ export function HistoryPage() {
           <Table>
             <thead>
               <tr>
-                <Th>Event</Th>
-                <Th>Series</Th>
-                <Th>Release</Th>
-                <Th>Details</Th>
-                <Th>Date</Th>
+                <Th>{t("Event")}</Th>
+                <Th>{t("Series")}</Th>
+                <Th>{t("Release")}</Th>
+                <Th>{t("Details")}</Th>
+                <Th>{t("Date")}</Th>
               </tr>
             </thead>
             <tbody>
@@ -87,15 +88,11 @@ export function HistoryPage() {
             </tbody>
           </Table>
           <div className="mt-3 flex items-center justify-end gap-2 text-sm">
-            <Button size="sm" disabled={page <= 1} onClick={() => setPage(String(page - 1))}>
-              Previous
-            </Button>
+            <Button size="sm" disabled={page <= 1} onClick={() => setPage(String(page - 1))}>{t("Previous")}</Button>
             <span className="text-muted">
               {page} / {pages}
             </span>
-            <Button size="sm" disabled={page >= pages} onClick={() => setPage(String(page + 1))}>
-              Next
-            </Button>
+            <Button size="sm" disabled={page >= pages} onClick={() => setPage(String(page + 1))}>{t("Next")}</Button>
           </div>
         </>
       )}

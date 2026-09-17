@@ -1,3 +1,4 @@
+import { t } from "../../lib/i18n/core";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { S } from "../../api/client";
 import type { ReaderSettings } from "./settings";
@@ -163,8 +164,7 @@ export function WebtoonViewer({
       <div className="mx-auto flex flex-col items-center" style={{ width }}>
         {chapter.prev && (
           <div className="w-full py-6 text-center text-sm text-neutral-400">
-            <button type="button" className="rounded-md border border-neutral-600 px-3 py-1.5" onClick={(e) => (e.stopPropagation(), onChapter("prev"))}>
-              Previous chapter: ch. {chapter.prev.number}
+            <button type="button" className="rounded-md border border-neutral-600 px-3 py-1.5" onClick={(e) => (e.stopPropagation(), onChapter("prev"))}>{t("Previous chapter: ch.") + " "}{chapter.prev.number}
             </button>
           </div>
         )}

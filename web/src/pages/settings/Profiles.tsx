@@ -1,3 +1,4 @@
+import { t as tr, t } from "../../lib/i18n/core";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Trash2 } from "lucide-react";
@@ -56,16 +57,14 @@ export function ProfilesPage() {
   return (
     <>
       <PageHeader
-        title="Profiles"
-        subtitle="How releases are chosen, upgraded, upscaled and cleaned for the series using a profile."
+        title={t("Profiles")}
+        subtitle={t("How releases are chosen, upgraded, upscaled and cleaned for the series using a profile.")}
         actions={
           <Button
             variant="primary"
             icon={<Plus className="size-4" />}
             onClick={() => setEditing({ id: 0, name: "", isDefault: false, config: structuredClone(emptyConfig), createdAt: "", updatedAt: "" })}
-          >
-            Add profile
-          </Button>
+          >{t("Add profile")}</Button>
         }
       />
       {isLoading && <Loading />}
@@ -75,16 +74,16 @@ export function ProfilesPage() {
             key={p.id}
             title={
               <span className="flex items-center gap-2">
-                {p.name} {p.isDefault && <Badge tone="accent">default</Badge>}
+                {p.name} {p.isDefault && <Badge tone="accent">{t("default")}</Badge>}
               </span>
             }
             actions={
               <>
-                <IconButton title="Edit" onClick={() => setEditing(p)}>
+                <IconButton title={t("Edit")} onClick={() => setEditing(p)}>
                   <Pencil className="size-4" />
                 </IconButton>
                 {!p.isDefault && (
-                  <IconButton title="Delete" onClick={() => setDeleting(p)}>
+                  <IconButton title={t("Delete")} onClick={() => setDeleting(p)}>
                     <Trash2 className="size-4" />
                   </IconButton>
                 )}
@@ -92,18 +91,18 @@ export function ProfilesPage() {
             }
           >
             <div className="flex flex-wrap gap-1.5 text-xs">
-              <Badge tone={p.config.allowUpgrades ? "info" : "default"}>upgrades {p.config.allowUpgrades ? "on" : "off"}</Badge>
-              <Badge tone={p.config.upscale.enabled ? "accent" : "default"}>upscale {p.config.upscale.enabled ? `< ${p.config.upscale.minWidth}px` : "off"}</Badge>
-              {p.config.encode?.format && p.config.encode.format !== "keep" && <Badge tone="accent">re-encode {p.config.encode.format}</Badge>}
-              {p.config.preferredScanlators?.length ? <Badge>prefers {p.config.preferredScanlators.join(", ")}</Badge> : null}
-              {p.config.blockedScanlators?.length ? <Badge tone="err">blocks {p.config.blockedScanlators.join(", ")}</Badge> : null}
-              {p.config.cleanup?.enabled !== undefined && <Badge tone="warn">cleanup {p.config.cleanup.enabled ? "on" : "off"}</Badge>}
+              <Badge tone={p.config.allowUpgrades ? "info" : "default"}>{t("upgrades") + " "}{p.config.allowUpgrades ? tr("on") : tr("off")}</Badge>
+              <Badge tone={p.config.upscale.enabled ? "accent" : "default"}>{t("upscale") + " "}{p.config.upscale.enabled ? `< ${p.config.upscale.minWidth}px` : tr("off")}</Badge>
+              {p.config.encode?.format && p.config.encode.format !== "keep" && <Badge tone="accent">{t("re-encode") + " "}{p.config.encode.format}</Badge>}
+              {p.config.preferredScanlators?.length ? <Badge>{t("prefers") + " "}{p.config.preferredScanlators.join(", ")}</Badge> : null}
+              {p.config.blockedScanlators?.length ? <Badge tone="err">{t("blocks") + " "}{p.config.blockedScanlators.join(", ")}</Badge> : null}
+              {p.config.cleanup?.enabled !== undefined && <Badge tone="warn">{t("cleanup") + " "}{p.config.cleanup.enabled ? tr("on") : tr("off")}</Badge>}
             </div>
           </Card>
         ))}
       </div>
       {editing && <ProfileEditor profile={editing} onClose={() => setEditing(null)} />}
-      <Confirm open={!!deleting} title="Delete profile" danger confirmLabel="Delete" message={`Delete ${deleting?.name}?`} onConfirm={remove} onClose={() => setDeleting(null)} />
+      <Confirm open={!!deleting} title={t("Delete profile")} danger confirmLabel={t("Delete")} message={`Delete ${deleting?.name}?`} onConfirm={remove} onClose={() => setDeleting(null)} />
     </>
   );
 }
@@ -143,7 +142,7 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
         ? await unwrap(api.PUT("/api/v1/profiles/{id}", { params: { path: { id: p.id } }, body: p }))
         : await unwrap(api.POST("/api/v1/profiles", { body: p }));
       qc.invalidateQueries({ queryKey: ["profiles"] });
-      toast.success("Profile saved");
+      toast.success(tr("Profile saved"));
       if (processing && changedProcessing && !cfg.processExisting && p.id) {
         const est = await unwrap(api.GET("/api/v1/profiles/{id}/process-estimate", { params: { path: { id: saved.id } } }));
         if (est.files > 0) {
@@ -164,62 +163,60 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
     <Modal
       open
       onClose={onClose}
-      title={p.id ? `Edit ${profile.name}` : "New profile"}
+      title={p.id ? `Edit ${profile.name}` : tr("New profile")}
       size="lg"
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" loading={saving} onClick={save}>
-            Save
-          </Button>
+          <Button onClick={onClose}>{t("Cancel")}</Button>
+          <Button variant="primary" loading={saving} onClick={save}>{t("Save")}</Button>
         </>
       }
     >
       <div className="flex flex-col gap-5">
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Name">
+          <Field label={t("Name")}>
             <Input value={p.name} onChange={(e) => setP({ ...p, name: e.target.value })} />
           </Field>
           <div className="flex items-end">
-            <Switch checked={p.isDefault} onChange={(v) => setP({ ...p, isDefault: v })} label="Default profile" />
+            <Switch checked={p.isDefault} onChange={(v) => setP({ ...p, isDefault: v })} label={t("Default profile")} />
           </div>
         </div>
-        <h3 className="font-semibold">Release selection</h3>
-        <Field label="Preferred scanlators" help="Regular expressions, most preferred first. Sources are ranked by series priority before scanlators.">
-          <TagInput value={cfg.preferredScanlators ?? []} onChange={(v) => setCfg({ preferredScanlators: v })} placeholder="e.g. ^Official$ or TCB" />
+        <h3 className="font-semibold">{t("Release selection")}</h3>
+        <Field label={t("Preferred scanlators")} help={t("Regular expressions, most preferred first. Sources are ranked by series priority before scanlators.")}>
+          <TagInput value={cfg.preferredScanlators ?? []} onChange={(v) => setCfg({ preferredScanlators: v })} placeholder={t("e.g. ^Official$ or TCB")} />
         </Field>
-        <Field label="Blocked scanlators" help="Releases matching these are never downloaded.">
+        <Field label={t("Blocked scanlators")} help={t("Releases matching these are never downloaded.")}>
           <TagInput value={cfg.blockedScanlators ?? []} onChange={(v) => setCfg({ blockedScanlators: v })} />
         </Field>
         <div className="grid gap-4 md:grid-cols-2">
-          <Switch checked={cfg.allowUpgrades} onChange={(v) => setCfg({ allowUpgrades: v })} label="Upgrade chapters when a better release appears" />
-          <Field label="Minimum pages" help="0 = off">
+          <Switch checked={cfg.allowUpgrades} onChange={(v) => setCfg({ allowUpgrades: v })} label={t("Upgrade chapters when a better release appears")} />
+          <Field label={t("Minimum pages")} help={t("0 = off")}>
             <Input type="number" min={0} value={cfg.minPages} onChange={(e) => setCfg({ minPages: Number(e.target.value) })} />
           </Field>
         </div>
 
-        <h3 className="font-semibold">Processing</h3>
-        <Field label="When" help="Background: chapters are readable right away and processed later (e.g. at night, see Settings → Schedule).">
+        <h3 className="font-semibold">{t("Processing")}</h3>
+        <Field label={t("When")} help={t("Background: chapters are readable right away and processed later (e.g. at night, see Settings → Schedule).")}>
           <Select value={cfg.processTiming || "background"} onChange={(e) => setCfg({ processTiming: e.target.value as Cfg["processTiming"] })}>
-            <option value="background">In the background, after import</option>
-            <option value="inline">Before import (slower to appear)</option>
+            <option value="background">{t("In the background, after import")}</option>
+            <option value="inline">{t("Before import (slower to appear)")}</option>
           </Select>
         </Field>
-        <h3 className="font-semibold">Upscaling</h3>
-        <Switch checked={up.enabled} onChange={(v) => setUp({ enabled: v })} label="Upscale small pages" />
+        <h3 className="font-semibold">{t("Upscaling")}</h3>
+        <Switch checked={up.enabled} onChange={(v) => setUp({ enabled: v })} label={t("Upscale small pages")} />
         {up.enabled && (
           <div className="grid gap-4 md:grid-cols-2">
-            <Field label="Upscaler">
+            <Field label={t("Upscaler")}>
               <Select value={upscalerId} onChange={(e) => setUp({ upscalerId: Number(e.target.value) })}>
                 {upscalers?.map((u) => (
                   <option key={u.id} value={u.id}>
                     {u.name}
                   </option>
                 ))}
-                {!upscalers?.length && <option value={0}>No upscaler configured</option>}
+                {!upscalers?.length && <option value={0}>{t("No upscaler configured")}</option>}
               </Select>
             </Field>
-            <Field label="Model" help={info?.devices?.length ? `GPU: ${info.devices.join(", ")}` : undefined}>
+            <Field label={t("Model")} help={info?.devices?.length ? `GPU: ${info.devices.join(", ")}` : undefined}>
               <Select value={up.model} onChange={(e) => setUp({ model: e.target.value })}>
                 {(info?.models ?? [{ name: up.model, description: "" }]).map((m) => (
                   <option key={m.name} value={m.name} title={m.description}>
@@ -228,43 +225,43 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
                 ))}
               </Select>
             </Field>
-            <Field label="Upscale pages narrower than (px)" help="iPad portrait: ~1600-2000px. Wider pages are left untouched.">
+            <Field label={t("Upscale pages narrower than (px)")} help={t("iPad portrait: ~1600-2000px. Wider pages are left untouched.")}>
               <Input type="number" value={up.minWidth} onChange={(e) => setUp({ minWidth: Number(e.target.value) })} />
             </Field>
-            <Field label="Maximum width (px)" help="Results are downscaled to at most this width. 0 = no cap.">
+            <Field label={t("Maximum width (px)")} help={t("Results are downscaled to at most this width. 0 = no cap.")}>
               <Input type="number" value={up.maxWidth} onChange={(e) => setUp({ maxWidth: Number(e.target.value) })} />
             </Field>
-            <Field label="Noise reduction" help="-1 none … 3 strong (waifu2x / Real-CUGAN)">
+            <Field label={t("Noise reduction")} help={t("-1 none … 3 strong (waifu2x / Real-CUGAN)")}>
               <Input type="number" min={-1} max={3} value={up.noise} onChange={(e) => setUp({ noise: Number(e.target.value) })} />
             </Field>
-            <Field label="Output format">
+            <Field label={t("Output format")}>
               <Select value={up.format} onChange={(e) => setUp({ format: e.target.value })}>
                 <option value="webp">WebP</option>
                 <option value="jpeg">JPEG</option>
-                <option value="png">PNG (large)</option>
+                <option value="png">{t("PNG (large)")}</option>
               </Select>
             </Field>
-            <Field label="Quality">
+            <Field label={t("Quality")}>
               <Input type="number" min={1} max={100} value={up.quality} onChange={(e) => setUp({ quality: Number(e.target.value) })} />
             </Field>
           </div>
         )}
 
-        <h3 className="font-semibold">Re-encoding to save space</h3>
+        <h3 className="font-semibold">{t("Re-encoding to save space")}</h3>
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Format">
+          <Field label={t("Format")}>
             <Select value={enc.format} onChange={(e) => setEnc({ format: e.target.value as Cfg["encode"]["format"] })}>
-              <option value="keep">Keep original pages</option>
-              <option value="avif">AVIF (lossy, typically 40-70% smaller)</option>
-              <option value="jxl">JPEG XL lossless (~20% smaller JPEGs, reversible)</option>
+              <option value="keep">{t("Keep original pages")}</option>
+              <option value="avif">{t("AVIF (lossy, typically 40-70% smaller)")}</option>
+              <option value="jxl">{t("JPEG XL lossless (~20% smaller JPEGs, reversible)")}</option>
             </Select>
           </Field>
           {enc.format !== "keep" && (
-            <Field label="Preset" help="Max compression is much slower; try Preview or `mangarr bench encode` first.">
+            <Field label={t("Preset")} help={t("Max compression is much slower; try Preview or `mangarr bench encode` first.")}>
               <Select value={enc.preset} onChange={(e) => setEnc({ preset: e.target.value as Cfg["encode"]["preset"] })}>
-                <option value="fast">Fast</option>
-                <option value="balanced">Balanced</option>
-                <option value="max">Maximum compression</option>
+                <option value="fast">{t("Fast")}</option>
+                <option value="balanced">{t("Balanced")}</option>
+                <option value="max">{t("Maximum compression")}</option>
               </Select>
             </Field>
           )}
@@ -272,31 +269,29 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
         {enc.format !== "keep" && compat[enc.format] && (
           <div className="rounded-md border border-border bg-panel-2 p-3 text-xs">
             <div>
-              <span className="text-ok">Reads {enc.format.toUpperCase()}:</span> {compat[enc.format].yes.join(", ")}
+              <span className="text-ok">{t("Reads") + " "}{enc.format.toUpperCase()}:</span> {compat[enc.format].yes.join(", ")}
             </div>
             <div className="mt-1">
-              <span className="text-err">Can't:</span> {compat[enc.format].no.join(", ")}
+              <span className="text-err">{t("Can't:")}</span> {compat[enc.format].no.join(", ")}
             </div>
             {compat[enc.format].note && <div className="mt-1 text-muted">{compat[enc.format].note}</div>}
-            <div className="mt-1 text-muted">After the first re-encoded chapter mangarr asks Komga whether it could read it, and pauses re-encoding if not.</div>
+            <div className="mt-1 text-muted">{t("After the first re-encoded chapter mangarr asks Komga whether it could read it, and pauses re-encoding if not.")}</div>
           </div>
         )}
         {enc.format !== "keep" && (
           <div className="grid gap-4 md:grid-cols-2">
             {enc.format === "avif" && (
-              <Field label="Quality" help="0 = preset (fast 60, balanced 55, max 48)">
+              <Field label={t("Quality")} help={t("0 = preset (fast 60, balanced 55, max 48)")}>
                 <Input type="number" min={0} max={100} value={enc.quality} onChange={(e) => setEnc({ quality: Number(e.target.value) })} />
               </Field>
             )}
-            <Field label="Minimum saving per page (%)" help="Pages that wouldn't shrink this much stay as they are">
+            <Field label={t("Minimum saving per page (%)")} help={t("Pages that wouldn't shrink this much stay as they are")}>
               <Input type="number" min={0} max={90} value={enc.minSavingsPct} onChange={(e) => setEnc({ minSavingsPct: Number(e.target.value) })} />
             </Field>
-            {enc.format === "avif" && <Switch checked={enc.grayscale} onChange={(v) => setEnc({ grayscale: v })} label="Encode black-and-white pages without color (smaller)" />}
-            <Switch checked={enc.recycleOriginals} onChange={(v) => setEnc({ recycleOriginals: v })} label="Keep originals in the recycle bin for a while" />
+            {enc.format === "avif" && <Switch checked={enc.grayscale} onChange={(v) => setEnc({ grayscale: v })} label={t("Encode black-and-white pages without color (smaller)")} />}
+            <Switch checked={enc.recycleOriginals} onChange={(v) => setEnc({ recycleOriginals: v })} label={t("Keep originals in the recycle bin for a while")} />
             <div className="md:col-span-2">
-              <Button size="sm" onClick={() => setPreviewing(true)}>
-                Preview on a chapter…
-              </Button>
+              <Button size="sm" onClick={() => setPreviewing(true)}>{t("Preview on a chapter…")}</Button>
             </div>
           </div>
         )}
@@ -304,30 +299,30 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
           <Switch
             checked={cfg.processExisting}
             onChange={(v) => setCfg({ processExisting: v })}
-            label="Also process chapters downloaded before these settings changed"
+            label={t("Also process chapters downloaded before these settings changed")}
           />
         )}
 
-        <h3 className="font-semibold">Cleanup overrides</h3>
+        <h3 className="font-semibold">{t("Cleanup overrides")}</h3>
         <div className="grid gap-4 md:grid-cols-3">
-          <Field label="Cleanup">
+          <Field label={t("Cleanup")}>
             <Select
               value={tri(cfg.cleanup?.enabled)}
               onChange={(e) => setCfg({ cleanup: { ...cfg.cleanup, enabled: e.target.value === "inherit" ? undefined : e.target.value === "on" } })}
             >
-              <option value="inherit">Use global setting</option>
-              <option value="on">Enabled</option>
-              <option value="off">Disabled</option>
+              <option value="inherit">{t("Use global setting")}</option>
+              <option value="on">{t("Enabled")}</option>
+              <option value="off">{t("Disabled")}</option>
             </Select>
           </Field>
-          <Field label="Keep last read" help="empty = global">
+          <Field label={t("Keep last read")} help={t("empty = global")}>
             <Input
               type="number"
               value={cfg.cleanup?.keepLastRead ?? ""}
               onChange={(e) => setCfg({ cleanup: { ...cfg.cleanup, keepLastRead: e.target.value === "" ? undefined : Number(e.target.value) } })}
             />
           </Field>
-          <Field label="Grace days" help="empty = global">
+          <Field label={t("Grace days")} help={t("empty = global")}>
             <Input
               type="number"
               value={cfg.cleanup?.graceDays ?? ""}
@@ -339,15 +334,15 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
       {previewing && <EncodePreview encode={enc} onClose={() => setPreviewing(false)} />}
       <Confirm
         open={!!applyTo}
-        title="Process existing chapters?"
-        confirmLabel="Process them"
+        title={t("Process existing chapters?")}
+        confirmLabel={t("Process them")}
         message={applyTo ? `${applyTo.files} chapters (${bytes(applyTo.bytes)}) already downloaded with this profile weren't processed with these settings. Process them in the background too? New chapters are processed automatically either way.` : ""}
         onConfirm={async () => {
           if (!applyTo) return;
           try {
             await unwrap(api.PUT("/api/v1/profiles/{id}", { params: { path: { id: applyTo.id } }, body: { ...p, id: applyTo.id, config: { ...cfg, processExisting: true } } }));
             qc.invalidateQueries({ queryKey: ["profiles"] });
-            toast.success("Existing chapters will be processed in the background");
+            toast.success(tr("Existing chapters will be processed in the background"));
           } catch (e) {
             toast.fromError(e);
           }
@@ -375,9 +370,9 @@ function EncodePreview({ encode, onClose }: { encode: Cfg["encode"]; onClose: ()
   return (
     <Modal open onClose={onClose} title={`Preview ${encode.format.toUpperCase()} (${encode.preset})`} size="xl">
       <div className="mb-4 flex flex-wrap items-end gap-2">
-        <Field label="Series" className="min-w-48 flex-1">
+        <Field label={t("Series")} className="min-w-48 flex-1">
           <Select value={seriesId} onChange={(e) => (setSeriesId(Number(e.target.value)), setChapterId(0))}>
-            <option value={0}>Pick a series…</option>
+            <option value={0}>{t("Pick a series…")}</option>
             {series?.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.title}
@@ -385,7 +380,7 @@ function EncodePreview({ encode, onClose }: { encode: Cfg["encode"]; onClose: ()
             ))}
           </Select>
         </Field>
-        <Field label="Chapter" className="w-40">
+        <Field label={t("Chapter")} className="w-40">
           <Select value={chapterId || withFiles[0]?.id || 0} onChange={(e) => setChapterId(Number(e.target.value))}>
             {withFiles.map((c) => (
               <option key={c.id} value={c.id}>
@@ -394,20 +389,14 @@ function EncodePreview({ encode, onClose }: { encode: Cfg["encode"]; onClose: ()
             ))}
           </Select>
         </Field>
-        <Button variant="primary" disabled={!withFiles.length} loading={run.isPending} onClick={() => run.mutate()}>
-          Encode 3 pages
-        </Button>
+        <Button variant="primary" disabled={!withFiles.length} loading={run.isPending} onClick={() => run.mutate()}>{t("Encode 3 pages")}</Button>
       </div>
       {run.error && <ErrorBox error={run.error} />}
       {res && (
         <>
           <p className="mb-3 text-sm text-muted">
-            {res.engine} · {res.seconds.toFixed(1)} s ·{" "}
-            <a className="text-accent-2 hover:underline" href={apiUrl(`api/v1/processing/preview/${res.token}/sample.cbz`)}>
-              download sample CBZ
-            </a>{" "}
-            to check it in your reader app
-          </p>
+            {res.engine} · {res.seconds.toFixed(1)}{" " + t("s ·")}{" "}
+            <a className="text-accent-2 hover:underline" href={apiUrl(`api/v1/processing/preview/${res.token}/sample.cbz`)}>{t("download sample CBZ")}</a>{" "}{t("to check it in your reader app")}</p>
           <div className="flex flex-col gap-4">
             {res.pages.map((pg) => (
               <div key={pg.index} className="grid grid-cols-2 gap-2">

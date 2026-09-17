@@ -1,3 +1,4 @@
+import { t as tr, t } from "../../lib/i18n/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -201,9 +202,7 @@ function Reader({ chapterId }: { chapterId: number }) {
     return (
       <div className="flex h-dvh flex-col items-center justify-center gap-4 bg-black p-6 text-neutral-200">
         <ErrorBox error={error} />
-        <button type="button" className="text-sm text-orange-400 hover:underline" onClick={() => navigate(-1)}>
-          Go back
-        </button>
+        <button type="button" className="text-sm text-orange-400 hover:underline" onClick={() => navigate(-1)}>{t("Go back")}</button>
       </div>
     );
   }
@@ -253,26 +252,25 @@ function Reader({ chapterId }: { chapterId: number }) {
         )}
         style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top))" }}
       >
-        <Link to={`/series/${ch.seriesId}`} className="rounded p-2 hover:bg-neutral-800" aria-label="Back to the series">
+        <Link to={`/series/${ch.seriesId}`} className="rounded p-2 hover:bg-neutral-800" aria-label={t("Back to the series")}>
           <ArrowLeft className="size-5" />
         </Link>
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-medium">{ch.seriesTitle}</div>
-          <div className="truncate text-xs text-neutral-400">
-            Ch. {ch.number}
+          <div className="truncate text-xs text-neutral-400">{t("Ch.") + " "}{ch.number}
             {ch.title && ch.title !== ch.number && !ch.title.endsWith(ch.number) ? ` · ${ch.title}` : ""}
-            {!ch.downloaded && " · streamed"}
+            {!ch.downloaded && tr(" · streamed")}
           </div>
         </div>
         {ch.canDownload && (
-          <a href={apiUrl(`api/v1/read/chapters/${ch.id}/file`)} download className="rounded p-2 hover:bg-neutral-800" aria-label="Download the chapter">
+          <a href={apiUrl(`api/v1/read/chapters/${ch.id}/file`)} download className="rounded p-2 hover:bg-neutral-800" aria-label={t("Download the chapter")}>
             <Download className="size-5" />
           </a>
         )}
-        <button type="button" className="rounded p-2 hover:bg-neutral-800" onClick={toggleFull} aria-label="Full screen">
+        <button type="button" className="rounded p-2 hover:bg-neutral-800" onClick={toggleFull} aria-label={t("Full screen")}>
           {full ? <Minimize className="size-5" /> : <Maximize className="size-5" />}
         </button>
-        <button type="button" className="rounded p-2 hover:bg-neutral-800" onClick={() => setPanel((p) => !p)} aria-label="Reader settings">
+        <button type="button" className="rounded p-2 hover:bg-neutral-800" onClick={() => setPanel((p) => !p)} aria-label={t("Reader settings")}>
           <Settings2 className="size-5" />
         </button>
       </div>
@@ -290,7 +288,7 @@ function Reader({ chapterId }: { chapterId: number }) {
           className="rounded p-2 hover:bg-neutral-800 disabled:opacity-30"
           disabled={!ch.prev}
           onClick={() => goChapter("prev")}
-          aria-label="Previous chapter"
+          aria-label={t("Previous chapter")}
         >
           <ChevronLeft className="size-5" />
         </button>
@@ -303,7 +301,7 @@ function Reader({ chapterId }: { chapterId: number }) {
             onChange={(e) => setIndex(Number(e.target.value))}
             className="flex-1 accent-orange-500"
             style={{ direction: s.direction === "rtl" ? "rtl" : "ltr" }}
-            aria-label="Page"
+            aria-label={t("Page")}
           />
         ) : (
           <div className="flex-1" />
@@ -316,7 +314,7 @@ function Reader({ chapterId }: { chapterId: number }) {
           className="rounded p-2 hover:bg-neutral-800 disabled:opacity-30"
           disabled={!ch.next}
           onClick={() => goChapter("next")}
-          aria-label="Next chapter"
+          aria-label={t("Next chapter")}
         >
           <ChevronRight className="size-5" />
         </button>

@@ -706,6 +706,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/ui-preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["me-ui-preferences"];
+        put: operations["me-ui-preferences-save"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/modules": {
         parameters: {
             query?: never;
@@ -3865,6 +3881,12 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        "Me-ui-preferences-saveRequest": {
+            /** @enum {string} */
+            locale: "auto" | "en" | "ru" | "uk" | "ua";
+            /** @enum {string} */
+            mode: "reading" | "editing";
+        };
         MediaManagement: {
             chapterFormat: string;
             dirMode: string;
@@ -5056,6 +5078,14 @@ export interface components {
             refreshGapMinSec?: number;
             /** Format: int64 */
             requestsPerMinute?: number;
+        };
+        UIPreferences: {
+            /** @enum {string} */
+            locale: "auto" | "en" | "ru" | "uk";
+            /** @enum {string} */
+            mode: "reading" | "editing";
+            /** Format: date-time */
+            updatedAt: string;
         };
         UpdateRequest: {
             blockedScanlators?: string[];
@@ -7125,6 +7155,68 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "me-ui-preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UIPreferences"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "me-ui-preferences-save": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Me-ui-preferences-saveRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UIPreferences"];
+                };
             };
             /** @description Error */
             default: {

@@ -1,3 +1,4 @@
+import { t } from "../../lib/i18n/core";
 import { Link } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Eraser, RefreshCw } from "lucide-react";
@@ -28,39 +29,37 @@ export function CleanupPage() {
   return (
     <>
       <PageHeader
-        title="Read-based cleanup"
-        subtitle="Delete chapters every reader has finished to save space. Cleaned chapters are never downloaded again unless you restore them."
+        title={t("Read-based cleanup")}
+        subtitle={t("Delete chapters every reader has finished to save space. Cleaned chapters are never downloaded again unless you restore them.")}
         actions={
           <>
-            <Button variant="primary" loading={saving} onClick={async () => (await save(), preview.refetch())}>
-              Save
-            </Button>
+            <Button variant="primary" loading={saving} onClick={async () => (await save(), preview.refetch())}>{t("Save")}</Button>
           </>
         }
       />
       {isLoading && <Loading />}
       {error && <ErrorBox error={error} />}
       {c && (
-        <Card title="Rules" className="mb-6">
+        <Card title={t("Rules")} className="mb-6">
           <div className="grid gap-5 md:grid-cols-2">
             <div className="flex flex-col gap-3">
-              <Switch env={lock("enabled")} checked={c.enabled} onChange={(v) => patch({ enabled: v })} label={<b>Enable cleanup</b>} />
-              <Switch env={lock("dryRun")} checked={c.dryRun} onChange={(v) => patch({ dryRun: v })} label="Dry run (only preview, never delete)" />
-              <Switch env={lock("ignoreReadersNotStarted")} checked={c.ignoreReadersNotStarted} onChange={(v) => patch({ ignoreReadersNotStarted: v })} label="Ignore readers who never started a series" />
-              <Switch env={lock("useRecycleBin")} checked={c.useRecycleBin} onChange={(v) => patch({ useRecycleBin: v })} label="Move to recycle bin instead of deleting" />
+              <Switch env={lock("enabled")} checked={c.enabled} onChange={(v) => patch({ enabled: v })} label={<b>{t("Enable cleanup")}</b>} />
+              <Switch env={lock("dryRun")} checked={c.dryRun} onChange={(v) => patch({ dryRun: v })} label={t("Dry run (only preview, never delete)")} />
+              <Switch env={lock("ignoreReadersNotStarted")} checked={c.ignoreReadersNotStarted} onChange={(v) => patch({ ignoreReadersNotStarted: v })} label={t("Ignore readers who never started a series")} />
+              <Switch env={lock("useRecycleBin")} checked={c.useRecycleBin} onChange={(v) => patch({ useRecycleBin: v })} label={t("Move to recycle bin instead of deleting")} />
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <Field env={lock("keepLastRead")} label="Keep last read chapters" help="Keeps apps' progress anchored">
+              <Field env={lock("keepLastRead")} label={t("Keep last read chapters")} help={t("Keeps apps' progress anchored")}>
                 <Input type="number" min={0} value={c.keepLastRead} onChange={(e) => patch({ keepLastRead: Number(e.target.value) })} />
               </Field>
-              <Field env={lock("graceDays")} label="Grace period (days)" help="After the last reader finished">
+              <Field env={lock("graceDays")} label={t("Grace period (days)")} help={t("After the last reader finished")}>
                 <Input type="number" min={0} value={c.graceDays} onChange={(e) => patch({ graceDays: Number(e.target.value) })} />
               </Field>
-              <Field env={lock("minFreeSpaceGb")} label="Only when free space below (GB)" help="0 = always">
+              <Field env={lock("minFreeSpaceGb")} label={t("Only when free space below (GB)")} help={t("0 = always")}>
                 <Input type="number" min={0} value={c.minFreeSpaceGb} onChange={(e) => patch({ minFreeSpaceGb: Number(e.target.value) })} />
               </Field>
             </div>
-            <Field env={lock("statuses")} label="Series status in scope">
+            <Field env={lock("statuses")} label={t("Series status in scope")}>
               <div className="flex flex-wrap gap-3">
                 {["ongoing", "completed", "hiatus", "cancelled", "unknown"].map((s) => (
                   <label key={s} className="flex items-center gap-1.5 text-sm">
@@ -69,7 +68,7 @@ export function CleanupPage() {
                 ))}
               </div>
             </Field>
-            <Field env={lock("readerIds")} label="Required readers" help="None selected = every reader counting for cleanup.">
+            <Field env={lock("readerIds")} label={t("Required readers")} help={t("None selected = every reader counting for cleanup.")}>
               <div className="flex flex-wrap gap-3">
                 {readers?.map((r) => (
                   <label key={r.id} className="flex items-center gap-1.5 text-sm">
@@ -77,13 +76,12 @@ export function CleanupPage() {
                   </label>
                 ))}
                 {!readers?.length && (
-                  <span className="text-sm text-muted">
-                    No readers yet — <Link to="/settings/readers" className="text-accent-2">add readers</Link>.
+                  <span className="text-sm text-muted">{t("No readers yet —") + " "}<Link to="/settings/readers" className="text-accent-2">{t("add readers")}</Link>.
                   </span>
                 )}
               </div>
             </Field>
-            <Field env={lock("excludeTags")} label="Excluded tags" help="Series with any of these tags are never cleaned.">
+            <Field env={lock("excludeTags")} label={t("Excluded tags")} help={t("Series with any of these tags are never cleaned.")}>
               <div className="flex flex-wrap gap-3">
                 {Array.from(new Set([...(c.excludeTags ?? []), ...(tags ?? []).map((t) => t.label)])).map((t) => (
                   <label key={t} className="flex items-center gap-1.5 text-sm">
@@ -101,21 +99,17 @@ export function CleanupPage() {
         </Card>
       )}
       <Card
-        title="Preview"
+        title={t("Preview")}
         actions={
           <>
-            <Button size="sm" icon={<RefreshCw className="size-3.5" />} onClick={() => preview.refetch()}>
-              Refresh
-            </Button>
+            <Button size="sm" icon={<RefreshCw className="size-3.5" />} onClick={() => preview.refetch()}>{t("Refresh")}</Button>
             <Button
               size="sm"
               variant="danger"
               icon={<Eraser className="size-3.5" />}
               disabled={!preview.data?.candidates.length}
               onClick={() => push.mutate({ name: "Cleanup", body: { force: true }, label: "Cleanup started" })}
-            >
-              Run now
-            </Button>
+            >{t("Run now")}</Button>
           </>
         }
       >
@@ -124,18 +118,17 @@ export function CleanupPage() {
         {preview.data && (
           <>
             <p className="mb-3 text-sm">
-              {preview.data.candidates.length} chapters · <b>{bytes(preview.data.totalSize)}</b> would be freed
-              {!preview.data.enabled && <span className="ml-2"><Badge tone="warn">cleanup disabled</Badge></span>}
-              {preview.data.dryRun && <span className="ml-2"><Badge tone="info">dry run</Badge></span>}
+              {preview.data.candidates.length}{" " + t("chapters ·") + " "}<b>{bytes(preview.data.totalSize)}</b>{" " + t("would be freed")}{!preview.data.enabled && <span className="ml-2"><Badge tone="warn">{t("cleanup disabled")}</Badge></span>}
+              {preview.data.dryRun && <span className="ml-2"><Badge tone="info">{t("dry run")}</Badge></span>}
             </p>
             {preview.data.candidates.length > 0 && (
               <Table className="mb-4">
                 <thead>
                   <tr>
-                    <Th>Series</Th>
-                    <Th>Chapter</Th>
-                    <Th>Size</Th>
-                    <Th>Last read</Th>
+                    <Th>{t("Series")}</Th>
+                    <Th>{t("Chapter")}</Th>
+                    <Th>{t("Size")}</Th>
+                    <Th>{t("Last read")}</Th>
                   </tr>
                 </thead>
                 <tbody>
@@ -156,7 +149,7 @@ export function CleanupPage() {
             )}
             {preview.data.skipped.length > 0 && (
               <details className="text-sm">
-                <summary className="cursor-pointer text-muted">{preview.data.skipped.length} series skipped</summary>
+                <summary className="cursor-pointer text-muted">{preview.data.skipped.length}{" " + t("series skipped")}</summary>
                 <ul className="mt-2 flex flex-col gap-1">
                   {preview.data.skipped.map((s) => (
                     <li key={s.seriesId} className="text-xs">

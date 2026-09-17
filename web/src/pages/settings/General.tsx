@@ -1,3 +1,4 @@
+import { t as tr, t } from "../../lib/i18n/core";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Copy, KeyRound, Plus, Trash2 } from "lucide-react";
@@ -16,7 +17,7 @@ export function GeneralPage() {
     try {
       const v = await unwrap(api.POST("/api/v1/settings/general/apikey"));
       setValue(v);
-      toast.success("New API key generated");
+      toast.success(tr("New API key generated"));
     } catch (e) {
       toast.fromError(e);
     }
@@ -24,46 +25,41 @@ export function GeneralPage() {
   return (
     <>
       <PageHeader
-        title="General"
+        title={t("General")}
         actions={
-          <Button variant="primary" loading={saving} onClick={() => save()}>
-            Save
-          </Button>
+          <Button variant="primary" loading={saving} onClick={() => save()}>{t("Save")}</Button>
         }
       />
       {isLoading && <Loading />}
       {error && <ErrorBox error={error} />}
       {g && (
-        <Card title="Server" className="mb-6">
+        <Card title={t("Server")} className="mb-6">
           <div className="grid gap-4 md:grid-cols-2">
-            <Field env={lock("instanceName")} label="Instance name">
+            <Field env={lock("instanceName")} label={t("Instance name")}>
               <Input value={g.instanceName} onChange={(e) => patch({ instanceName: e.target.value })} />
             </Field>
-            <Field env={lock("publicUrl")} label="Public URL" help="Used for links in notifications, e.g. https://mangarr.example.com">
+            <Field env={lock("publicUrl")} label={t("Public URL")} help={t("Used for links in notifications, e.g. https://mangarr.example.com")}>
               <Input value={g.publicUrl} onChange={(e) => patch({ publicUrl: e.target.value })} />
             </Field>
-            <Field env={lock("imageCacheMaxMb")} label="Image cache limit (MB)" help="Thumbnails and covers; oldest files are removed first. 0 = unlimited.">
+            <Field env={lock("imageCacheMaxMb")} label={t("Image cache limit (MB)")} help={t("Thumbnails and covers; oldest files are removed first. 0 = unlimited.")}>
               <Input type="number" min={0} value={g.imageCacheMaxMb} onChange={(e) => patch({ imageCacheMaxMb: Number(e.target.value) })} />
             </Field>
-            <Field env={lock("backupRetention")} label="Keep scheduled backups">
+            <Field env={lock("backupRetention")} label={t("Keep scheduled backups")}>
               <Input type="number" min={1} value={g.backupRetention} onChange={(e) => patch({ backupRetention: Number(e.target.value) })} />
             </Field>
             <Field
               label={
-                <>
-                  API key <EnvLock env={lock("apiKey")} />
+                <>{t("API key") + " "}<EnvLock env={lock("apiKey")} />
                 </>
               }
-              help="Send as X-Api-Key header. API docs: /api/docs"
+              help={t("Send as X-Api-Key header. API docs: /api/docs")}
             >
               <div className="flex gap-2">
                 <Input readOnly value={g.apiKey} className="font-mono text-xs" />
-                <IconButton title="Copy" onClick={() => (navigator.clipboard.writeText(g.apiKey), toast.info("Copied"))}>
+                <IconButton title={t("Copy")} onClick={() => (navigator.clipboard.writeText(g.apiKey), toast.info(tr("Copied")))}>
                   <Copy className="size-4" />
                 </IconButton>
-                <Button onClick={regen} disabled={!!lock("apiKey")} icon={<KeyRound className="size-4" />}>
-                  Regenerate
-                </Button>
+                <Button onClick={regen} disabled={!!lock("apiKey")} icon={<KeyRound className="size-4" />}>{t("Regenerate")}</Button>
               </div>
             </Field>
           </div>
@@ -94,8 +90,8 @@ function Tags() {
     qc.invalidateQueries({ queryKey: ["tags"] });
   };
   return (
-    <Card title="Tags" className="mb-6">
-      <p className="mb-3 text-sm text-muted">Tags limit notifications to some series, and the “keep” tag excludes series from cleanup.</p>
+    <Card title={t("Tags")} className="mb-6">
+      <p className="mb-3 text-sm text-muted">{t("Tags limit notifications to some series, and the “keep” tag excludes series from cleanup.")}</p>
       <div className="mb-3 flex flex-wrap gap-2">
         {data?.map((t) => (
           <Badge key={t.id}>
@@ -108,9 +104,7 @@ function Tags() {
       </div>
       <div className="flex max-w-sm gap-2">
         <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="keep" />
-        <Button icon={<Plus className="size-4" />} disabled={!label} onClick={add}>
-          Add
-        </Button>
+        <Button icon={<Plus className="size-4" />} disabled={!label} onClick={add}>{t("Add")}</Button>
       </div>
     </Card>
   );
@@ -125,7 +119,7 @@ function Password() {
     try {
       await unwrap(api.POST("/api/v1/auth/password", { body: { password: pw } }));
       setPw("");
-      toast.success("Password changed");
+      toast.success(tr("Password changed"));
     } catch (e) {
       toast.fromError(e);
     } finally {
@@ -133,12 +127,10 @@ function Password() {
     }
   };
   return (
-    <Card title="Password">
+    <Card title={t("Password")}>
       <div className="flex max-w-sm gap-2">
-        <Input type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="New password" />
-        <Button disabled={pw.length < 6} loading={saving} onClick={change}>
-          Change
-        </Button>
+        <Input type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder={t("New password")} />
+        <Button disabled={pw.length < 6} loading={saving} onClick={change}>{t("Change")}</Button>
       </div>
     </Card>
   );

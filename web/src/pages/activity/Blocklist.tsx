@@ -1,3 +1,4 @@
+import { t } from "../../lib/i18n/core";
 import { Link } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
@@ -14,19 +15,19 @@ export function BlocklistPage() {
   };
   return (
     <>
-      <PageHeader title="Blocklist" subtitle="Releases that failed or were rejected; they are never downloaded again." />
+      <PageHeader title={t("Blocklist")} subtitle={t("Releases that failed or were rejected; they are never downloaded again.")} />
       {isLoading && <Loading />}
       {error && <ErrorBox error={error} />}
-      {data?.length === 0 && <EmptyState title="Blocklist is empty" />}
+      {data?.length === 0 && <EmptyState title={t("Blocklist is empty")} />}
       {data && data.length > 0 && (
         <Table>
           <thead>
             <tr>
-              <Th>Series</Th>
-              <Th>Source</Th>
-              <Th>Scanlator</Th>
-              <Th>Reason</Th>
-              <Th>Date</Th>
+              <Th>{t("Series")}</Th>
+              <Th>{t("Source")}</Th>
+              <Th>{t("Scanlator")}</Th>
+              <Th>{t("Reason")}</Th>
+              <Th>{t("Date")}</Th>
               <Th />
             </tr>
           </thead>
@@ -43,7 +44,7 @@ export function BlocklistPage() {
                 <Td className="max-w-md text-xs text-err">{b.reason}</Td>
                 <Td className="whitespace-nowrap text-muted">{dateTime(b.createdAt)}</Td>
                 <Td className="text-right">
-                  <IconButton title="Remove from blocklist" onClick={() => remove(b.id)}>
+                  <IconButton title={t("Remove from blocklist")} onClick={() => remove(b.id)}>
                     <Trash2 className="size-4" />
                   </IconButton>
                 </Td>

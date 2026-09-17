@@ -1,3 +1,4 @@
+import { t as tr, t } from "../../lib/i18n/core";
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, unwrap, type S } from "../../api/client";
@@ -51,7 +52,7 @@ export function BulkSourcesModal({ ids, onClose }: { ids: number[]; onClose: () 
         return;
       }
       qc.invalidateQueries({ queryKey: ["series"] });
-      toast.success(`${chosen.displayName} queued for ${r.total} series`, "Watch it in Activity → Commands");
+      toast.success(`${chosen.displayName} queued for ${r.total} series`, tr("Watch it in Activity → Commands"));
       onClose();
     } catch (e) {
       setError(e);
@@ -72,13 +73,9 @@ export function BulkSourcesModal({ ids, onClose }: { ids: number[]; onClose: () 
       title={`Sources for ${ids.length} series`}
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
-          <Button disabled={!chosen || busy} onClick={() => run(true)}>
-            Preview
-          </Button>
-          <Button variant="primary" disabled={!chosen || busy} onClick={() => run(false)}>
-            Apply
-          </Button>
+          <Button onClick={onClose}>{t("Cancel")}</Button>
+          <Button disabled={!chosen || busy} onClick={() => run(true)}>{t("Preview")}</Button>
+          <Button variant="primary" disabled={!chosen || busy} onClick={() => run(false)}>{t("Apply")}</Button>
         </>
       }
     >
@@ -93,7 +90,7 @@ export function BulkSourcesModal({ ids, onClose }: { ids: number[]; onClose: () 
             ))}
           </Select>
           <Select className="w-56" value={pick} onChange={(e) => (setPick(e.target.value), setPreview(null))}>
-            <option value="">Pick a catalog…</option>
+            <option value="">{t("Pick a catalog…")}</option>
             {list.map((c) => (
               <option key={`${c.moduleId}:${c.id}`} value={`${c.moduleId}:${c.id}`}>
                 {c.displayName} ({c.lang})
@@ -103,8 +100,8 @@ export function BulkSourcesModal({ ids, onClose }: { ids: number[]; onClose: () 
         </div>
         <p className="text-xs text-muted">
           {action === "add"
-            ? "Each series is looked up at the catalog by title and linked last, so downloads keep preferring the sources it already has. A preview searches the first 25."
-            : "This only touches series already linked to the catalog."}
+            ? tr("Each series is looked up at the catalog by title and linked last, so downloads keep preferring the sources it already has. A preview searches the first 25.")
+            : tr("This only touches series already linked to the catalog.")}
         </p>
         {error ? <ErrorBox error={error} /> : null}
         {busy && <Loading />}
@@ -116,14 +113,14 @@ export function BulkSourcesModal({ ids, onClose }: { ids: number[]; onClose: () 
                   {n} {k}
                 </Badge>
               ))}
-              {preview.length === 0 && <span className="text-muted">Nothing to do.</span>}
+              {preview.length === 0 && <span className="text-muted">{t("Nothing to do.")}</span>}
             </div>
             <div className="max-h-80 overflow-auto">
               <Table>
                 <thead>
                   <tr>
-                    <Th>Series</Th>
-                    <Th>Found</Th>
+                    <Th>{t("Series")}</Th>
+                    <Th>{t("Found")}</Th>
                     <Th></Th>
                   </tr>
                 </thead>

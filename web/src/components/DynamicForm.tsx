@@ -1,3 +1,4 @@
+import { t as tr, t, label as translateLabel } from "../lib/i18n/core";
 import { useState } from "react";
 import type { ModuleField } from "../api/client";
 import { EnvLock, Field, Input, KeyValueEditor, Locked, Select, Switch, TagInput, Textarea } from "./ui";
@@ -28,7 +29,7 @@ export function DynamicForm({
     const env = locks?.[f.name];
     const label = (
       <>
-        {f.label}
+        {translateLabel(f.label)}
         {f.required && <span className="text-accent"> *</span>}
       </>
     );
@@ -42,28 +43,28 @@ export function DynamicForm({
                 onChange={(x) => set(f.name, x)}
                 label={
                   <span className="inline-flex items-center gap-2 font-medium">
-                    {f.label}
+                    {translateLabel(f.label)}
                     <EnvLock env={env} />
                   </span>
                 }
               />
             </Locked>
-            {f.help && <p className="text-xs text-muted">{f.help}</p>}
+            {f.help && <p className="text-xs text-muted">{f.help ? translateLabel(f.help) : undefined}</p>}
           </div>
         );
       case "number":
         return (
-          <Field key={f.name} label={label} help={f.help} env={env}>
+          <Field key={f.name} label={label} help={f.help ? translateLabel(f.help) : undefined} env={env}>
             <Input type="number" value={v === undefined || v === null ? "" : String(v)} onChange={(e) => set(f.name, e.target.value === "" ? 0 : Number(e.target.value))} />
           </Field>
         );
       case "select":
         return (
-          <Field key={f.name} label={label} help={f.help} env={env}>
+          <Field key={f.name} label={label} help={f.help ? translateLabel(f.help) : undefined} env={env}>
             <Select value={String(v ?? "")} onChange={(e) => set(f.name, isNaN(Number(e.target.value)) || typeof f.default !== "number" ? e.target.value : Number(e.target.value))}>
               {(f.options ?? []).map((o) => (
                 <option key={o.value} value={o.value}>
-                  {o.label}
+                  {translateLabel(o.label)}
                 </option>
               ))}
             </Select>
@@ -71,25 +72,25 @@ export function DynamicForm({
         );
       case "tags":
         return (
-          <Field key={f.name} label={label} help={f.help} env={env}>
+          <Field key={f.name} label={label} help={f.help ? translateLabel(f.help) : undefined} env={env}>
             <TagInput value={Array.isArray(v) ? (v as string[]) : []} onChange={(x) => set(f.name, x)} placeholder={f.placeholder} />
           </Field>
         );
       case "keyvalue":
         return (
-          <Field key={f.name} label={label} help={f.help} env={env}>
+          <Field key={f.name} label={label} help={f.help ? translateLabel(f.help) : undefined} env={env}>
             <KeyValueEditor value={(v as Record<string, string>) ?? {}} onChange={(x) => set(f.name, x)} />
           </Field>
         );
       case "textarea":
         return (
-          <Field key={f.name} label={label} help={f.help} env={env}>
+          <Field key={f.name} label={label} help={f.help ? translateLabel(f.help) : undefined} env={env}>
             <Textarea value={String(v ?? "")} placeholder={f.placeholder} onChange={(e) => set(f.name, e.target.value)} />
           </Field>
         );
       default:
         return (
-          <Field key={f.name} label={label} help={f.help} env={env}>
+          <Field key={f.name} label={label} help={f.help ? translateLabel(f.help) : undefined} env={env}>
             <Input
               type={f.type === "password" ? "password" : f.type === "url" ? "url" : "text"}
               value={String(v ?? "")}
@@ -108,7 +109,7 @@ export function DynamicForm({
       {advanced.length > 0 && (
         <>
           <button type="button" className="self-start text-sm text-accent-2 hover:underline" onClick={() => setShowAdvanced(!showAdvanced)}>
-            {showAdvanced ? "Hide" : "Show"} advanced settings ({advanced.length})
+            {showAdvanced ? tr("Hide") : tr("Show")}{" " + t("advanced settings (")}{advanced.length})
           </button>
           {showAdvanced && advanced.map(render)}
         </>

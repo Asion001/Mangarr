@@ -1,3 +1,4 @@
+import { t } from "../../lib/i18n/core";
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -28,9 +29,8 @@ export function SourcesPage() {
   if (!mods.length)
     return (
       <>
-        <PageHeader title="Sources" />
-        <EmptyState title="No source module configured">
-          Add a source module (for example Suwayomi with Keiyoushi extensions) in <Link to="/settings/sources" className="text-accent-2">Settings → Source modules</Link>.
+        <PageHeader title={t("Sources")} />
+        <EmptyState title={t("No source module configured")}>{t("Add a source module (for example Suwayomi with Keiyoushi extensions) in") + " "}<Link to="/settings/sources" className="text-accent-2">{t("Settings → Source modules")}</Link>.
         </EmptyState>
       </>
     );
@@ -46,11 +46,11 @@ export function SourcesPage() {
   return (
     <>
       <PageHeader
-        title="Sources"
+        title={t("Sources")}
         actions={
           mods.length > 1 && (
             <>
-              <Button onClick={() => setSwitching(true)}>Switch engine…</Button>
+              <Button onClick={() => setSwitching(true)}>{t("Switch engine…")}</Button>
               <Select value={current?.id} onChange={(e) => setParams({ module: e.target.value })}>
                 {mods.map((m) => (
                   <option key={m.id} value={m.id}>
@@ -116,22 +116,20 @@ function Extensions({ module }: { module: ModuleResource }) {
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Input className="max-w-xs" placeholder="Filter extensions…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <Input className="max-w-xs" placeholder={t("Filter extensions…")} value={q} onChange={(e) => setQ(e.target.value)} />
         <Select className="w-32" value={lang} onChange={(e) => setLang(e.target.value)}>
-          <option value="">all langs</option>
+          <option value="">{t("all langs")}</option>
           {langs.map((l) => (
             <option key={l}>{l}</option>
           ))}
         </Select>
         <Select className="w-40" value={show} onChange={(e) => setShow(e.target.value)}>
-          <option value="all">All</option>
-          <option value="installed">Installed</option>
-          <option value="updates">Updates</option>
+          <option value="all">{t("All")}</option>
+          <option value="installed">{t("Installed")}</option>
+          <option value="updates">{t("Updates")}</option>
         </Select>
-        <Switch checked={nsfw} onChange={(v) => setNsfw(v ? "1" : "")} label="Show NSFW extensions" />
-        <Button className="ml-auto" icon={<RefreshCw className="size-4" />} loading={isFetching && refresh} onClick={() => (setRefresh(true), qc.invalidateQueries({ queryKey: ["extensions"] }))}>
-          Refresh from stores
-        </Button>
+        <Switch checked={nsfw} onChange={(v) => setNsfw(v ? "1" : "")} label={t("Show NSFW extensions")} />
+        <Button className="ml-auto" icon={<RefreshCw className="size-4" />} loading={isFetching && refresh} onClick={() => (setRefresh(true), qc.invalidateQueries({ queryKey: ["extensions"] }))}>{t("Refresh from stores")}</Button>
       </div>
       {isFetching && !data && <Loading />}
       {error && <ErrorBox error={error} />}
@@ -147,29 +145,25 @@ function Extensions({ module }: { module: ModuleResource }) {
               </div>
               <div className="text-xs text-muted">
                 v{e.versionName}
-                {e.obsolete && <span className="ml-1 text-err">obsolete</span>}
+                {e.obsolete && <span className="ml-1 text-err">{t("obsolete")}</span>}
               </div>
             </div>
             {e.installed ? (
               <div className="flex gap-1">
                 {e.hasUpdate && (
-                  <Button size="sm" variant="primary" loading={busy === e.pkg} icon={<ArrowUpCircle className="size-3.5" />} onClick={() => act(e, "update")}>
-                    Update
-                  </Button>
+                  <Button size="sm" variant="primary" loading={busy === e.pkg} icon={<ArrowUpCircle className="size-3.5" />} onClick={() => act(e, "update")}>{t("Update")}</Button>
                 )}
-                <IconButton title="Uninstall" disabled={busy === e.pkg} onClick={() => act(e, "uninstall")}>
+                <IconButton title={t("Uninstall")} disabled={busy === e.pkg} onClick={() => act(e, "uninstall")}>
                   <Trash2 className="size-4" />
                 </IconButton>
               </div>
             ) : (
-              <Button size="sm" loading={busy === e.pkg} icon={<Download className="size-3.5" />} onClick={() => act(e, "install")}>
-                Install
-              </Button>
+              <Button size="sm" loading={busy === e.pkg} icon={<Download className="size-3.5" />} onClick={() => act(e, "install")}>{t("Install")}</Button>
             )}
           </div>
         ))}
       </div>
-      {list.length > 300 && <p className="mt-3 text-center text-sm text-muted">Showing 300 of {list.length}; refine the filter.</p>}
+      {list.length > 300 && <p className="mt-3 text-center text-sm text-muted">{t("Showing 300 of") + " "}{list.length}{t("; refine the filter.")}</p>}
     </>
   );
 }
@@ -191,7 +185,7 @@ function Browse({ module }: { module: ModuleResource }) {
     queryFn: () => unwrap(api.GET("/api/v1/sources/{moduleId}/{sourceId}/browse", { params: { path: { moduleId: module.id, sourceId: src!.id }, query: { type, q, page } } })),
     enabled: !!src && (type !== "search" || q.length > 0),
   });
-  if (!mine.length) return <EmptyState title="No catalogs">Install an extension first.</EmptyState>;
+  if (!mine.length) return <EmptyState title={t("No catalogs")}>{t("Install an extension first.")}</EmptyState>;
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -203,11 +197,9 @@ function Browse({ module }: { module: ModuleResource }) {
           ))}
         </Select>
         <Select className="w-32" value={type} onChange={(e) => (setType(e.target.value), setPage("1"))}>
-          <option value="popular">Popular</option>
-          <option value="latest" disabled={!src?.supportsLatest}>
-            Latest
-          </option>
-          <option value="search">Search</option>
+          <option value="popular">{t("Popular")}</option>
+          <option value="latest" disabled={!src?.supportsLatest}>{t("Latest")}</option>
+          <option value="search">{t("Search")}</option>
         </Select>
         {type === "search" && (
           <form
@@ -217,13 +209,11 @@ function Browse({ module }: { module: ModuleResource }) {
               setPage("1");
             }}
           >
-            <Input name="q" placeholder="Search…" defaultValue={q} />
+            <Input name="q" placeholder={t("Search…")} defaultValue={q} />
           </form>
         )}
         {module.capabilities.includes("preferences") && src && (
-          <Button icon={<Settings2 className="size-4" />} onClick={() => setPrefs(src)}>
-            Source settings
-          </Button>
+          <Button icon={<Settings2 className="size-4" />} onClick={() => setPrefs(src)}>{t("Source settings")}</Button>
         )}
       </div>
       {isFetching && <Loading />}
@@ -243,12 +233,8 @@ function Browse({ module }: { module: ModuleResource }) {
             ))}
           </div>
           <div className="mt-4 flex justify-center gap-2">
-            <Button size="sm" disabled={page <= 1} onClick={() => setPage(String(page - 1))}>
-              Previous
-            </Button>
-            <Button size="sm" disabled={!data.hasNext} onClick={() => setPage(String(page + 1))}>
-              Next
-            </Button>
+            <Button size="sm" disabled={page <= 1} onClick={() => setPage(String(page - 1))}>{t("Previous")}</Button>
+            <Button size="sm" disabled={!data.hasNext} onClick={() => setPage(String(page + 1))}>{t("Next")}</Button>
           </div>
         </>
       )}
@@ -282,25 +268,23 @@ function Stores({ module }: { module: ModuleResource }) {
     }
   };
   return (
-    <Card title="Extension stores">
+    <Card title={t("Extension stores")}>
       {isLoading && <Loading />}
       {error && <ErrorBox error={error} />}
       <div className="flex flex-col gap-2">
         {data?.map((u) => (
           <div key={u} className="flex items-center gap-2 rounded bg-panel-2 px-3 py-2 text-sm">
             <span className="flex-1 truncate font-mono text-xs">{u}</span>
-            <IconButton title="Remove" onClick={() => remove(u)}>
+            <IconButton title={t("Remove")} onClick={() => remove(u)}>
               <Trash2 className="size-4" />
             </IconButton>
           </div>
         ))}
         <div className="mt-2 flex gap-2">
           <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…/index.min.json" />
-          <Button icon={<Plus className="size-4" />} disabled={!url} onClick={add}>
-            Add store
-          </Button>
+          <Button icon={<Plus className="size-4" />} disabled={!url} onClick={add}>{t("Add store")}</Button>
         </div>
-        <p className="text-xs text-muted">Keiyoushi is added by default. Only add stores you trust: extensions run as code inside the engine.</p>
+        <p className="text-xs text-muted">{t("Keiyoushi is added by default. Only add stores you trust: extensions run as code inside the engine.")}</p>
       </div>
     </Card>
   );

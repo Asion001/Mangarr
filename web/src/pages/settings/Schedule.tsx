@@ -1,3 +1,4 @@
+import { t as tr, t } from "../../lib/i18n/core";
 import { Plus, Trash2 } from "lucide-react";
 import { type S } from "../../api/client";
 import { Button, Card, EmptyState, EnvLock, ErrorBox, Field, IconButton, Input, Loading, Locked, PageHeader, Select, Switch } from "../../components/ui";
@@ -16,12 +17,10 @@ export function SchedulePage() {
   return (
     <>
       <PageHeader
-        title="Schedule"
-        subtitle="Quiet hours: pause downloads or processing, or throttle more gently, at certain times."
+        title={t("Schedule")}
+        subtitle={t("Quiet hours: pause downloads or processing, or throttle more gently, at certain times.")}
         actions={
-          <Button variant="primary" loading={doc.saving} onClick={() => doc.save()}>
-            Save
-          </Button>
+          <Button variant="primary" loading={doc.saving} onClick={() => doc.save()}>{t("Save")}</Button>
         }
       />
       {doc.isLoading && <Loading />}
@@ -29,14 +28,13 @@ export function SchedulePage() {
       {v && (
         <>
           <Card className="mb-4">
-            <Field label="Time zone" help="IANA name such as Europe/Madrid. Empty = the server's time zone (TZ)." env={doc.lock("timezone")}>
+            <Field label={t("Time zone")} help={t("IANA name such as Europe/Madrid. Empty = the server's time zone (TZ).")} env={doc.lock("timezone")}>
               <Input className="max-w-xs" value={v.timezone} placeholder={Intl.DateTimeFormat().resolvedOptions().timeZone} onChange={(e) => doc.patch({ timezone: e.target.value })} />
             </Field>
           </Card>
           <Card
             title={
-              <span className="inline-flex items-center gap-2">
-                Windows <EnvLock env={env} />
+              <span className="inline-flex items-center gap-2">{t("Windows") + " "}<EnvLock env={env} />
               </span>
             }
             actions={
@@ -47,27 +45,25 @@ export function SchedulePage() {
                 onClick={() =>
                   doc.patch({ windows: [...windows, { name: "Night", days: [], start: "01:00", end: "07:00", pauseDownloads: false, pauseProcessing: false, throttle: "" }] })
                 }
-              >
-                Add window
-              </Button>
+              >{t("Add window")}</Button>
             }
           >
             <Locked env={env}>
-              {windows.length === 0 && <EmptyState title="No quiet hours">Everything runs around the clock.</EmptyState>}
+              {windows.length === 0 && <EmptyState title={t("No quiet hours")}>{t("Everything runs around the clock.")}</EmptyState>}
               <div className="flex flex-col gap-4">
                 {windows.map((w, i) => (
                   <div key={i} className="rounded-lg border border-border p-3">
                     <div className="mb-3 flex flex-wrap items-end gap-3">
-                      <Field label="Name" className="w-40">
+                      <Field label={t("Name")} className="w-40">
                         <Input value={w.name} onChange={(e) => setWindow(i, { name: e.target.value })} />
                       </Field>
-                      <Field label="From">
+                      <Field label={t("From")}>
                         <Input type="time" value={w.start} onChange={(e) => setWindow(i, { start: e.target.value })} />
                       </Field>
-                      <Field label="To" help={w.end <= w.start ? "next day" : undefined}>
+                      <Field label={t("To")} help={w.end <= w.start ? tr("next day") : undefined}>
                         <Input type="time" value={w.end} onChange={(e) => setWindow(i, { end: e.target.value })} />
                       </Field>
-                      <IconButton title="Remove window" className="ml-auto" onClick={() => doc.patch({ windows: windows.filter((_, j) => j !== i) })}>
+                      <IconButton title={t("Remove window")} className="ml-auto" onClick={() => doc.patch({ windows: windows.filter((_, j) => j !== i) })}>
                         <Trash2 className="size-4" />
                       </IconButton>
                     </div>
@@ -85,27 +81,23 @@ export function SchedulePage() {
                           </button>
                         );
                       })}
-                      <span className="self-center text-xs text-muted">{(w.days ?? []).length === 0 && "every day"}</span>
+                      <span className="self-center text-xs text-muted">{(w.days ?? []).length === 0 && tr("every day")}</span>
                     </div>
                     <div className="flex flex-wrap items-center gap-4">
-                      <Switch checked={w.pauseDownloads} onChange={(x) => setWindow(i, { pauseDownloads: x })} label="Pause downloads" />
-                      <Switch checked={w.pauseProcessing} onChange={(x) => setWindow(i, { pauseProcessing: x })} label="Pause upscaling / re-encoding" />
-                      <label className="flex items-center gap-2 text-sm">
-                        Throttle
-                        <Select className="w-36" value={w.throttle ?? ""} onChange={(e) => setWindow(i, { throttle: e.target.value as Window["throttle"] })}>
-                          <option value="">unchanged</option>
-                          <option value="gentle">gentle</option>
-                          <option value="normal">normal</option>
-                          <option value="fast">fast</option>
+                      <Switch checked={w.pauseDownloads} onChange={(x) => setWindow(i, { pauseDownloads: x })} label={t("Pause downloads")} />
+                      <Switch checked={w.pauseProcessing} onChange={(x) => setWindow(i, { pauseProcessing: x })} label={t("Pause upscaling / re-encoding")} />
+                      <label className="flex items-center gap-2 text-sm">{t("Throttle")}<Select className="w-36" value={w.throttle ?? ""} onChange={(e) => setWindow(i, { throttle: e.target.value as Window["throttle"] })}>
+                          <option value="">{t("unchanged")}</option>
+                          <option value="gentle">{t("gentle")}</option>
+                          <option value="normal">{t("normal")}</option>
+                          <option value="fast">{t("fast")}</option>
                         </Select>
                       </label>
                     </div>
                   </div>
                 ))}
               </div>
-              <p className="mt-3 text-xs text-muted">
-                Example: to upscale only at night, add a window 07:00–01:00 with “Pause upscaling”. A window that ends before it starts continues into the next day.
-              </p>
+              <p className="mt-3 text-xs text-muted">{t("Example: to upscale only at night, add a window 07:00–01:00 with “Pause upscaling”. A window that ends before it starts continues into the next day.")}</p>
             </Locked>
           </Card>
         </>

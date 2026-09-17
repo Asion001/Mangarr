@@ -1,3 +1,4 @@
+import { useLocale } from "./lib/uiPreferences";
 import { useEffect } from "react";
 import { Navigate, Route, Routes, useMatch } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -42,6 +43,7 @@ import { ImportsPage } from "./pages/import/Imports";
 import { ImportDetailPage } from "./pages/import/ImportDetail";
 
 export function App() {
+  useLocale();
   const { data: auth, isLoading } = useAuthStatus();
   const qc = useQueryClient();
   const toast = useToast();

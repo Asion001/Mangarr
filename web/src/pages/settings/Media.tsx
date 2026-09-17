@@ -1,3 +1,4 @@
+import { t as tr, t } from "../../lib/i18n/core";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FolderInput, FolderPlus, Trash2 } from "lucide-react";
@@ -20,11 +21,9 @@ export function MediaPage() {
   return (
     <>
       <PageHeader
-        title="Media management"
+        title={t("Media management")}
         actions={
-          <Button variant="primary" loading={saving} onClick={() => save()}>
-            Save
-          </Button>
+          <Button variant="primary" loading={saving} onClick={() => save()}>{t("Save")}</Button>
         }
       />
       <RootFolders />
@@ -32,12 +31,12 @@ export function MediaPage() {
       {error && <ErrorBox error={error} />}
       {m && (
         <>
-          <Card title="File naming" className="mb-6">
+          <Card title={t("File naming")} className="mb-6">
             <div className="grid gap-4 md:grid-cols-2">
-              <Field env={lock("chapterFormat")} label="Chapter file format" help="Tokens: {Series Title} {Series CleanTitle} {Series Year} {Chapter:0000} {Volume:00} {Chapter Title} {Scanlator} {Source} {Language}. [ ] = optional group.">
+              <Field env={lock("chapterFormat")} label={t("Chapter file format")} help={t("Tokens: {Series Title} {Series CleanTitle} {Series Year} {Chapter:0000} {Volume:00} {Chapter Title} {Scanlator} {Source} {Language}. [ ] = optional group.")}>
                 <Input value={m.chapterFormat} onChange={(e) => patch({ chapterFormat: e.target.value })} />
               </Field>
-              <Field env={lock("seriesFolderFormat")} label="Series folder format">
+              <Field env={lock("seriesFolderFormat")} label={t("Series folder format")}>
                 <Input value={m.seriesFolderFormat} onChange={(e) => patch({ seriesFolderFormat: e.target.value })} />
               </Field>
             </div>
@@ -49,38 +48,36 @@ export function MediaPage() {
                 <div className="ml-4">{preview.volume}</div>
               </div>
             )}
-            <p className="mt-3 text-xs text-warn">
-              Keep scanlator, source and volume out of file names: upgrades replace files in place, and changing names later breaks read progress in Komga/Kavita.
-            </p>
+            <p className="mt-3 text-xs text-warn">{t("Keep scanlator, source and volume out of file names: upgrades replace files in place, and changing names later breaks read progress in Komga/Kavita.")}</p>
           </Card>
-          <Card title="Library files" className="mb-6">
+          <Card title={t("Library files")} className="mb-6">
             <div className="grid gap-4 md:grid-cols-2">
-              <Switch env={lock("writeSeriesJson")} checked={m.writeSeriesJson} onChange={(v) => patch({ writeSeriesJson: v })} label="Write series.json (Komga series metadata)" />
-              <Switch env={lock("writeCover")} checked={m.writeCover} onChange={(v) => patch({ writeCover: v })} label="Write cover.jpg" />
-              <Switch env={lock("writeVolume")} checked={m.writeVolume} onChange={(v) => patch({ writeVolume: v })} label="Write volume numbers into ComicInfo.xml" />
+              <Switch env={lock("writeSeriesJson")} checked={m.writeSeriesJson} onChange={(v) => patch({ writeSeriesJson: v })} label={t("Write series.json (Komga series metadata)")} />
+              <Switch env={lock("writeCover")} checked={m.writeCover} onChange={(v) => patch({ writeCover: v })} label={t("Write cover.jpg")} />
+              <Switch env={lock("writeVolume")} checked={m.writeVolume} onChange={(v) => patch({ writeVolume: v })} label={t("Write volume numbers into ComicInfo.xml")} />
               <Switch
                 env={lock("renameFolderOnTitleChange")}
                 checked={m.renameFolderOnTitleChange}
                 onChange={(v) => patch({ renameFolderOnTitleChange: v })}
-                label="Rename a series folder when its title changes"
+                label={t("Rename a series folder when its title changes")}
               />
-              <Field env={lock("minFreeSpaceMb")} label="Minimum free space (MB)" help="Downloads pause when a root folder has less.">
+              <Field env={lock("minFreeSpaceMb")} label={t("Minimum free space (MB)")} help={t("Downloads pause when a root folder has less.")}>
                 <Input type="number" value={m.minFreeSpaceMb} onChange={(e) => patch({ minFreeSpaceMb: Number(e.target.value) })} />
               </Field>
-              <Field env={lock("fileMode")} label="File permissions" help="Octal, e.g. 0664">
+              <Field env={lock("fileMode")} label={t("File permissions")} help={t("Octal, e.g. 0664")}>
                 <Input value={m.fileMode} onChange={(e) => patch({ fileMode: e.target.value })} />
               </Field>
-              <Field env={lock("dirMode")} label="Folder permissions">
+              <Field env={lock("dirMode")} label={t("Folder permissions")}>
                 <Input value={m.dirMode} onChange={(e) => patch({ dirMode: e.target.value })} />
               </Field>
             </div>
           </Card>
-          <Card title="Recycle bin">
+          <Card title={t("Recycle bin")}>
             <div className="grid gap-4 md:grid-cols-2">
-              <Field env={lock("recycleBinPath")} label="Recycle bin folder" help="Replaced and cleaned files go here. Empty = inside the data folder.">
+              <Field env={lock("recycleBinPath")} label={t("Recycle bin folder")} help={t("Replaced and cleaned files go here. Empty = inside the data folder.")}>
                 <Input value={m.recycleBinPath} onChange={(e) => patch({ recycleBinPath: e.target.value })} />
               </Field>
-              <Field env={lock("recycleBinDays")} label="Keep recycled files (days)" help="0 = forever">
+              <Field env={lock("recycleBinDays")} label={t("Keep recycled files (days)")} help={t("0 = forever")}>
                 <Input type="number" value={m.recycleBinDays} onChange={(e) => patch({ recycleBinDays: Number(e.target.value) })} />
               </Field>
             </div>
@@ -127,32 +124,32 @@ function RootFolders() {
     }
   };
   return (
-    <Card title="Root folders" className="mb-6">
+    <Card title={t("Root folders")} className="mb-6">
       {relocating && (
         <Modal
           open
           onClose={() => setRelocating(null)}
-          title="Change root folder location"
+          title={t("Change root folder location")}
           footer={
             <>
-              <Button onClick={() => setRelocating(null)}>Cancel</Button>
+              <Button onClick={() => setRelocating(null)}>{t("Cancel")}</Button>
               <Button variant="primary" onClick={relocate}>
-                {relocating.moveFiles ? "Move series" : "Update path"}
+                {relocating.moveFiles ? tr("Move series") : tr("Update path")}
               </Button>
             </>
           }
         >
-          <Field label="New path">
+          <Field label={t("New path")}>
             <Input value={relocating.path} onChange={(e) => setRelocating({ ...relocating, path: e.target.value })} />
           </Field>
           <div className="mt-3">
             <Switch
               checked={relocating.moveFiles}
               onChange={(v) => setRelocating({ ...relocating, moveFiles: v })}
-              label="Move the series folders there (off: they were already moved)"
+              label={t("Move the series folders there (off: they were already moved)")}
             />
           </div>
-          <p className="mt-2 text-xs text-muted">Update library server path mappings if they point at the old location.</p>
+          <p className="mt-2 text-xs text-muted">{t("Update library server path mappings if they point at the old location.")}</p>
         </Modal>
       )}
       {isLoading && <Loading />}
@@ -160,10 +157,10 @@ function RootFolders() {
         <Table className="mb-4">
           <thead>
             <tr>
-              <Th>Path</Th>
-              <Th>Language</Th>
-              <Th>Series</Th>
-              <Th>Free space</Th>
+              <Th>{t("Path")}</Th>
+              <Th>{t("Language")}</Th>
+              <Th>{t("Series")}</Th>
+              <Th>{t("Free space")}</Th>
               <Th />
             </tr>
           </thead>
@@ -177,10 +174,10 @@ function RootFolders() {
                 <Td>{r.seriesCount}</Td>
                 <Td>{r.accessible ? bytes(r.freeSpace) : <Badge tone="err">{r.error}</Badge>}</Td>
                 <Td className="text-right">
-                  <IconButton title="Change location" disabled={!!r.managedBy} onClick={() => setRelocating({ id: r.id, path: r.path, moveFiles: true })}>
+                  <IconButton title={t("Change location")} disabled={!!r.managedBy} onClick={() => setRelocating({ id: r.id, path: r.path, moveFiles: true })}>
                     <FolderInput className="size-4" />
                   </IconButton>
-                  <IconButton title={r.managedBy ? "Set by MANGARR_ROOT_FOLDERS" : "Remove"} onClick={() => remove(r.id)} disabled={r.seriesCount > 0 || !!r.managedBy}>
+                  <IconButton title={r.managedBy ? tr("Set by MANGARR_ROOT_FOLDERS") : tr("Remove")} onClick={() => remove(r.id)} disabled={r.seriesCount > 0 || !!r.managedBy}>
                     <Trash2 className="size-4" />
                   </IconButton>
                 </Td>
@@ -192,11 +189,9 @@ function RootFolders() {
       <div className="flex flex-wrap gap-2">
         <Input className="max-w-md flex-1" value={path} onChange={(e) => setPath(e.target.value)} placeholder="/data/manga/en" />
         <Input className="w-24" value={lang} onChange={(e) => setLang(e.target.value)} placeholder="en" />
-        <Button icon={<FolderPlus className="size-4" />} disabled={!path} onClick={add}>
-          Add root folder
-        </Button>
+        <Button icon={<FolderPlus className="size-4" />} disabled={!path} onClick={add}>{t("Add root folder")}</Button>
       </div>
-      <p className="mt-2 text-xs text-muted">Use one root folder per language. Mount the same folder read-only into Komga/Kavita.</p>
+      <p className="mt-2 text-xs text-muted">{t("Use one root folder per language. Mount the same folder read-only into Komga/Kavita.")}</p>
     </Card>
   );
 }

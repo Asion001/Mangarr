@@ -1,3 +1,4 @@
+import { t as tr, t } from "../../lib/i18n/core";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, unwrap, type ModuleResource, type S } from "../../api/client";
@@ -31,7 +32,7 @@ export function SwitchEngine({ modules, from, onClose }: { modules: ModuleResour
       setRows(r.rows);
       if (!dryRun) {
         qc.invalidateQueries({ queryKey: ["series"] });
-        toast.success("Switching in the background", "Watch it in Activity → Commands");
+        toast.success(tr("Switching in the background"), tr("Watch it in Activity → Commands"));
         onClose();
       }
     } catch (e) {
@@ -50,24 +51,20 @@ export function SwitchEngine({ modules, from, onClose }: { modules: ModuleResour
     <Modal
       open
       onClose={onClose}
-      title="Switch engine"
+      title={t("Switch engine")}
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
-          <Button disabled={!toId || busy} onClick={() => plan(true)}>
-            Preview
-          </Button>
-          <Button variant="primary" disabled={!toId || busy || !moving} onClick={() => plan(false)}>
-            Move {moving || ""} links
-          </Button>
+          <Button onClick={onClose}>{t("Cancel")}</Button>
+          <Button disabled={!toId || busy} onClick={() => plan(true)}>{t("Preview")}</Button>
+          <Button variant="primary" disabled={!toId || busy || !moving} onClick={() => plan(false)}>{t("Move") + " "}{moving || ""}{" " + t("links")}</Button>
         </>
       }
     >
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-muted">Move links from</span>
+          <span className="text-muted">{t("Move links from")}</span>
           <Badge>{from.name}</Badge>
-          <span className="text-muted">to</span>
+          <span className="text-muted">{t("to")}</span>
           <Select className="w-48" value={toId} onChange={(e) => setToId(Number(e.target.value))}>
             {others.map((m) => (
               <option key={m.id} value={m.id}>
@@ -76,11 +73,7 @@ export function SwitchEngine({ modules, from, onClose }: { modules: ModuleResour
             ))}
           </Select>
         </div>
-        <p className="text-xs text-muted">
-          A link moves when both modules know the catalog by the same id, which is the case wherever a site is built in under the id its extension
-          has. Nothing is re-matched and no file is touched: the manga is identified by its catalog and its address, and the engine's own ids are
-          dropped on the way.
-        </p>
+        <p className="text-xs text-muted">{t("A link moves when both modules know the catalog by the same id, which is the case wherever a site is built in under the id its extension has. Nothing is re-matched and no file is touched: the manga is identified by its catalog and its address, and the engine's own ids are dropped on the way.")}</p>
         {error ? <ErrorBox error={error} /> : null}
         {busy && <Loading />}
         {rows && (
@@ -88,8 +81,8 @@ export function SwitchEngine({ modules, from, onClose }: { modules: ModuleResour
             <Table>
               <thead>
                 <tr>
-                  <Th>Catalog</Th>
-                  <Th>Series</Th>
+                  <Th>{t("Catalog")}</Th>
+                  <Th>{t("Series")}</Th>
                   <Th></Th>
                 </tr>
               </thead>
@@ -98,14 +91,12 @@ export function SwitchEngine({ modules, from, onClose }: { modules: ModuleResour
                   <tr key={r.sourceId} className={r.moves ? undefined : "opacity-70"}>
                     <Td>{r.catalog}</Td>
                     <Td>{r.series}</Td>
-                    <Td className="text-right">{r.moves ? <Badge tone="ok">moves</Badge> : <span className="text-xs text-muted">{r.reason}</span>}</Td>
+                    <Td className="text-right">{r.moves ? <Badge tone="ok">{t("moves")}</Badge> : <span className="text-xs text-muted">{r.reason}</span>}</Td>
                   </tr>
                 ))}
                 {rows.length === 0 && (
                   <tr>
-                    <Td colSpan={3} className="text-muted">
-                      This module has no linked series.
-                    </Td>
+                    <Td colSpan={3} className="text-muted">{t("This module has no linked series.")}</Td>
                   </tr>
                 )}
               </tbody>

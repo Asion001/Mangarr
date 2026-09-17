@@ -1,3 +1,4 @@
+import { t as tr, t } from "../../lib/i18n/core";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router";
@@ -23,27 +24,24 @@ export function StatusPage() {
   return (
     <>
       <PageHeader
-        title="Status"
+        title={t("Status")}
         actions={
-          <a href={apiUrl("api/v1/system/diagnostics")} download title="Status, health, modules, settings, queue and logs, with secrets removed">
-            <Button icon={<LifeBuoy className="size-4" />}>Download diagnostics</Button>
+          <a href={apiUrl("api/v1/system/diagnostics")} download title={t("Status, health, modules, settings, queue and logs, with secrets removed")}>
+            <Button icon={<LifeBuoy className="size-4" />}>{t("Download diagnostics")}</Button>
           </a>
         }
       />
       <Card
-        title="Health"
+        title={t("Health")}
         className="mb-6"
         actions={
-          <Button size="sm" icon={<RefreshCw className="size-3.5" />} onClick={run}>
-            Check now
-          </Button>
+          <Button size="sm" icon={<RefreshCw className="size-3.5" />} onClick={run}>{t("Check now")}</Button>
         }
       >
         {isLoading && <Loading />}
         {health && health.checks.length === 0 && (
           <p className="flex items-center gap-2 text-sm text-ok">
-            <CheckCircle2 className="size-4" /> Everything looks good.
-          </p>
+            <CheckCircle2 className="size-4" />{" " + t("Everything looks good.")}</p>
         )}
         <div className="flex flex-col gap-2">
           {health?.checks.map((c, i) => (
@@ -63,40 +61,40 @@ export function StatusPage() {
             </div>
           ))}
         </div>
-        {health && <p className="mt-3 text-xs text-muted">Checked {relative(health.checkedAt)}</p>}
+        {health && <p className="mt-3 text-xs text-muted">{t("Checked") + " "}{relative(health.checkedAt)}</p>}
       </Card>
       {status && (
-        <Card title="About" className="mb-6">
+        <Card title={t("About")} className="mb-6">
           <dl className="grid grid-cols-[140px_1fr] gap-y-1.5 text-sm">
-            <dt className="text-muted">Version</dt>
+            <dt className="text-muted">{t("Version")}</dt>
             <dd>
               {status.version} <span className="text-muted">({status.commit})</span>
             </dd>
-            <dt className="text-muted">Runtime</dt>
+            <dt className="text-muted">{t("Runtime")}</dt>
             <dd>
               {status.goVersion} · {status.os}/{status.arch}
             </dd>
-            <dt className="text-muted">Database</dt>
+            <dt className="text-muted">{t("Database")}</dt>
             <dd>{status.database}</dd>
-            <dt className="text-muted">Data folder</dt>
+            <dt className="text-muted">{t("Data folder")}</dt>
             <dd className="font-mono text-xs">{status.dataDir}</dd>
-            <dt className="text-muted">Started</dt>
+            <dt className="text-muted">{t("Started")}</dt>
             <dd>{dateTime(status.startedAt)}</dd>
           </dl>
         </Card>
       )}
       <ProcessingCard />
       <CacheCard />
-      <Card title="Recent commands">
+      <Card title={t("Recent commands")}>
         <Table className="border-0">
           <thead>
             <tr>
-              <Th>Command</Th>
-              <Th>Status</Th>
-              <Th>Message</Th>
-              <Th>Trigger</Th>
-              <Th>Queued</Th>
-              <Th>Duration</Th>
+              <Th>{t("Command")}</Th>
+              <Th>{t("Status")}</Th>
+              <Th>{t("Message")}</Th>
+              <Th>{t("Trigger")}</Th>
+              <Th>{t("Queued")}</Th>
+              <Th>{t("Duration")}</Th>
             </tr>
           </thead>
           <tbody>
@@ -126,7 +124,7 @@ function CacheCard() {
   const clear = async (body: { catalogs?: boolean; images?: string[] }) => {
     try {
       qc.setQueryData(["cache"], await unwrap(api.POST("/api/v1/system/cache/clear", { body: { catalogs: false, ...body } })));
-      toast.success("Cache cleared");
+      toast.success(tr("Cache cleared"));
     } catch (e) {
       toast.fromError(e);
     }
@@ -134,7 +132,7 @@ function CacheCard() {
   const compact = async () => {
     try {
       await unwrap(api.POST("/api/v1/commands", { body: { name: "CompactImageCache" } }));
-      toast.info("Resizing cached images");
+      toast.info(tr("Resizing cached images"));
     } catch (e) {
       toast.fromError(e);
     }
@@ -143,48 +141,43 @@ function CacheCard() {
   const pct = data.imageMaxBytes > 0 ? Math.min(100, (data.imageBytes / data.imageMaxBytes) * 100) : 0;
   return (
     <Card
-      title="Caches"
+      title={t("Caches")}
       className="mb-6"
       actions={
-        <Button size="sm" onClick={compact} title="Resize cached thumbnails and covers to small JPEGs">
-          Compact images
-        </Button>
+        <Button size="sm" onClick={compact} title={t("Resize cached thumbnails and covers to small JPEGs")}>{t("Compact images")}</Button>
       }
     >
       <div className="mb-3 flex flex-col gap-1 text-sm">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <span>
-            Images on disk: <b>{bytes(data.imageBytes)}</b>
-            {data.imageMaxBytes > 0 ? ` of ${bytes(data.imageMaxBytes)} limit` : " (no limit)"}
+          <span>{t("Images on disk:") + " "}<b>{bytes(data.imageBytes)}</b>
+            {data.imageMaxBytes > 0 ? ` of ${bytes(data.imageMaxBytes)} limit` : tr(" (no limit)")}
           </span>
-          <span className="text-xs text-muted">oldest images are removed above the limit (Settings → General)</span>
+          <span className="text-xs text-muted">{t("oldest images are removed above the limit (Settings → General)")}</span>
         </div>
         {data.imageMaxBytes > 0 && <Progress value={pct} tone={pct > 95 ? "warn" : "accent"} />}
-        {data.needsCompact && <p className="text-xs text-warn">Images cached by an older version are being resized; sizes drop once that finishes.</p>}
+        {data.needsCompact && <p className="text-xs text-warn">{t("Images cached by an older version are being resized; sizes drop once that finishes.")}</p>}
       </div>
       <div className="overflow-x-auto">
         <Table>
           <thead>
             <tr>
-              <Th>Cache</Th>
-              <Th>Entries</Th>
-              <Th>Size</Th>
-              <Th>Average</Th>
+              <Th>{t("Cache")}</Th>
+              <Th>{t("Entries")}</Th>
+              <Th>{t("Size")}</Th>
+              <Th>{t("Average")}</Th>
               <Th></Th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <Td>Search results & manga details (memory)</Td>
+              <Td>{t("Search results & manga details (memory)")}</Td>
               <Td>{data.entries}</Td>
               <Td>
                 {bytes(data.bytes)} / {bytes(data.maxBytes)}
               </Td>
               <Td>—</Td>
               <Td className="text-right">
-                <Button size="sm" onClick={() => clear({ catalogs: true })}>
-                  Clear
-                </Button>
+                <Button size="sm" onClick={() => clear({ catalogs: true })}>{t("Clear")}</Button>
               </Td>
             </tr>
             {data.images.map((b) => (
@@ -194,9 +187,7 @@ function CacheCard() {
                 <Td>{bytes(b.bytes)}</Td>
                 <Td>{b.files > 0 ? bytes(b.bytes / b.files) : "—"}</Td>
                 <Td className="text-right">
-                  <Button size="sm" onClick={() => clear({ images: [b.name] })}>
-                    Clear
-                  </Button>
+                  <Button size="sm" onClick={() => clear({ images: [b.name] })}>{t("Clear")}</Button>
                 </Td>
               </tr>
             ))}
@@ -223,31 +214,29 @@ function ProcessingCard() {
     try {
       await unwrap(api.POST("/api/v1/processing/resume"));
       qc.invalidateQueries({ queryKey: ["processing"] });
-      toast.success("Re-encoding resumed");
+      toast.success(tr("Re-encoding resumed"));
     } catch (e) {
       toast.fromError(e);
     }
   };
   return (
-    <Card title="Processing" className="mb-6">
+    <Card title={t("Processing")} className="mb-6">
       {data.state.encodeBlocked && (
         <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-err/40 bg-err/10 p-2 text-sm">
-          <span className="flex-1">Re-encoding is paused: {data.state.reason}</span>
-          <Button size="sm" onClick={resume}>
-            Resume
-          </Button>
+          <span className="flex-1">{t("Re-encoding is paused:") + " "}{data.state.reason}</span>
+          <Button size="sm" onClick={resume}>{t("Resume")}</Button>
         </div>
       )}
       <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-5">
-        <Stat label="Space saved" value={bytes(data.spaceSaved)} />
-        <Stat label="Processed" value={String(data.processed)} />
+        <Stat label={t("Space saved")} value={bytes(data.spaceSaved)} />
+        <Stat label={t("Processed")} value={String(data.processed)} />
         <Stat
-          label="Waiting"
+          label={t("Waiting")}
           value={data.pending > 0 ? `${data.pending} ch · ${data.pendingPages.toLocaleString()} p` : "0"}
           hint={data.failed > 0 ? `${data.failed} gave up` : undefined}
         />
-        <Stat label="Speed (last day)" value={data.pagesPerMinute > 0 ? `${data.pagesPerMinute.toFixed(1)} pages/min` : "—"} />
-        <Stat label="Backlog done in" value={data.etaSeconds > 0 ? `~${eta(data.etaSeconds)}` : "—"} />
+        <Stat label={t("Speed (last day)")} value={data.pagesPerMinute > 0 ? `${data.pagesPerMinute.toFixed(1)} pages/min` : "—"} />
+        <Stat label={t("Backlog done in")} value={data.etaSeconds > 0 ? `~${eta(data.etaSeconds)}` : "—"} />
       </div>
 
       {data.active.length > 0 && (
@@ -258,7 +247,7 @@ function ProcessingCard() {
               <div key={j.id} className="rounded-md border border-border p-2 text-sm">
                 <div className="mb-1 flex flex-wrap justify-between gap-2">
                   <Link to={`/series/${j.seriesId}`} className="font-medium hover:text-accent-2">
-                    {j.seriesTitle} · ch. {j.chapter}
+                    {j.seriesTitle}{" " + t("· ch.") + " "}{j.chapter}
                   </Link>
                   <span className="text-xs text-muted">{live ? describe(live) : j.status}</span>
                 </div>
@@ -276,11 +265,11 @@ function ProcessingCard() {
           <Table>
             <thead>
               <tr>
-                <Th>Recently processed</Th>
-                <Th>Size</Th>
-                <Th>Pages</Th>
-                <Th>Time</Th>
-                <Th>When</Th>
+                <Th>{t("Recently processed")}</Th>
+                <Th>{t("Size")}</Th>
+                <Th>{t("Pages")}</Th>
+                <Th>{t("Time")}</Th>
+                <Th>{t("When")}</Th>
               </tr>
             </thead>
             <tbody>
@@ -288,7 +277,7 @@ function ProcessingCard() {
                 <tr key={i}>
                   <Td>
                     <Link to={`/series/${f.seriesId}`} className="hover:text-accent-2">
-                      {f.seriesTitle} · ch. {f.chapter}
+                      {f.seriesTitle}{" " + t("· ch.") + " "}{f.chapter}
                     </Link>
                   </Td>
                   <Td className="whitespace-nowrap">
@@ -298,7 +287,7 @@ function ProcessingCard() {
                   <Td>{f.pages}</Td>
                   <Td className="whitespace-nowrap">
                     {eta(f.seconds)}
-                    {f.seconds > 0 && <span className="ml-1 text-xs text-muted">{(f.pages / f.seconds).toFixed(1)} p/s</span>}
+                    {f.seconds > 0 && <span className="ml-1 text-xs text-muted">{(f.pages / f.seconds).toFixed(1)}{" " + t("p/s")}</span>}
                   </Td>
                   <Td className="whitespace-nowrap text-muted">{relative(f.processedAt)}</Td>
                 </tr>
@@ -307,8 +296,7 @@ function ProcessingCard() {
           </Table>
         </div>
       )}
-      <p className="mt-3 text-xs text-muted">
-        Encoders: {data.engines.map((e) => `${e.name} (${e.format}${e.slow ? ", slow" : ""})`).join(", ") || "none"}
+      <p className="mt-3 text-xs text-muted">{t("Encoders:") + " "}{data.engines.map((e) => `${e.name} (${e.format}${e.slow ? ", slow" : ""})`).join(", ") || tr("none")}
       </p>
     </Card>
   );
@@ -333,8 +321,7 @@ function CheckItems({ items }: { items: NonNullable<S["HealthCheck"]["items"]> }
       )}
       {items.length > shown.length && (
         <button type="button" className="text-xs text-accent-2 hover:underline" onClick={() => setAll(true)}>
-          +{items.length - shown.length} more
-        </button>
+          +{items.length - shown.length}{" " + t("more")}</button>
       )}
     </div>
   );
@@ -365,12 +352,11 @@ function SavedChart() {
   return (
     <div className="mt-4">
       <div className="mb-1 flex flex-wrap justify-between gap-2 text-xs text-muted">
-        <span>Saved per day, last 30 days</span>
+        <span>{t("Saved per day, last 30 days")}</span>
         <span>
-          {bytes(total)} saved · {pages.toLocaleString()} pages
-        </span>
+          {bytes(total)}{" " + t("saved ·") + " "}{pages.toLocaleString()}{" " + t("pages")}</span>
       </div>
-      <svg viewBox={`0 0 ${W} ${H + 14}`} className="h-auto w-full" role="img" aria-label="Space saved per day">
+      <svg viewBox={`0 0 ${W} ${H + 14}`} className="h-auto w-full" role="img" aria-label={t("Space saved per day")}>
         {data.map((d, i) => {
           const h = (saved[i] / maxSaved) * H;
           const x = i * (bw + gap);

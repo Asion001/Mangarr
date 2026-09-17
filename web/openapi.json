@@ -3443,6 +3443,33 @@
         ],
         "type": "object"
       },
+      "Me-ui-preferences-saveRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "locale": {
+            "enum": [
+              "auto",
+              "en",
+              "ru",
+              "uk",
+              "ua"
+            ],
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "reading",
+              "editing"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "locale",
+          "mode"
+        ],
+        "type": "object"
+      },
       "MediaManagement": {
         "additionalProperties": false,
         "properties": {
@@ -7465,6 +7492,37 @@
         },
         "type": "object"
       },
+      "UIPreferences": {
+        "additionalProperties": false,
+        "properties": {
+          "locale": {
+            "enum": [
+              "auto",
+              "en",
+              "ru",
+              "uk"
+            ],
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "reading",
+              "editing"
+            ],
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "locale",
+          "mode",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
       "UpdateRequest": {
         "additionalProperties": false,
         "properties": {
@@ -10909,6 +10967,74 @@
         "summary": "Sign out one of your sessions",
         "tags": [
           "Auth"
+        ]
+      }
+    },
+    "/api/v1/me/ui-preferences": {
+      "get": {
+        "operationId": "me-ui-preferences",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UIPreferences"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Account"
+        ]
+      },
+      "put": {
+        "operationId": "me-ui-preferences-save",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Me-ui-preferences-saveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UIPreferences"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Account"
         ]
       }
     },

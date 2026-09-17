@@ -1,3 +1,4 @@
+import { t as tr, t } from "../../lib/i18n/core";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router";
@@ -50,75 +51,63 @@ export function ReadersPage() {
   return (
     <>
       <PageHeader
-        title="Readers"
-        subtitle="People who read your library. Their progress (from Komga/Kavita and reading apps) decides what read-based cleanup may delete; mangarr passes it on to every connected server."
+        title={t("Readers")}
+        subtitle={t("People who read your library. Their progress (from Komga/Kavita and reading apps) decides what read-based cleanup may delete; mangarr passes it on to every connected server.")}
         actions={
-          <Button icon={<RefreshCw className="size-4" />} onClick={() => push.mutate({ name: "SyncReadProgress", label: "Syncing read progress" })}>
-            Sync now
-          </Button>
+          <Button icon={<RefreshCw className="size-4" />} onClick={() => push.mutate({ name: "SyncReadProgress", label: "Syncing read progress" })}>{t("Sync now")}</Button>
         }
       />
       {progressLibs.length === 0 && (
-        <p className="mb-4 text-sm text-muted">
-          To sync progress from Komga or Kavita, add the server under <Link to="/settings/library" className="text-accent-2 hover:underline">Library servers</Link>; readers then link their
-          own account there. Reading apps connect through <Link to="/settings/reading" className="text-accent-2 hover:underline">Reading apps</Link>.
+        <p className="mb-4 text-sm text-muted">{t("To sync progress from Komga or Kavita, add the server under") + " "}<Link to="/settings/library" className="text-accent-2 hover:underline">{t("Library servers")}</Link>{t("; readers then link their own account there. Reading apps connect through") + " "}<Link to="/settings/reading" className="text-accent-2 hover:underline">{t("Reading apps")}</Link>.
         </p>
       )}
       <div className="mb-4 flex max-w-md gap-2">
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Reader name" />
-        <Button variant="primary" icon={<UserPlus className="size-4" />} disabled={!name} onClick={add}>
-          Add reader
-        </Button>
+        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("Reader name")} />
+        <Button variant="primary" icon={<UserPlus className="size-4" />} disabled={!name} onClick={add}>{t("Add reader")}</Button>
       </div>
       {isLoading && <Loading />}
       {error && <ErrorBox error={error} />}
-      {data?.length === 0 && <EmptyState title="No readers">Cleanup only deletes chapters that every reader counting for cleanup has finished.</EmptyState>}
+      {data?.length === 0 && <EmptyState title={t("No readers")}>{t("Cleanup only deletes chapters that every reader counting for cleanup has finished.")}</EmptyState>}
       <div className="grid gap-3 md:grid-cols-2">
         {data?.map((r) => (
           <Card
             key={r.id}
             title={
               <span className="flex items-center gap-2">
-                {r.name} <Badge>{r.completedCount} chapters read</Badge>
+                {r.name} <Badge>{r.completedCount}{" " + t("chapters read")}</Badge>
               </span>
             }
             actions={
-              <IconButton title="Delete reader" onClick={() => setDeleting(r)}>
+              <IconButton title={t("Delete reader")} onClick={() => setDeleting(r)}>
                 <Trash2 className="size-4" />
               </IconButton>
             }
           >
             <div className="flex flex-col gap-3">
-              <Switch checked={r.countForCleanup} onChange={(v) => update(r, v)} label="Counts for cleanup" />
+              <Switch checked={r.countForCleanup} onChange={(v) => update(r, v)} label={t("Counts for cleanup")} />
               {r.accounts.map((a) => (
                 <div key={a.id} className="flex items-center gap-2 rounded bg-panel-2 px-3 py-2 text-sm">
                   <Badge tone="info">{a.moduleName}</Badge>
                   <span className="flex-1 truncate">{a.externalUser}</span>
-                  <span className="text-xs text-muted">synced {relative(a.lastSyncAt)}</span>
+                  <span className="text-xs text-muted">{t("synced") + " "}{relative(a.lastSyncAt)}</span>
                   {a.liveCapable ? (
                     a.live?.connected ? (
-                      <Badge tone="ok" title={a.live.lastEventAt ? `last change ${relative(a.live.lastEventAt)}` : "connected"}>
-                        live
-                      </Badge>
+                      <Badge tone="ok" title={a.live.lastEventAt ? `last change ${relative(a.live.lastEventAt)}` : tr("connected")}>{t("live")}</Badge>
                     ) : (
-                      <Badge tone="warn" title={a.live?.error || "connecting"}>
-                        reconnecting
-                      </Badge>
+                      <Badge tone="warn" title={a.live?.error || tr("connecting")}>{t("reconnecting")}</Badge>
                     )
                   ) : (
-                    <span className="text-xs text-muted">every {syncEvery} min</span>
+                    <span className="text-xs text-muted">{t("every") + " "}{syncEvery}{" " + t("min")}</span>
                   )}
-                  {a.lastError && <Badge tone="err" title={a.lastError}>error</Badge>}
-                  <IconButton title="Remove account" onClick={() => removeAccount(r, a.id)}>
+                  {a.lastError && <Badge tone="err" title={a.lastError}>{t("error")}</Badge>}
+                  <IconButton title={t("Remove account")} onClick={() => removeAccount(r, a.id)}>
                     <Trash2 className="size-4" />
                   </IconButton>
                 </div>
               ))}
               {progressLibs.length > 0 && (
                 <div>
-                  <Button size="sm" icon={<Plus className="size-3.5" />} onClick={() => setAccount(r)}>
-                    Link account
-                  </Button>
+                  <Button size="sm" icon={<Plus className="size-3.5" />} onClick={() => setAccount(r)}>{t("Link account")}</Button>
                 </div>
               )}
               <ReaderSyncPanel readerId={r.id} />
@@ -127,7 +116,7 @@ export function ReadersPage() {
         ))}
       </div>
       {account && <AccountModal reader={account} onClose={() => setAccount(null)} />}
-      <Confirm open={!!deleting} title="Delete reader" danger confirmLabel="Delete" message={`Delete ${deleting?.name} and their progress?`} onConfirm={remove} onClose={() => setDeleting(null)} />
+      <Confirm open={!!deleting} title={t("Delete reader")} danger confirmLabel={t("Delete")} message={`Delete ${deleting?.name} and their progress?`} onConfirm={remove} onClose={() => setDeleting(null)} />
     </>
   );
 }
@@ -152,7 +141,7 @@ function AccountModal({ reader, onClose }: { reader: Reader; onClose: () => void
       for (const [k, v] of Object.entries(creds)) credentials[k] = String(v ?? "");
       await unwrap(api.POST("/api/v1/readers/{id}/accounts", { params: { path: { id: reader.id } }, body: { moduleId, credentials } }));
       qc.invalidateQueries({ queryKey: ["readers"] });
-      toast.success("Account linked");
+      toast.success(tr("Account linked"));
       onClose();
     } catch (e) {
       setError(e);
@@ -167,15 +156,13 @@ function AccountModal({ reader, onClose }: { reader: Reader; onClose: () => void
       title={`Link an account for ${reader.name}`}
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" loading={saving} onClick={save}>
-            Test & save
-          </Button>
+          <Button onClick={onClose}>{t("Cancel")}</Button>
+          <Button variant="primary" loading={saving} onClick={save}>{t("Test & save")}</Button>
         </>
       }
     >
       <div className="flex flex-col gap-4">
-        <Field label="Library server">
+        <Field label={t("Library server")}>
           <Select value={moduleId} onChange={(e) => (setModuleId(Number(e.target.value)), setCreds({}))}>
             {progressLibs.map((l) => (
               <option key={l.id} value={l.id}>

@@ -1,3 +1,4 @@
+import { getLocale, t } from "./i18n/core";
 export function bytes(n?: number | null): string {
   if (!n) return "0 B";
   const units = ["B", "KB", "MB", "GB", "TB"];
@@ -7,37 +8,34 @@ export function bytes(n?: number | null): string {
     v /= 1024;
     i++;
   }
-  return `${v.toFixed(v >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
+  return `${new Intl.NumberFormat(getLocale(), {maximumFractionDigits:v >= 10 || i === 0 ? 0 : 1}).format(v)} ${units[i]}`;
 }
 
 export function date(s?: string | null): string {
   if (!s) return "—";
   const d = new Date(s);
   if (isNaN(d.getTime()) || d.getFullYear() < 1971) return "—";
-  return d.toLocaleDateString();
+  return d.toLocaleDateString(getLocale());
 }
 
 export function dateTime(s?: string | null): string {
   if (!s) return "—";
   const d = new Date(s);
   if (isNaN(d.getTime()) || d.getFullYear() < 1971) return "—";
-  return d.toLocaleString();
+  return d.toLocaleString(getLocale());
 }
 
 export function relative(s?: string | null): string {
-  if (!s) return "never";
+  if (!s) return t("never");
   const d = new Date(s).getTime();
-  if (isNaN(d)) return "never";
-  const diff = (Date.now() - d) / 1000;
+  if (!Number.isFinite(d)) return t("never");
+  const diff = (d - Date.now()) / 1000;
   const abs = Math.abs(diff);
-  const fmt = (v: number, u: string) => `${Math.round(v)} ${u}${Math.round(v) === 1 ? "" : "s"}`;
-  let out: string;
-  if (abs < 60) out = "just now";
-  else if (abs < 3600) out = fmt(abs / 60, "minute");
-  else if (abs < 86400) out = fmt(abs / 3600, "hour");
-  else out = fmt(abs / 86400, "day");
-  if (out === "just now") return out;
-  return diff >= 0 ? `${out} ago` : `in ${out}`;
+  const format = new Intl.RelativeTimeFormat(getLocale(), {numeric:"auto"});
+  if (abs < 60) return format.format(0, "second");
+  if (abs < 3600) return format.format(Math.round(diff / 60), "minute");
+  if (abs < 86400) return format.format(Math.round(diff / 3600), "hour");
+  return format.format(Math.round(diff / 86400), "day");
 }
 
 export function duration(ms?: number | null): string {

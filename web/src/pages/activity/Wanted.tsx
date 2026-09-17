@@ -1,3 +1,4 @@
+import { t } from "../../lib/i18n/core";
 import { Link } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
@@ -19,28 +20,26 @@ export function WantedPage() {
   return (
     <>
       <PageHeader
-        title="Wanted"
+        title={t("Wanted")}
         subtitle={data ? `${data.total} monitored chapters are missing` : undefined}
         actions={
-          <Button icon={<Search className="size-4" />} onClick={() => push.mutate({ name: "SearchMissing", label: "Searching all missing chapters" })}>
-            Search all
-          </Button>
+          <Button icon={<Search className="size-4" />} onClick={() => push.mutate({ name: "SearchMissing", label: "Searching all missing chapters" })}>{t("Search all")}</Button>
         }
       />
       {isLoading && <Loading />}
       {error && <ErrorBox error={error} />}
-      {data?.items.length === 0 && <EmptyState title="Nothing is missing">Every monitored chapter is downloaded.</EmptyState>}
+      {data?.items.length === 0 && <EmptyState title={t("Nothing is missing")}>{t("Every monitored chapter is downloaded.")}</EmptyState>}
       {data && data.items.length > 0 && (
         <>
           <Table>
             <thead>
               <tr>
-                <Th>Series</Th>
-                <Th>Chapter</Th>
-                <Th>Title</Th>
-                <Th>Released</Th>
-                <Th>Releases</Th>
-                <Th>State</Th>
+                <Th>{t("Series")}</Th>
+                <Th>{t("Chapter")}</Th>
+                <Th>{t("Title")}</Th>
+                <Th>{t("Released")}</Th>
+                <Th>{t("Releases")}</Th>
+                <Th>{t("State")}</Th>
                 <Th />
               </tr>
             </thead>
@@ -61,7 +60,7 @@ export function WantedPage() {
                   </Td>
                   <Td className="text-right">
                     <IconButton
-                      title="Search"
+                      title={t("Search")}
                       onClick={() => push.mutate({ name: "SearchMissing", body: { seriesId: c.seriesId, chapterIds: [c.id], explicit: true }, label: `Searching ch. ${c.number}` })}
                     >
                       <Search className="size-4" />
@@ -72,15 +71,11 @@ export function WantedPage() {
             </tbody>
           </Table>
           <div className="mt-3 flex items-center justify-end gap-2 text-sm">
-            <Button size="sm" disabled={page <= 1} onClick={() => setPage(String(page - 1))}>
-              Previous
-            </Button>
+            <Button size="sm" disabled={page <= 1} onClick={() => setPage(String(page - 1))}>{t("Previous")}</Button>
             <span className="text-muted">
               {page} / {pages}
             </span>
-            <Button size="sm" disabled={page >= pages} onClick={() => setPage(String(page + 1))}>
-              Next
-            </Button>
+            <Button size="sm" disabled={page >= pages} onClick={() => setPage(String(page + 1))}>{t("Next")}</Button>
           </div>
         </>
       )}

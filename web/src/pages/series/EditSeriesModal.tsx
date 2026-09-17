@@ -1,3 +1,4 @@
+import { t as tr, t } from "../../lib/i18n/core";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Lock, Unlock } from "lucide-react";
@@ -56,7 +57,7 @@ export function EditSeriesModal({ series, onClose }: { series: Series; onClose: 
         }),
       );
       qc.invalidateQueries({ queryKey: ["series"] });
-      toast.success("Series saved", moving ? (moveFiles ? "Moving the files in the background" : "Location updated") : undefined);
+      toast.success(tr("Series saved"), moving ? (moveFiles ? "Moving the files in the background" : "Location updated") : undefined);
       onClose();
     } catch (e) {
       toast.fromError(e);
@@ -67,14 +68,14 @@ export function EditSeriesModal({ series, onClose }: { series: Series; onClose: 
 
   if (relink) {
     return (
-      <Modal open onClose={() => setRelink(false)} title="Fix metadata match" size="lg">
+      <Modal open onClose={() => setRelink(false)} title={t("Fix metadata match")} size="lg">
         <MetadataSearch
           initialQuery={series.title}
           onPick={async (c) => {
             try {
               await unwrap(api.PUT("/api/v1/series/{id}/metadata", { params: { path: { id: series.id } }, body: { moduleId: c.moduleId, provider: c.provider, id: c.id } }));
               qc.invalidateQueries({ queryKey: ["series"] });
-              toast.success("Metadata updated");
+              toast.success(tr("Metadata updated"));
               onClose();
             } catch (e) {
               toast.fromError(e);
@@ -93,21 +94,17 @@ export function EditSeriesModal({ series, onClose }: { series: Series; onClose: 
       size="lg"
       footer={
         <>
-          <Button onClick={() => setRelink(true)} className="mr-auto">
-            Fix metadata match…
-          </Button>
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" loading={saving} onClick={save}>
-            Save
-          </Button>
+          <Button onClick={() => setRelink(true)} className="mr-auto">{t("Fix metadata match…")}</Button>
+          <Button onClick={onClose}>{t("Cancel")}</Button>
+          <Button variant="primary" loading={saving} onClick={save}>{t("Save")}</Button>
         </>
       }
     >
       <div className="grid gap-4 md:grid-cols-2">
-        <Field label="Title" help="Editing locks the field against metadata refreshes." className="md:col-span-2">
+        <Field label={t("Title")} help={t("Editing locks the field against metadata refreshes.")} className="md:col-span-2">
           <Input value={title} onChange={(e) => setTitle(e.target.value)} />
         </Field>
-        <Field label="Profile">
+        <Field label={t("Profile")}>
           <Select value={profileId} onChange={(e) => setProfileId(Number(e.target.value))}>
             {profiles?.map((p) => (
               <option key={p.id} value={p.id}>
@@ -116,21 +113,21 @@ export function EditSeriesModal({ series, onClose }: { series: Series; onClose: 
             ))}
           </Select>
         </Field>
-        <Field label="New chapters">
+        <Field label={t("New chapters")}>
           <Select value={monitorNew} onChange={(e) => setMonitorNew(e.target.value)}>
-            <option value="all">Monitor automatically</option>
-            <option value="none">Don't monitor</option>
+            <option value="all">{t("Monitor automatically")}</option>
+            <option value="none">{t("Don't monitor")}</option>
           </Select>
         </Field>
-        <Field label="Reading direction" help="Written to ComicInfo (Manga field).">
+        <Field label={t("Reading direction")} help={t("Written to ComicInfo (Manga field).")}>
           <Select value={direction} onChange={(e) => setDirection(e.target.value)}>
-            <option value="rtl">Right to left (manga)</option>
-            <option value="ltr">Left to right</option>
-            <option value="vertical">Vertical</option>
-            <option value="webtoon">Webtoon (long strip)</option>
+            <option value="rtl">{t("Right to left (manga)")}</option>
+            <option value="ltr">{t("Left to right")}</option>
+            <option value="vertical">{t("Vertical")}</option>
+            <option value="webtoon">{t("Webtoon (long strip)")}</option>
           </Select>
         </Field>
-        <Field label="Status">
+        <Field label={t("Status")}>
           <Select value={status} onChange={(e) => setStatus(e.target.value)}>
             {["unknown", "ongoing", "completed", "hiatus", "cancelled"].map((s) => (
               <option key={s} value={s}>
@@ -139,10 +136,10 @@ export function EditSeriesModal({ series, onClose }: { series: Series; onClose: 
             ))}
           </Select>
         </Field>
-        <Field label="Language (BCP-47)">
+        <Field label={t("Language (BCP-47)")}>
           <Input value={language} onChange={(e) => setLanguage(e.target.value)} placeholder="en" />
         </Field>
-        <Field label="Tags">
+        <Field label={t("Tags")}>
           <div className="flex flex-wrap gap-2">
             {tags?.map((t) => (
               <label key={t.id} className="flex items-center gap-1 text-sm">
@@ -150,13 +147,13 @@ export function EditSeriesModal({ series, onClose }: { series: Series; onClose: 
                 {t.label}
               </label>
             ))}
-            {!tags?.length && <span className="text-xs text-muted">Create tags in Settings → General.</span>}
+            {!tags?.length && <span className="text-xs text-muted">{t("Create tags in Settings → General.")}</span>}
           </div>
         </Field>
-        <Field label="Blocked scanlators" help="Releases by these groups are never downloaded for this series (on top of the profile's list).">
-          <TagInput value={blocked} onChange={setBlocked} placeholder="Group name, Enter" />
+        <Field label={t("Blocked scanlators")} help={t("Releases by these groups are never downloaded for this series (on top of the profile's list).")}>
+          <TagInput value={blocked} onChange={setBlocked} placeholder={t("Group name, Enter")} />
         </Field>
-        <Field label="Root folder">
+        <Field label={t("Root folder")}>
           <Select value={rootId} onChange={(e) => setRootId(Number(e.target.value))}>
             {roots?.map((r) => (
               <option key={r.id} value={r.id}>
@@ -165,23 +162,23 @@ export function EditSeriesModal({ series, onClose }: { series: Series; onClose: 
             ))}
           </Select>
         </Field>
-        <Field label="Folder">
+        <Field label={t("Folder")}>
           <Input value={folder} onChange={(e) => setFolder(e.target.value)} />
         </Field>
         {moving && (
           <div className="md:col-span-2">
-            <Switch checked={moveFiles} onChange={setMoveFiles} label="Move the files (off: they were already moved by hand)" />
-            <p className="mt-1 text-xs text-muted">Reader progress on Komga/Kavita is restored after the move.</p>
+            <Switch checked={moveFiles} onChange={setMoveFiles} label={t("Move the files (off: they were already moved by hand)")} />
+            <p className="mt-1 text-xs text-muted">{t("Reader progress on Komga/Kavita is restored after the move.")}</p>
           </div>
         )}
-        <Field label="Description" className="md:col-span-2">
+        <Field label={t("Description")} className="md:col-span-2">
           <Textarea rows={5} value={description} onChange={(e) => setDescription(e.target.value)} />
         </Field>
         <div className="md:col-span-2">
-          <Switch checked={monitored} onChange={setMonitored} label="Monitored" />
+          <Switch checked={monitored} onChange={setMonitored} label={t("Monitored")} />
         </div>
         {locks.length > 0 && (
-          <Field label="Locked fields" help="Click to unlock; unlocked fields follow metadata refreshes again." className="md:col-span-2">
+          <Field label={t("Locked fields")} help={t("Click to unlock; unlocked fields follow metadata refreshes again.")} className="md:col-span-2">
             <div className="flex flex-wrap gap-1.5">
               {locks.map((l) => (
                 <button key={l} type="button" className="inline-flex items-center gap-1 rounded bg-panel-2 px-2 py-1 text-xs hover:bg-border" onClick={() => setLocks(locks.filter((x) => x !== l))}>

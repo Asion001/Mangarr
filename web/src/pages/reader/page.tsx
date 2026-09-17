@@ -1,3 +1,4 @@
+import { t } from "../../lib/i18n/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, apiUrl, unwrap } from "../../api/client";
 
@@ -164,9 +165,7 @@ export function PageImage({
   if (failed) {
     return (
       <div style={{ width, height }} className="flex items-center justify-center text-sm text-neutral-400">
-        <button type="button" className="rounded border border-neutral-600 px-3 py-1.5" onClick={() => setFailed(false)}>
-          Couldn't load this page — retry
-        </button>
+        <button type="button" className="rounded border border-neutral-600 px-3 py-1.5" onClick={() => setFailed(false)}>{t("Couldn't load this page — retry")}</button>
       </div>
     );
   }

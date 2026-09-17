@@ -1,3 +1,4 @@
+import { t as tr, t } from "../../lib/i18n/core";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, KeyRound, Server, Smartphone } from "lucide-react";
@@ -46,7 +47,7 @@ function EventLine({ e }: { e: Event }) {
           {e.seriesTitle}
         </Link>
       ) : (
-        <span className="text-muted">deleted series</span>
+        <span className="text-muted">{t("deleted series")}</span>
       )}
       <span className="text-muted">: {describe(e)}</span>
     </span>
@@ -60,11 +61,10 @@ function DeviceRow({ d }: { d: Device }) {
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium">{who(d)}</span>
-          <span className="text-xs text-muted">last report {relative(d.lastSeen)}</span>
+          <span className="text-xs text-muted">{t("last report") + " "}{relative(d.lastSeen)}</span>
           {d.kept > 0 && (
-            <Badge tone="warn" title="Reports lower than mangarr's progress, for example a server that doesn't know about chapters read in an app yet. mangarr kept its own progress.">
-              {d.kept} kept
-            </Badge>
+            <Badge tone="warn" title={t("Reports lower than mangarr's progress, for example a server that doesn't know about chapters read in an app yet. mangarr kept its own progress.")}>
+              {d.kept}{" " + t("kept")}</Badge>
           )}
         </div>
         {d.last && (
@@ -90,45 +90,38 @@ export function ReaderSyncPanel({ readerId }: { readerId: number }) {
   return (
     <div className="border-t border-border pt-3">
       <button type="button" className="flex items-center gap-1 text-sm font-medium text-muted hover:text-fg" onClick={() => setOpen(!open)}>
-        {open ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
-        Devices & sync
-      </button>
+        {open ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}{t("Devices & sync")}</button>
       {open && (
         <div className="mt-2 flex flex-col gap-2">
           {isLoading && <Spinner />}
           {error && <ErrorBox error={error} />}
           {data?.readingApps && (
-            <p className="text-xs text-muted">
-              This is an account's progress: its reading apps (Mihon, KMReader, Paperback) write here.{" "}
-              <Link to="/settings/users" className="text-accent-2 hover:underline">
-                Users & groups
-              </Link>
+            <p className="text-xs text-muted">{t("This is an account's progress: its reading apps (Mihon, KMReader, Paperback) write here.")}{" "}
+              <Link to="/settings/users" className="text-accent-2 hover:underline">{t("Users & groups")}</Link>
             </p>
           )}
-          {data && data.devices.length === 0 && unusedKeys.length === 0 && <p className="text-sm text-muted">No progress reports in the last 30 days.</p>}
+          {data && data.devices.length === 0 && unusedKeys.length === 0 && <p className="text-sm text-muted">{t("No progress reports in the last 30 days.")}</p>}
           {data?.devices.map((d) => <DeviceRow key={`${d.origin}/${d.client}/${d.device}`} d={d} />)}
           {unusedKeys.map((k) => (
             <div key={k.id} className="flex items-center gap-2 rounded bg-panel-2 px-3 py-2 text-sm">
               <Smartphone className="size-4 shrink-0 text-muted" />
               <span className="font-medium">{k.comment || k.prefix}</span>
               <span className="text-xs text-muted">
-                {k.lastUsedAt ? `connected ${relative(k.lastUsedAt)}${k.lastClient ? ` (${k.lastClient})` : ""}, no progress yet` : "key not used yet"}
+                {k.lastUsedAt ? `connected ${relative(k.lastUsedAt)}${k.lastClient ? ` (${k.lastClient})` : ""}, no progress yet` : tr("key not used yet")}
               </span>
             </div>
           ))}
           {data && data.events.length > 0 && (
             <div>
               <button type="button" className="flex items-center gap-1 text-xs text-muted hover:text-fg" onClick={() => setShowEvents(!showEvents)}>
-                {showEvents ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
-                Recent reports
-              </button>
+                {showEvents ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}{t("Recent reports")}</button>
               {showEvents && (
                 <ul className="mt-1 flex flex-col gap-2 text-xs">
                   {data.events.map((e) => (
                     <li key={e.id} className="flex flex-col">
                       <span className="flex items-center gap-2 text-muted">
                         <span title={e.at}>{relative(e.at)}</span>· <span className="truncate">{who(e)}</span>
-                        {e.outcome === "kept" && <Badge tone="warn">kept</Badge>}
+                        {e.outcome === "kept" && <Badge tone="warn">{t("kept")}</Badge>}
                       </span>
                       <EventLine e={e} />
                     </li>

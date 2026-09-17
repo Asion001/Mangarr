@@ -1,3 +1,4 @@
+import { t as tr, t, label } from "../lib/i18n/core";
 import { useState, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation } from "react-router";
 import clsx from "clsx";
@@ -120,7 +121,7 @@ export function Layout() {
               )}
             >
               {item.icon}
-              <span className="flex-1">{item.label}</span>
+              <span className="flex-1">{label(item.label)}</span>
               {item.to === "/activity" && queued > 0 && (
                 <span className={`rounded-full px-1.5 text-xs text-white ${queue?.state.paused ? "bg-warn" : "bg-accent"}`}>{queued}</span>
               )}
@@ -138,7 +139,7 @@ export function Layout() {
                       clsx("-ml-px border-l px-3 py-1.5", isActive ? "border-accent text-fg" : "border-transparent text-muted hover:text-fg")
                     }
                   >
-                    {c.label}
+                    {label(c.label)}
                   </NavLink>
                 ))}
               </div>
@@ -154,19 +155,18 @@ export function Layout() {
         }
       >
         <UserRound className="size-4" />
-        <span className="flex-1 truncate">{name || "My account"}</span>
+        <span className="flex-1 truncate">{name || tr("My account")}</span>
       </NavLink>
       <div className="flex items-center justify-between px-2 pt-2 text-xs text-muted">
         {can("library.manage") ? (
           <span className="flex items-center gap-1">
-            <Activity className="size-3.5" /> {queued} in queue{queue?.state.paused ? " (paused)" : ""}
+            <Activity className="size-3.5" /> {queued}{" " + t("in queue")}{queue?.state.paused ? tr(" (paused)") : ""}
           </span>
         ) : (
           <span />
         )}
         <button className="flex items-center gap-1 hover:text-fg" onClick={logout}>
-          <LogOut className="size-3.5" /> Log out
-        </button>
+          <LogOut className="size-3.5" />{" " + t("Log out")}</button>
       </div>
     </nav>
   );

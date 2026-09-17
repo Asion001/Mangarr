@@ -1,9 +1,11 @@
+import { t as tr, t, label } from "../../lib/i18n/core";
+import { useUIPreferences } from "../../lib/uiPreferences";
 import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, KeyRound, Link2, LogOut, Monitor, Pencil, Plus, Trash2, Unlink } from "lucide-react";
 import { api, unwrap, type Implementation, type ModuleResource } from "../../api/client";
 import { DynamicForm, defaultsOf } from "../../components/DynamicForm";
-import { Badge, Button, Card, Confirm, ErrorBox, Field, IconButton, Input, Modal, PageHeader, Tabs } from "../../components/ui";
+import { Badge, Button, Card, Confirm, ErrorBox, Field, IconButton, Input, Modal, PageHeader, Select, Tabs } from "../../components/ui";
 import { ModuleEditor, type Draft } from "../settings/Modules";
 import { appAddress, DevicesCard, Guide, type App } from "../settings/ReadingApps";
 import { useAccount } from "../../lib/account";
@@ -30,19 +32,18 @@ export function AccountPage() {
   const { account, name, can } = useAccount();
   return (
     <>
-      <PageHeader title="My account" subtitle={
-          account?.kind === "user" ? `Signed in as ${account.username}` : account?.kind === "anonymous" ? "Logins are turned off (MANGARR_AUTH_DISABLED)" : "Signed in with the API key"
+      <PageHeader title={t("My account")} subtitle={
+          account?.kind === "user" ? `Signed in as ${account.username}` : account?.kind === "anonymous" ? tr("Logins are turned off (MANGARR_AUTH_DISABLED)") : tr("Signed in with the API key")
         } />
       <div className="flex flex-col gap-6">
+        <InterfaceCard />
         <Card title={name}>
           <div className="flex flex-col gap-2 text-sm">
-            <div>
-              Group <Badge tone="info">{account?.group || "—"}</Badge>
+            <div>{t("Group") + " "}<Badge tone="info">{account?.group || "—"}</Badge>
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-muted">You can:</span> read the library
-              {(account?.permissions ?? []).map((p) => (
-                <Badge key={p}>{permLabel[p] ?? p}</Badge>
+              <span className="text-muted">{t("You can:")}</span>{" " + t("read the library")}{(account?.permissions ?? []).map((p) => (
+                <Badge key={p}>{label(permLabel[p] ?? p)}</Badge>
               ))}
             </div>
           </div>
@@ -63,15 +64,15 @@ function ReadingAppsCard() {
   if (!st) return null;
   if (!st.enabled) {
     return (
-      <Card title="Reading apps">
-        <p className="text-sm text-muted">Mihon, KMReader and Paperback can read this library once an administrator turns on reading apps.</p>
+      <Card title={t("Reading apps")}>
+        <p className="text-sm text-muted">{t("Mihon, KMReader and Paperback can read this library once an administrator turns on reading apps.")}</p>
       </Card>
     );
   }
   return (
     <>
-      <Card title="Reading apps">
-        <p className="mb-3 text-sm text-muted">Read in Mihon, KMReader or Paperback: they connect as your account and sync your progress.</p>
+      <Card title={t("Reading apps")}>
+        <p className="mb-3 text-sm text-muted">{t("Read in Mihon, KMReader or Paperback: they connect as your account and sync your progress.")}</p>
         <Tabs
           tabs={[
             { value: "mihon", label: "Mihon (Android)" },
@@ -107,7 +108,7 @@ function PasswordCard() {
     setSaving(true);
     try {
       await unwrap(api.POST("/api/v1/auth/password", { body: { current, password } }));
-      toast.success("Password changed", "Your other sessions were signed out");
+      toast.success(tr("Password changed"), tr("Your other sessions were signed out"));
       setCurrent("");
       setPassword("");
       setConfirm("");
@@ -118,15 +119,15 @@ function PasswordCard() {
     }
   };
   return (
-    <Card title="Password">
+    <Card title={t("Password")}>
       <form onSubmit={submit} className="grid max-w-xl gap-4 sm:grid-cols-2">
-        <Field label="Current password" className="sm:col-span-2">
+        <Field label={t("Current password")} className="sm:col-span-2">
           <Input type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} required />
         </Field>
-        <Field label="New password" help="At least 8 characters.">
+        <Field label={t("New password")} help={t("At least 8 characters.")}>
           <Input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
         </Field>
-        <Field label="Confirm new password">
+        <Field label={t("Confirm new password")}>
           <Input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
         </Field>
         {error !== null && (
@@ -135,9 +136,7 @@ function PasswordCard() {
           </div>
         )}
         <div>
-          <Button type="submit" icon={<KeyRound className="size-4" />} loading={saving}>
-            Change password
-          </Button>
+          <Button type="submit" icon={<KeyRound className="size-4" />} loading={saving}>{t("Change password")}</Button>
         </div>
       </form>
     </Card>
@@ -160,19 +159,17 @@ function SessionsCard() {
     try {
       await unwrap(api.POST("/api/v1/me/sessions/revoke-others"));
       qc.invalidateQueries({ queryKey: ["me", "sessions"] });
-      toast.success("Signed out everywhere else");
+      toast.success(tr("Signed out everywhere else"));
     } catch (e) {
       toast.fromError(e);
     }
   };
   return (
     <Card
-      title="Where you're signed in"
+      title={t("Where you're signed in")}
       actions={
         (data?.length ?? 0) > 1 && (
-          <Button size="sm" icon={<LogOut className="size-3.5" />} onClick={others}>
-            Sign out everywhere else
-          </Button>
+          <Button size="sm" icon={<LogOut className="size-3.5" />} onClick={others}>{t("Sign out everywhere else")}</Button>
         )
       }
     >
@@ -183,14 +180,14 @@ function SessionsCard() {
             <Monitor className="size-4 shrink-0 text-muted" />
             <div className="flex min-w-0 flex-1 flex-col">
               <span className="font-medium">
-                {browser(s.userAgent)} {s.current && <Badge tone="ok">this browser</Badge>}
+                {browser(s.userAgent)} {s.current && <Badge tone="ok">{t("this browser")}</Badge>}
               </span>
               <span className="truncate text-xs text-muted">
-                {s.ip || "unknown address"} · active {relative(s.lastSeenAt)} · signed in {relative(s.createdAt)}
+                {s.ip || tr("unknown address")}{" " + t("· active") + " "}{relative(s.lastSeenAt)}{" " + t("· signed in") + " "}{relative(s.createdAt)}
               </span>
             </div>
             {!s.current && (
-              <IconButton title="Sign out" onClick={() => revoke(s.id)}>
+              <IconButton title={t("Sign out")} onClick={() => revoke(s.id)}>
                 <LogOut className="size-4" />
               </IconButton>
             )}
@@ -231,18 +228,14 @@ function NotificationsCard() {
   };
   return (
     <Card
-      title="Notifications"
+      title={t("Notifications")}
       actions={
-        <Button size="sm" icon={<Plus className="size-4" />} onClick={() => setPicking(true)}>
-          Add
-        </Button>
+        <Button size="sm" icon={<Plus className="size-4" />} onClick={() => setPicking(true)}>{t("Add")}</Button>
       }
     >
-      <p className="mb-3 text-sm text-muted">
-        Get new chapters of the series you follow, and news about your requests, on your phone or chat. Follow a series with the bell on its page.
-      </p>
+      <p className="mb-3 text-sm text-muted">{t("Get new chapters of the series you follow, and news about your requests, on your phone or chat. Follow a series with the bell on its page.")}</p>
       {error && <ErrorBox error={error} />}
-      {targets?.length === 0 && <p className="text-sm text-muted">No notifications set up yet.</p>}
+      {targets?.length === 0 && <p className="text-sm text-muted">{t("No notifications set up yet.")}</p>}
       <div className="flex flex-col gap-2">
         {targets?.map((m) => (
           <div key={m.id} className="flex items-center gap-3 rounded-md bg-panel-2 px-3 py-2 text-sm">
@@ -255,22 +248,22 @@ function NotificationsCard() {
               </div>
               {m.error && <div className="text-xs text-err">{m.error}</div>}
             </div>
-            {!m.enabled && <Badge>off</Badge>}
+            {!m.enabled && <Badge>{t("off")}</Badge>}
             <IconButton
-              title="Edit"
+              title={t("Edit")}
               onClick={() =>
                 setDraft({ id: m.id, implementation: m.implementation, name: m.name, enabled: m.enabled, priority: m.priority, events: m.events ?? [], settings: { ...m.settings } })
               }
             >
               <Pencil className="size-4" />
             </IconButton>
-            <IconButton title="Delete" onClick={() => setDeleting(m)}>
+            <IconButton title={t("Delete")} onClick={() => setDeleting(m)}>
               <Trash2 className="size-4" />
             </IconButton>
           </div>
         ))}
       </div>
-      <Modal open={picking} onClose={() => setPicking(false)} title="Send my notifications to">
+      <Modal open={picking} onClose={() => setPicking(false)} title={t("Send my notifications to")}>
         <div className="flex flex-col gap-2">
           {impls?.map((i) => (
             <button key={i.name} onClick={() => startNew(i)} className="rounded-lg border border-border p-3 text-left hover:border-accent hover:bg-panel-2">
@@ -281,7 +274,7 @@ function NotificationsCard() {
         </div>
       </Modal>
       {draft && <ModuleEditor kind="notify" personal draft={draft} impl={implOf(draft.implementation)} onClose={() => setDraft(null)} />}
-      <Confirm open={!!deleting} title="Delete notification" danger confirmLabel="Delete" message={`Delete ${deleting?.name}?`} onConfirm={remove} onClose={() => setDeleting(null)} />
+      <Confirm open={!!deleting} title={t("Delete notification")} danger confirmLabel={t("Delete")} message={`Delete ${deleting?.name}?`} onConfirm={remove} onClose={() => setDeleting(null)} />
     </Card>
   );
 }
@@ -301,12 +294,12 @@ function LibraryAccountsCard() {
     try {
       const credentials = Object.fromEntries(Object.entries(creds).map(([k, v]) => [k, String(v ?? "")]));
       await unwrap(api.POST("/api/v1/me/library-accounts", { body: { moduleId, credentials } }));
-      toast.success("Linked", "Your progress there syncs with mangarr now.");
+      toast.success(tr("Linked"), tr("Your progress there syncs with mangarr now."));
       setLinking(null);
       setCreds({});
       refresh();
     } catch (e) {
-      toast.fromError(e, "Couldn't link it");
+      toast.fromError(e, tr("Couldn't link it"));
     } finally {
       setBusy(false);
     }
@@ -320,8 +313,8 @@ function LibraryAccountsCard() {
     }
   };
   return (
-    <Card title="Library servers">
-      <p className="mb-3 text-sm text-muted">Read in Komga or Kavita with your own account? Link it and your progress there syncs with mangarr (and the other way).</p>
+    <Card title={t("Library servers")}>
+      <p className="mb-3 text-sm text-muted">{t("Read in Komga or Kavita with your own account? Link it and your progress there syncs with mangarr (and the other way).")}</p>
       <div className="flex flex-col gap-2">
         {servers.map((srv) => (
           <div key={srv.moduleId} className="rounded-md bg-panel-2 px-3 py-2 text-sm">
@@ -330,20 +323,17 @@ function LibraryAccountsCard() {
                 <div className="font-medium">{srv.name}</div>
                 <div className="text-xs text-muted">
                   {srv.linked ? (
-                    <>
-                      Linked as {srv.linked.externalUser || "you"}
+                    <>{t("Linked as") + " "}{srv.linked.externalUser || tr("you")}
                       {srv.linked.lastSyncAt && ` · synced ${relative(srv.linked.lastSyncAt)}`}
                     </>
                   ) : (
-                    "Not linked"
+                    tr("Not linked")
                   )}
                 </div>
                 {srv.linked?.lastError && <div className="text-xs text-err">{srv.linked.lastError}</div>}
               </div>
               {srv.linked ? (
-                <Button size="sm" icon={<Unlink className="size-4" />} onClick={() => unlink(srv.moduleId)}>
-                  Unlink
-                </Button>
+                <Button size="sm" icon={<Unlink className="size-4" />} onClick={() => unlink(srv.moduleId)}>{t("Unlink")}</Button>
               ) : (
                 linking !== srv.moduleId && (
                   <Button
@@ -353,9 +343,7 @@ function LibraryAccountsCard() {
                       setLinking(srv.moduleId);
                       setCreds(defaultsOf(srv.fields));
                     }}
-                  >
-                    Link
-                  </Button>
+                  >{t("Link")}</Button>
                 )
               )}
             </div>
@@ -363,12 +351,8 @@ function LibraryAccountsCard() {
               <div className="mt-3 flex flex-col gap-3 border-t border-border pt-3">
                 <DynamicForm fields={srv.fields} values={creds} onChange={setCreds} />
                 <div className="flex justify-end gap-2">
-                  <Button size="sm" onClick={() => setLinking(null)}>
-                    Cancel
-                  </Button>
-                  <Button size="sm" variant="primary" loading={busy} onClick={() => link(srv.moduleId)}>
-                    Link
-                  </Button>
+                  <Button size="sm" onClick={() => setLinking(null)}>{t("Cancel")}</Button>
+                  <Button size="sm" variant="primary" loading={busy} onClick={() => link(srv.moduleId)}>{t("Link")}</Button>
                 </div>
               </div>
             )}
@@ -377,4 +361,10 @@ function LibraryAccountsCard() {
       </div>
     </Card>
   );
+}
+
+function InterfaceCard() {
+  const {preferences,save,saving,error} = useUIPreferences();
+  const toast=useToast();
+  return <Card title={t("Interface")}><Field label={t("Interface language")}><Select disabled={saving} value={preferences.locale} onChange={e=>{void save({locale:e.target.value as typeof preferences.locale}).catch(e=>toast.fromError(e));}}><option value="auto">{t("Automatic")}</option><option value="en">English</option><option value="ru">Русский</option><option value="uk">Українська</option></Select></Field>{error ? <p role="alert">{t("Could not save preferences")}</p> : null}</Card>;
 }

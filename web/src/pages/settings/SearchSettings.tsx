@@ -1,3 +1,4 @@
+import { t } from "../../lib/i18n/core";
 import { type S } from "../../api/client";
 import { Button, Card, ErrorBox, Field, Input, Loading, PageHeader, Select, Switch } from "../../components/ui";
 import { useSettingsDoc } from "./useSettingsDoc";
@@ -34,60 +35,54 @@ export function SearchSettingsPage() {
   return (
     <>
       <PageHeader
-        title="Search & throttling"
-        subtitle="How catalogs are searched when adding series, and how gently mangarr talks to sites."
+        title={t("Search & throttling")}
+        subtitle={t("How catalogs are searched when adding series, and how gently mangarr talks to sites.")}
         actions={
-          <Button variant="primary" loading={doc.saving} onClick={() => doc.save()}>
-            Save
-          </Button>
+          <Button variant="primary" loading={doc.saving} onClick={() => doc.save()}>{t("Save")}</Button>
         }
       />
       {doc.isLoading && <Loading />}
       {doc.error && <ErrorBox error={doc.error} />}
       {v && qs && (
         <>
-          <Card title="Quick search" className="mb-6">
+          <Card title={t("Quick search")} className="mb-6">
             <div className="flex flex-col gap-4">
               <Switch
                 checked={qs.enabled}
                 env={doc.lock("quickSearch.enabled")}
                 onChange={(x) => setQS({ enabled: x })}
-                label="Search catalogs one by one (by priority) and stop at the first confident match"
+                label={t("Search catalogs one by one (by priority) and stop at the first confident match")}
               />
               <div className="grid gap-4 md:grid-cols-2">
-                <Field label="Match threshold" help="Title similarity from 0 to 1 that counts as the same series" env={doc.lock("quickSearch.threshold")}>
+                <Field label={t("Match threshold")} help={t("Title similarity from 0 to 1 that counts as the same series")} env={doc.lock("quickSearch.threshold")}>
                   <Input type="number" step={0.01} min={0.5} max={1} value={qs.threshold} onChange={(e) => setQS({ threshold: Number(e.target.value) })} />
                 </Field>
-                <Field label="Time limit (s)" help="Stop searching one by one after this" env={doc.lock("quickSearch.budgetSeconds")}>
+                <Field label={t("Time limit (s)")} help={t("Stop searching one by one after this")} env={doc.lock("quickSearch.budgetSeconds")}>
                   <Input type="number" min={5} value={qs.budgetSeconds} onChange={(e) => setQS({ budgetSeconds: Number(e.target.value) })} />
                 </Field>
-                <Field label="Chapter counts" help="Each count is one extra request to the site" env={doc.lock("quickSearch.details")}>
+                <Field label={t("Chapter counts")} help={t("Each count is one extra request to the site")} env={doc.lock("quickSearch.details")}>
                   <Select value={qs.details} onChange={(e) => setQS({ details: e.target.value as typeof qs.details })}>
-                    <option value="none">Don't fetch</option>
-                    <option value="best">Best match only</option>
-                    <option value="top">Top results</option>
+                    <option value="none">{t("Don't fetch")}</option>
+                    <option value="best">{t("Best match only")}</option>
+                    <option value="top">{t("Top results")}</option>
                   </Select>
                 </Field>
                 {qs.details === "top" && (
-                  <Field label="Results with chapter counts" env={doc.lock("quickSearch.topN")}>
+                  <Field label={t("Results with chapter counts")} env={doc.lock("quickSearch.topN")}>
                     <Input type="number" min={1} max={5} value={qs.topN} onChange={(e) => setQS({ topN: Number(e.target.value) })} />
                   </Field>
                 )}
               </div>
             </div>
           </Card>
-          <Card title="Throttling">
-            <p className="mb-4 text-sm text-muted">
-              Applies to every catalog (override per catalog in Sources → Catalogs). <b>Fast</b> behaves like Mihon: no extra pauses. <b>Normal</b> adds short random pauses
-              between chapters and checks. <b>Gentle</b> is for sites that block easily. Sites that answer with 429 or Cloudflare errors are paused automatically
-              (5 minutes, doubling up to 2 hours).
-            </p>
+          <Card title={t("Throttling")}>
+            <p className="mb-4 text-sm text-muted">{t("Applies to every catalog (override per catalog in Sources → Catalogs).") + " "}<b>{t("Fast")}</b>{" " + t("behaves like Mihon: no extra pauses.") + " "}<b>{t("Normal")}</b>{" " + t("adds short random pauses between chapters and checks.") + " "}<b>{t("Gentle")}</b>{" " + t("is for sites that block easily. Sites that answer with 429 or Cloudflare errors are paused automatically (5 minutes, doubling up to 2 hours).")}</p>
             <div className="grid gap-4 md:grid-cols-3">
-              <Field label="Preset" env={doc.lock("throttle.preset")}>
+              <Field label={t("Preset")} env={doc.lock("throttle.preset")}>
                 <Select value={v.throttle.preset || "normal"} onChange={(e) => doc.patch({ throttle: { preset: e.target.value as Throttle["preset"] } })}>
-                  <option value="gentle">Gentle</option>
-                  <option value="normal">Normal</option>
-                  <option value="fast">Fast (like Mihon)</option>
+                  <option value="gentle">{t("Gentle")}</option>
+                  <option value="normal">{t("Normal")}</option>
+                  <option value="fast">{t("Fast (like Mihon)")}</option>
                 </Select>
               </Field>
               {throttleFields.map((f) => (

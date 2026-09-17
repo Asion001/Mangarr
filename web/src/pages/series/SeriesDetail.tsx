@@ -1,3 +1,4 @@
+import { t as tr, t } from "../../lib/i18n/core";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -73,7 +74,7 @@ export function SeriesDetail() {
             </div>
             <div className="flex items-center gap-3">
               {account?.kind === "user" && <FollowButton seriesId={id} following={s.following} />}
-              {manage && <Switch checked={s.monitored} onChange={setMonitored} label={s.monitored ? "Monitored" : "Unmonitored"} />}
+              {manage && <Switch checked={s.monitored} onChange={setMonitored} label={s.monitored ? tr("Monitored") : tr("Unmonitored")} />}
             </div>
           </div>
           <div className="mt-3 flex flex-wrap gap-1.5">
@@ -90,10 +91,10 @@ export function SeriesDetail() {
             ))}
           </div>
           <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-4">
-            <Stat label="Chapters" value={`${s.stats.fileCount} / ${s.stats.chapterCount}`} />
-            <Stat label="Missing" value={String(s.stats.missingCount)} />
-            <Stat label="Cleaned" value={String(s.stats.cleanedCount)} />
-            <Stat label="On disk" value={s.stats.spaceSaved > 0 ? `${bytes(s.stats.sizeOnDisk)} (saved ${bytes(s.stats.spaceSaved)})` : bytes(s.stats.sizeOnDisk)} />
+            <Stat label={t("Chapters")} value={`${s.stats.fileCount} / ${s.stats.chapterCount}`} />
+            <Stat label={t("Missing")} value={String(s.stats.missingCount)} />
+            <Stat label={t("Cleaned")} value={String(s.stats.cleanedCount)} />
+            <Stat label={t("On disk")} value={s.stats.spaceSaved > 0 ? `${bytes(s.stats.sizeOnDisk)} (saved ${bytes(s.stats.spaceSaved)})` : bytes(s.stats.sizeOnDisk)} />
           </div>
           {readTarget && (
             <Link to={`/read/${readTarget.id}`} className="mt-3 inline-flex items-center gap-2 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-2">
@@ -104,31 +105,30 @@ export function SeriesDetail() {
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
               {s.reading.nextUnread && !readTarget && (
                 <span className="flex items-center gap-1">
-                  <BookOpen className="size-4 text-info" />
-                  Continue: ch. {s.reading.nextUnread.number}
+                  <BookOpen className="size-4 text-info" />{t("Continue: ch.") + " "}{s.reading.nextUnread.number}
                   {s.reading.nextUnread.title && s.reading.nextUnread.title !== s.reading.nextUnread.number && (
                     <span className="text-muted">{s.reading.nextUnread.title}</span>
                   )}
-                  {!s.reading.nextUnread.available && <Badge tone="warn">not downloaded</Badge>}
+                  {!s.reading.nextUnread.available && <Badge tone="warn">{t("not downloaded")}</Badge>}
                 </span>
               )}
               {s.reading.readers.map((r) => (
                 <span key={r.readerId} className="text-muted" title={r.lastReadAt ? `last read ${relative(r.lastReadAt)}` : undefined}>
                   <Eye className="mr-1 inline size-3.5" />
-                  {r.reader}: {r.read}/{s.stats.chapterCount} read{r.inProgress > 0 && `, ${r.inProgress} started`}
+                  {r.reader}: {r.read}/{s.stats.chapterCount}{" " + t("read")}{r.inProgress > 0 && `, ${r.inProgress} started`}
                 </span>
               ))}
               {s.reading.webUrl && (
                 <a href={s.reading.webUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-accent-2 hover:underline">
-                  <ExternalLink className="size-3.5" /> Open in {s.reading.webName || "library"}
+                  <ExternalLink className="size-3.5" />{" " + t("Open in") + " "}{s.reading.webName || tr("library")}
                 </a>
               )}
             </div>
           )}
           {(md.authors?.length || md.artists?.length) && (
             <p className="mt-3 text-sm text-muted">
-              {md.authors?.length ? <>Story: {md.authors.join(", ")}</> : null}
-              {md.artists?.length ? <> · Art: {md.artists.join(", ")}</> : null}
+              {md.authors?.length ? <>{t("Story:") + " "}{md.authors.join(", ")}</> : null}
+              {md.artists?.length ? <>{" " + t("· Art:") + " "}{md.artists.join(", ")}</> : null}
             </p>
           )}
           {md.description && (
@@ -147,30 +147,14 @@ export function SeriesDetail() {
             ))}
           </div>
           {manage && <div className="mt-4 flex flex-wrap gap-2">
-            <Button icon={<RefreshCw className="size-4" />} onClick={() => push.mutate({ name: "RefreshSeries", body: { seriesId: id }, label: "Refreshing sources" })}>
-              Refresh
-            </Button>
-            <Button icon={<Search className="size-4" />} onClick={() => push.mutate({ name: "SearchMissing", body: { seriesId: id }, label: "Searching missing chapters" })}>
-              Search missing
-            </Button>
-            <Button icon={<BookText className="size-4" />} onClick={() => push.mutate({ name: "RefreshMetadata", body: { seriesId: id }, label: "Refreshing metadata" })}>
-              Metadata
-            </Button>
-            <Button icon={<Sparkles className="size-4" />} onClick={() => push.mutate({ name: "ProcessExisting", body: { seriesId: id }, label: "Downloaded chapters will be processed in the background" })}>
-              Process existing
-            </Button>
-            <Button icon={<FilePen className="size-4" />} onClick={() => setRenaming(true)}>
-              Rename files
-            </Button>
-            <Button icon={<FileSearch className="size-4" />} onClick={() => push.mutate({ name: "DiskScan", body: { seriesId: id }, label: "Scanning files" })}>
-              Rescan disk
-            </Button>
-            <Button icon={<Pencil className="size-4" />} onClick={() => setEdit(true)}>
-              Edit
-            </Button>
-            <Button variant="ghost" icon={<Trash2 className="size-4" />} onClick={() => setDel(true)}>
-              Delete
-            </Button>
+            <Button icon={<RefreshCw className="size-4" />} onClick={() => push.mutate({ name: "RefreshSeries", body: { seriesId: id }, label: "Refreshing sources" })}>{t("Refresh")}</Button>
+            <Button icon={<Search className="size-4" />} onClick={() => push.mutate({ name: "SearchMissing", body: { seriesId: id }, label: "Searching missing chapters" })}>{t("Search missing")}</Button>
+            <Button icon={<BookText className="size-4" />} onClick={() => push.mutate({ name: "RefreshMetadata", body: { seriesId: id }, label: "Refreshing metadata" })}>{t("Metadata")}</Button>
+            <Button icon={<Sparkles className="size-4" />} onClick={() => push.mutate({ name: "ProcessExisting", body: { seriesId: id }, label: "Downloaded chapters will be processed in the background" })}>{t("Process existing")}</Button>
+            <Button icon={<FilePen className="size-4" />} onClick={() => setRenaming(true)}>{t("Rename files")}</Button>
+            <Button icon={<FileSearch className="size-4" />} onClick={() => push.mutate({ name: "DiskScan", body: { seriesId: id }, label: "Scanning files" })}>{t("Rescan disk")}</Button>
+            <Button icon={<Pencil className="size-4" />} onClick={() => setEdit(true)}>{t("Edit")}</Button>
+            <Button variant="ghost" icon={<Trash2 className="size-4" />} onClick={() => setDel(true)}>{t("Delete")}</Button>
           </div>}
         </div>
       </div>
@@ -182,26 +166,22 @@ export function SeriesDetail() {
       {renaming && <RenameModal seriesIds={[id]} onClose={() => setRenaming(false)} />}
       <Confirm
         open={del}
-        title="Delete series"
+        title={t("Delete series")}
         danger
-        confirmLabel="Delete"
+        confirmLabel={t("Delete")}
         loading={deleting}
         message={
-          <>
-            Remove <b>{s.title}</b> from mangarr?
-          </>
+          <>{t("Remove") + " "}<b>{s.title}</b>{" " + t("from mangarr?")}</>
         }
         onConfirm={remove}
         onClose={() => setDel(false)}
       >
         <div className="mt-3">
-          <Switch checked={deleteFiles} onChange={setDeleteFiles} label="Also move its folder to the recycle bin" />
+          <Switch checked={deleteFiles} onChange={setDeleteFiles} label={t("Also move its folder to the recycle bin")} />
         </div>
       </Confirm>
       <div className="mt-6 text-xs text-muted">
-        <Link to="/activity/history" className="hover:text-fg">
-          View history →
-        </Link>
+        <Link to="/activity/history" className="hover:text-fg">{t("View history →")}</Link>
       </div>
     </>
   );
@@ -253,9 +233,9 @@ function FollowButton({ seriesId, following }: { seriesId: number; following: bo
       loading={busy}
       icon={following ? <BellOff className="size-4" /> : <Bell className="size-4" />}
       onClick={toggle}
-      title={following ? "Stop getting its new chapters" : "Get its new chapters on your notifications (set them up under My account)"}
+      title={following ? tr("Stop getting its new chapters") : tr("Get its new chapters on your notifications (set them up under My account)")}
     >
-      {following ? "Following" : "Follow"}
+      {following ? tr("Following") : tr("Follow")}
     </Button>
   );
 }

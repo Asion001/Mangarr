@@ -1,3 +1,4 @@
+import { t } from "../../lib/i18n/core";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, ExternalLink, Plus, Trash2 } from "lucide-react";
@@ -49,24 +50,22 @@ export function SourcesPanel({ series }: { series: Series }) {
       title={`Sources (${sources.length})`}
       className="mb-6"
       actions={
-        <Button size="sm" icon={<Plus className="size-3.5" />} onClick={() => setAdding(true)}>
-          Link source
-        </Button>
+        <Button size="sm" icon={<Plus className="size-3.5" />} onClick={() => setAdding(true)}>{t("Link source")}</Button>
       }
     >
       {sources.length === 0 ? (
-        <p className="text-sm text-muted">No source is linked. Link one to receive chapters.</p>
+        <p className="text-sm text-muted">{t("No source is linked. Link one to receive chapters.")}</p>
       ) : (
         <Table className="border-0">
           <thead>
             <tr>
-              <Th>Priority</Th>
-              <Th>Source</Th>
-              <Th>Title at source</Th>
-              <Th>Last check</Th>
-              <Th>Next check</Th>
-              <Th>Status</Th>
-              <Th>Enabled</Th>
+              <Th>{t("Priority")}</Th>
+              <Th>{t("Source")}</Th>
+              <Th>{t("Title at source")}</Th>
+              <Th>{t("Last check")}</Th>
+              <Th>{t("Next check")}</Th>
+              <Th>{t("Status")}</Th>
+              <Th>{t("Enabled")}</Th>
               <Th />
             </tr>
           </thead>
@@ -76,10 +75,10 @@ export function SourcesPanel({ series }: { series: Series }) {
                 <Td>
                   <div className="flex items-center gap-0.5">
                     <span className="w-5 text-center text-muted">{i + 1}</span>
-                    <IconButton title="Higher priority" disabled={i === 0} onClick={() => move(i, -1)}>
+                    <IconButton title={t("Higher priority")} disabled={i === 0} onClick={() => move(i, -1)}>
                       <ArrowUp className="size-3.5" />
                     </IconButton>
-                    <IconButton title="Lower priority" disabled={i === sources.length - 1} onClick={() => move(i, 1)}>
+                    <IconButton title={t("Lower priority")} disabled={i === sources.length - 1} onClick={() => move(i, 1)}>
                       <ArrowDown className="size-3.5" />
                     </IconButton>
                   </div>
@@ -99,19 +98,18 @@ export function SourcesPanel({ series }: { series: Series }) {
                 <Td>
                   {ss.consecutiveFailures > 0 ? (
                     <Badge tone="err" title={ss.lastError}>
-                      {ss.consecutiveFailures} failures
-                    </Badge>
+                      {ss.consecutiveFailures}{" " + t("failures")}</Badge>
                   ) : ss.lastSuccessAt ? (
-                    <Badge tone="ok">ok</Badge>
+                    <Badge tone="ok">{t("ok")}</Badge>
                   ) : (
-                    <Badge>pending</Badge>
+                    <Badge>{t("pending")}</Badge>
                   )}
                 </Td>
                 <Td>
                   <Switch checked={ss.enabled} onChange={(v) => update(ss, { enabled: v })} />
                 </Td>
                 <Td className="text-right">
-                  <IconButton title="Unlink" onClick={() => setRemoving(ss)}>
+                  <IconButton title={t("Unlink")} onClick={() => setRemoving(ss)}>
                     <Trash2 className="size-4" />
                   </IconButton>
                 </Td>
@@ -135,7 +133,7 @@ export function SourcesPanel({ series }: { series: Series }) {
         <SourceSearchModal
           initialQuery={series.title}
           titles={[series.title, ...(series.metadata?.altTitles ?? [])]}
-          title="Link a source"
+          title={t("Link a source")}
           onClose={() => setAdding(false)}
           onPick={async (m, g) => {
             try {
@@ -156,9 +154,9 @@ export function SourcesPanel({ series }: { series: Series }) {
       )}
       <Confirm
         open={!!removing}
-        title="Unlink source"
+        title={t("Unlink source")}
         danger
-        confirmLabel="Unlink"
+        confirmLabel={t("Unlink")}
         message={`Stop using ${removing?.sourceName} for this series? Downloaded files are kept.`}
         onConfirm={remove}
         onClose={() => setRemoving(null)}

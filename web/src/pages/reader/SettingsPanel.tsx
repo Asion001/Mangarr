@@ -1,3 +1,4 @@
+import { t as tr, t } from "../../lib/i18n/core";
 import type { ReactNode } from "react";
 import { X } from "lucide-react";
 import clsx from "clsx";
@@ -66,13 +67,13 @@ export function SettingsPanel({
       onPointerUp={(e) => e.stopPropagation()}
     >
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="font-semibold">Reader settings</h2>
-        <button type="button" className="rounded p-1 hover:bg-neutral-800" onClick={onClose} aria-label="Close">
+        <h2 className="font-semibold">{t("Reader settings")}</h2>
+        <button type="button" className="rounded p-1 hover:bg-neutral-800" onClick={onClose} aria-label={t("Close")}>
           <X className="size-5" />
         </button>
       </div>
       <div className="flex flex-col gap-5">
-        <Row label="Reading mode">
+        <Row label={t("Reading mode")}>
           <Choice
             value={paged ? s.direction : "webtoon"}
             options={[
@@ -86,7 +87,7 @@ export function SettingsPanel({
         </Row>
         {paged && (
           <>
-            <Row label="Scale">
+            <Row label={t("Scale")}>
               <Choice
                 value={s.scale}
                 options={[
@@ -99,7 +100,7 @@ export function SettingsPanel({
               />
             </Row>
             {s.direction !== "vertical" && (
-              <Row label="Pages">
+              <Row label={t("Pages")}>
                 <Choice
                   value={s.spread}
                   options={[
@@ -109,24 +110,22 @@ export function SettingsPanel({
                   ]}
                   onChange={(spread) => set({ spread })}
                 />
-                {s.spread !== "single" && <Toggle checked={s.coverAlone} onChange={(coverAlone) => set({ coverAlone })} label="First page alone (cover)" />}
-                {s.spread === "single" && <Toggle checked={s.splitWide} onChange={(splitWide) => set({ splitWide })} label="Split double pages" />}
+                {s.spread !== "single" && <Toggle checked={s.coverAlone} onChange={(coverAlone) => set({ coverAlone })} label={t("First page alone (cover)")} />}
+                {s.spread === "single" && <Toggle checked={s.splitWide} onChange={(splitWide) => set({ splitWide })} label={t("Split double pages")} />}
               </Row>
             )}
           </>
         )}
         {!paged && (
-          <Row label="Webtoon">
-            <div className="flex items-center gap-3 text-sm text-neutral-200">
-              Side padding
-              <input type="range" min={0} max={30} step={5} value={s.padding} onChange={(e) => set({ padding: Number(e.target.value) })} className="flex-1 accent-orange-500" />
+          <Row label={t("Webtoon")}>
+            <div className="flex items-center gap-3 text-sm text-neutral-200">{t("Side padding")}<input type="range" min={0} max={30} step={5} value={s.padding} onChange={(e) => set({ padding: Number(e.target.value) })} className="flex-1 accent-orange-500" />
               <span className="w-10 text-right text-xs text-neutral-400">{s.padding}%</span>
             </div>
-            <Toggle checked={s.gap} onChange={(gap) => set({ gap })} label="Gap between pages" />
+            <Toggle checked={s.gap} onChange={(gap) => set({ gap })} label={t("Gap between pages")} />
           </Row>
         )}
-        <Toggle checked={s.crop} onChange={(crop) => set({ crop })} label={paged ? "Crop borders" : "Crop side borders"} />
-        <Row label="Tap zones">
+        <Toggle checked={s.crop} onChange={(crop) => set({ crop })} label={paged ? tr("Crop borders") : tr("Crop side borders")} />
+        <Row label={t("Tap zones")}>
           <Choice
             value={s.tapZones}
             options={[
@@ -139,9 +138,9 @@ export function SettingsPanel({
             ]}
             onChange={(tapZones) => set({ tapZones })}
           />
-          <Toggle checked={s.invertTaps} onChange={(invertTaps) => set({ invertTaps })} label="Invert tap zones" />
+          <Toggle checked={s.invertTaps} onChange={(invertTaps) => set({ invertTaps })} label={t("Invert tap zones")} />
         </Row>
-        <Row label="Background">
+        <Row label={t("Background")}>
           <Choice
             value={s.background}
             options={[
@@ -153,19 +152,15 @@ export function SettingsPanel({
           />
         </Row>
         <div className="flex flex-col gap-2.5">
-          <Toggle checked={s.autoNext} onChange={(autoNext) => set({ autoNext })} label="Go on to the next chapter" />
-          <Toggle checked={s.keepAwake} onChange={(keepAwake) => set({ keepAwake })} label="Keep the screen on" />
-          <Toggle checked={s.showPageNumber} onChange={(showPageNumber) => set({ showPageNumber })} label="Show the page number" />
+          <Toggle checked={s.autoNext} onChange={(autoNext) => set({ autoNext })} label={t("Go on to the next chapter")} />
+          <Toggle checked={s.keepAwake} onChange={(keepAwake) => set({ keepAwake })} label={t("Keep the screen on")} />
+          <Toggle checked={s.showPageNumber} onChange={(showPageNumber) => set({ showPageNumber })} label={t("Show the page number")} />
         </div>
-        <p className="text-xs text-neutral-500">Changes are kept for this series.</p>
+        <p className="text-xs text-neutral-500">{t("Changes are kept for this series.")}</p>
         <div className="flex flex-wrap gap-2">
-          <button type="button" className="rounded-md border border-neutral-700 px-3 py-1.5 text-xs hover:border-neutral-500" onClick={saveAsDefault}>
-            Use for all series
-          </button>
+          <button type="button" className="rounded-md border border-neutral-700 px-3 py-1.5 text-xs hover:border-neutral-500" onClick={saveAsDefault}>{t("Use for all series")}</button>
           {hasOwn && (
-            <button type="button" className="rounded-md border border-neutral-700 px-3 py-1.5 text-xs hover:border-neutral-500" onClick={reset}>
-              Back to my defaults
-            </button>
+            <button type="button" className="rounded-md border border-neutral-700 px-3 py-1.5 text-xs hover:border-neutral-500" onClick={reset}>{t("Back to my defaults")}</button>
           )}
         </div>
       </div>

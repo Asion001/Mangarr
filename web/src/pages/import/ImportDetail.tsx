@@ -1,3 +1,4 @@
+import { t as tr, t } from "../../lib/i18n/core";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -99,7 +100,7 @@ export function ImportDetailPage() {
       await unwrap(api.PATCH("/api/v1/imports/{id}/entries", { params: { path: { id } }, body }));
       refresh();
     } catch (e) {
-      toast.fromError(e, "Update failed");
+      toast.fromError(e, tr("Update failed"));
     }
   };
   const command = async (path: "remap" | "install-extensions" | "run", label: string) => {
@@ -110,7 +111,7 @@ export function ImportDetailPage() {
       toast.info(label);
       window.setTimeout(refresh, 300);
     } catch (e) {
-      toast.fromError(e, "Couldn't start");
+      toast.fromError(e, tr("Couldn't start"));
     }
   };
 
@@ -127,15 +128,14 @@ export function ImportDetailPage() {
   return (
     <>
       <Link to="/import" className="mb-2 inline-flex items-center gap-1 text-xs text-muted hover:text-fg">
-        <ArrowLeft className="size-3.5" /> Imports
-      </Link>
+        <ArrowLeft className="size-3.5" />{" " + t("Imports")}</Link>
       <PageHeader
         title={d.fileName}
         subtitle={
           <span className="flex flex-wrap items-center gap-2">
             {formatLabel(d.format)}
-            {d.info.backupDate && <span>· made {date(d.info.backupDate)}</span>}
-            <span>· {d.info.entries} manga</span>
+            {d.info.backupDate && <span>{t("· made") + " "}{date(d.info.backupDate)}</span>}
+            <span>· {d.info.entries}{" " + t("manga")}</span>
             <Badge tone={statusTone(d.status)}>{statusLabel(d.status)}</Badge>
             {busy && <Spinner className="size-3.5" />}
             {d.progress && <span className="text-xs">{d.progress}</span>}
@@ -143,17 +143,12 @@ export function ImportDetailPage() {
         }
         actions={
           <>
-            <Button icon={<RefreshCw className="size-4" />} disabled={busy} onClick={() => command("remap", "Matching again")}>
-              Match again
-            </Button>
+            <Button icon={<RefreshCw className="size-4" />} disabled={busy} onClick={() => command("remap", "Matching again")}>{t("Match again")}</Button>
             {(counts.extension ?? 0) > 0 && (
-              <Button icon={<Download className="size-4" />} disabled={busy} onClick={() => command("install-extensions", "Installing extensions")}>
-                Install extensions ({counts.extension})
+              <Button icon={<Download className="size-4" />} disabled={busy} onClick={() => command("install-extensions", "Installing extensions")}>{t("Install extensions (")}{counts.extension})
               </Button>
             )}
-            <Button variant="primary" icon={<Play className="size-4" />} disabled={busy || selectedReady === 0} onClick={() => setConfirmRun(true)}>
-              Import {selectedReady} selected
-            </Button>
+            <Button variant="primary" icon={<Play className="size-4" />} disabled={busy || selectedReady === 0} onClick={() => setConfirmRun(true)}>{t("Import") + " "}{selectedReady}{" " + t("selected")}</Button>
           </>
         }
       />
@@ -173,24 +168,18 @@ export function ImportDetailPage() {
         </div>
         <div className="relative ml-auto w-full max-w-xs">
           <Search className="absolute left-2.5 top-2.5 size-4 text-muted" />
-          <Input className="pl-8" placeholder="Filter titles…" defaultValue={q} onChange={(e) => (setQ(e.target.value), setPage("1"))} />
+          <Input className="pl-8" placeholder={t("Filter titles…")} defaultValue={q} onChange={(e) => (setQ(e.target.value), setPage("1"))} />
         </div>
       </div>
 
       <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted">
         <span>
-          {counts.selected ?? 0} of {counts.all ?? 0} selected
-        </span>
-        <Button size="sm" disabled={busy} onClick={() => patch({ filter, selected: true })}>
-          Select all {state ? stateLabel(state).toLowerCase() : ""} ({total})
+          {counts.selected ?? 0}{" " + t("of") + " "}{counts.all ?? 0}{" " + t("selected")}</span>
+        <Button size="sm" disabled={busy} onClick={() => patch({ filter, selected: true })}>{t("Select all") + " "}{state ? stateLabel(state).toLowerCase() : ""} ({total})
         </Button>
-        <Button size="sm" disabled={busy} onClick={() => patch({ filter, selected: false })}>
-          Deselect them
-        </Button>
+        <Button size="sm" disabled={busy} onClick={() => patch({ filter, selected: false })}>{t("Deselect them")}</Button>
         {(counts.review ?? 0) > 0 && (
-          <Button size="sm" icon={<Check className="size-3.5" />} disabled={busy} onClick={() => patch({ filter: { state: "review" }, accept: true })}>
-            Accept all suggestions
-          </Button>
+          <Button size="sm" icon={<Check className="size-3.5" />} disabled={busy} onClick={() => patch({ filter: { state: "review" }, accept: true })}>{t("Accept all suggestions")}</Button>
         )}
       </div>
 
@@ -199,10 +188,10 @@ export function ImportDetailPage() {
         <thead>
           <tr>
             <Th className="w-8" />
-            <Th>Manga in the backup</Th>
-            <Th>Source</Th>
-            <Th>Metadata</Th>
-            <Th>Status</Th>
+            <Th>{t("Manga in the backup")}</Th>
+            <Th>{t("Source")}</Th>
+            <Th>{t("Metadata")}</Th>
+            <Th>{t("Status")}</Th>
           </tr>
         </thead>
         <tbody>
@@ -219,24 +208,18 @@ export function ImportDetailPage() {
           ))}
           {items.length === 0 && !entries.isLoading && (
             <tr>
-              <Td colSpan={5} className="py-6 text-center text-muted">
-                Nothing here.
-              </Td>
+              <Td colSpan={5} className="py-6 text-center text-muted">{t("Nothing here.")}</Td>
             </tr>
           )}
         </tbody>
       </Table>
       {pages > 1 && (
         <div className="mt-3 flex items-center justify-center gap-2 text-sm">
-          <Button size="sm" disabled={page <= 1} onClick={() => setPage(String(page - 1))}>
-            Previous
-          </Button>
+          <Button size="sm" disabled={page <= 1} onClick={() => setPage(String(page - 1))}>{t("Previous")}</Button>
           <span className="text-muted">
             {page} / {pages}
           </span>
-          <Button size="sm" disabled={page >= pages} onClick={() => setPage(String(page + 1))}>
-            Next
-          </Button>
+          <Button size="sm" disabled={page >= pages} onClick={() => setPage(String(page + 1))}>{t("Next")}</Button>
         </div>
       )}
 
@@ -271,9 +254,7 @@ export function ImportDetailPage() {
                 patch({ ids: [pickMeta.id], clearMetadata: true });
                 setPickMeta(null);
               }}
-            >
-              Add without metadata
-            </Button>
+            >{t("Add without metadata")}</Button>
           )}
         </Modal>
       )}
@@ -283,15 +264,12 @@ export function ImportDetailPage() {
         message={
           <div className="flex flex-col gap-2 text-sm">
             <p>
-              {counts["selected:ready"] ?? 0} series are added, {counts["selected:library"] ?? 0} merge into series you already have.
-              {(counts["selected:failed"] ?? 0) > 0 && ` ${counts["selected:failed"]} that failed before are retried.`}
+              {counts["selected:ready"] ?? 0}{" " + t("series are added,") + " "}{counts["selected:library"] ?? 0}{" " + t("merge into series you already have.")}{(counts["selected:failed"] ?? 0) > 0 && ` ${counts["selected:failed"]} that failed before are retried.`}
             </p>
-            <p className="text-muted">
-              Each series' chapters are fetched from its source while importing (with the usual request throttling), so large libraries take a while.
-            </p>
+            <p className="text-muted">{t("Each series' chapters are fetched from its source while importing (with the usual request throttling), so large libraries take a while.")}</p>
           </div>
         }
-        confirmLabel="Import"
+        confirmLabel={t("Import")}
         onClose={() => setConfirmRun(false)}
         onConfirm={() => {
           setConfirmRun(false);
@@ -334,10 +312,9 @@ function EntryRow({
               <span>{e.data.sourceName || e.data.sourceId}</span>
               {e.chapterCount > 0 && (
                 <span>
-                  · {e.readCount}/{e.chapterCount} read
-                </span>
+                  · {e.readCount}/{e.chapterCount}{" " + t("read")}</span>
               )}
-              {!e.data.favorite && <Badge>history only</Badge>}
+              {!e.data.favorite && <Badge>{t("history only")}</Badge>}
               {(e.data.categories ?? []).map((c) => (
                 <Badge key={c}>
                   <Tags className="mr-1 inline size-3" />
@@ -357,20 +334,17 @@ function EntryRow({
           </div>
         ) : e.extension ? (
           <div className="text-xs text-muted">
-            {e.extension.name} ({e.extension.lang}) isn't installed
-          </div>
+            {e.extension.name} ({e.extension.lang}{t(") isn't installed")}</div>
         ) : (
           <span className="text-xs text-muted">—</span>
         )}
         {e.state !== "imported" && (
           <div className="mt-1 flex gap-1">
             <Button size="sm" variant="ghost" disabled={disabled} onClick={onPickSource}>
-              {src ? "Change" : "Pick source"}
+              {src ? tr("Change") : tr("Pick source")}
             </Button>
             {e.state === "review" && src && (
-              <Button size="sm" variant="ghost" icon={<Check className="size-3.5" />} disabled={disabled} onClick={onAccept}>
-                Accept
-              </Button>
+              <Button size="sm" variant="ghost" icon={<Check className="size-3.5" />} disabled={disabled} onClick={onAccept}>{t("Accept")}</Button>
             )}
           </div>
         )}
@@ -384,11 +358,11 @@ function EntryRow({
             </div>
           </div>
         ) : (
-          <span className="text-xs text-muted">{e.state === "library" ? "—" : "from the source"}</span>
+          <span className="text-xs text-muted">{e.state === "library" ? "—" : tr("from the source")}</span>
         )}
         {e.state !== "imported" && e.state !== "library" && (
           <Button size="sm" variant="ghost" disabled={disabled} onClick={onPickMeta}>
-            {e.metadata ? "Change" : "Pick"}
+            {e.metadata ? tr("Change") : tr("Pick")}
           </Button>
         )}
       </Td>
@@ -397,8 +371,7 @@ function EntryRow({
         {e.message && <div className="mt-1 max-w-xs text-xs text-muted">{e.message}</div>}
         {e.seriesId && (
           <Link to={`/series/${e.seriesId}`} className="mt-1 inline-flex items-center gap-1 text-xs text-accent-2 hover:underline">
-            <Library className="size-3" /> Open series
-          </Link>
+            <Library className="size-3" />{" " + t("Open series")}</Link>
         )}
       </Td>
     </tr>
@@ -418,7 +391,7 @@ function OptionsCard({ imp, disabled, onSaved }: { imp: S["ImportResource"]; dis
       await unwrap(api.PUT("/api/v1/imports/{id}/options", { params: { path: { id: imp.id } }, body: next }));
       onSaved();
     } catch (e) {
-      toast.fromError(e, "Couldn't save options");
+      toast.fromError(e, tr("Couldn't save options"));
     }
   };
   const set = <K extends keyof Options>(k: K, v: Options[K]) => save({ ...o, [k]: v });
@@ -427,11 +400,11 @@ function OptionsCard({ imp, disabled, onSaved }: { imp: S["ImportResource"]; dis
   const setCat = (c: string, patch: Partial<S["ImportCategory"]>) => save({ ...o, categories: { ...(o.categories ?? {}), [c]: { ...catRule(c), ...patch } } });
 
   return (
-    <Card title="Import options">
+    <Card title={t("Import options")}>
       <fieldset disabled={disabled} className="grid gap-4 md:grid-cols-3">
-        <Field label="Root folder">
+        <Field label={t("Root folder")}>
           <Select value={o.rootFolderId} onChange={(e) => set("rootFolderId", Number(e.target.value))}>
-            <option value={0}>Choose…</option>
+            <option value={0}>{t("Choose…")}</option>
             {roots?.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.path}
@@ -439,34 +412,34 @@ function OptionsCard({ imp, disabled, onSaved }: { imp: S["ImportResource"]; dis
             ))}
           </Select>
         </Field>
-        <Field label="Profile">
+        <Field label={t("Profile")}>
           <Select value={o.profileId || profiles?.find((p) => p.isDefault)?.id || 0} onChange={(e) => set("profileId", Number(e.target.value))}>
             {profiles?.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
-                {p.isDefault ? " (default)" : ""}
+                {p.isDefault ? tr(" (default)") : ""}
               </option>
             ))}
           </Select>
         </Field>
-        <Field label="Monitor" help="From the first unread: chapters after the last one you read are downloaded.">
+        <Field label={t("Monitor")} help={t("From the first unread: chapters after the last one you read are downloaded.")}>
           <Select value={o.monitor} onChange={(e) => set("monitor", e.target.value as Options["monitor"])}>
-            <option value="unread">From the first unread chapter</option>
-            <option value="all">All chapters</option>
-            <option value="future">Only new chapters</option>
-            <option value="none">Nothing</option>
+            <option value="unread">{t("From the first unread chapter")}</option>
+            <option value="all">{t("All chapters")}</option>
+            <option value="future">{t("Only new chapters")}</option>
+            <option value="none">{t("Nothing")}</option>
           </Select>
         </Field>
         <div className="flex flex-col gap-2">
-          <Switch checked={o.searchMissing} onChange={(v) => set("searchMissing", v)} label="Download monitored chapters right away" />
-          <Switch checked={o.monitorNew === "all"} onChange={(v) => set("monitorNew", v ? "all" : "none")} label="Monitor new chapters" />
-          <Switch checked={o.onlyFavorites} onChange={(v) => set("onlyFavorites", v)} label="Only library manga (not history)" />
+          <Switch checked={o.searchMissing} onChange={(v) => set("searchMissing", v)} label={t("Download monitored chapters right away")} />
+          <Switch checked={o.monitorNew === "all"} onChange={(v) => set("monitorNew", v ? "all" : "none")} label={t("Monitor new chapters")} />
+          <Switch checked={o.onlyFavorites} onChange={(v) => set("onlyFavorites", v)} label={t("Only library manga (not history)")} />
         </div>
         <div className="flex flex-col gap-2">
-          <Switch checked={o.readState} onChange={(v) => set("readState", v)} label="Import read chapters" />
+          <Switch checked={o.readState} onChange={(v) => set("readState", v)} label={t("Import read chapters")} />
           {o.readState && (
             <Select value={o.readerId} onChange={(e) => set("readerId", Number(e.target.value))}>
-              <option value={0}>New reader “{imp.format === "aidoku" ? "Aidoku" : "Mihon"} backup”</option>
+              <option value={0}>{t("New reader “")}{imp.format === "aidoku" ? "Aidoku" : "Mihon"}{" " + t("backup”")}</option>
               {readers?.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.name}
@@ -475,25 +448,25 @@ function OptionsCard({ imp, disabled, onSaved }: { imp: S["ImportResource"]; dis
             </Select>
           )}
           {o.readState && (
-            <Switch checked={o.pushProgress} onChange={(v) => set("pushProgress", v)} label="Mark them read in Komga/Kavita once downloaded" />
+            <Switch checked={o.pushProgress} onChange={(v) => set("pushProgress", v)} label={t("Mark them read in Komga/Kavita once downloaded")} />
           )}
         </div>
         <div className="flex flex-col gap-2">
-          <Switch checked={o.matchMetadata} onChange={(v) => set("matchMetadata", v)} label="Link metadata (tracker ids, titles)" />
-          <Switch checked={o.findByTitle} onChange={(v) => set("findByTitle", v)} label="Search by title when a source can't be matched" />
-          <Switch checked={o.blockScanlators} onChange={(v) => set("blockScanlators", v)} label="Keep excluded scanlators blocked" />
-          <Switch checked={o.categoryTags} onChange={(v) => set("categoryTags", v)} label="Tag series with their categories" />
+          <Switch checked={o.matchMetadata} onChange={(v) => set("matchMetadata", v)} label={t("Link metadata (tracker ids, titles)")} />
+          <Switch checked={o.findByTitle} onChange={(v) => set("findByTitle", v)} label={t("Search by title when a source can't be matched")} />
+          <Switch checked={o.blockScanlators} onChange={(v) => set("blockScanlators", v)} label={t("Keep excluded scanlators blocked")} />
+          <Switch checked={o.categoryTags} onChange={(v) => set("categoryTags", v)} label={t("Tag series with their categories")} />
         </div>
       </fieldset>
       {cats.length > 0 && (
         <div className="mt-4">
-          <div className="mb-2 text-sm font-medium">Categories</div>
+          <div className="mb-2 text-sm font-medium">{t("Categories")}</div>
           <div className="grid gap-2">
             {cats.map((c) => (
               <div key={c} className="flex flex-wrap items-center gap-2 text-sm">
                 <span className="w-40 truncate font-medium">{c}</span>
                 <Select className="w-auto max-w-full" disabled={disabled} value={catRule(c).rootFolderId ?? 0} onChange={(e) => setCat(c, { rootFolderId: Number(e.target.value) })}>
-                  <option value={0}>Root folder above</option>
+                  <option value={0}>{t("Root folder above")}</option>
                   {roots?.map((r) => (
                     <option key={r.id} value={r.id}>
                       {r.path}
@@ -501,14 +474,14 @@ function OptionsCard({ imp, disabled, onSaved }: { imp: S["ImportResource"]; dis
                   ))}
                 </Select>
                 <Select className="w-auto max-w-full" disabled={disabled} value={catRule(c).profileId ?? 0} onChange={(e) => setCat(c, { profileId: Number(e.target.value) })}>
-                  <option value={0}>Profile above</option>
+                  <option value={0}>{t("Profile above")}</option>
                   {profiles?.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name}
                     </option>
                   ))}
                 </Select>
-                <Switch checked={!!catRule(c).skip} disabled={disabled} onChange={(v) => setCat(c, { skip: v })} label="Skip" />
+                <Switch checked={!!catRule(c).skip} disabled={disabled} onChange={(v) => setCat(c, { skip: v })} label={t("Skip")} />
               </div>
             ))}
           </div>

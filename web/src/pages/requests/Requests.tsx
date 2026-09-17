@@ -1,3 +1,4 @@
+import { t as tr, t } from "../../lib/i18n/core";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -32,7 +33,7 @@ export function RequestsPage() {
   const [tab, setTab] = useQueryParam("tab", manager ? "manage" : "ask");
   return (
     <>
-      <PageHeader title="Requests" subtitle="Ask for series to be added to the library; you'll be told when they arrive." />
+      <PageHeader title={t("Requests")} subtitle={t("Ask for series to be added to the library; you'll be told when they arrive.")} />
       <Tabs
         value={tab}
         onChange={setTab}
@@ -58,21 +59,18 @@ function AskTab({ onDone }: { onDone: () => void }) {
         <MetadataSearch
           query={q}
           setQuery={(v) => setQ(v, { replace: false })}
-          placeholder="Search for a series to request"
+          placeholder={t("Search for a series to request")}
           action={(r) =>
             r.existingSeriesId ? (
               <Link to={`/series/${r.existingSeriesId}`}>
-                <Button size="sm" icon={<BookOpen className="size-4" />}>
-                  In library
-                </Button>
+                <Button size="sm" icon={<BookOpen className="size-4" />}>{t("In library")}</Button>
               </Link>
             ) : r.request?.mine ? (
               <Badge tone={statusTone[r.request.status as Status] ?? "info"}>
-                <Check className="size-3" /> Requested
-              </Badge>
+                <Check className="size-3" />{" " + t("Requested")}</Badge>
             ) : (
               <Button size="sm" variant="primary" icon={<PlusCircle className="size-4" />} onClick={() => setAsking(r)}>
-                {r.request ? "Request too" : "Request"}
+                {r.request ? tr("Request too") : tr("Request")}
               </Button>
             )
           }
@@ -98,7 +96,7 @@ function AskModal({ result, onClose, onDone }: { result: LookupResult; onClose: 
       onClose();
       onDone();
     } catch (e) {
-      toast.fromError(e, "Couldn't request it");
+      toast.fromError(e, tr("Couldn't request it"));
     } finally {
       setBusy(false);
     }
@@ -111,10 +109,8 @@ function AskModal({ result, onClose, onDone }: { result: LookupResult; onClose: 
       size="sm"
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" loading={busy} onClick={send}>
-            Request
-          </Button>
+          <Button onClick={onClose}>{t("Cancel")}</Button>
+          <Button variant="primary" loading={busy} onClick={send}>{t("Request")}</Button>
         </>
       }
     >
@@ -123,11 +119,11 @@ function AskModal({ result, onClose, onDone }: { result: LookupResult; onClose: 
         <div className="min-w-0 text-sm">
           <div className="font-medium">{result.title}</div>
           <div className="text-muted">{[result.year, result.format].filter(Boolean).join(" · ")}</div>
-          {result.request && <p className="mt-2 text-muted">Someone asked for this already; you'll be added to their request.</p>}
+          {result.request && <p className="mt-2 text-muted">{t("Someone asked for this already; you'll be added to their request.")}</p>}
         </div>
       </div>
-      <Field label="Note (optional)" className="mt-4">
-        <Textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="e.g. the official English translation" />
+      <Field label={t("Note (optional)")} className="mt-4">
+        <Textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder={t("e.g. the official English translation")} />
       </Field>
     </Modal>
   );
@@ -149,9 +145,7 @@ function MineTab() {
   if (error) return <ErrorBox error={error} />;
   if (!data?.length)
     return (
-      <EmptyState title="No requests yet" icon={<Inbox className="size-8" />}>
-        Find a series under Request a series.
-      </EmptyState>
+      <EmptyState title={t("No requests yet")} icon={<Inbox className="size-8" />}>{t("Find a series under Request a series.")}</EmptyState>
     );
   return (
     <div className="flex flex-col gap-2">
@@ -161,9 +155,7 @@ function MineTab() {
           r={r}
           actions={
             r.status === "pending" && (
-              <Button size="sm" icon={<Undo2 className="size-4" />} onClick={() => withdraw(r)}>
-                Withdraw
-              </Button>
+              <Button size="sm" icon={<Undo2 className="size-4" />} onClick={() => withdraw(r)}>{t("Withdraw")}</Button>
             )
           }
         />
@@ -192,18 +184,18 @@ function ManageTab() {
     <>
       <div className="mb-3 flex items-center gap-2">
         <Select value={status} onChange={(e) => setStatus(e.target.value)} className="w-44">
-          <option value="pending">Pending</option>
-          <option value="approved">Approved</option>
-          <option value="available">Available</option>
-          <option value="declined">Declined</option>
-          <option value="all">All</option>
+          <option value="pending">{t("Pending")}</option>
+          <option value="approved">{t("Approved")}</option>
+          <option value="available">{t("Available")}</option>
+          <option value="declined">{t("Declined")}</option>
+          <option value="all">{t("All")}</option>
         </Select>
       </div>
       {isLoading && <Loading />}
       {error && <ErrorBox error={error} />}
       {data && data.length === 0 && (
-        <EmptyState title={status === "pending" ? "Nothing to handle" : "No requests"} icon={<Inbox className="size-8" />}>
-          {status === "pending" && "New requests show up here."}
+        <EmptyState title={status === "pending" ? tr("Nothing to handle") : tr("No requests")} icon={<Inbox className="size-8" />}>
+          {status === "pending" && tr("New requests show up here.")}
         </EmptyState>
       )}
       <div className="flex flex-col gap-2">
@@ -220,24 +212,16 @@ function ManageTab() {
                     variant="primary"
                     icon={<PlusCircle className="size-4" />}
                     onClick={() => nav(`/add/${r.metadata.moduleId}/${encodeURIComponent(r.metadata.id!)}/sources?request=${r.id}`)}
-                  >
-                    Add series
-                  </Button>
+                  >{t("Add series")}</Button>
                 )}
                 {(r.status === "pending" || r.status === "declined") && (
-                  <Button size="sm" icon={<Link2 className="size-4" />} onClick={() => setLinking(r)}>
-                    Link
-                  </Button>
+                  <Button size="sm" icon={<Link2 className="size-4" />} onClick={() => setLinking(r)}>{t("Link")}</Button>
                 )}
                 {r.status === "pending" && (
-                  <Button size="sm" icon={<X className="size-4" />} onClick={() => setDeclining(r)}>
-                    Decline
-                  </Button>
+                  <Button size="sm" icon={<X className="size-4" />} onClick={() => setDeclining(r)}>{t("Decline")}</Button>
                 )}
                 {r.status !== "pending" && (
-                  <Button size="sm" variant="ghost" icon={<Trash2 className="size-4" />} onClick={() => remove(r)} title="Delete the request">
-                    Delete
-                  </Button>
+                  <Button size="sm" variant="ghost" icon={<Trash2 className="size-4" />} onClick={() => remove(r)} title={t("Delete the request")}>{t("Delete")}</Button>
                 )}
               </>
             }
@@ -267,16 +251,16 @@ function RequestRow({ r, actions, showRequesters }: { r: Request; actions?: Reac
           {md.year ? <Badge>{md.year}</Badge> : null}
           {md.format && <Badge>{md.format}</Badge>}
           <Badge tone={statusTone[r.status]}>{statusLabel[r.status]}</Badge>
-          {r.count > 1 && <Badge title="People who asked for it">{r.count} people</Badge>}
+          {r.count > 1 && <Badge title={t("People who asked for it")}>{r.count}{" " + t("people")}</Badge>}
         </div>
         <div className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-muted">
           <span className="flex items-center gap-1">
-            <Clock className="size-3" /> asked {relative(r.createdAt)}
-            {showRequesters && r.requesters.length > 0 && <> by {r.requesters.map((x) => x.name).join(", ")}</>}
+            <Clock className="size-3" />{" " + t("asked") + " "}{relative(r.createdAt)}
+            {showRequesters && r.requesters.length > 0 && <>{" " + t("by") + " "}{r.requesters.map((x) => x.name).join(", ")}</>}
           </span>
           {r.handledAt && r.status !== "pending" && (
             <span>
-              {r.status === "declined" ? "declined" : "added"} {relative(r.handledAt)}
+              {r.status === "declined" ? tr("declined") : tr("added")} {relative(r.handledAt)}
               {r.handledBy && ` by ${r.handledBy}`}
             </span>
           )}
@@ -288,7 +272,7 @@ function RequestRow({ r, actions, showRequesters }: { r: Request; actions?: Reac
               “{x.note}”{showRequesters && <span className="text-muted"> — {x.name}</span>}
             </p>
           ))}
-        {r.reason && <p className="mt-1 text-sm text-err">Declined: {r.reason}</p>}
+        {r.reason && <p className="mt-1 text-sm text-err">{t("Declined:") + " "}{r.reason}</p>}
       </div>
       {actions && <div className="flex shrink-0 flex-wrap items-center gap-2 self-center">{actions}</div>}
     </div>
@@ -320,15 +304,13 @@ function DeclineModal({ r, onClose }: { r: Request; onClose: () => void }) {
       size="sm"
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="danger" loading={busy} onClick={decline}>
-            Decline
-          </Button>
+          <Button onClick={onClose}>{t("Cancel")}</Button>
+          <Button variant="danger" loading={busy} onClick={decline}>{t("Decline")}</Button>
         </>
       }
     >
-      <Field label="Reason (the requesters see it)">
-        <Input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} placeholder="e.g. no source has it" />
+      <Field label={t("Reason (the requesters see it)")}>
+        <Input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} placeholder={t("e.g. no source has it")} />
       </Field>
     </Modal>
   );
@@ -356,7 +338,7 @@ function LinkModal({ r, onClose }: { r: Request; onClose: () => void }) {
     try {
       await unwrap(api.POST("/api/v1/requests/{id}/link", { params: { path: { id: r.id } }, body: { seriesId } }));
       qc.invalidateQueries({ queryKey: ["requests"] });
-      toast.success("Linked", "The requesters were told.");
+      toast.success(tr("Linked"), tr("The requesters were told."));
       onClose();
     } catch (e) {
       toast.fromError(e);
@@ -366,8 +348,8 @@ function LinkModal({ r, onClose }: { r: Request; onClose: () => void }) {
   };
   return (
     <Modal open onClose={onClose} title={`Link ${r.title} to a series`}>
-      <p className="mb-3 text-sm text-muted">Already in the library under another name? Pick it; the request is marked as added.</p>
-      <Input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter series" autoFocus />
+      <p className="mb-3 text-sm text-muted">{t("Already in the library under another name? Pick it; the request is marked as added.")}</p>
+      <Input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder={t("Filter series")} autoFocus />
       <div className="mt-3 flex flex-col gap-1">
         {list.map((s) => (
           <button
@@ -381,7 +363,7 @@ function LinkModal({ r, onClose }: { r: Request; onClose: () => void }) {
             <span className="text-xs text-muted">{s.metadata.year || ""}</span>
           </button>
         ))}
-        {series && list.length === 0 && <p className="text-sm text-muted">No series match.</p>}
+        {series && list.length === 0 && <p className="text-sm text-muted">{t("No series match.")}</p>}
       </div>
     </Modal>
   );

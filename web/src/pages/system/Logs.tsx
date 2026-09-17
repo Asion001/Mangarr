@@ -1,3 +1,4 @@
+import { t as tr, t } from "../../lib/i18n/core";
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
 import { Copy, Download, FileText, LifeBuoy, RefreshCw } from "lucide-react";
@@ -25,41 +26,34 @@ export function LogsPage() {
       await navigator.clipboard.writeText(text);
       toast.success(`Copied ${data?.length ?? 0} entries`);
     } catch (e) {
-      toast.fromError(e, "Copy failed");
+      toast.fromError(e, tr("Copy failed"));
     }
   };
   return (
     <>
       <PageHeader
-        title="Logs"
+        title={t("Logs")}
         actions={
           <>
             <Select className="w-32" value={level} onChange={(e) => setLevel(e.target.value)}>
-              <option value="debug">debug</option>
-              <option value="info">info</option>
-              <option value="warn">warn</option>
-              <option value="error">error</option>
+              <option value="debug">{t("debug")}</option>
+              <option value="info">{t("info")}</option>
+              <option value="warn">{t("warn")}</option>
+              <option value="error">{t("error")}</option>
             </Select>
-            <Button icon={<RefreshCw className="size-4" />} loading={isFetching} onClick={() => refetch()}>
-              Refresh
-            </Button>
-            <Button icon={<Copy className="size-4" />} onClick={copy}>
-              Copy
-            </Button>
-            <a href={apiUrl("api/v1/system/diagnostics")} download title="Logs plus status, health, modules and settings, with secrets removed">
-              <Button icon={<LifeBuoy className="size-4" />}>Diagnostics</Button>
+            <Button icon={<RefreshCw className="size-4" />} loading={isFetching} onClick={() => refetch()}>{t("Refresh")}</Button>
+            <Button icon={<Copy className="size-4" />} onClick={copy}>{t("Copy")}</Button>
+            <a href={apiUrl("api/v1/system/diagnostics")} download title={t("Logs plus status, health, modules and settings, with secrets removed")}>
+              <Button icon={<LifeBuoy className="size-4" />}>{t("Diagnostics")}</Button>
             </a>
             <a href={apiUrl("api/v1/system/logs/download")} download>
-              <Button variant="primary" icon={<Download className="size-4" />}>
-                Download logs
-              </Button>
+              <Button variant="primary" icon={<Download className="size-4" />}>{t("Download logs")}</Button>
             </a>
           </>
         }
       />
-      <p className="mb-3 text-xs text-muted">
-        API keys, passwords and tokens are masked in this view, in copies and in downloads.{" "}
-        {files.data && !files.data.enabled && "Log files are off (MANGARR_LOG_DIR=off): downloads contain the recent entries only."}
+      <p className="mb-3 text-xs text-muted">{t("API keys, passwords and tokens are masked in this view, in copies and in downloads.")}{" "}
+        {files.data && !files.data.enabled && tr("Log files are off (MANGARR_LOG_DIR=off): downloads contain the recent entries only.")}
       </p>
       {files.data?.enabled && files.data.files.length > 0 && (
         <div className="mb-3 flex flex-wrap gap-2 text-xs">
@@ -102,7 +96,7 @@ export function LogsPage() {
               ))}
           </div>
         ))}
-        {data?.length === 0 && <span className="text-muted">No log entries at this level.</span>}
+        {data?.length === 0 && <span className="text-muted">{t("No log entries at this level.")}</span>}
       </div>
     </>
   );

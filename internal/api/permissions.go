@@ -33,6 +33,8 @@ var operationPermissions = map[string][]string{
 	"auth-logout":               {permSignedIn},
 	"auth-password":             {permSignedIn},
 	"me-sessions":               {permSignedIn},
+	"me-ui-preferences":         {permSignedIn},
+	"me-ui-preferences-save":    {permSignedIn},
 	"me-sessions-revoke":        {permSignedIn},
 	"me-sessions-revoke-others": {permSignedIn},
 	"me-library-accounts":       {permSignedIn},

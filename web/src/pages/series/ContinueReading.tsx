@@ -1,3 +1,4 @@
+import { t as tr, t } from "../../lib/i18n/core";
 import { useQuery } from "@tanstack/react-query";
 import { BookOpen } from "lucide-react";
 import { Link } from "react-router";
@@ -17,8 +18,7 @@ export function ContinueReading() {
   return (
     <section className="mb-6">
       <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold">
-        <BookOpen className="size-4 text-info" /> Continue reading
-        <span className="font-normal text-muted">· {data.reader}</span>
+        <BookOpen className="size-4 text-info" />{" " + t("Continue reading")}<span className="font-normal text-muted">· {data.reader}</span>
       </h2>
       <div className="flex gap-3 overflow-x-auto pb-2">
         {data.items.map((it) => (
@@ -32,9 +32,7 @@ export function ContinueReading() {
               </div>
               {!it.next.available && (
                 <div className="absolute bottom-1.5 left-1.5">
-                  <Badge tone="warn" title="Streamed from the source; the download is queued when you open it">
-                    not downloaded
-                  </Badge>
+                  <Badge tone="warn" title={t("Streamed from the source; the download is queued when you open it")}>{t("not downloaded")}</Badge>
                 </div>
               )}
             </Link>
@@ -42,8 +40,7 @@ export function ContinueReading() {
             <Link to={`/series/${it.seriesId}`} className="line-clamp-2 text-xs font-medium leading-tight hover:text-accent-2">
               {it.title}
             </Link>
-            <div className="-mt-0.5 text-xs text-muted">
-              ch. {it.next.number} {it.page > 0 ? `· page ${it.page}` : "next"}
+            <div className="-mt-0.5 text-xs text-muted">{t("ch.") + " "}{it.next.number} {it.page > 0 ? `· page ${it.page}` : tr("next")}
             </div>
           </div>
         ))}

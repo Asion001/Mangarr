@@ -1,3 +1,4 @@
+import { t as tr, t } from "../../lib/i18n/core";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, KeyRound, Link2, LogOut, Pencil, Plus, Trash2, UserPlus } from "lucide-react";
@@ -24,7 +25,7 @@ export function UsersPage() {
   const tab = tabParam as Tab;
   return (
     <>
-      <PageHeader title="Users & groups" subtitle="Share the library: everyone reads the same series, with their own progress. Groups decide what members can do and see." />
+      <PageHeader title={t("Users & groups")} subtitle={t("Share the library: everyone reads the same series, with their own progress. Groups decide what members can do and see.")} />
       <Tabs
         tabs={[
           { value: "users", label: "Users" },
@@ -75,9 +76,7 @@ function UsersTab() {
   return (
     <>
       <div className="mb-3 flex justify-end">
-        <Button variant="primary" icon={<UserPlus className="size-4" />} onClick={() => setCreating(true)}>
-          Add user
-        </Button>
+        <Button variant="primary" icon={<UserPlus className="size-4" />} onClick={() => setCreating(true)}>{t("Add user")}</Button>
       </div>
       {isLoading && <Loading />}
       {error && <ErrorBox error={error} />}
@@ -86,11 +85,11 @@ function UsersTab() {
           <Table>
             <thead>
               <tr>
-                <Th>User</Th>
-                <Th>Group</Th>
-                <Th>Progress</Th>
-                <Th>Last sign-in</Th>
-                <Th>Signed in</Th>
+                <Th>{t("User")}</Th>
+                <Th>{t("Group")}</Th>
+                <Th>{t("Progress")}</Th>
+                <Th>{t("Last sign-in")}</Th>
+                <Th>{t("Signed in")}</Th>
                 <Th />
               </tr>
             </thead>
@@ -100,29 +99,29 @@ function UsersTab() {
                   <Td>
                     <div className="font-medium">{u.displayName || u.username}</div>
                     {u.displayName && <div className="text-xs text-muted">{u.username}</div>}
-                    {u.disabled && <Badge tone="warn">disabled</Badge>}
+                    {u.disabled && <Badge tone="warn">{t("disabled")}</Badge>}
                   </Td>
                   <Td>
                     <Badge tone="info">{u.group}</Badge>
                   </Td>
                   <Td className="text-muted">{u.readerName || "—"}</Td>
-                  <Td className="text-muted">{u.lastLoginAt ? relative(u.lastLoginAt) : "never"}</Td>
+                  <Td className="text-muted">{u.lastLoginAt ? relative(u.lastLoginAt) : tr("never")}</Td>
                   <Td className="text-muted">
-                    {u.sessions} browser{u.sessions === 1 ? "" : "s"}, {u.devices} app{u.devices === 1 ? "" : "s"}
+                    {u.sessions}{" " + t("browser")}{u.sessions === 1 ? "" : tr("s")}, {u.devices}{" " + t("app")}{u.devices === 1 ? "" : tr("s")}
                   </Td>
                   <Td>
                     <div className="flex justify-end">
-                      <IconButton title="Edit" onClick={() => setEditing(u)}>
+                      <IconButton title={t("Edit")} onClick={() => setEditing(u)}>
                         <Pencil className="size-4" />
                       </IconButton>
-                      <IconButton title="Set password" onClick={() => setPassword(u)}>
+                      <IconButton title={t("Set password")} onClick={() => setPassword(u)}>
                         <KeyRound className="size-4" />
                       </IconButton>
-                      <IconButton title="Sign out everywhere" onClick={() => signout(u)}>
+                      <IconButton title={t("Sign out everywhere")} onClick={() => signout(u)}>
                         <LogOut className="size-4" />
                       </IconButton>
                       {u.id !== account?.id && (
-                        <IconButton title="Delete" onClick={() => setDeleting(u)}>
+                        <IconButton title={t("Delete")} onClick={() => setDeleting(u)}>
                           <Trash2 className="size-4" />
                         </IconButton>
                       )}
@@ -139,9 +138,9 @@ function UsersTab() {
       {password && <PasswordModal user={password} onClose={() => setPassword(null)} />}
       <Confirm
         open={!!deleting}
-        title="Delete user"
+        title={t("Delete user")}
         danger
-        confirmLabel="Delete"
+        confirmLabel={t("Delete")}
         message={`Delete ${deleting?.username}? Their reader and its progress stay (Settings → Readers).`}
         onConfirm={remove}
         onClose={() => setDeleting(null)}
@@ -185,33 +184,31 @@ function UserModal({ user, onClose }: { user?: User; onClose: () => void }) {
     <Modal
       open
       onClose={onClose}
-      title={user ? `Edit ${user.username}` : "Add a user"}
+      title={user ? `Edit ${user.username}` : tr("Add a user")}
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" loading={saving} onClick={save}>
-            Save
-          </Button>
+          <Button onClick={onClose}>{t("Cancel")}</Button>
+          <Button variant="primary" loading={saving} onClick={save}>{t("Save")}</Button>
         </>
       }
     >
       <div className="flex flex-col gap-4">
         {!user && (
           <>
-            <Field label="Username">
+            <Field label={t("Username")}>
               <Input autoFocus autoComplete="off" value={username} onChange={(e) => setUsername(e.target.value)} />
             </Field>
-            <Field label="Password" help="At least 8 characters. They can change it under My account.">
+            <Field label={t("Password")} help={t("At least 8 characters. They can change it under My account.")}>
               <Input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
             </Field>
           </>
         )}
-        <Field label="Name to show" help="Optional.">
+        <Field label={t("Name to show")} help={t("Optional.")}>
           <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
         </Field>
-        <Field label="Group">
+        <Field label={t("Group")}>
           <Select value={groupId} onChange={(e) => setGroupId(Number(e.target.value))}>
-            {!user && <option value={0}>Users</option>}
+            {!user && <option value={0}>{t("Users")}</option>}
             {groups
               ?.filter((g) => user || g.builtin !== "users")
               .map((g) => (
@@ -223,7 +220,7 @@ function UserModal({ user, onClose }: { user?: User; onClose: () => void }) {
         </Field>
         {user && (
           <>
-            <Field label="Progress" help="The reader whose progress this user reads and writes (e.g. one you set up for their Komga account before).">
+            <Field label={t("Progress")} help={t("The reader whose progress this user reads and writes (e.g. one you set up for their Komga account before).")}>
               <Select value={readerId} onChange={(e) => setReaderId(Number(e.target.value))}>
                 {readers?.map((r) => (
                   <option key={r.id} value={r.id}>
@@ -232,7 +229,7 @@ function UserModal({ user, onClose }: { user?: User; onClose: () => void }) {
                 ))}
               </Select>
             </Field>
-            {user.id !== account?.id && <Switch checked={disabled} onChange={setDisabled} label="Disabled (can't sign in)" />}
+            {user.id !== account?.id && <Switch checked={disabled} onChange={setDisabled} label={t("Disabled (can't sign in)")} />}
           </>
         )}
         {error !== null && <ErrorBox error={error} />}
@@ -248,7 +245,7 @@ function PasswordModal({ user, onClose }: { user: User; onClose: () => void }) {
   const save = async () => {
     try {
       await unwrap(api.POST("/api/v1/users/{id}/password", { params: { path: { id: user.id } }, body: { password } }));
-      toast.success(`Password set for ${user.username}`, "They were signed out everywhere");
+      toast.success(`Password set for ${user.username}`, tr("They were signed out everywhere"));
       onClose();
     } catch (e) {
       setError(e);
@@ -261,15 +258,13 @@ function PasswordModal({ user, onClose }: { user: User; onClose: () => void }) {
       title={`Set ${user.username}'s password`}
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={password.length < 8} onClick={save}>
-            Set password
-          </Button>
+          <Button onClick={onClose}>{t("Cancel")}</Button>
+          <Button variant="primary" disabled={password.length < 8} onClick={save}>{t("Set password")}</Button>
         </>
       }
     >
       <div className="flex flex-col gap-4">
-        <Field label="New password" help="At least 8 characters.">
+        <Field label={t("New password")} help={t("At least 8 characters.")}>
           <Input type="password" autoComplete="new-password" autoFocus value={password} onChange={(e) => setPassword(e.target.value)} />
         </Field>
         {error !== null && <ErrorBox error={error} />}
@@ -303,9 +298,7 @@ function GroupsTab() {
   return (
     <>
       <div className="mb-3 flex justify-end">
-        <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setEditing("new")}>
-          Add group
-        </Button>
+        <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setEditing("new")}>{t("Add group")}</Button>
       </div>
       {isLoading && <Loading />}
       {error && <ErrorBox error={error} />}
@@ -317,16 +310,16 @@ function GroupsTab() {
               key={g.id}
               title={
                 <span className="flex items-center gap-2">
-                  {g.name} {g.builtin && <Badge>built-in</Badge>} <span className="text-xs font-normal text-muted">{g.members} member{g.members === 1 ? "" : "s"}</span>
+                  {g.name} {g.builtin && <Badge>{t("built-in")}</Badge>} <span className="text-xs font-normal text-muted">{g.members}{" " + t("member")}{g.members === 1 ? "" : tr("s")}</span>
                 </span>
               }
               actions={
                 <div className="flex">
-                  <IconButton title="Edit" onClick={() => setEditing(g)}>
+                  <IconButton title={t("Edit")} onClick={() => setEditing(g)}>
                     <Pencil className="size-4" />
                   </IconButton>
                   {!g.builtin && (
-                    <IconButton title="Delete" onClick={() => setDeleting(g)}>
+                    <IconButton title={t("Delete")} onClick={() => setDeleting(g)}>
                       <Trash2 className="size-4" />
                     </IconButton>
                   )}
@@ -335,7 +328,7 @@ function GroupsTab() {
             >
               <div className="flex flex-col gap-2 text-sm">
                 <div className="flex flex-wrap gap-1.5">
-                  {g.permissions.length === 0 && <span className="text-muted">Read only</span>}
+                  {g.permissions.length === 0 && <span className="text-muted">{t("Read only")}</span>}
                   {g.permissions.map((p) => (
                     <Badge key={p} tone={p === "admin" ? "accent" : "default"}>
                       {permName(p)}
@@ -344,7 +337,7 @@ function GroupsTab() {
                 </div>
                 <div className="text-xs text-muted">
                   {!limited
-                    ? "Sees every series"
+                    ? tr("Sees every series")
                     : [
                         g.includeTags.length > 0 && `only tagged ${g.includeTags.map(tagName).join(" or ")}`,
                         g.excludeTags.length > 0 && `never tagged ${g.excludeTags.map(tagName).join(", ")}`,
@@ -352,7 +345,7 @@ function GroupsTab() {
                       ]
                         .filter(Boolean)
                         .join("; ")}
-                  {g.autoApproveRequests && " · requests are added without approval"}
+                  {g.autoApproveRequests && tr(" · requests are added without approval")}
                 </div>
               </div>
             </Card>
@@ -362,9 +355,9 @@ function GroupsTab() {
       {editing && <GroupModal group={editing === "new" ? undefined : editing} onClose={() => setEditing(null)} />}
       <Confirm
         open={!!deleting}
-        title="Delete group"
+        title={t("Delete group")}
         danger
-        confirmLabel="Delete"
+        confirmLabel={t("Delete")}
         message={`Delete ${deleting?.name}? Its members move to Users.`}
         onConfirm={remove}
         onClose={() => setDeleting(null)}
@@ -374,7 +367,7 @@ function GroupsTab() {
 }
 
 function Chips<T extends number | string>({ options, value, onChange }: { options: { value: T; label: string }[]; value: T[]; onChange: (v: T[]) => void }) {
-  if (options.length === 0) return <span className="text-sm text-muted">None yet</span>;
+  if (options.length === 0) return <span className="text-sm text-muted">{t("None yet")}</span>;
   return (
     <div className="flex flex-wrap gap-1.5">
       {options.map((o) => {
@@ -428,25 +421,23 @@ function GroupModal({ group, onClose }: { group?: Group; onClose: () => void }) 
     <Modal
       open
       onClose={onClose}
-      title={group ? `Edit ${group.name}` : "Add a group"}
+      title={group ? `Edit ${group.name}` : tr("Add a group")}
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" loading={saving} disabled={!name.trim()} onClick={save}>
-            Save
-          </Button>
+          <Button onClick={onClose}>{t("Cancel")}</Button>
+          <Button variant="primary" loading={saving} disabled={!name.trim()} onClick={save}>{t("Save")}</Button>
         </>
       }
     >
       <div className="flex flex-col gap-5">
-        <Field label="Name">
+        <Field label={t("Name")}>
           <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
         {admins ? (
-          <p className="text-sm text-muted">Admins can do everything and see every series.</p>
+          <p className="text-sm text-muted">{t("Admins can do everything and see every series.")}</p>
         ) : (
           <>
-            <Field label="Members can" help="Everyone can read the series their group sees and keep their own progress.">
+            <Field label={t("Members can")} help={t("Everyone can read the series their group sees and keep their own progress.")}>
               <div className="flex flex-col gap-2">
                 {perms?.map((p) => (
                   <label key={p.key} className="flex items-start gap-2 text-sm">
@@ -463,16 +454,16 @@ function GroupModal({ group, onClose }: { group?: Group; onClose: () => void }) 
                 ))}
               </div>
             </Field>
-            <Field label="Only series tagged" help="Members see series with any of these tags. None selected: every series.">
+            <Field label={t("Only series tagged")} help={t("Members see series with any of these tags. None selected: every series.")}>
               <Chips options={tagOptions} value={includeTags} onChange={setInclude} />
             </Field>
-            <Field label="Never series tagged" help="Hide series with these tags, e.g. an nsfw tag.">
+            <Field label={t("Never series tagged")} help={t("Hide series with these tags, e.g. an nsfw tag.")}>
               <Chips options={tagOptions} value={excludeTags} onChange={setExclude} />
             </Field>
-            <Field label="Only these root folders" help="None selected: all root folders.">
+            <Field label={t("Only these root folders")} help={t("None selected: all root folders.")}>
               <Chips options={(roots ?? []).map((r) => ({ value: r.id, label: r.path }))} value={rootFolders} onChange={setRoots} />
             </Field>
-            <Switch checked={autoApprove} onChange={setAutoApprove} label="Add members' requests without approval (when a source is found automatically)" />
+            <Switch checked={autoApprove} onChange={setAutoApprove} label={t("Add members' requests without approval (when a source is found automatically)")} />
           </>
         )}
         {error !== null && <ErrorBox error={error} />}
@@ -497,24 +488,22 @@ function InvitesTab() {
   return (
     <>
       <div className="mb-3 flex items-center justify-between gap-3">
-        <p className="text-sm text-muted">Send a friend a link: they choose their own username and password.</p>
-        <Button variant="primary" icon={<Link2 className="size-4" />} onClick={() => setCreating(true)}>
-          Create invite link
-        </Button>
+        <p className="text-sm text-muted">{t("Send a friend a link: they choose their own username and password.")}</p>
+        <Button variant="primary" icon={<Link2 className="size-4" />} onClick={() => setCreating(true)}>{t("Create invite link")}</Button>
       </div>
       {isLoading && <Loading />}
       {error && <ErrorBox error={error} />}
-      {data?.length === 0 && <EmptyState title="No invite links yet" />}
+      {data?.length === 0 && <EmptyState title={t("No invite links yet")} />}
       {!!data?.length && (
         <div className="overflow-x-auto">
           <Table>
             <thead>
               <tr>
-                <Th>For</Th>
-                <Th>Group</Th>
-                <Th>Used</Th>
-                <Th>Expires</Th>
-                <Th>Created</Th>
+                <Th>{t("For")}</Th>
+                <Th>{t("Group")}</Th>
+                <Th>{t("Used")}</Th>
+                <Th>{t("Expires")}</Th>
+                <Th>{t("Created")}</Th>
                 <Th />
               </tr>
             </thead>
@@ -526,12 +515,12 @@ function InvitesTab() {
                     <Badge tone="info">{inv.group}</Badge>
                   </Td>
                   <Td>
-                    {inv.uses} / {inv.maxUses} {!inv.active && <Badge>done</Badge>}
+                    {inv.uses} / {inv.maxUses} {!inv.active && <Badge>{t("done")}</Badge>}
                   </Td>
-                  <Td className="text-muted">{inv.expiresAt ? dateTime(inv.expiresAt) : "never"}</Td>
+                  <Td className="text-muted">{inv.expiresAt ? dateTime(inv.expiresAt) : tr("never")}</Td>
                   <Td className="text-muted">{relative(inv.createdAt)}</Td>
                   <Td>
-                    <IconButton title="Delete" onClick={() => remove(inv)}>
+                    <IconButton title={t("Delete")} onClick={() => remove(inv)}>
                       <Trash2 className="size-4" />
                     </IconButton>
                   </Td>
@@ -568,49 +557,43 @@ function InviteModal({ onClose }: { onClose: () => void }) {
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(link);
-      toast.success("Link copied");
+      toast.success(tr("Link copied"));
     } catch {
-      toast.error("Couldn't copy: select the link and copy it by hand");
+      toast.error(tr("Couldn't copy: select the link and copy it by hand"));
     }
   };
   return (
     <Modal
       open
       onClose={onClose}
-      title={link ? "Invite link" : "Create an invite link"}
+      title={link ? tr("Invite link") : tr("Create an invite link")}
       footer={
         link ? (
-          <Button variant="primary" onClick={onClose}>
-            Done
-          </Button>
+          <Button variant="primary" onClick={onClose}>{t("Done")}</Button>
         ) : (
           <>
-            <Button onClick={onClose}>Cancel</Button>
-            <Button variant="primary" onClick={create}>
-              Create link
-            </Button>
+            <Button onClick={onClose}>{t("Cancel")}</Button>
+            <Button variant="primary" onClick={create}>{t("Create link")}</Button>
           </>
         )
       }
     >
       {link ? (
         <div className="flex flex-col gap-3">
-          <p className="text-sm">Send this link to {note || "your friend"}. It's only shown now.</p>
+          <p className="text-sm">{t("Send this link to") + " "}{note || tr("your friend")}{t(". It's only shown now.")}</p>
           <div className="flex gap-2">
             <Input readOnly value={link} onFocus={(e) => e.currentTarget.select()} className="font-mono text-xs" />
-            <Button icon={<Copy className="size-4" />} onClick={copy}>
-              Copy
-            </Button>
+            <Button icon={<Copy className="size-4" />} onClick={copy}>{t("Copy")}</Button>
           </div>
         </div>
       ) : (
         <div className="flex flex-col gap-4">
-          <Field label="For" help="A note for you, e.g. their name. They see it on the invite page.">
+          <Field label={t("For")} help={t("A note for you, e.g. their name. They see it on the invite page.")}>
             <Input autoFocus value={note} onChange={(e) => setNote(e.target.value)} />
           </Field>
-          <Field label="Group">
+          <Field label={t("Group")}>
             <Select value={groupId} onChange={(e) => setGroupId(Number(e.target.value))}>
-              <option value={0}>Users</option>
+              <option value={0}>{t("Users")}</option>
               {groups
                 ?.filter((g) => g.builtin !== "users")
                 .map((g) => (
@@ -621,10 +604,10 @@ function InviteModal({ onClose }: { onClose: () => void }) {
             </Select>
           </Field>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Accounts it can create">
+            <Field label={t("Accounts it can create")}>
               <Input type="number" min={1} max={100} value={maxUses} onChange={(e) => setMaxUses(Number(e.target.value))} />
             </Field>
-            <Field label="Expires after (days)" help="0 = never">
+            <Field label={t("Expires after (days)")} help={t("0 = never")}>
               <Input type="number" min={0} max={365} value={expireDays} onChange={(e) => setExpireDays(Number(e.target.value))} />
             </Field>
           </div>

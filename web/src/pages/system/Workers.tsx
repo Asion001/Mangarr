@@ -1,3 +1,4 @@
+import { t as tr, t } from "../../lib/i18n/core";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Plus, Trash2 } from "lucide-react";
@@ -33,39 +34,34 @@ export function WorkersPage() {
       await unwrap(api.PUT("/api/v1/workers/{id}", { params: { path: { id: w.id } }, body }));
       reload();
     } catch (e) {
-      toast.fromError(e, "Could not update the worker");
+      toast.fromError(e, tr("Could not update the worker"));
     }
   };
 
   return (
     <>
       <PageHeader
-        title="Workers"
-        subtitle="Machines that download, upscale and encode for this server"
+        title={t("Workers")}
+        subtitle={t("Machines that download, upscale and encode for this server")}
         actions={
-          <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setAdding(true)}>
-            Add worker
-          </Button>
+          <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setAdding(true)}>{t("Add worker")}</Button>
         }
       />
       {isLoading && <Loading />}
       {error && <ErrorBox error={error} />}
       {data && data.length === 0 && (
-        <EmptyState title="No workers yet">
-          A worker is the same mangarr image started with <code>MANGARR_MODE=worker</code>, a server address and a key from here. It dials in and asks
-          for work, so it needs no port of its own.
-        </EmptyState>
+        <EmptyState title={t("No workers yet")}>{t("A worker is the same mangarr image started with") + " "}<code>MANGARR_MODE=worker</code>{t(", a server address and a key from here. It dials in and asks for work, so it needs no port of its own.")}</EmptyState>
       )}
       {data && data.length > 0 && (
         <Table>
           <thead>
             <tr>
-              <Th>Worker</Th>
-              <Th>Roles</Th>
-              <Th>Doing now</Th>
-              <Th>Last 24 hours</Th>
-              <Th>Lifetime</Th>
-              <Th>Enabled</Th>
+              <Th>{t("Worker")}</Th>
+              <Th>{t("Roles")}</Th>
+              <Th>{t("Doing now")}</Th>
+              <Th>{t("Last 24 hours")}</Th>
+              <Th>{t("Lifetime")}</Th>
+              <Th>{t("Enabled")}</Th>
               <Th />
             </tr>
           </thead>
@@ -74,7 +70,7 @@ export function WorkersPage() {
               <tr key={w.id} className={w.enabled ? undefined : "opacity-60"}>
                 <Td>
                   <div className="flex items-center gap-2">
-                    <span className={`size-2 rounded-full ${w.online ? "bg-ok" : "bg-border"}`} title={w.online ? "online" : "offline"} />
+                    <span className={`size-2 rounded-full ${w.online ? "bg-ok" : "bg-border"}`} title={w.online ? tr("online") : tr("offline")} />
                     <span className="font-medium">{w.name}</span>
                   </div>
                   <div className="font-mono text-xs text-muted">
@@ -118,35 +114,32 @@ export function WorkersPage() {
                       ))}
                     </div>
                   ) : (
-                    <span className="text-xs">idle · seen {w.lastSeenAt ? relative(w.lastSeenAt) : "never"}</span>
+                    <span className="text-xs">{t("idle · seen") + " "}{w.lastSeenAt ? relative(w.lastSeenAt) : tr("never")}</span>
                   )}
                 </Td>
                 <Td className="text-muted">
                   <div className="text-xs">
-                    {w.recent.tasks} tasks{w.recent.failed > 0 && <span className="text-err"> · {w.recent.failed} failed</span>}
+                    {w.recent.tasks}{" " + t("tasks")}{w.recent.failed > 0 && <span className="text-err"> · {w.recent.failed}{" " + t("failed")}</span>}
                   </div>
                   <div className="text-xs">
-                    {w.recent.pages} pages · {bytes(w.recent.bytesIn)} in · {bytes(w.recent.bytesOut)} out
-                  </div>
+                    {w.recent.pages}{" " + t("pages ·") + " "}{bytes(w.recent.bytesIn)}{" " + t("in ·") + " "}{bytes(w.recent.bytesOut)}{" " + t("out")}</div>
                   {w.recent.seconds > 0 && (
                     <div className="text-xs">
-                      {((w.recent.bytesIn / w.recent.seconds) / (1 << 20)).toFixed(1)} MB/s while busy
-                    </div>
+                      {((w.recent.bytesIn / w.recent.seconds) / (1 << 20)).toFixed(1)}{" " + t("MB/s while busy")}</div>
                   )}
                 </Td>
                 <Td className="text-muted">
                   <div className="text-xs">
-                    {w.tasksDone} tasks{w.tasksFailed > 0 && <span className="text-err"> · {w.tasksFailed} failed</span>}
+                    {w.tasksDone}{" " + t("tasks")}{w.tasksFailed > 0 && <span className="text-err"> · {w.tasksFailed}{" " + t("failed")}</span>}
                   </div>
                   <div className="text-xs">
-                    {w.pagesDone} pages · {bytes(w.bytesIn)} in
-                  </div>
+                    {w.pagesDone}{" " + t("pages ·") + " "}{bytes(w.bytesIn)}{" " + t("in")}</div>
                 </Td>
                 <Td>
                   <Switch checked={w.enabled} onChange={(v) => update(w, { enabled: v })} />
                 </Td>
                 <Td className="text-right">
-                  <IconButton title="Remove" onClick={() => setRemoving(w)}>
+                  <IconButton title={t("Remove")} onClick={() => setRemoving(w)}>
                     <Trash2 className="size-4" />
                   </IconButton>
                 </Td>
@@ -173,7 +166,7 @@ export function WorkersPage() {
           title={`Remove ${removing.name}?`}
           footer={
             <>
-              <Button onClick={() => setRemoving(null)}>Cancel</Button>
+              <Button onClick={() => setRemoving(null)}>{t("Cancel")}</Button>
               <Button
                 variant="danger"
                 onClick={async () => {
@@ -185,13 +178,11 @@ export function WorkersPage() {
                   }
                   setRemoving(null);
                 }}
-              >
-                Remove
-              </Button>
+              >{t("Remove")}</Button>
             </>
           }
         >
-          <p className="text-sm text-muted">Its key stops working at once. Anything it is doing now is given to another worker or run here.</p>
+          <p className="text-sm text-muted">{t("Its key stops working at once. Anything it is doing now is given to another worker or run here.")}</p>
         </Modal>
       )}
     </>
@@ -209,7 +200,7 @@ function AddWorker({ onClose, onCreated }: { onClose: () => void; onCreated: (na
       const r = await unwrap(api.POST("/api/v1/workers", { body: { name, roles: picked } }));
       onCreated(r.worker.name, r.key);
     } catch (e) {
-      toast.fromError(e, "Could not add the worker");
+      toast.fromError(e, tr("Could not add the worker"));
     } finally {
       setBusy(false);
     }
@@ -218,23 +209,21 @@ function AddWorker({ onClose, onCreated }: { onClose: () => void; onCreated: (na
     <Modal
       open
       onClose={onClose}
-      title="Add worker"
+      title={t("Add worker")}
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={!name.trim() || !picked.length || busy} onClick={create}>
-            Create key
-          </Button>
+          <Button onClick={onClose}>{t("Cancel")}</Button>
+          <Button variant="primary" disabled={!name.trim() || !picked.length || busy} onClick={create}>{t("Create key")}</Button>
         </>
       }
     >
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium">Name</label>
+          <label className="text-sm font-medium">{t("Name")}</label>
           <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="gpu-box" />
         </div>
         <div className="flex flex-col gap-1">
-          <span className="text-sm font-medium">What it may do</span>
+          <span className="text-sm font-medium">{t("What it may do")}</span>
           {roles.map((r) => (
             <label key={r.key} className="flex items-start gap-2 text-sm">
               <input
@@ -258,24 +247,22 @@ function AddWorker({ onClose, onCreated }: { onClose: () => void; onCreated: (na
 function IssuedKey({ name, value, onClose }: { name: string; value: string; onClose: () => void }) {
   const toast = useToast();
   return (
-    <Modal open onClose={onClose} title={`Key for ${name}`} footer={<Button variant="primary" onClick={onClose}>Done</Button>}>
+    <Modal open onClose={onClose} title={`Key for ${name}`} footer={<Button variant="primary" onClick={onClose}>{t("Done")}</Button>}>
       <div className="flex flex-col gap-3">
-        <p className="text-sm text-muted">Copy it now: only its hash is kept here, so this is the one time it can be read.</p>
+        <p className="text-sm text-muted">{t("Copy it now: only its hash is kept here, so this is the one time it can be read.")}</p>
         <div className="flex items-center gap-2">
           <code className="flex-1 rounded border border-border bg-bg px-2 py-1 font-mono text-xs break-all">{value}</code>
           <IconButton
-            title="Copy"
+            title={t("Copy")}
             onClick={async () => {
               await navigator.clipboard.writeText(value);
-              toast.success("Key copied");
+              toast.success(tr("Key copied"));
             }}
           >
             <Copy className="size-4" />
           </IconButton>
         </div>
-        <p className="text-xs text-muted">
-          Give it to the worker as <code>MANGARR_WORKER_KEY</code>, with <code>MANGARR_SERVER_URL</code> pointing at this server.
-        </p>
+        <p className="text-xs text-muted">{t("Give it to the worker as") + " "}<code>MANGARR_WORKER_KEY</code>{t(", with") + " "}<code>MANGARR_SERVER_URL</code>{" " + t("pointing at this server.")}</p>
       </div>
     </Modal>
   );

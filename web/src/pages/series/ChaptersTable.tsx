@@ -1,3 +1,4 @@
+import { t as tr, t } from "../../lib/i18n/core";
 import { Fragment, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpen, ChevronDown, ChevronRight, ExternalLink, HelpCircle, RotateCcw, Search, Sparkles, Eye } from "lucide-react";
@@ -82,32 +83,24 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
         <div className="flex flex-wrap items-center gap-2">
           {sel.length > 0 && (
             <>
-              <span className="text-xs text-muted">{sel.length} selected</span>
-              <Button size="sm" onClick={() => monitor(sel, true)}>
-                Monitor
-              </Button>
-              <Button size="sm" onClick={() => monitor(sel, false)}>
-                Unmonitor
-              </Button>
-              <Button size="sm" icon={<Search className="size-3.5" />} onClick={() => search(sel)}>
-                Search
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
-                Clear
-              </Button>
+              <span className="text-xs text-muted">{sel.length}{" " + t("selected")}</span>
+              <Button size="sm" onClick={() => monitor(sel, true)}>{t("Monitor")}</Button>
+              <Button size="sm" onClick={() => monitor(sel, false)}>{t("Unmonitor")}</Button>
+              <Button size="sm" icon={<Search className="size-3.5" />} onClick={() => search(sel)}>{t("Search")}</Button>
+              <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>{t("Clear")}</Button>
             </>
           )}
           <select className="rounded-md border border-border bg-bg px-2 py-1 text-xs" value={filter} onChange={(e) => setFilter(e.target.value)}>
-            <option value="all">All</option>
-            <option value="missing">Missing</option>
-            <option value="downloaded">Downloaded</option>
+            <option value="all">{t("All")}</option>
+            <option value="missing">{t("Missing")}</option>
+            <option value="downloaded">{t("Downloaded")}</option>
           </select>
         </div>
       }
     >
       {isLoading && <Loading />}
       {error && <ErrorBox error={error} />}
-      {data && data.length === 0 && <p className="text-sm text-muted">No chapters yet. Refresh the series to fetch the chapter list.</p>}
+      {data && data.length === 0 && <p className="text-sm text-muted">{t("No chapters yet. Refresh the series to fetch the chapter list.")}</p>}
       {list.length > 0 && (
         <Table className="border-0">
           <thead>
@@ -121,11 +114,11 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
               </Th>
               <Th className="w-8" />
               <Th>#</Th>
-              <Th>Title</Th>
-              <Th>Released</Th>
-              <Th>State</Th>
-              <Th>File</Th>
-              <Th>Read by</Th>
+              <Th>{t("Title")}</Th>
+              <Th>{t("Released")}</Th>
+              <Th>{t("State")}</Th>
+              <Th>{t("File")}</Th>
+              <Th>{t("Read by")}</Th>
               <Th className="w-28" />
             </tr>
           </thead>
@@ -149,13 +142,13 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
                       <div className="flex items-center gap-1">
                         <button className="flex items-center gap-1 text-left hover:text-accent-2" onClick={() => setExpanded(toggle(expanded, c.id))}>
                           {open ? <ChevronDown className="size-3.5 shrink-0" /> : <ChevronRight className="size-3.5 shrink-0" />}
-                          <span className="line-clamp-1 min-w-40">{c.title || <span className="text-muted">Chapter {c.number}</span>}</span>
+                          <span className="line-clamp-1 min-w-40">{c.title || <span className="text-muted">{t("Chapter") + " "}{c.number}</span>}</span>
                           <span className="text-xs text-muted">({c.releases.length})</span>
                         </button>
                         {readable(c) && (
                           <Link
                             to={`/read/${c.id}`}
-                            title={c.file ? "Read" : "Read (streamed from the source)"}
+                            title={c.file ? tr("Read") : tr("Read (streamed from the source)")}
                             aria-label={`Read chapter ${c.number}`}
                             className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted hover:bg-panel-2 hover:text-accent-2"
                           >
@@ -179,14 +172,13 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
                       {c.file ? (
                         <div className="flex flex-col">
                           <span>
-                            {bytes(c.file.size)} · {c.file.pageCount}p · {c.file.avgWidth}px
+                            {bytes(c.file.size)} · {c.file.pageCount}{t("p ·") + " "}{c.file.avgWidth}px
                           </span>
                           <span className="flex items-center gap-1 text-muted">
                             {c.file.scanlator || c.file.sourceName}
                             {c.file.upscaled && (
                               <Badge tone="accent" title={c.file.upscaleModel}>
-                                <Sparkles className="size-3" /> upscaled
-                              </Badge>
+                                <Sparkles className="size-3" />{" " + t("upscaled")}</Badge>
                             )}
                             {(c.file.format === "avif" || c.file.format === "jxl") && (
                               <Badge
@@ -203,9 +195,7 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
                               </Badge>
                             )}
                             {c.file.processState === "failed" && (
-                              <Badge tone="err" title={c.file.processError}>
-                                processing failed
-                              </Badge>
+                              <Badge tone="err" title={c.file.processError}>{t("processing failed")}</Badge>
                             )}
                           </span>
                         </div>
@@ -225,16 +215,16 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
                     <Td className="text-right">
                       <div className="flex justify-end">
                         {manage && (c.state === "cleaned" ? (
-                          <IconButton title="Restore (download again)" onClick={() => restore(c)}>
+                          <IconButton title={t("Restore (download again)")} onClick={() => restore(c)}>
                             <RotateCcw className="size-4" />
                           </IconButton>
                         ) : (
-                          <IconButton title="Search this chapter" onClick={() => search([c.id])}>
+                          <IconButton title={t("Search this chapter")} onClick={() => search([c.id])}>
                             <Search className="size-4" />
                           </IconButton>
                         ))}
                         {manage && (
-                          <IconButton title="Why (not) downloaded?" onClick={() => setExplain(c)}>
+                          <IconButton title={t("Why (not) downloaded?")} onClick={() => setExplain(c)}>
                             <HelpCircle className="size-4" />
                           </IconButton>
                         )}
@@ -245,17 +235,17 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
                     <tr>
                       <Td colSpan={9} className="bg-bg/60">
                         {c.releases.length === 0 ? (
-                          <p className="text-xs text-muted">No releases.</p>
+                          <p className="text-xs text-muted">{t("No releases.")}</p>
                         ) : (
                           <div className="flex flex-col gap-1">
                             {c.releases.map((r) => (
                               <div key={r.id} className="flex flex-wrap items-center gap-2 text-xs">
                                 <Badge>{r.sourceName}</Badge>
                                 <span className={r.removed ? "line-through text-muted" : ""}>{r.name}</span>
-                                {r.scanlator && <span className="text-muted">by {r.scanlator}</span>}
+                                {r.scanlator && <span className="text-muted">{t("by") + " "}{r.scanlator}</span>}
                                 <span className="text-muted">{date(r.uploadDate)}</span>
-                                {r.blocklisted && <Badge tone="err">blocklisted</Badge>}
-                                {c.file?.releaseId === r.id && <Badge tone="ok">current file</Badge>}
+                                {r.blocklisted && <Badge tone="err">{t("blocklisted")}</Badge>}
+                                {c.file?.releaseId === r.id && <Badge tone="ok">{t("current file")}</Badge>}
                                 {r.webUrl && (
                                   <a href={r.webUrl} target="_blank" rel="noreferrer" className="text-muted hover:text-accent-2">
                                     <ExternalLink className="size-3" />
@@ -265,7 +255,7 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
                             ))}
                           </div>
                         )}
-                        {c.job?.error && <p className="mt-2 text-xs text-err">Last error: {c.job.error}</p>}
+                        {c.job?.error && <p className="mt-2 text-xs text-err">{t("Last error:") + " "}{c.job.error}</p>}
                       </Td>
                     </tr>
                   )}
@@ -293,21 +283,20 @@ function DecisionModal({ seriesId, chapter, onClose }: { seriesId: number; chapt
       {data && (
         <div className="flex flex-col gap-3 text-sm">
           {data.approved ? (
-            <p>
-              Would download <b>{data.approved.name}</b> from <b>{data.approved.sourceName}</b>
+            <p>{t("Would download") + " "}<b>{data.approved.name}</b>{" " + t("from") + " "}<b>{data.approved.sourceName}</b>
               {data.approved.scanlator ? ` (${data.approved.scanlator})` : ""}
-              {data.decision.isUpgrade ? " as an upgrade" : ""}.
+              {data.decision.isUpgrade ? tr(" as an upgrade") : ""}.
             </p>
           ) : (
-            <p className="text-muted">Nothing would be downloaded right now.</p>
+            <p className="text-muted">{t("Nothing would be downloaded right now.")}</p>
           )}
           {data.decision.rejections.length > 0 && (
             <ul className="flex flex-col gap-1">
               {data.decision.rejections.map((r, i) => (
                 <li key={i} className="flex items-start gap-2">
-                  <Badge tone={r.temporary ? "warn" : "err"}>{r.temporary ? "temporary" : "rejected"}</Badge>
+                  <Badge tone={r.temporary ? "warn" : "err"}>{r.temporary ? tr("temporary") : tr("rejected")}</Badge>
                   <span>
-                    {r.releaseId ? <span className="text-muted">{relName(r.releaseId)?.sourceName ?? "release"}: </span> : null}
+                    {r.releaseId ? <span className="text-muted">{relName(r.releaseId)?.sourceName ?? tr("release")}: </span> : null}
                     {r.reason}
                   </span>
                 </li>

@@ -1,3 +1,4 @@
+import { t as tr, t } from "../../lib/i18n/core";
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -48,9 +49,7 @@ export function MetadataSearch({
         }}
       >
         <Input autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={placeholder} />
-        <Button type="submit" variant="primary" icon={<Search className="size-4" />}>
-          Search
-        </Button>
+        <Button type="submit" variant="primary" icon={<Search className="size-4" />}>{t("Search")}</Button>
       </form>
       {isFetching && <Loading />}
       {error && <ErrorBox error={error} />}
@@ -82,17 +81,15 @@ export function MetadataSearch({
                 action(r)
               ) : r.existingSeriesId ? (
                 <Link to={`/series/${r.existingSeriesId}`}>
-                  <Button size="sm">In library</Button>
+                  <Button size="sm">{t("In library")}</Button>
                 </Link>
               ) : (
-                <Button size="sm" variant="primary" onClick={() => onPick?.(r)}>
-                  Select
-                </Button>
+                <Button size="sm" variant="primary" onClick={() => onPick?.(r)}>{t("Select")}</Button>
               )}
             </div>
           </div>
         ))}
-        {data && data.results.length === 0 && <p className="text-sm text-muted">No metadata found.</p>}
+        {data && data.results.length === 0 && <p className="text-sm text-muted">{t("No metadata found.")}</p>}
       </div>
     </div>
   );
@@ -104,7 +101,7 @@ function StepHeader({ step, title, base, search }: { step: 0 | 1 | 2; title?: st
   const links = ["/add", base ? `${base}/sources${search ?? ""}` : undefined, base ? `${base}/options${search ?? ""}` : undefined];
   return (
     <PageHeader
-      title={title ? `Add ${title}` : "Add series"}
+      title={title ? `Add ${title}` : tr("Add series")}
       subtitle={
         <span className="flex flex-wrap gap-2">
           {steps.map((s, i) => (
@@ -135,7 +132,7 @@ export function AddSearchStep() {
       <Card>
         <MetadataSearch query={q} setQuery={(v) => setQ(v, { replace: false })} onPick={pick} />
         <div className="mt-4 border-t border-border pt-4">
-          <p className="mb-2 text-sm text-muted">Not on any metadata site? Add it using only the source's information.</p>
+          <p className="mb-2 text-sm text-muted">{t("Not on any metadata site? Add it using only the source's information.")}</p>
           <form
             className="flex gap-2"
             onSubmit={(e) => {
@@ -143,16 +140,13 @@ export function AddSearchStep() {
               if (title.trim()) nav(`/add/manual/-/sources?title=${encodeURIComponent(title.trim())}`);
             }}
           >
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Series title" />
-            <Button type="submit">Continue without metadata</Button>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("Series title")} />
+            <Button type="submit">{t("Continue without metadata")}</Button>
           </form>
         </div>
       </Card>
-      <p className="mt-3 text-sm text-muted">
-        Coming from Mihon, Tachiyomi, Suwayomi or Aidoku?{" "}
-        <Link to="/import" className="text-accent-2 hover:underline">
-          Import your library from a backup
-        </Link>
+      <p className="mt-3 text-sm text-muted">{t("Coming from Mihon, Tachiyomi, Suwayomi or Aidoku?")}{" "}
+        <Link to="/import" className="text-accent-2 hover:underline">{t("Import your library from a backup")}</Link>
       </p>
     </>
   );
@@ -216,22 +210,18 @@ export function AddSourcesStep() {
       <StepHeader step={1} title={ctx.title} base={ctx.base} search={ctx.search} />
       <Card
         title={
-          <span>
-            Sources for <span className="text-accent-2">{ctx.title}</span>
+          <span>{t("Sources for") + " "}<span className="text-accent-2">{ctx.title}</span>
           </span>
         }
         actions={
           <>
-            <Button size="sm" onClick={() => nav(`/add?q=${encodeURIComponent(ctx.title)}`)}>
-              Back
-            </Button>
-            <Button size="sm" variant="primary" disabled={picked.length === 0} onClick={() => nav(options, { state: { from: loc.pathname + loc.search } })}>
-              Next ({picked.length})
+            <Button size="sm" onClick={() => nav(`/add?q=${encodeURIComponent(ctx.title)}`)}>{t("Back")}</Button>
+            <Button size="sm" variant="primary" disabled={picked.length === 0} onClick={() => nav(options, { state: { from: loc.pathname + loc.search } })}>{t("Next (")}{picked.length})
             </Button>
           </>
         }
       >
-        <p className="mb-3 text-sm text-muted">Pick one or more sources. The first one has the highest priority; others are fallbacks.</p>
+        <p className="mb-3 text-sm text-muted">{t("Pick one or more sources. The first one has the highest priority; others are fallbacks.")}</p>
         {picked.length > 0 && (
           <div className="mb-4 flex flex-col gap-1.5">
             {picked.map((p, i) => (
@@ -239,14 +229,14 @@ export function AddSourcesStep() {
                 <span className="w-5 text-muted">{i + 1}.</span>
                 <Badge>{p.group.sourceName}</Badge>
                 <span className="flex-1 truncate">{p.manga.title}</span>
-                {p.manga.chapterCount != null && <span className="text-xs text-muted">{p.manga.chapterCount} ch</span>}
-                <IconButton title="Up" disabled={i === 0} onClick={() => setPicked((c) => swap(c, i, i - 1))}>
+                {p.manga.chapterCount != null && <span className="text-xs text-muted">{p.manga.chapterCount}{" " + t("ch")}</span>}
+                <IconButton title={t("Up")} disabled={i === 0} onClick={() => setPicked((c) => swap(c, i, i - 1))}>
                   <ArrowUp className="size-3.5" />
                 </IconButton>
-                <IconButton title="Down" disabled={i === picked.length - 1} onClick={() => setPicked((c) => swap(c, i, i + 1))}>
+                <IconButton title={t("Down")} disabled={i === picked.length - 1} onClick={() => setPicked((c) => swap(c, i, i + 1))}>
                   <ArrowDown className="size-3.5" />
                 </IconButton>
-                <IconButton title="Remove" onClick={() => toggle(p)}>
+                <IconButton title={t("Remove")} onClick={() => toggle(p)}>
                   <X className="size-3.5" />
                 </IconButton>
               </div>
@@ -361,10 +351,10 @@ export function AddOptionsStep() {
       sessionState.remove(ctx.storageKey + ":request");
       qc.invalidateQueries({ queryKey: ["series"] });
       qc.invalidateQueries({ queryKey: ["requests"] });
-      toast.success(`${s.title} added`, "Fetching chapters…");
+      toast.success(`${s.title} added`, tr("Fetching chapters…"));
       nav(`/series/${s.id}`);
     } catch (e) {
-      toast.fromError(e, "Could not add series");
+      toast.fromError(e, tr("Could not add series"));
     } finally {
       setAdding(false);
     }
@@ -374,22 +364,18 @@ export function AddOptionsStep() {
     <>
       <StepHeader step={2} title={ctx.title} base={ctx.base} search={ctx.search} />
       <Card
-        title="Options"
+        title={t("Options")}
         actions={
           <>
-            <Button size="sm" onClick={() => nav(back)}>
-              Back
-            </Button>
-            <Button size="sm" variant="primary" loading={adding} disabled={!picked.length} icon={<BookPlus className="size-4" />} onClick={add}>
-              Add {ctx.title}
+            <Button size="sm" onClick={() => nav(back)}>{t("Back")}</Button>
+            <Button size="sm" variant="primary" loading={adding} disabled={!picked.length} icon={<BookPlus className="size-4" />} onClick={add}>{t("Add") + " "}{ctx.title}
             </Button>
           </>
         }
       >
         {!picked.length && <ErrorBox error="Pick at least one source first." />}
         {picked.length > 0 && (
-          <p className="mb-4 text-sm text-muted">
-            Sources:{" "}
+          <p className="mb-4 text-sm text-muted">{t("Sources:")}{" "}
             {picked.map((p, i) => (
               <span key={pickKey(p)}>
                 {i > 0 && " → "}
@@ -402,7 +388,7 @@ export function AddOptionsStep() {
           <ErrorBox error="Add a root folder in Settings → Media management first." />
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
-            <Field label="Root folder">
+            <Field label={t("Root folder")}>
               <Select value={rootId} onChange={(e) => patch({ rootId: Number(e.target.value) })}>
                 {roots.map((r) => (
                   <option key={r.id} value={r.id}>
@@ -411,51 +397,51 @@ export function AddOptionsStep() {
                 ))}
               </Select>
             </Field>
-            <Field label="Profile">
+            <Field label={t("Profile")}>
               <Select value={profileId} onChange={(e) => patch({ profileId: Number(e.target.value) })}>
                 {profiles?.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
-                    {p.isDefault ? " (default)" : ""}
+                    {p.isDefault ? tr(" (default)") : ""}
                   </option>
                 ))}
               </Select>
             </Field>
-            <Field label="Monitor" help="Which existing chapters to download. Future chapters follow the setting below.">
+            <Field label={t("Monitor")} help={t("Which existing chapters to download. Future chapters follow the setting below.")}>
               <Select value={o.monitor} onChange={(e) => patch({ monitor: e.target.value })}>
-                <option value="all">All chapters</option>
-                <option value="latest">Latest N chapters</option>
-                <option value="from">From chapter…</option>
-                <option value="future">Only future chapters</option>
-                <option value="none">None</option>
+                <option value="all">{t("All chapters")}</option>
+                <option value="latest">{t("Latest N chapters")}</option>
+                <option value="from">{t("From chapter…")}</option>
+                <option value="future">{t("Only future chapters")}</option>
+                <option value="none">{t("None")}</option>
               </Select>
             </Field>
             {o.monitor === "latest" && (
-              <Field label="Number of latest chapters">
+              <Field label={t("Number of latest chapters")}>
                 <Input type="number" min={1} value={o.latestCount} onChange={(e) => patch({ latestCount: Number(e.target.value) })} />
               </Field>
             )}
             {o.monitor === "from" && (
-              <Field label="First chapter">
+              <Field label={t("First chapter")}>
                 <Input type="number" step="0.1" value={o.fromChapter} onChange={(e) => patch({ fromChapter: Number(e.target.value) })} />
               </Field>
             )}
-            <Field label="New chapters">
+            <Field label={t("New chapters")}>
               <Select value={o.monitorNew} onChange={(e) => patch({ monitorNew: e.target.value })}>
-                <option value="all">Monitor and download</option>
-                <option value="none">Don't monitor</option>
+                <option value="all">{t("Monitor and download")}</option>
+                <option value="none">{t("Don't monitor")}</option>
               </Select>
             </Field>
-            <Field label="Reading direction">
+            <Field label={t("Reading direction")}>
               <Select value={o.direction} onChange={(e) => patch({ direction: e.target.value })}>
-                <option value="">Automatic</option>
-                <option value="rtl">Right to left (manga)</option>
-                <option value="ltr">Left to right</option>
-                <option value="webtoon">Webtoon (long strip)</option>
+                <option value="">{t("Automatic")}</option>
+                <option value="rtl">{t("Right to left (manga)")}</option>
+                <option value="ltr">{t("Left to right")}</option>
+                <option value="webtoon">{t("Webtoon (long strip)")}</option>
               </Select>
             </Field>
             <div className="md:col-span-2">
-              <Switch checked={o.searchMissing} onChange={(v) => patch({ searchMissing: v })} label="Start downloading monitored chapters right away" />
+              <Switch checked={o.searchMissing} onChange={(v) => patch({ searchMissing: v })} label={t("Start downloading monitored chapters right away")} />
             </div>
           </div>
         )}

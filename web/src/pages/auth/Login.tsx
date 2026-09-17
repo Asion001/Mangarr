@@ -1,3 +1,4 @@
+import { t as tr, t } from "../../lib/i18n/core";
 import { useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { KeyRound, LogIn } from "lucide-react";
@@ -45,7 +46,7 @@ export function LoginPage({ setup }: { setup: boolean }) {
           <img src="./favicon.svg" className="size-10" alt="" />
           <div>
             <h1 className="text-lg font-semibold">mangarr</h1>
-            <p className="text-sm text-muted">{setup ? "Create the administrator account" : "Sign in to continue"}</p>
+            <p className="text-sm text-muted">{setup ? tr("Create the administrator account") : tr("Sign in to continue")}</p>
           </div>
         </div>
         <div className="flex flex-col gap-4">
@@ -58,30 +59,29 @@ export function LoginPage({ setup }: { setup: boolean }) {
                 </Button>
               </a>
               {passwords && <div className="flex items-center gap-3 text-xs text-muted">
-                <span className="h-px flex-1 bg-border" /> or <span className="h-px flex-1 bg-border" />
+                <span className="h-px flex-1 bg-border" />{" " + t("or") + " "}<span className="h-px flex-1 bg-border" />
               </div>}
               {!passwords && (
                 <button type="button" className="text-xs text-muted hover:text-fg" onClick={() => setShowPassword(true)}>
-                  <KeyRound className="mr-1 inline size-3" /> Administrator? Sign in with a password
-                </button>
+                  <KeyRound className="mr-1 inline size-3" />{" " + t("Administrator? Sign in with a password")}</button>
               )}
             </>
           )}
           {passwords && <>
-          <Field label="Username">
+          <Field label={t("Username")}>
             <Input autoFocus autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} required />
           </Field>
-          <Field label="Password">
+          <Field label={t("Password")}>
             <Input type="password" autoComplete={setup ? "new-password" : "current-password"} value={password} onChange={(e) => setPassword(e.target.value)} required />
           </Field>
           {setup && (
-            <Field label="Confirm password" help="At least 8 characters.">
+            <Field label={t("Confirm password")} help={t("At least 8 characters.")}>
               <Input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
             </Field>
           )}
           {error !== null && <ErrorBox error={error} />}
           <Button variant={sso ? "secondary" : "primary"} type="submit" loading={loading}>
-            {setup ? "Create account" : "Sign in"}
+            {setup ? tr("Create account") : tr("Sign in")}
           </Button>
           </>}
         </div>

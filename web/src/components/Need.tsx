@@ -1,3 +1,4 @@
+import { t } from "../lib/i18n/core";
 import type { ReactNode } from "react";
 import { Lock } from "lucide-react";
 import { useAccount, type Perm } from "../lib/account";
@@ -8,8 +9,6 @@ export function Need({ perm, children }: { perm: Perm | Perm[]; children: ReactN
   const { can } = useAccount();
   if (can(perm)) return <>{children}</>;
   return (
-    <EmptyState title="Not available for your account" icon={<Lock className="size-8" />}>
-      Ask an administrator if you need this.
-    </EmptyState>
+    <EmptyState title={t("Not available for your account")} icon={<Lock className="size-8" />}>{t("Ask an administrator if you need this.")}</EmptyState>
   );
 }

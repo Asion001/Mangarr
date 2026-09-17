@@ -1,3 +1,4 @@
+import { t as tr, t } from "../../lib/i18n/core";
 import { useMemo, useState } from "react";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, Search, SlidersHorizontal } from "lucide-react";
@@ -64,18 +65,16 @@ export function ScopeBar({
     `rounded-full border px-3 py-1 text-xs font-medium ${active ? "border-accent bg-accent/15 text-fg" : "border-border text-muted hover:text-fg"}`;
   return (
     <div className="mb-4 flex flex-wrap items-center gap-2">
-      <button type="button" className={chip(scope === "active")} onClick={() => setScope("active")} title="Enabled catalogs in your default languages">
-        Active sources ({counts.active})
+      <button type="button" className={chip(scope === "active")} onClick={() => setScope("active")} title={t("Enabled catalogs in your default languages")}>{t("Active sources (")}{counts.active})
       </button>
-      <button type="button" className={chip(scope === "all")} onClick={() => setScope("all")}>
-        All sources ({counts.all})
+      <button type="button" className={chip(scope === "all")} onClick={() => setScope("all")}>{t("All sources (")}{counts.all})
       </button>
       <button type="button" className={chip(scope === "custom")} onClick={() => setPicking(true)}>
         <SlidersHorizontal className="mr-1 inline size-3" />
-        {scope === "custom" ? `${keys.length} picked` : "Pick…"}
+        {scope === "custom" ? `${keys.length} picked` : tr("Pick…")}
       </button>
-      <Select className="ml-auto w-28" value={lang} onChange={(e) => setLang(e.target.value)} title="Language">
-        <option value="">{scope === "active" ? "default langs" : "all langs"}</option>
+      <Select className="ml-auto w-28" value={lang} onChange={(e) => setLang(e.target.value)} title={t("Language")}>
+        <option value="">{scope === "active" ? tr("default langs") : tr("all langs")}</option>
         {langs.map((l) => (
           <option key={l} value={l}>
             {l}
@@ -108,17 +107,15 @@ function CatalogPicker({ items, selected, onSave, onClose }: { items: Catalog[];
     <Modal
       open
       onClose={onClose}
-      title="Search these catalogs"
+      title={t("Search these catalogs")}
       footer={
         <>
-          <Button onClick={() => setSel([])}>Clear</Button>
-          <Button variant="primary" onClick={() => onSave(sel)}>
-            Search {sel.length} catalogs
-          </Button>
+          <Button onClick={() => setSel([])}>{t("Clear")}</Button>
+          <Button variant="primary" onClick={() => onSave(sel)}>{t("Search") + " "}{sel.length}{" " + t("catalogs")}</Button>
         </>
       }
     >
-      <Input autoFocus className="mb-3" placeholder="Filter…" value={q} onChange={(e) => setQ(e.target.value)} />
+      <Input autoFocus className="mb-3" placeholder={t("Filter…")} value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="flex max-h-[50vh] flex-col gap-1 overflow-y-auto">
         {list.map((c) => {
           const k = catKey(c);
@@ -126,7 +123,7 @@ function CatalogPicker({ items, selected, onSave, onClose }: { items: Catalog[];
             <label key={k} className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-panel-2">
               <input type="checkbox" checked={sel.includes(k)} onChange={(e) => setSel(e.target.checked ? [...sel, k] : sel.filter((x) => x !== k))} />
               <span className="flex-1">{c.displayName}</span>
-              {!c.enabled && <Badge>disabled</Badge>}
+              {!c.enabled && <Badge>{t("disabled")}</Badge>}
             </label>
           );
         })}
@@ -146,10 +143,8 @@ export function SearchInput({ query, setQuery, placeholder }: { query: string; s
         setQuery(draft.trim());
       }}
     >
-      <Input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={placeholder ?? "Title to search at sources"} />
-      <Button type="submit" variant="primary" icon={<Search className="size-4" />}>
-        Search
-      </Button>
+      <Input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={placeholder ?? tr("Title to search at sources")} />
+      <Button type="submit" variant="primary" icon={<Search className="size-4" />}>{t("Search")}</Button>
     </form>
   );
 }
@@ -167,7 +162,7 @@ function ResultTile({ m, g, selected, onPick }: { m: SourceManga; g: PickGroup; 
           <Check className="size-3.5" />
         </span>
       )}
-      {m.chapterCount != null && <span className="absolute left-2 top-2 rounded bg-black/70 px-1.5 text-[10px] text-white">{m.chapterCount} ch</span>}
+      {m.chapterCount != null && <span className="absolute left-2 top-2 rounded bg-black/70 px-1.5 text-[10px] text-white">{m.chapterCount}{" " + t("ch")}</span>}
       <span className="line-clamp-2 text-xs">{m.title}</span>
     </button>
   );
@@ -212,14 +207,13 @@ export function CatalogResults({
     })),
   });
   if (!query) return null;
-  if (!targets.length) return <p className="text-sm text-muted">No catalogs match this selection.</p>;
+  if (!targets.length) return <p className="text-sm text-muted">{t("No catalogs match this selection.")}</p>;
   const pending = active.filter((r) => r.isPending).length;
   return (
     <div className="flex flex-col gap-4">
       {pending > 0 && (
         <p className="flex items-center gap-2 text-xs text-muted">
-          <Spinner /> Searched {targets.length - pending} of {targets.length} catalogs…
-        </p>
+          <Spinner />{" " + t("Searched") + " "}{targets.length - pending}{" " + t("of") + " "}{targets.length}{" " + t("catalogs…")}</p>
       )}
       {targets.map((c, i) => {
         const r = active[i];
@@ -240,7 +234,7 @@ export function CatalogResults({
           <div key={catKey(c)}>
             <div className="mb-2 flex items-center gap-2 text-sm font-medium">
               {c.displayName} <Badge>{c.lang}</Badge>
-              <span className="text-xs font-normal text-muted">{mangas.length} results</span>
+              <span className="text-xs font-normal text-muted">{mangas.length}{" " + t("results")}</span>
             </div>
             <div className="grid grid-cols-[repeat(auto-fill,minmax(110px,1fr))] gap-3">
               {mangas.slice(0, 18).map((m) => (
@@ -250,7 +244,7 @@ export function CatalogResults({
           </div>
         );
       })}
-      {pending === 0 && active.every((r) => (r.data?.mangas ?? []).length === 0 && !r.isError) && <p className="text-sm text-muted">No results.</p>}
+      {pending === 0 && active.every((r) => (r.data?.mangas ?? []).length === 0 && !r.isError) && <p className="text-sm text-muted">{t("No results.")}</p>}
     </div>
   );
 }
@@ -269,14 +263,14 @@ export function HeroMatch({ c, selected, onUse }: { c: QuickCandidate; selected:
         className="aspect-[2/3] w-40 shrink-0 self-center sm:self-start"
       />
       <div className="flex min-w-0 flex-1 flex-col gap-2">
-        <div className="text-xs uppercase tracking-wide text-accent-2">Best match · {Math.round(c.score * 100)}% title match</div>
+        <div className="text-xs uppercase tracking-wide text-accent-2">{t("Best match ·") + " "}{Math.round(c.score * 100)}{t("% title match")}</div>
         <h3 className="text-lg font-semibold">{c.manga.title}</h3>
         <div className="flex flex-wrap gap-1.5">
           <Badge tone="accent">{c.sourceName}</Badge>
-          {ch && <Badge tone="info">{ch.count} chapters</Badge>}
+          {ch && <Badge tone="info">{ch.count}{" " + t("chapters")}</Badge>}
           {ch?.status && <Badge>{ch.status}</Badge>}
-          {ch?.latestName && <Badge>latest: {ch.latestName}</Badge>}
-          {ch?.latestUpload && <Badge>updated {relative(ch.latestUpload)}</Badge>}
+          {ch?.latestName && <Badge>{t("latest:") + " "}{ch.latestName}</Badge>}
+          {ch?.latestUpload && <Badge>{t("updated") + " "}{relative(ch.latestUpload)}</Badge>}
           {(ch?.scanlators ?? []).map((s) => (
             <Badge key={s}>{s}</Badge>
           ))}
@@ -284,7 +278,7 @@ export function HeroMatch({ c, selected, onUse }: { c: QuickCandidate; selected:
         {ch?.description && <p className="line-clamp-3 text-sm text-fg/80">{ch.description}</p>}
         <div className="mt-auto flex flex-wrap gap-2 pt-2">
           <Button variant="primary" icon={<Check className="size-4" />} onClick={onUse} disabled={selected}>
-            {selected ? "Selected" : "Use this"}
+            {selected ? tr("Selected") : tr("Use this")}
           </Button>
         </div>
       </div>
@@ -356,8 +350,7 @@ export function SourceSearch({
       <ScopeBar scope={scope} setScope={setScope} lang={lang} setLang={setLang} keys={keys} setKeys={setKeys} />
       {quickEnabled && quick.isFetching && (
         <p className="mb-4 flex items-center gap-2 text-sm text-muted">
-          <Spinner /> Searching catalogs one by one, best first…
-        </p>
+          <Spinner />{" " + t("Searching catalogs one by one, best first…")}</p>
       )}
       {quick.error && <ErrorBox error={quick.error} />}
       {!more && match && (
@@ -368,16 +361,14 @@ export function SourceSearch({
             onUse={() => onPick(match.manga, { moduleId: match.moduleId, sourceId: match.sourceId, sourceName: match.sourceName, lang: match.lang }, true)}
           />
           <button type="button" className="mb-2 inline-flex items-center gap-1 text-sm text-accent-2 hover:underline" onClick={() => setMore(true)}>
-            <ChevronDown className="size-4" /> Not it? Search other sources ({targets.length})
+            <ChevronDown className="size-4" />{" " + t("Not it? Search other sources (")}{targets.length})
           </button>
-          <p className="text-xs text-muted">
-            Searched {quick.data?.searched.map((s) => s.sourceName).join(", ")}
-            {quick.data?.remaining.length ? `; ${quick.data.remaining.length} more not searched yet` : ""}. You can pick more sources as fallbacks.
-          </p>
+          <p className="text-xs text-muted">{t("Searched") + " "}{quick.data?.searched.map((s) => s.sourceName).join(", ")}
+            {quick.data?.remaining.length ? `; ${quick.data.remaining.length} more not searched yet` : ""}{t(". You can pick more sources as fallbacks.")}</p>
         </>
       )}
       {!more && quick.isSuccess && !match && quickEnabled && (
-        <p className="mb-3 text-sm text-muted">No confident match; showing every catalog.</p>
+        <p className="mb-3 text-sm text-muted">{t("No confident match; showing every catalog.")}</p>
       )}
       {showGrid && <CatalogResults query={query} targets={targets} gen={gen} selected={selected} onPick={(m, g) => onPick(m, g)} />}
     </>

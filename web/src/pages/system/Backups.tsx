@@ -1,3 +1,4 @@
+import { t as tr, t } from "../../lib/i18n/core";
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -21,7 +22,7 @@ export function BackupsPage() {
     try {
       await unwrap(api.POST("/api/v1/system/backups"));
       qc.invalidateQueries({ queryKey: ["backups"] });
-      toast.success("Backup created");
+      toast.success(tr("Backup created"));
     } catch (e) {
       toast.fromError(e);
     } finally {
@@ -37,9 +38,9 @@ export function BackupsPage() {
         throw new Error(body.detail || `HTTP ${r.status}`);
       }
       qc.invalidateQueries({ queryKey: ["backups"] });
-      toast.success("Backup added", "Restore it from the list");
+      toast.success(tr("Backup added"), tr("Restore it from the list"));
     } catch (e) {
-      toast.fromError(e, "Couldn't add the backup");
+      toast.fromError(e, tr("Couldn't add the backup"));
     } finally {
       setUploading(false);
       if (file.current) file.current.value = "";
@@ -51,7 +52,7 @@ export function BackupsPage() {
       await unwrap(api.POST("/api/v1/system/backups/{name}/restore", { params: { path: { name: restoring } } }));
       navigate("/system/database");
     } catch (e) {
-      toast.fromError(e, "Couldn't restore");
+      toast.fromError(e, tr("Couldn't restore"));
     }
     setRestoring(null);
   };
@@ -62,30 +63,26 @@ export function BackupsPage() {
   return (
     <>
       <PageHeader
-        title="Backups"
-        subtitle="The whole database, on SQLite and PostgreSQL alike. A backup restores into either, also on another install."
+        title={t("Backups")}
+        subtitle={t("The whole database, on SQLite and PostgreSQL alike. A backup restores into either, also on another install.")}
         actions={
           <>
             <input ref={file} type="file" accept=".zip,application/zip" hidden onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
-            <Button icon={<Upload className="size-4" />} loading={uploading} onClick={() => file.current?.click()}>
-              Add a backup file
-            </Button>
-            <Button variant="primary" loading={creating} icon={<Plus className="size-4" />} onClick={create}>
-              Back up now
-            </Button>
+            <Button icon={<Upload className="size-4" />} loading={uploading} onClick={() => file.current?.click()}>{t("Add a backup file")}</Button>
+            <Button variant="primary" loading={creating} icon={<Plus className="size-4" />} onClick={create}>{t("Back up now")}</Button>
           </>
         }
       />
       {isLoading && <Loading />}
-      {data?.length === 0 && <EmptyState title="No backups yet" />}
+      {data?.length === 0 && <EmptyState title={t("No backups yet")} />}
       {data && data.length > 0 && (
         <Table>
           <thead>
             <tr>
-              <Th>Name</Th>
-              <Th>Type</Th>
-              <Th>Size</Th>
-              <Th>Created</Th>
+              <Th>{t("Name")}</Th>
+              <Th>{t("Type")}</Th>
+              <Th>{t("Size")}</Th>
+              <Th>{t("Created")}</Th>
               <Th />
             </tr>
           </thead>
@@ -101,14 +98,14 @@ export function BackupsPage() {
                 <Td className="text-right">
                   <div className="flex justify-end">
                     <a href={apiUrl(`api/v1/system/backups/${encodeURIComponent(b.name)}`)} download>
-                      <IconButton title="Download">
+                      <IconButton title={t("Download")}>
                         <Download className="size-4" />
                       </IconButton>
                     </a>
-                    <IconButton title="Restore" onClick={() => setRestoring(b.name)}>
+                    <IconButton title={t("Restore")} onClick={() => setRestoring(b.name)}>
                       <ArchiveRestore className="size-4" />
                     </IconButton>
-                    <IconButton title="Delete" onClick={() => remove(b.name)}>
+                    <IconButton title={t("Delete")} onClick={() => remove(b.name)}>
                       <Trash2 className="size-4" />
                     </IconButton>
                   </div>
@@ -120,9 +117,9 @@ export function BackupsPage() {
       )}
       <Confirm
         open={!!restoring}
-        title="Restore backup"
+        title={t("Restore backup")}
         danger
-        confirmLabel="Replace data and restart"
+        confirmLabel={t("Replace data and restart")}
         message={`All of mangarr's data is replaced with ${restoring}'s, then mangarr restarts. Files in your library aren't touched. Make a backup first if you might want today's data back.`}
         onConfirm={restore}
         onClose={() => setRestoring(null)}

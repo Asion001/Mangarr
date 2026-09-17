@@ -1,3 +1,4 @@
+import { t } from "../../lib/i18n/core";
 import { Plus, Trash2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { api, unwrap, type S } from "../../api/client";
@@ -16,83 +17,75 @@ export function SingleSignOnPage() {
   return (
     <>
       <PageHeader
-        title="Single sign-on"
-        subtitle="Let people sign in with your identity provider (Authentik, Authelia, Keycloak, Pocket ID, Google, ...)."
+        title={t("Single sign-on")}
+        subtitle={t("Let people sign in with your identity provider (Authentik, Authelia, Keycloak, Pocket ID, Google, ...).")}
         actions={
-          <Button variant="primary" loading={saving} onClick={() => save()}>
-            Save
-          </Button>
+          <Button variant="primary" loading={saving} onClick={() => save()}>{t("Save")}</Button>
         }
       />
       {isLoading && <Loading />}
       {error && <ErrorBox error={error} />}
       {c && (
         <div className="flex flex-col gap-6">
-          <Card title="Provider">
+          <Card title={t("Provider")}>
             <div className="flex flex-col gap-4">
-              <Switch checked={c.enabled} onChange={(enabled) => patch({ enabled })} label="Allow signing in with the provider" />
+              <Switch checked={c.enabled} onChange={(enabled) => patch({ enabled })} label={t("Allow signing in with the provider")} />
               <div className="grid gap-4 md:grid-cols-2">
-                <Field label="Issuer URL" help="Where its /.well-known/openid-configuration lives, e.g. https://auth.example.com/application/o/mangarr/">
+                <Field label={t("Issuer URL")} help={t("Where its /.well-known/openid-configuration lives, e.g. https://auth.example.com/application/o/mangarr/")}>
                   <Input value={c.issuer} onChange={(e) => patch({ issuer: e.target.value })} placeholder="https://auth.example.com" />
                 </Field>
-                <Field label="Client id">
+                <Field label={t("Client id")}>
                   <Input value={c.clientId} onChange={(e) => patch({ clientId: e.target.value })} />
                 </Field>
-                <Field label="Client secret" help="Leave as it is to keep the stored one.">
+                <Field label={t("Client secret")} help={t("Leave as it is to keep the stored one.")}>
                   <Input type="password" value={c.clientSecret ?? ""} onChange={(e) => patch({ clientSecret: e.target.value })} autoComplete="new-password" />
                 </Field>
-                <Field label="Button label">
-                  <Input value={c.buttonLabel} onChange={(e) => patch({ buttonLabel: e.target.value })} placeholder="Sign in with SSO" />
+                <Field label={t("Button label")}>
+                  <Input value={c.buttonLabel} onChange={(e) => patch({ buttonLabel: e.target.value })} placeholder={t("Sign in with SSO")} />
                 </Field>
-                <Field label="Scopes">
+                <Field label={t("Scopes")}>
                   <TagInput value={c.scopes ?? []} onChange={(scopes) => patch({ scopes })} placeholder="openid" />
                 </Field>
-                <Field label="Redirect URL" help="Allow exactly this address at the provider.">
+                <Field label={t("Redirect URL")} help={t("Allow exactly this address at the provider.")}>
                   <Input readOnly value={c.redirectUrl} className="font-mono text-xs" />
                 </Field>
               </div>
             </div>
           </Card>
 
-          <Card title="Accounts">
+          <Card title={t("Accounts")}>
             <div className="flex flex-col gap-4">
               <div className="grid gap-4 md:grid-cols-2">
-                <Field label="Username claim" help="Which claim names new accounts (an email keeps its first part).">
+                <Field label={t("Username claim")} help={t("Which claim names new accounts (an email keeps its first part).")}>
                   <Input value={c.usernameClaim} onChange={(e) => patch({ usernameClaim: e.target.value })} placeholder="preferred_username" />
                 </Field>
-                <Field label="Groups claim" help="Which claim lists the provider's groups.">
-                  <Input value={c.groupsClaim} onChange={(e) => patch({ groupsClaim: e.target.value })} placeholder="groups" />
+                <Field label={t("Groups claim")} help={t("Which claim lists the provider's groups.")}>
+                  <Input value={c.groupsClaim} onChange={(e) => patch({ groupsClaim: e.target.value })} placeholder={t("groups")} />
                 </Field>
               </div>
-              <Switch checked={c.createUsers} onChange={(createUsers) => patch({ createUsers })} label="Make an account on first sign-in (otherwise people need an invite)" />
+              <Switch checked={c.createUsers} onChange={(createUsers) => patch({ createUsers })} label={t("Make an account on first sign-in (otherwise people need an invite)")} />
               <div>
-                <Switch checked={c.linkByUsername} onChange={(linkByUsername) => patch({ linkByUsername })} label="Sign in to an account here with the same username" />
-                <p className="mt-1 text-xs text-muted">
-                  Only with a provider where you control usernames: anyone who can pick one there could take over that account.
-                </p>
+                <Switch checked={c.linkByUsername} onChange={(linkByUsername) => patch({ linkByUsername })} label={t("Sign in to an account here with the same username")} />
+                <p className="mt-1 text-xs text-muted">{t("Only with a provider where you control usernames: anyone who can pick one there could take over that account.")}</p>
               </div>
               <div>
-                <Switch checked={c.passwordLogin} onChange={(passwordLogin) => patch({ passwordLogin })} label="Keep password sign-in for everyone" />
-                <p className="mt-1 text-xs text-muted">Off: only administrators may still use a password, to get back in when the provider is down.</p>
+                <Switch checked={c.passwordLogin} onChange={(passwordLogin) => patch({ passwordLogin })} label={t("Keep password sign-in for everyone")} />
+                <p className="mt-1 text-xs text-muted">{t("Off: only administrators may still use a password, to get back in when the provider is down.")}</p>
               </div>
             </div>
           </Card>
 
           <Card
-            title="Groups"
+            title={t("Groups")}
             actions={
-              <Button size="sm" icon={<Plus className="size-4" />} onClick={() => patch({ groups: [...mappings, { claim: "", groupId: groups?.[0]?.id ?? 0 }] })}>
-                Add
-              </Button>
+              <Button size="sm" icon={<Plus className="size-4" />} onClick={() => patch({ groups: [...mappings, { claim: "", groupId: groups?.[0]?.id ?? 0 }] })}>{t("Add")}</Button>
             }
           >
-            <p className="mb-3 text-sm text-muted">
-              People land in the first group whose provider group they're in, at every sign-in. Without a match they keep the group they have (new accounts go to Users).
-            </p>
+            <p className="mb-3 text-sm text-muted">{t("People land in the first group whose provider group they're in, at every sign-in. Without a match they keep the group they have (new accounts go to Users).")}</p>
             <div className="flex flex-col gap-2">
               {mappings.map((m, i) => (
                 <div key={i} className="flex flex-wrap items-center gap-2">
-                  <Input className="w-56" value={m.claim} onChange={(e) => setMapping(i, { claim: e.target.value })} placeholder="Group at the provider" />
+                  <Input className="w-56" value={m.claim} onChange={(e) => setMapping(i, { claim: e.target.value })} placeholder={t("Group at the provider")} />
                   <span className="text-muted">→</span>
                   <Select className="w-48" value={m.groupId} onChange={(e) => setMapping(i, { groupId: Number(e.target.value) })}>
                     {(groups ?? []).map((g) => (
@@ -101,20 +94,19 @@ export function SingleSignOnPage() {
                       </option>
                     ))}
                   </Select>
-                  <IconButton title="Remove" onClick={() => patch({ groups: mappings.filter((_, k) => k !== i) })}>
+                  <IconButton title={t("Remove")} onClick={() => patch({ groups: mappings.filter((_, k) => k !== i) })}>
                     <Trash2 className="size-4" />
                   </IconButton>
                 </div>
               ))}
-              {mappings.length === 0 && <p className="text-sm text-muted">No mapping: everyone keeps the group they have here.</p>}
+              {mappings.length === 0 && <p className="text-sm text-muted">{t("No mapping: everyone keeps the group they have here.")}</p>}
             </div>
             <div className="mt-4">
-              <Switch checked={c.onlyMapped} onChange={(onlyMapped) => patch({ onlyMapped })} label="Turn away people in none of these groups" />
+              <Switch checked={c.onlyMapped} onChange={(onlyMapped) => patch({ onlyMapped })} label={t("Turn away people in none of these groups")} />
             </div>
             {!c.enabled && (
               <p className="mt-4 text-xs text-muted">
-                <Badge tone="warn">off</Badge> Turn it on above once the provider is set up; mangarr checks the issuer when you save.
-              </p>
+                <Badge tone="warn">{t("off")}</Badge>{" " + t("Turn it on above once the provider is set up; mangarr checks the issuer when you save.")}</p>
             )}
           </Card>
         </div>

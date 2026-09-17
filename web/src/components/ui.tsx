@@ -1,3 +1,4 @@
+import { t, label as translateLabel } from "../lib/i18n/core";
 import { useEffect, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import clsx from "clsx";
 import { Loader2, Lock, X, Plus, Trash2 } from "lucide-react";
@@ -106,7 +107,7 @@ export function EnvLock({ env }: { env?: string }) {
   if (!env) return null;
   return (
     <span className="inline-flex items-center gap-1 text-xs font-normal text-warn" title={`Set by environment variable ${env}; change it in your container config.`}>
-      <Lock size={12} aria-label="Locked" />
+      <Lock size={12} aria-label={t("Locked")} />
       env
     </span>
   );
@@ -143,8 +144,7 @@ export function Field({
       </label>
       <Locked env={env}>{children}</Locked>
       {env && (
-        <p className="text-xs break-all text-warn">
-          Set by <code>{env}</code>
+        <p className="text-xs break-all text-warn">{t("Set by") + " "}<code>{env}</code>
         </p>
       )}
       {help && <p className="text-xs text-muted">{help}</p>}
@@ -278,7 +278,7 @@ export function Modal({
       >
         <header className="flex items-center justify-between border-b border-border px-5 py-3.5">
           <h2 className="font-semibold">{title}</h2>
-          <IconButton title="Close" onClick={onClose}>
+          <IconButton title={t("Close")} onClick={onClose}>
             <X className="size-4" />
           </IconButton>
         </header>
@@ -318,9 +318,9 @@ export function Confirm({
       size="sm"
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
+          <Button onClick={onClose}>{t("Cancel")}</Button>
           <Button variant={danger ? "danger" : "primary"} loading={loading} onClick={onConfirm}>
-            {confirmLabel}
+            {translateLabel(confirmLabel)}
           </Button>
         </>
       }
@@ -343,7 +343,7 @@ export function Tabs<T extends string>({ tabs, value, onChange }: { tabs: { valu
             value === t.value ? "border-accent text-fg" : "border-transparent text-muted hover:text-fg",
           )}
         >
-          {t.label}
+          {typeof t.label === "string" ? translateLabel(t.label) : t.label}
         </button>
       ))}
     </div>
@@ -384,9 +384,7 @@ export function TagInput({ value, onChange, placeholder }: { value: string[]; on
             }
           }}
         />
-        <Button type="button" onClick={add} icon={<Plus className="size-4" />}>
-          Add
-        </Button>
+        <Button type="button" onClick={add} icon={<Plus className="size-4" />}>{t("Add")}</Button>
       </div>
     </div>
   );
@@ -417,15 +415,13 @@ export function KeyValueEditor({
         <div key={i} className="flex gap-2">
           <Input value={k} placeholder={keyPlaceholder} onChange={(e) => commit(rows.map((r, j) => (j === i ? [e.target.value, r[1]] : r)))} />
           <Input value={v} placeholder={valuePlaceholder} onChange={(e) => commit(rows.map((r, j) => (j === i ? [r[0], e.target.value] : r)))} />
-          <IconButton title="Remove" type="button" onClick={() => commit(rows.filter((_, j) => j !== i))}>
+          <IconButton title={t("Remove")} type="button" onClick={() => commit(rows.filter((_, j) => j !== i))}>
             <Trash2 className="size-4" />
           </IconButton>
         </div>
       ))}
       <div>
-        <Button type="button" size="sm" onClick={() => setRows([...rows, ["", ""]])} icon={<Plus className="size-3.5" />}>
-          Add row
-        </Button>
+        <Button type="button" size="sm" onClick={() => setRows([...rows, ["", ""]])} icon={<Plus className="size-3.5" />}>{t("Add row")}</Button>
       </div>
     </div>
   );

@@ -1,3 +1,4 @@
+import { t as tr, t } from "../../lib/i18n/core";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -96,7 +97,7 @@ export function QueuePage() {
     return (
     <tr key={j.id} className={selected.has(j.id) || allMatching ? "bg-accent/5" : undefined}>
       <Td className="w-8">
-        <input type="checkbox" aria-label="Select" checked={allMatching || selected.has(j.id)} onChange={() => undefined} onClick={(e) => toggle(idx, e.shiftKey)} />
+        <input type="checkbox" aria-label={t("Select")} checked={allMatching || selected.has(j.id)} onChange={() => undefined} onClick={(e) => toggle(idx, e.shiftKey)} />
       </Td>
       {!group && (
         <Td>
@@ -109,12 +110,12 @@ export function QueuePage() {
         {j.chapter}
         {j.isUpgrade && (
           <span className="ml-1.5">
-            <Badge tone="info">upgrade</Badge>
+            <Badge tone="info">{t("upgrade")}</Badge>
           </span>
         )}
         {j.kind === "reprocess" && (
           <span className="ml-1.5">
-            <Badge tone="accent">process</Badge>
+            <Badge tone="accent">{t("process")}</Badge>
           </span>
         )}
         {j.priority !== 0 && <span className="ml-1.5 text-xs text-muted">{j.priority > 0 ? "↑" : "↓"}</span>}
@@ -125,9 +126,9 @@ export function QueuePage() {
       </Td>
       <Td>
         <Badge tone={tone(j.status)}>{j.status}</Badge>
-        {j.attempt > 0 && j.status !== "completed" && <span className="ml-1 text-xs text-muted">try {j.attempt + 1}</span>}
+        {j.attempt > 0 && j.status !== "completed" && <span className="ml-1 text-xs text-muted">{t("try") + " "}{j.attempt + 1}</span>}
         {j.worker && (
-          <Badge tone="info" title="Being done on this worker">
+          <Badge tone="info" title={t("Being done on this worker")}>
             {j.worker}
           </Badge>
         )}
@@ -147,8 +148,7 @@ export function QueuePage() {
           <>
             <Progress value={j.progress} tone={j.status === "failed" ? "err" : j.status === "completed" ? "ok" : "accent"} />
             <div className="mt-1 text-xs text-muted">
-              {j.pagesDone}/{j.pagesTotal} pages
-            </div>
+              {j.pagesDone}/{j.pagesTotal}{" " + t("pages")}</div>
           </>
         )}
       </Td>
@@ -156,23 +156,23 @@ export function QueuePage() {
       <Td className="text-right">
         <div className="flex justify-end">
           {j.status === "failed" && (
-            <IconButton title="Retry" onClick={() => run("retry", [j.id])}>
+            <IconButton title={t("Retry")} onClick={() => run("retry", [j.id])}>
               <RotateCw className="size-4" />
             </IconButton>
           )}
           {j.status === "paused" ? (
-            <IconButton title="Resume" onClick={() => run("resume", [j.id])}>
+            <IconButton title={t("Resume")} onClick={() => run("resume", [j.id])}>
               <Play className="size-4" />
             </IconButton>
           ) : (
             ["queued", "downloading", "processing"].includes(j.status) && (
-              <IconButton title="Pause" onClick={() => run("pause", [j.id])}>
+              <IconButton title={t("Pause")} onClick={() => run("pause", [j.id])}>
                 <Pause className="size-4" />
               </IconButton>
             )
           )}
           {j.status !== "completed" && (
-            <IconButton title="Remove" onClick={() => (setSelected(new Set([j.id])), setAllMatching(false), setConfirm({ action: "remove", label: "Remove" }))}>
+            <IconButton title={t("Remove")} onClick={() => (setSelected(new Set([j.id])), setAllMatching(false), setConfirm({ action: "remove", label: "Remove" }))}>
               <Trash2 className="size-4" />
             </IconButton>
           )}
@@ -185,32 +185,28 @@ export function QueuePage() {
   return (
     <>
       <PageHeader
-        title="Queue"
-        subtitle="Chapters being downloaded, processed and imported"
+        title={t("Queue")}
+        subtitle={t("Chapters being downloaded, processed and imported")}
         actions={
           <>
             {state?.paused ? (
-              <Button variant="primary" icon={<Play className="size-4" />} onClick={() => pauseAll()}>
-                Resume queue{state.pausedUntil ? ` (paused until ${new Date(state.pausedUntil).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})` : ""}
+              <Button variant="primary" icon={<Play className="size-4" />} onClick={() => pauseAll()}>{t("Resume queue")}{state.pausedUntil ? ` (paused until ${new Date(state.pausedUntil).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})` : ""}
               </Button>
             ) : (
-              <Select className="w-44" value="" onChange={(e) => e.target.value && pauseAll(Number(e.target.value))} title="Pause the whole queue">
-                <option value="">Pause queue…</option>
-                <option value="60">for 1 hour</option>
-                <option value="360">for 6 hours</option>
-                <option value="1440">for 24 hours</option>
-                <option value="0">until resumed</option>
+              <Select className="w-44" value="" onChange={(e) => e.target.value && pauseAll(Number(e.target.value))} title={t("Pause the whole queue")}>
+                <option value="">{t("Pause queue…")}</option>
+                <option value="60">{t("for 1 hour")}</option>
+                <option value="360">{t("for 6 hours")}</option>
+                <option value="1440">{t("for 24 hours")}</option>
+                <option value="0">{t("until resumed")}</option>
               </Select>
             )}
-            <Button icon={<Eraser className="size-4" />} onClick={clear}>
-              Clear finished
-            </Button>
+            <Button icon={<Eraser className="size-4" />} onClick={clear}>{t("Clear finished")}</Button>
           </>
         }
       />
       {state?.quiet?.windows?.length ? (
-        <p className="mb-3 text-sm text-warn">
-          Quiet hours ({state.quiet.windows.join(", ")}):{" "}
+        <p className="mb-3 text-sm text-warn">{t("Quiet hours (")}{state.quiet.windows.join(", ")}):{" "}
           {[state.quiet.pauseDownloads && "downloads paused", state.quiet.pauseProcessing && "processing paused", state.quiet.throttle && `${state.quiet.throttle} throttling`]
             .filter(Boolean)
             .join(", ")}
@@ -220,9 +216,8 @@ export function QueuePage() {
         <button
           onClick={() => (setStatus(""), setPage("1"), resetSelection())}
           className={`rounded-full border px-3 py-1 text-xs ${!status ? "border-accent bg-accent/15 text-fg" : "border-border text-muted hover:text-fg"}`}
-          title="Show every status"
-        >
-          all {Object.values(data?.counts ?? {}).reduce((a, b) => a + b, 0)}
+          title={t("Show every status")}
+        >{t("all") + " "}{Object.values(data?.counts ?? {}).reduce((a, b) => a + b, 0)}
         </button>
         {statuses.map((s) => {
           const n = data?.counts?.[s] ?? 0;
@@ -239,52 +234,34 @@ export function QueuePage() {
           );
         })}
         <Select className="w-36" value={kind} onChange={(e) => (setKind(e.target.value), setPage("1"), resetSelection())}>
-          <option value="">All kinds</option>
-          <option value="download">Downloads</option>
-          <option value="reprocess">Processing</option>
+          <option value="">{t("All kinds")}</option>
+          <option value="download">{t("Downloads")}</option>
+          <option value="reprocess">{t("Processing")}</option>
         </Select>
-        <Input className="max-w-xs" placeholder="Filter by series…" defaultValue={q} onChange={(e) => (setQ(e.target.value), setPage("1"), resetSelection())} />
-        <Switch checked={!!group} onChange={(v) => setGroup(v ? "series" : "")} label="Group by series" />
+        <Input className="max-w-xs" placeholder={t("Filter by series…")} defaultValue={q} onChange={(e) => (setQ(e.target.value), setPage("1"), resetSelection())} />
+        <Switch checked={!!group} onChange={(v) => setGroup(v ? "series" : "")} label={t("Group by series")} />
       </div>
       {count > 0 && (
         <div className="sticky top-0 z-10 mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-accent/40 bg-panel p-2 text-sm shadow">
-          <span className="font-medium">{count} selected</span>
+          <span className="font-medium">{count}{" " + t("selected")}</span>
           {pageAllSelected && !allMatching && total > items.length && (
-            <button className="text-accent-2 hover:underline" onClick={() => setAllMatching(true)}>
-              Select all {total} matching
-            </button>
+            <button className="text-accent-2 hover:underline" onClick={() => setAllMatching(true)}>{t("Select all") + " "}{total}{" " + t("matching")}</button>
           )}
           <div className="ml-auto flex flex-wrap gap-1">
-            <Button size="sm" icon={<Pause className="size-3.5" />} onClick={() => run("pause")}>
-              Pause
-            </Button>
-            <Button size="sm" icon={<Play className="size-3.5" />} onClick={() => run("resume")}>
-              Resume
-            </Button>
-            <Button size="sm" icon={<RotateCw className="size-3.5" />} onClick={() => run("retry")}>
-              Retry
-            </Button>
-            <Button size="sm" icon={<ArrowUpToLine className="size-3.5" />} onClick={() => run("top")}>
-              Top
-            </Button>
-            <Button size="sm" icon={<ArrowDownToLine className="size-3.5" />} onClick={() => run("bottom")}>
-              Bottom
-            </Button>
-            <Button size="sm" icon={<Ban className="size-3.5" />} onClick={() => setConfirm({ action: "blocklist", label: "Remove and blocklist" })}>
-              Blocklist
-            </Button>
-            <Button size="sm" variant="danger" icon={<Trash2 className="size-3.5" />} onClick={() => setConfirm({ action: "remove", label: "Remove" })}>
-              Remove
-            </Button>
-            <Button size="sm" variant="ghost" onClick={resetSelection}>
-              Clear
-            </Button>
+            <Button size="sm" icon={<Pause className="size-3.5" />} onClick={() => run("pause")}>{t("Pause")}</Button>
+            <Button size="sm" icon={<Play className="size-3.5" />} onClick={() => run("resume")}>{t("Resume")}</Button>
+            <Button size="sm" icon={<RotateCw className="size-3.5" />} onClick={() => run("retry")}>{t("Retry")}</Button>
+            <Button size="sm" icon={<ArrowUpToLine className="size-3.5" />} onClick={() => run("top")}>{t("Top")}</Button>
+            <Button size="sm" icon={<ArrowDownToLine className="size-3.5" />} onClick={() => run("bottom")}>{t("Bottom")}</Button>
+            <Button size="sm" icon={<Ban className="size-3.5" />} onClick={() => setConfirm({ action: "blocklist", label: "Remove and blocklist" })}>{t("Blocklist")}</Button>
+            <Button size="sm" variant="danger" icon={<Trash2 className="size-3.5" />} onClick={() => setConfirm({ action: "remove", label: "Remove" })}>{t("Remove")}</Button>
+            <Button size="sm" variant="ghost" onClick={resetSelection}>{t("Clear")}</Button>
           </div>
         </div>
       )}
       {isLoading && <Loading />}
       {error && <ErrorBox error={error} />}
-      {data && total === 0 && <EmptyState title="Queue is empty">New chapters are queued automatically when a monitored series gets an update.</EmptyState>}
+      {data && total === 0 && <EmptyState title={t("Queue is empty")}>{t("New chapters are queued automatically when a monitored series gets an update.")}</EmptyState>}
       {items.length > 0 && (
         <div className="overflow-x-auto">
           <Table>
@@ -293,17 +270,17 @@ export function QueuePage() {
                 <Th className="w-8">
                   <input
                     type="checkbox"
-                    aria-label="Select page"
+                    aria-label={t("Select page")}
                     checked={pageAllSelected || allMatching}
                     onChange={() => (pageAllSelected ? resetSelection() : setSelected(new Set(items.map((j) => j.id))))}
                   />
                 </Th>
-                {!group && <Th>Series</Th>}
-                <Th>Chapter</Th>
-                <Th>Source</Th>
-                <Th>Status</Th>
-                <Th>Progress</Th>
-                <Th>Updated</Th>
+                {!group && <Th>{t("Series")}</Th>}
+                <Th>{t("Chapter")}</Th>
+                <Th>{t("Source")}</Th>
+                <Th>{t("Status")}</Th>
+                <Th>{t("Progress")}</Th>
+                <Th>{t("Updated")}</Th>
                 <Th />
               </tr>
             </thead>
@@ -334,15 +311,10 @@ export function QueuePage() {
       )}
       {total > PAGE && (
         <div className="mt-4 flex items-center justify-center gap-3 text-sm">
-          <Button size="sm" disabled={page <= 1} onClick={() => setPage(String(page - 1))}>
-            Previous
-          </Button>
-          <span className="text-muted">
-            Page {page} of {Math.ceil(total / PAGE)}
+          <Button size="sm" disabled={page <= 1} onClick={() => setPage(String(page - 1))}>{t("Previous")}</Button>
+          <span className="text-muted">{t("Page") + " "}{page}{" " + t("of") + " "}{Math.ceil(total / PAGE)}
           </span>
-          <Button size="sm" disabled={page * PAGE >= total} onClick={() => setPage(String(page + 1))}>
-            Next
-          </Button>
+          <Button size="sm" disabled={page * PAGE >= total} onClick={() => setPage(String(page + 1))}>{t("Next")}</Button>
         </div>
       )}
       <Confirm
@@ -388,13 +360,13 @@ function SeriesGroup({
           <input type="checkbox" aria-label={`Select ${title}`} checked={selected} onChange={(e) => onSelect(e.target.checked)} />
         </Td>
         <Td colSpan={6}>
-          <button className="mr-2 text-muted" onClick={() => setOpen(!open)} aria-label={open ? "Collapse" : "Expand"}>
+          <button className="mr-2 text-muted" onClick={() => setOpen(!open)} aria-label={open ? tr("Collapse") : tr("Expand")}>
             {open ? "▾" : "▸"}
           </button>
           <Link to={`/series/${seriesId}`} className="font-medium hover:text-accent-2">
             {title}
           </Link>
-          <span className="ml-2 text-xs text-muted">{count} chapters</span>
+          <span className="ml-2 text-xs text-muted">{count}{" " + t("chapters")}</span>
         </Td>
       </tr>
       {open && children}

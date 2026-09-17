@@ -456,3 +456,24 @@ docker/{Dockerfile, compose.example.yml}   (mangarr, optional suwayomi/flaresolv
   a health check.
 - **Suwayomi's H2 database can corrupt:** mangarr is the source of truth and the IDs are portable,
   so links can be recovered. Optionally point Suwayomi at the existing Postgres 16.
+
+
+## Phase 2 implementation sequence
+
+Each part is committed separately on `codex/phase-2`. Existing permission checks remain authoritative.
+
+| Part | Implementation and verification |
+| --- | --- |
+| P1 | Account UI preferences (`auto/en/ru/uk`, `ua` alias), SQLite/Postgres migrations and portable backups; Russian/Ukrainian catalog, locale-aware dates, unit and browser checks. Static UI copy translated; dynamic templates and built-in module copy audited again in P10. |
+| P2 | Reading/editing switch; collapsible desktop rail, scrolling navigation, fixed account controls and accessible mobile drawer. |
+| P3 | Signed size delta, space added/net saved statistics, useful slow-job throughput and responsive history. |
+| P4 | Reproduce Mihon tracker requests, repair stale Komga sessions and verify numbering/progress contracts. Record actual Mihon validation separately. |
+| P5 | Language/library source preferences, per-series inheritance/custom mode, shared resolver for candidate/current-file comparisons and reader fallback. |
+| P6 | Scoped, paginated title search and chapter navigation, stable sorting, filters and shared chapter picker. |
+| P7 | Cached general discovery feeds from metadata and prioritized sources; scoped enrichment, source-backed requests and partial failures. |
+| P8 | Responsive discovery shelves, filters and detail actions using existing permissions and request flow. |
+| P9 | Caller-scoped `.tachibk` library/progress and Komga settings export, revocable device key and restore guide. |
+| P10 | Cross-database/migration/backup checks, browser coverage, generated schema checks, CI and live integration evidence. |
+
+P1 validation: API, schema coverage and database-copy tests passed against SQLite and local PostgreSQL; locale unit tests passed.
+Browser validation: Chromium switched Russian/Ukrainian and retained the anonymous preference after reload. Production build and 1,097-message static coverage check passed.

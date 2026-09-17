@@ -1,3 +1,4 @@
+import { t as tr, t as translateUI } from "../../lib/i18n/core";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, Pencil, PlugZap } from "lucide-react";
@@ -98,14 +99,12 @@ export function ModulesPage({ kind }: { kind: string }) {
         title={t.title}
         subtitle={t.subtitle}
         actions={
-          <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setPicking(true)}>
-            Add
-          </Button>
+          <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setPicking(true)}>{translateUI("Add")}</Button>
         }
       />
       {isLoading && <Loading />}
       {error && <ErrorBox error={error} />}
-      {mods?.length === 0 && <EmptyState title="Nothing configured yet">Click “Add” to set one up.</EmptyState>}
+      {mods?.length === 0 && <EmptyState title={translateUI("Nothing configured yet")}>{translateUI("Click “Add” to set one up.")}</EmptyState>}
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {mods?.map((m) => (
           <div key={m.id} className="flex flex-col gap-2 rounded-lg border border-border bg-panel p-4">
@@ -115,11 +114,11 @@ export function ModulesPage({ kind }: { kind: string }) {
                 <div className="text-xs text-muted">{implOf(m.implementation)?.displayName ?? m.implementation}</div>
               </div>
               <div className="flex">
-                <IconButton title="Edit" onClick={() => startEdit(m)}>
+                <IconButton title={translateUI("Edit")} onClick={() => startEdit(m)}>
                   <Pencil className="size-4" />
                 </IconButton>
                 <IconButton
-                  title={m.managedBy?.startsWith("env:") ? "Defined by environment variables" : "Delete"}
+                  title={m.managedBy?.startsWith("env:") ? tr("Defined by environment variables") : tr("Delete")}
                   disabled={!!m.managedBy?.startsWith("env:")}
                   onClick={() => setDeleting(m)}
                 >
@@ -128,13 +127,13 @@ export function ModulesPage({ kind }: { kind: string }) {
               </div>
             </div>
             <div className="flex flex-wrap gap-1">
-              {m.enabled ? <Badge tone="ok">enabled</Badge> : <Badge>disabled</Badge>}
+              {m.enabled ? <Badge tone="ok">{translateUI("enabled")}</Badge> : <Badge>{translateUI("disabled")}</Badge>}
               {m.managedBy?.startsWith("env:") && (
                 <Badge tone="warn" title={`Defined by MANGARR_MODULE_${m.managedBy.replace(/^env:/, "")}_* variables`}>
                   env
                 </Badge>
               )}
-              <Badge>priority {m.priority}</Badge>
+              <Badge>{translateUI("priority") + " "}{m.priority}</Badge>
               {m.capabilities.map((c) => (
                 <Badge key={c} tone="info">
                   {c}
@@ -154,12 +153,12 @@ export function ModulesPage({ kind }: { kind: string }) {
               <div className="mt-0.5 text-sm text-muted">{i.description}</div>
             </button>
           ))}
-          {impls?.length === 0 && <p className="text-sm text-muted">No implementations available.</p>}
+          {impls?.length === 0 && <p className="text-sm text-muted">{translateUI("No implementations available.")}</p>}
         </div>
       </Modal>
 
       {draft && <ModuleEditor kind={kind} draft={draft} impl={implOf(draft.implementation)} onClose={() => setDraft(null)} />}
-      <Confirm open={!!deleting} title="Delete module" danger confirmLabel="Delete" message={`Delete ${deleting?.name}?`} onConfirm={remove} onClose={() => setDeleting(null)} />
+      <Confirm open={!!deleting} title={translateUI("Delete module")} danger confirmLabel={translateUI("Delete")} message={`Delete ${deleting?.name}?`} onConfirm={remove} onClose={() => setDeleting(null)} />
     </>
   );
 }
@@ -195,7 +194,7 @@ export function ModuleEditor({
     try {
       if (personal) await unwrap(api.POST("/api/v1/me/notifications/test", { body: { ...own(), id: d.id } }));
       else await unwrap(api.POST("/api/v1/modules/test", { body: { ...body(), id: d.id } }));
-      toast.success("Test succeeded");
+      toast.success(tr("Test succeeded"));
     } catch (e) {
       setError(e);
     } finally {
@@ -230,32 +229,28 @@ export function ModuleEditor({
       size="lg"
       footer={
         <>
-          <Button className="mr-auto" icon={<PlugZap className="size-4" />} loading={testing} onClick={test}>
-            Test
-          </Button>
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" loading={saving} onClick={save}>
-            Save
-          </Button>
+          <Button className="mr-auto" icon={<PlugZap className="size-4" />} loading={testing} onClick={test}>{translateUI("Test")}</Button>
+          <Button onClick={onClose}>{translateUI("Cancel")}</Button>
+          <Button variant="primary" loading={saving} onClick={save}>{translateUI("Save")}</Button>
         </>
       }
     >
       <div className="flex flex-col gap-4">
         {impl?.description && <p className="text-sm text-muted">{impl.description}</p>}
         <div className={personal ? "" : "grid gap-4 md:grid-cols-[1fr_120px]"}>
-          <Field label="Name" env={d.lock?.meta.name}>
+          <Field label={translateUI("Name")} env={d.lock?.meta.name}>
             <Input value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} />
           </Field>
           {!personal && (
-            <Field label="Priority" help="Lower first" env={d.lock?.meta.priority}>
+            <Field label={translateUI("Priority")} help={translateUI("Lower first")} env={d.lock?.meta.priority}>
               <Input type="number" value={d.priority} onChange={(e) => setD({ ...d, priority: Number(e.target.value) })} />
             </Field>
           )}
         </div>
-        <Switch checked={d.enabled} onChange={(v) => setD({ ...d, enabled: v })} label="Enabled" env={d.lock?.meta.enabled} />
+        <Switch checked={d.enabled} onChange={(v) => setD({ ...d, enabled: v })} label={translateUI("Enabled")} env={d.lock?.meta.enabled} />
         {impl && <DynamicForm fields={impl.fields} values={d.settings} locks={d.lock?.fields} onChange={(settings) => setD({ ...d, settings })} />}
         {kind === "notify" && impl?.events && (
-          <Field label="Send on" env={d.lock?.meta.events}>
+          <Field label={translateUI("Send on")} env={d.lock?.meta.events}>
             <div className="grid gap-1.5 sm:grid-cols-2">
               {impl.events.map((ev) => (
                 <label key={ev} className="flex items-center gap-2 text-sm">

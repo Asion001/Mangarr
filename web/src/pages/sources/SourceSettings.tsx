@@ -1,3 +1,4 @@
+import { t } from "../../lib/i18n/core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap } from "../../api/client";
 import { ErrorBox, Input, Loading, Modal, Select, Switch } from "../../components/ui";
@@ -27,7 +28,7 @@ export function SourceSettings({ moduleId, sourceId, title, onClose }: { moduleI
     <Modal open onClose={onClose} title={`${title} settings`}>
       {isLoading && <Loading />}
       {error && <ErrorBox error={error} />}
-      {data?.length === 0 && <p className="text-sm text-muted">This source has no settings.</p>}
+      {data?.length === 0 && <p className="text-sm text-muted">{t("This source has no settings.")}</p>}
       <div className="flex flex-col gap-4">
         {data
           ?.filter((p) => p.visible)

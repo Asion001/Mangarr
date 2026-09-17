@@ -1,3 +1,4 @@
+import { t } from "../../lib/i18n/core";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { CheckSquare, LayoutGrid, List, PlusCircle, RefreshCw, Search } from "lucide-react";
@@ -85,18 +86,14 @@ export function SeriesIndex() {
   return (
     <>
       <PageHeader
-        title="Series"
+        title={t("Series")}
         subtitle={data ? `${data.length} series · ${bytes(data.reduce((n, s) => n + s.stats.sizeOnDisk, 0))}` : undefined}
         actions={
           manage && (
             <>
-              <Button icon={<RefreshCw className="size-4" />} onClick={() => push.mutate({ name: "RefreshSources", label: "Checking sources for new chapters" })}>
-                Check now
-              </Button>
+              <Button icon={<RefreshCw className="size-4" />} onClick={() => push.mutate({ name: "RefreshSources", label: "Checking sources for new chapters" })}>{t("Check now")}</Button>
               <Link to="/add">
-                <Button variant="primary" icon={<PlusCircle className="size-4" />}>
-                  Add series
-                </Button>
+                <Button variant="primary" icon={<PlusCircle className="size-4" />}>{t("Add series")}</Button>
               </Link>
             </>
           )
@@ -106,25 +103,25 @@ export function SeriesIndex() {
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="relative w-full max-w-xs">
           <Search className="absolute left-2.5 top-2.5 size-4 text-muted" />
-          <Input className="pl-8" placeholder="Filter series…" defaultValue={q} onChange={(e) => setQ(e.target.value)} />
+          <Input className="pl-8" placeholder={t("Filter series…")} defaultValue={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         <Select className="w-auto" value={filter} onChange={(e) => setFilter(e.target.value as Filter)}>
-          <option value="all">All</option>
-          <option value="following">Following</option>
-          <option value="monitored">Monitored</option>
-          <option value="missing">Missing chapters</option>
-          <option value="ongoing">Ongoing</option>
-          <option value="completed">Completed</option>
-          <option value="unread">With unread chapters</option>
-          <option value="reading">Started reading</option>
+          <option value="all">{t("All")}</option>
+          <option value="following">{t("Following")}</option>
+          <option value="monitored">{t("Monitored")}</option>
+          <option value="missing">{t("Missing chapters")}</option>
+          <option value="ongoing">{t("Ongoing")}</option>
+          <option value="completed">{t("Completed")}</option>
+          <option value="unread">{t("With unread chapters")}</option>
+          <option value="reading">{t("Started reading")}</option>
         </Select>
         <Select className="w-auto" value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
-          <option value="title">Sort: title</option>
-          <option value="added">Sort: recently added</option>
-          <option value="latest">Sort: latest chapter</option>
-          <option value="missing">Sort: missing</option>
-          <option value="size">Sort: size</option>
-          <option value="read">Sort: recently read</option>
+          <option value="title">{t("Sort: title")}</option>
+          <option value="added">{t("Sort: recently added")}</option>
+          <option value="latest">{t("Sort: latest chapter")}</option>
+          <option value="missing">{t("Sort: missing")}</option>
+          <option value="size">{t("Sort: size")}</option>
+          <option value="read">{t("Sort: recently read")}</option>
         </Select>
         <div className="ml-auto flex gap-1">
           {manage && (
@@ -133,14 +130,10 @@ export function SeriesIndex() {
               variant={selecting ? "primary" : "secondary"}
               icon={<CheckSquare className="size-3.5" />}
               onClick={() => (setSelecting(!selecting), setSelected(new Set()))}
-            >
-              Select
-            </Button>
+            >{t("Select")}</Button>
           )}
           {selecting && (
-            <Button size="sm" onClick={() => setSelected(new Set(list.map((s) => s.id)))}>
-              All shown
-            </Button>
+            <Button size="sm" onClick={() => setSelected(new Set(list.map((s) => s.id)))}>{t("All shown")}</Button>
           )}
           <Button variant={view === "posters" ? "primary" : "secondary"} size="sm" onClick={() => setViewPersist("posters")} icon={<LayoutGrid className="size-3.5" />} />
           <Button variant={view === "table" ? "primary" : "secondary"} size="sm" onClick={() => setViewPersist("table")} icon={<List className="size-3.5" />} />
@@ -149,9 +142,7 @@ export function SeriesIndex() {
       {isLoading && <Loading />}
       {error && <ErrorBox error={error} />}
       {data && data.length === 0 && (
-        <EmptyState title="No series yet">
-          Add a source module (Settings → Source modules), a root folder (Settings → Media management), then add your first series.
-        </EmptyState>
+        <EmptyState title={t("No series yet")}>{t("Add a source module (Settings → Source modules), a root folder (Settings → Media management), then add your first series.")}</EmptyState>
       )}
       {view === "posters" ? (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-4">
@@ -171,10 +162,10 @@ export function SeriesIndex() {
               >
                 <div className="relative">
                   <Cover src={apiUrl(s.coverUrl)} alt={s.title} className="aspect-[2/3] w-full ring-accent/60 transition group-hover:ring-2" />
-                  {!s.monitored && <div className="absolute left-1.5 top-1.5"><Badge>unmonitored</Badge></div>}
+                  {!s.monitored && <div className="absolute left-1.5 top-1.5"><Badge>{t("unmonitored")}</Badge></div>}
                   {s.stats.missingCount > 0 && (
                     <div className="absolute right-1.5 top-1.5">
-                      <Badge tone="warn">{s.stats.missingCount} missing</Badge>
+                      <Badge tone="warn">{s.stats.missingCount}{" " + t("missing")}</Badge>
                     </div>
                   )}
                 </div>
@@ -182,8 +173,7 @@ export function SeriesIndex() {
                 {s.stats.readCount > 0 && <ReadBar s={s} />}
                 <div className="line-clamp-2 text-sm font-medium leading-tight">{s.title}</div>
                 <div className="-mt-1 text-xs text-muted">
-                  {s.stats.fileCount}/{s.stats.chapterCount} chapters
-                  {s.stats.readCount > 0 && ` · ${s.stats.readCount} read`}
+                  {s.stats.fileCount}/{s.stats.chapterCount}{" " + t("chapters")}{s.stats.readCount > 0 && ` · ${s.stats.readCount} read`}
                 </div>
               </Link>
             );
@@ -194,12 +184,12 @@ export function SeriesIndex() {
           <thead>
             <tr>
               {selecting && <Th className="w-8" />}
-              <Th>Title</Th>
-              <Th>Status</Th>
-              <Th>Chapters</Th>
-              <Th>Latest</Th>
-              <Th>Size</Th>
-              <Th>Added</Th>
+              <Th>{t("Title")}</Th>
+              <Th>{t("Status")}</Th>
+              <Th>{t("Chapters")}</Th>
+              <Th>{t("Latest")}</Th>
+              <Th>{t("Size")}</Th>
+              <Th>{t("Added")}</Th>
             </tr>
           </thead>
           <tbody>
@@ -214,7 +204,7 @@ export function SeriesIndex() {
                   <Link to={`/series/${s.id}`} className="font-medium hover:text-accent-2">
                     {s.title}
                   </Link>
-                  {!s.monitored && <span className="ml-2"><Badge>unmonitored</Badge></span>}
+                  {!s.monitored && <span className="ml-2"><Badge>{t("unmonitored")}</Badge></span>}
                 </Td>
                 <Td>
                   <Badge tone={statusTone(s.status)}>{s.status}</Badge>

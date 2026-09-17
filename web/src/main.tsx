@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router";
 import "./index.css";
+import { UIPreferencesProvider } from "./lib/uiPreferences";
 import { App } from "./App";
 import { ToastProvider } from "./lib/toast";
 import { basePath } from "./api/client";
@@ -18,7 +19,7 @@ createRoot(document.getElementById("root")!).render(
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
         <BrowserRouter basename={basePath || "/"}>
-          <App />
+          <UIPreferencesProvider><App /></UIPreferencesProvider>
         </BrowserRouter>
       </ToastProvider>
     </QueryClientProvider>
