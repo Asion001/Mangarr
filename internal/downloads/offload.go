@@ -14,6 +14,7 @@ import (
 	"github.com/Asion001/mangarr/internal/model"
 	"github.com/Asion001/mangarr/internal/modules"
 	"github.com/Asion001/mangarr/internal/modules/source"
+	"github.com/Asion001/mangarr/internal/sourcegov"
 	"github.com/Asion001/mangarr/internal/worktasks"
 )
 
@@ -60,6 +61,14 @@ func (m *Manager) offload(ctx context.Context, job model.DownloadJob) (bool, err
 		jc.release, jc.link, job.ReleaseID, job.IsUpgrade = &rel, &link, &rel.ID, upgrade
 		_, _ = m.db.NewUpdate().Model(&job).Column("release_id", "is_upgrade").WherePK().Exec(ctx)
 	}
+	if m.Gov != nil {
+		// the same pause between chapters of a catalog a download here would
+		// take: pacing belongs to the server, whoever fetches the pages
+		if err := m.Gov.Pace(ctx, sourcegov.Key{ModuleID: jc.link.ModuleID, SourceID: jc.link.SourceID}, "chapter"); err != nil {
+			m.fail(ctx, &job, jc, err)
+			return true, nil
+		}
+	}
 	specs, err := m.pageSpecs(ctx, jc)
 	if err != nil {
 		if errors.Is(err, source.ErrUnsupported) {
@@ -76,6 +85,7 @@ func (m *Manager) offload(ctx context.Context, job model.DownloadJob) (bool, err
 		"prefetch": dl.WorkerPrefetch,
 		"series":   jc.series.Title,
 		"chapter":  jc.chapter.NumberKey,
+		"rate":     m.workerBudget(jc, dl.MaxPerSource),
 	}
 	task := &model.WorkerTask{JobID: job.ID, Kind: model.TaskDownload, Spec: spec, PagesTotal: len(specs)}
 	if err := m.Tasks.Add(ctx, task); err != nil {
@@ -86,6 +96,26 @@ func (m *Manager) offload(ctx context.Context, job model.DownloadJob) (bool, err
 	m.progress(&job, 0, len(specs))
 	m.log.Info("chapter handed to the workers", "job", job.ID, "series", jc.series.Title, "chapter", jc.chapter.NumberKey, "pages", len(specs))
 	return true, nil
+}
+
+// workerBudget is the share of a catalog's request budget a worker is told
+// to keep to. It is divided by the chapters of that catalog that may run at
+// once, never handed over whole: several workers on one catalog must add up
+// to what one machine here would have done.
+func (m *Manager) workerBudget(jc *jobCtx, perSource int) map[string]any {
+	if m.Gov == nil {
+		return nil
+	}
+	lim := m.Gov.Limits(sourcegov.Key{ModuleID: jc.link.ModuleID, SourceID: jc.link.SourceID})
+	share := max(perSource, 1)
+	out := map[string]any{"minDelayMs": lim.MinDelayMs, "jitterMs": lim.JitterMs}
+	if lim.RequestsPerMinute > 0 {
+		out["requestsPerMinute"] = max(lim.RequestsPerMinute/share, 1)
+	}
+	if lim.MaxConcurrent > 0 {
+		out["maxConcurrent"] = max(lim.MaxConcurrent/share, 1)
+	}
+	return out
 }
 
 // settingsLocal avoids importing the settings package for one constant in

@@ -353,3 +353,12 @@ func (g *Governor) Do(ctx context.Context, k Key, fn func(ctx context.Context) e
 	}
 	return err
 }
+
+// Limits is the effective throttle of a catalog, for handing part of its
+// budget to another machine that will make the requests itself.
+func (g *Governor) Limits(k Key) model.ThrottleConfig {
+	if g == nil || g.cfg == nil {
+		return Presets["normal"]
+	}
+	return g.cfg(k)
+}

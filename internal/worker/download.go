@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -47,6 +48,12 @@ func (w *Worker) download(ctx context.Context, t Task) (result, error) {
 	conc := w.cfg.PageConcurrency
 	if conc <= 0 {
 		conc = 4
+	}
+	// the share of the catalog's budget the server handed over: it paces the
+	// site for everyone, and a worker keeps to its part of that
+	pace := rateFrom(t.Spec)
+	if pace.maxConcurrent > 0 {
+		conc = min(conc, pace.maxConcurrent)
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -109,6 +116,9 @@ func (w *Worker) download(ctx context.Context, t Task) (result, error) {
 		go func() {
 			defer fetchers.Done()
 			for spec := range specs {
+				if err := pace.wait(ctx); err != nil {
+					return
+				}
 				data, err := w.fetchPage(ctx, spec)
 				if err != nil {
 					fail(fmt.Errorf("page %d: %w", spec.Index+1, err))
@@ -283,4 +293,69 @@ func (b *budget) give(n int) {
 	}
 	b.mu.Unlock()
 	b.cond.Broadcast()
+}
+
+// rate is what a worker may ask a site for, as the server worked it out.
+type rate struct {
+	perMinute     int
+	maxConcurrent int
+	minDelay      time.Duration
+	jitter        time.Duration
+
+	mu   sync.Mutex
+	next time.Time
+}
+
+// rateFrom reads the budget out of a task's spec (an empty one means "as
+// fast as you like", which is what a site with no limits gets).
+func rateFrom(spec map[string]any) *rate {
+	r := &rate{}
+	raw, ok := spec["rate"].(map[string]any)
+	if !ok {
+		return r
+	}
+	num := func(k string) int {
+		v, _ := raw[k].(float64)
+		return int(v)
+	}
+	r.perMinute, r.maxConcurrent = num("requestsPerMinute"), num("maxConcurrent")
+	r.minDelay = time.Duration(num("minDelayMs")) * time.Millisecond
+	r.jitter = time.Duration(num("jitterMs")) * time.Millisecond
+	return r
+}
+
+// wait holds a fetcher until its next request is due.
+func (r *rate) wait(ctx context.Context) error {
+	gap := r.minDelay
+	if r.perMinute > 0 {
+		if every := time.Minute / time.Duration(r.perMinute); every > gap {
+			gap = every
+		}
+	}
+	if r.jitter > 0 {
+		gap += time.Duration(rand.Int64N(int64(r.jitter)))
+	}
+	if gap <= 0 {
+		return ctx.Err()
+	}
+	r.mu.Lock()
+	now := time.Now()
+	if r.next.Before(now) {
+		r.next = now
+	}
+	due := r.next
+	r.next = due.Add(gap)
+	r.mu.Unlock()
+	d := time.Until(due)
+	if d <= 0 {
+		return nil
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
 }
