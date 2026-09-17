@@ -1,3 +1,4 @@
+import { sizeChange, sizeChangeLabel, throughput, signedBytes } from "../../lib/processingMetrics";
 import { t as tr, t } from "../../lib/i18n/core";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -227,15 +228,17 @@ function ProcessingCard() {
           <Button size="sm" onClick={resume}>{t("Resume")}</Button>
         </div>
       )}
-      <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3 lg:grid-cols-7">
         <Stat label={t("Space saved")} value={bytes(data.spaceSaved)} />
+        <Stat label={t("Space added")} value={bytes(data.spaceAdded)} />
+        <Stat label={t("Net space saved")} value={signedBytes(data.netSpaceSaved)} />
         <Stat label={t("Processed")} value={String(data.processed)} />
         <Stat
           label={t("Waiting")}
           value={data.pending > 0 ? `${data.pending} ch · ${data.pendingPages.toLocaleString()} p` : "0"}
           hint={data.failed > 0 ? `${data.failed} gave up` : undefined}
         />
-        <Stat label={t("Speed (last day)")} value={data.pagesPerMinute > 0 ? `${data.pagesPerMinute.toFixed(1)} pages/min` : "—"} />
+        <Stat label={t("Speed (last day)")} value={data.pagesPerMinute > 0 ? throughput(data.pagesPerMinute,60) : "—"} />
         <Stat label={t("Backlog done in")} value={data.etaSeconds > 0 ? `~${eta(data.etaSeconds)}` : "—"} />
       </div>
 
@@ -261,7 +264,8 @@ function ProcessingCard() {
       <SavedChart />
 
       {data.recent.length > 0 && (
-        <div className="mt-4 overflow-x-auto">
+        <div className="mt-4">
+          <div className="hidden md:block">
           <Table>
             <thead>
               <tr>
@@ -282,18 +286,31 @@ function ProcessingCard() {
                   </Td>
                   <Td className="whitespace-nowrap">
                     {bytes(f.sizeOriginal)} → {bytes(f.size)}
-                    {f.sizeOriginal > 0 && <span className="ml-1 text-xs text-ok">−{Math.round((1 - f.size / f.sizeOriginal) * 100)}%</span>}
+                    <SizeDelta before={f.sizeOriginal} after={f.size} />
                   </Td>
                   <Td>{f.pages}</Td>
                   <Td className="whitespace-nowrap">
                     {eta(f.seconds)}
-                    {f.seconds > 0 && <span className="ml-1 text-xs text-muted">{(f.pages / f.seconds).toFixed(1)}{" " + t("p/s")}</span>}
+                    <span className="ml-1 text-xs text-muted">{throughput(f.pages,f.seconds)}</span>
                   </Td>
                   <Td className="whitespace-nowrap text-muted">{relative(f.processedAt)}</Td>
                 </tr>
               ))}
             </tbody>
           </Table>
+          </div>
+          <div className="space-y-3 md:hidden">
+            <h3 className="text-sm font-medium">{t("Recently processed")}</h3>
+            {data.recent.map((f,i)=><article key={i} className="rounded border border-border p-3 text-sm">
+              <Link to={`/series/${f.seriesId}`} className="font-medium hover:text-accent-2">{f.seriesTitle} {t("· ch.")} {f.chapter}</Link>
+              <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
+                <dt className="text-muted">{t("Size")}</dt><dd>{bytes(f.sizeOriginal)} → {bytes(f.size)}<SizeDelta before={f.sizeOriginal} after={f.size}/></dd>
+                <dt className="text-muted">{t("Pages")}</dt><dd>{f.pages}</dd>
+                <dt className="text-muted">{t("Time")}</dt><dd>{eta(f.seconds)} · {throughput(f.pages,f.seconds)}</dd>
+                <dt className="text-muted">{t("When")}</dt><dd>{relative(f.processedAt)}</dd>
+              </dl>
+            </article>)}
+          </div>
         </div>
       )}
       <p className="mt-3 text-xs text-muted">{t("Encoders:") + " "}{data.engines.map((e) => `${e.name} (${e.format}${e.slow ? ", slow" : ""})`).join(", ") || tr("none")}
@@ -341,8 +358,8 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
 function SavedChart() {
   const { data } = useQuery({ queryKey: ["processing", "history"], queryFn: () => unwrap(api.GET("/api/v1/processing/history", { params: { query: { days: 30 } } })) });
   if (!data || !data.some((d) => d.files > 0)) return null;
-  const saved = data.map((d) => Math.max(0, d.bytesBefore - d.bytesAfter));
-  const maxSaved = Math.max(...saved, 1);
+  const saved = data.map((d) => d.bytesBefore - d.bytesAfter);
+  const maxSaved = Math.max(...saved.map(Math.abs), 1);
   const total = saved.reduce((a, b) => a + b, 0);
   const pages = data.reduce((a, d) => a + d.pages, 0);
   const W = 600,
@@ -352,18 +369,19 @@ function SavedChart() {
   return (
     <div className="mt-4">
       <div className="mb-1 flex flex-wrap justify-between gap-2 text-xs text-muted">
-        <span>{t("Saved per day, last 30 days")}</span>
+        <span>{t("Net saved per day, last 30 days")}</span>
         <span>
-          {bytes(total)}{" " + t("saved ·") + " "}{pages.toLocaleString()}{" " + t("pages")}</span>
+          {t("{size} net saved · {pages} pages",{size:signedBytes(total),pages})}</span>
       </div>
-      <svg viewBox={`0 0 ${W} ${H + 14}`} className="h-auto w-full" role="img" aria-label={t("Space saved per day")}>
+      <svg viewBox={`0 0 ${W} ${H + 14}`} className="h-auto w-full" role="img" aria-label={t("Net space saved per day")}>
+        <line x1={0} x2={W} y1={H/2} y2={H/2} className="stroke-muted/50"/>
         {data.map((d, i) => {
-          const h = (saved[i] / maxSaved) * H;
+          const h = (Math.abs(saved[i]) / maxSaved) * (H/2);
           const x = i * (bw + gap);
           return (
             <g key={d.day}>
-              <rect x={x} y={H - h} width={bw} height={Math.max(h, d.files > 0 ? 1 : 0)} rx={1.5} className="fill-accent/80">
-                <title>{`${d.day}: ${bytes(saved[i])} saved, ${d.files} files, ${d.pages} pages, ${eta(d.seconds)}`}</title>
+              <rect x={x} y={saved[i]>=0?H/2-h:H/2} width={bw} height={Math.max(h, d.files > 0 ? 1 : 0)} rx={1.5} className={saved[i]>=0?"fill-ok/80":"fill-warn/80"}>
+                <title>{`${d.day}: ${signedBytes(saved[i])} · ${d.files} · ${d.pages} · ${eta(d.seconds)}`}</title>
               </rect>
               {(i === data.length - 1 || (i % 7 === 0 && i < data.length - 4)) && (
                 <text
@@ -381,4 +399,9 @@ function SavedChart() {
       </svg>
     </div>
   );
+}
+
+function SizeDelta({before,after}:{before:number;after:number}) {
+  const delta=sizeChange(before,after);
+  return <span title={delta===null?t("Unknown original size"):undefined} className={`ml-1 text-xs ${delta===null||delta===0?'text-muted':delta>0?'text-warn':'text-ok'}`}>{sizeChangeLabel(before,after)}</span>;
 }

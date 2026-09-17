@@ -1,3 +1,4 @@
+import { throughput } from "./processingMetrics";
 import { useEffect, useSyncExternalStore } from "react";
 import type { S } from "../api/client";
 import { bytes } from "./format";
@@ -41,7 +42,7 @@ const stageLabel: Record<string, string> = { download: "downloading", upscale: "
 /** describe summarizes live progress: "encoding 34/60 · 3.1 p/s · −42% · 12s left". */
 export function describe(p: LiveProgress): string {
   const parts = [`${stageLabel[p.stage] ?? p.stage} ${p.done}/${p.total}`];
-  if (p.rate > 0) parts.push(p.rate >= 1 ? `${p.rate.toFixed(1)} p/s` : `${(p.rate * 60).toFixed(1)} p/min`);
+  if (p.rate > 0) parts.push(throughput(p.rate,1));
   if (p.bytesIn > 0 && p.bytesOut > 0 && p.stage === "encode") parts.push(`${Math.round((p.bytesOut / p.bytesIn - 1) * 100)}%`);
   if (p.bytesIn > 0 && p.stage === "download") parts.push(bytes(p.bytesIn));
   if (p.eta > 0) parts.push(`${eta(p.eta)} left`);

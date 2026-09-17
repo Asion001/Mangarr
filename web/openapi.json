@@ -4433,6 +4433,10 @@
             "format": "int64",
             "type": "integer"
           },
+          "netSpaceSaved": {
+            "format": "int64",
+            "type": "integer"
+          },
           "pagesPerMinute": {
             "format": "double",
             "type": "number"
@@ -4455,6 +4459,10 @@
             },
             "type": "array"
           },
+          "spaceAdded": {
+            "format": "int64",
+            "type": "integer"
+          },
           "spaceSaved": {
             "format": "int64",
             "type": "integer"
@@ -4470,6 +4478,8 @@
           "failed",
           "processed",
           "spaceSaved",
+          "spaceAdded",
+          "netSpaceSaved",
           "active",
           "pagesPerMinute",
           "pendingPages",

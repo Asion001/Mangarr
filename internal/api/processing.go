@@ -37,6 +37,10 @@ type ProcessingStatus struct {
 	Failed     int   `json:"failed"`
 	Processed  int   `json:"processed"`
 	SpaceSaved int64 `json:"spaceSaved"`
+	// SpaceAdded counts growth where the original size is known; SpaceSaved
+	// remains gross savings for existing clients. NetSpaceSaved can be negative.
+	SpaceAdded    int64 `json:"spaceAdded"`
+	NetSpaceSaved int64 `json:"netSpaceSaved"`
 	// Active are the jobs processing right now, with live progress.
 	Active []downloads.JobView `json:"active"`
 	// PagesPerMinute is the processing speed over the last day (0 = unknown).
@@ -225,11 +229,14 @@ func (s *Server) registerProcessing() {
 			var agg struct {
 				Processed int   `bun:"processed"`
 				Saved     int64 `bun:"saved"`
+				Added     int64 `bun:"added"`
 			}
 			_ = s.app.DB.NewSelect().Model((*model.ChapterFile)(nil)).
 				ColumnExpr("SUM(CASE WHEN process_state = ? THEN 1 ELSE 0 END) AS processed", model.ProcessDone).
-				ColumnExpr("COALESCE(SUM(CASE WHEN size_original > size THEN size_original - size ELSE 0 END), 0) AS saved").Scan(ctx, &agg)
+				ColumnExpr("COALESCE(SUM(CASE WHEN size_original > size THEN size_original - size ELSE 0 END), 0) AS saved").
+				ColumnExpr("COALESCE(SUM(CASE WHEN size_original > 0 AND size > size_original THEN size - size_original ELSE 0 END), 0) AS added").Scan(ctx, &agg)
 			st.Processed, st.SpaceSaved = agg.Processed, agg.Saved
+			st.SpaceAdded, st.NetSpaceSaved = agg.Added, agg.Saved-agg.Added
 			s.processingActivity(ctx, &st)
 			return &struct{ Body ProcessingStatus }{st}, nil
 		})

@@ -4179,6 +4179,8 @@ export interface components {
             etaSeconds: number;
             /** Format: int64 */
             failed: number;
+            /** Format: int64 */
+            netSpaceSaved: number;
             /** Format: double */
             pagesPerMinute: number;
             /** Format: int64 */
@@ -4188,6 +4190,8 @@ export interface components {
             /** Format: int64 */
             processed: number;
             recent: components["schemas"]["ProcessedFile"][];
+            /** Format: int64 */
+            spaceAdded: number;
             /** Format: int64 */
             spaceSaved: number;
             state: components["schemas"]["State"];
