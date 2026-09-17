@@ -15,3 +15,37 @@ test('switches languages and keeps an anonymous preference after reload',async({
   await expect(page.locator('html')).toHaveAttribute('lang','uk');
   await expect(page.getByRole('heading',{name:'Мій обліковий запис'})).toBeVisible();
 });
+
+test('saves signed-in editor mode and language without response-only fields',async({page})=>{
+  const saves:unknown[]=[];
+  await page.route('**/api/v1/**',async route=>{
+    const request=route.request();
+    const p=new URL(request.url()).pathname;
+    if(p.endsWith('/auth/status')) {
+      await route.fulfill({json:{authenticated:true,account:{kind:'user',id:1,permissions:['admin']}}});
+      return;
+    }
+    if(p.endsWith('/me/ui-preferences')) {
+      if(request.method()==='PUT') {
+        const body=request.postDataJSON();
+        saves.push(body);
+        await route.fulfill({json:{...body,updatedAt:'2026-09-17T00:00:00Z'}});
+      } else {
+        await route.fulfill({json:{locale:'auto',mode:'reading',updatedAt:'2026-09-17T00:00:00Z'}});
+      }
+      return;
+    }
+    if(p.endsWith('/me/notifications')||p.endsWith('/me/notifications/schema')||p.endsWith('/me/library-accounts')||p.endsWith('/me/sessions')) {
+      await route.fulfill({json:[]});
+      return;
+    }
+    await route.fulfill({json:{}});
+  });
+  await page.goto('/account');
+  await page.getByRole('button',{name:'Switch to editing mode'}).click();
+  await page.getByRole('combobox').first().selectOption('ru');
+  await expect.poll(()=>saves).toEqual([
+    {locale:'auto',mode:'editing'},
+    {locale:'ru',mode:'editing'},
+  ]);
+});

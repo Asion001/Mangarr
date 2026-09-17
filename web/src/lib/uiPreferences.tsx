@@ -22,7 +22,9 @@ export function UIPreferencesProvider({children}:{children:ReactNode}) {
   const preferences:UIPreferences = {...(personal ? query.data ?? defaults : local),mode:canEdit ? (personal ? query.data?.mode ?? 'reading' : local.mode) : 'reading'};
   useEffect(()=>{setLocale(resolveLocale(preferences.locale,navigator.languages));},[preferences.locale]);
   const mutation = useMutation({mutationFn:async(p:Partial<UIPreferences>)=>{
-    const next={...preferences,...p};
+    // The API response also contains updatedAt. Build the strict request shape
+    // explicitly so response-only fields are never sent back to the server.
+    const next:UIPreferences={locale:p.locale ?? preferences.locale,mode:p.mode ?? preferences.mode};
     if(!canEdit)next.mode='reading';
     if(personal){const result=await unwrap(api.PUT('/api/v1/me/ui-preferences',{body:next}));qc.setQueryData(['ui-preferences',account?.id],result);}
     else {localStorage.setItem(key,JSON.stringify(next));setLocal(next);}
