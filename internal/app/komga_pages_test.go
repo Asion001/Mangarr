@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -153,5 +155,67 @@ func TestKomgaAPIPages(t *testing.T) {
 				t.Fatalf("file of an undownloaded chapter: %d", resp.StatusCode)
 			}
 		})
+	}
+}
+
+// TestStreamedPageFetchedOnce: twenty readers opening the same page of a
+// chapter nobody has downloaded ask the source for it once. Without that,
+// a cold chapter opened by a few devices is a burst at the site.
+func TestStreamedPageFetchedOnce(t *testing.T) {
+	sc := fakesource.NewScenario("stream-once")
+	sc.Sources = []source.SourceInfo{{ID: "A", Name: "Source A", Lang: "en"}}
+	sc.PageDelay = 150 * time.Millisecond // long enough for the others to pile up
+	sc.AddManga(&fakesource.Manga{SourceID: "A", URL: "/a/1", Title: "Cold", Status: source.StatusOngoing,
+		Chapters: []fakesource.Chapter{{URL: "/a/1/c1", Name: "Chapter 1", Number: 1, Pages: 2, Uploaded: time.Now()}}})
+
+	e := newTestApp(t, dbtest.DSNs(t)["sqlite"])
+	mod := e.addFakeModule(t, "stream-once")
+	ser, err := e.App.Series.Add(e.Ctx, series.AddRequest{Title: "Cold", RootFolderID: e.RFID, Monitor: model.MonitorNone,
+		Sources: []series.SourceLink{{ModuleID: mod, SourceID: "A", URL: "/a/1", SourceName: "Source A", Lang: "en"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.runCommand(t, "RefreshSeries", map[string]any{"seriesId": ser.ID})
+	var ch model.Chapter
+	if err := e.App.DB.NewSelect().Model(&ch).Where("series_id = ?", ser.ID).Limit(1).Scan(e.Ctx); err != nil {
+		t.Fatal(err)
+	}
+	key, _, err := e.App.Komga.CreateKey(e.Ctx, 0, "test", "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(e.App.Komga.Handler())
+	defer srv.Close()
+
+	// opening a chapter also queues it; keep the download out of the count
+	e.App.Downloads.Hold(true)
+	defer e.App.Downloads.Hold(false)
+	sc.Fetches = 0
+	var wg sync.WaitGroup
+	var bad atomic.Int32
+	for range 20 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			req, _ := http.NewRequest("GET", srv.URL+"/api/v1/books/"+sid(ch.ID)+"/pages/1", nil)
+			req.Header.Set("X-API-Key", key)
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				bad.Add(1)
+				return
+			}
+			defer resp.Body.Close()
+			body, _ := io.ReadAll(resp.Body)
+			if resp.StatusCode != 200 || len(body) == 0 {
+				bad.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
+	if n := bad.Load(); n != 0 {
+		t.Fatalf("%d readers didn't get the page", n)
+	}
+	if sc.Fetches != 1 {
+		t.Fatalf("the source was asked for the same page %d times", sc.Fetches)
 	}
 }

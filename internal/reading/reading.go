@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/uptrace/bun"
@@ -50,6 +51,9 @@ type Service struct {
 
 	streams streams
 	bounds  boundsCache
+	// readerMu makes the first reader once: a fresh install answering a
+	// burst of app requests would otherwise race to create several.
+	readerMu sync.Mutex
 }
 
 // ReaderID is the reader reading apps act as (the configured one, else the
@@ -69,6 +73,12 @@ func (s *Service) ReaderID(ctx context.Context) (int64, error) {
 		return r.ID, nil
 	} else if !errors.Is(err, sql.ErrNoRows) {
 		return 0, err
+	}
+	// there is none yet: make it once, whoever asks first
+	s.readerMu.Lock()
+	defer s.readerMu.Unlock()
+	if err := s.DB.NewSelect().Model(&r).Order("id").Limit(1).Scan(ctx); err == nil {
+		return r.ID, nil
 	}
 	r = model.Reader{Name: "Me", CreatedAt: time.Now().UTC()}
 	if _, err := s.DB.NewInsert().Model(&r).Exec(ctx); err != nil {
