@@ -234,7 +234,7 @@ func (s *Server) registerWorkerProtocol() {
 				return nil, workerConflict(err)
 			}
 			if task, err := s.app.Tasks.Held(ctx, in.ID, w.ID); err == nil && task.Kind == model.TaskDownload {
-				s.app.Downloads.TaskProgress(*task, in.Body.PagesDone, in.Body.PagesTotal)
+				s.app.Downloads.TaskProgress(*task, in.Body.PagesDone, in.Body.PagesTotal, in.Body.BytesIn)
 			}
 			out := &struct {
 				Body struct {

@@ -409,8 +409,11 @@ func (m *Manager) setStatus(ctx context.Context, job *model.DownloadJob, status 
 	m.bus.Changed("queue", "updated", job.ID)
 }
 
-func (m *Manager) progress(job *model.DownloadJob, done, total int) {
-	m.Live.Update(job.ID, progress.Event{Stage: progress.StageDownload, Done: done, Total: total})
+// progress records how far a download is, for the queue and the live
+// stream. bytesIn is what has been pulled from the site so far (0 when the
+// caller doesn't count it).
+func (m *Manager) progress(job *model.DownloadJob, done, total int, bytesIn int64) {
+	m.Live.Update(job.ID, progress.Event{Stage: progress.StageDownload, Done: done, Total: total, BytesIn: bytesIn})
 	job.PagesDone, job.PagesTotal = done, total
 	if total > 0 {
 		job.Progress = done * 100 / total
@@ -742,7 +745,8 @@ func (m *Manager) fetchPages(ctx context.Context, jc *jobCtx, workDir string) ([
 	var mu sync.Mutex
 	var firstErr error
 	done := 0
-	m.progress(jc.job, 0, len(list))
+	var fetched int64 // bytes pulled from the site, for the queue's progress
+	m.progress(jc.job, 0, len(list), 0)
 	for i, p := range list {
 		wg.Add(1)
 		go func() {
@@ -766,7 +770,10 @@ func (m *Manager) fetchPages(ctx context.Context, jc *jobCtx, workDir string) ([
 			}
 			pages[i] = pf
 			done++
-			m.progress(jc.job, done, len(list))
+			if st, err := os.Stat(pf.Path); err == nil {
+				fetched += st.Size()
+			}
+			m.progress(jc.job, done, len(list), fetched)
 		}()
 	}
 	wg.Wait()

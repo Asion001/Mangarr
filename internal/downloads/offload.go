@@ -93,7 +93,7 @@ func (m *Manager) offload(ctx context.Context, job model.DownloadJob) (bool, err
 		return false, err
 	}
 	m.setStatus(ctx, &job, model.JobDownloading, model.ChapterDownloading)
-	m.progress(&job, 0, len(specs))
+	m.progress(&job, 0, len(specs), 0)
 	m.log.Info("chapter handed to the workers", "job", job.ID, "series", jc.series.Title, "chapter", jc.chapter.NumberKey, "pages", len(specs))
 	return true, nil
 }
@@ -282,9 +282,9 @@ func (m *Manager) TaskAbandoned(ctx context.Context, task model.WorkerTask, reas
 
 // TaskProgress reports what a worker has done so far against its job, so
 // the queue shows the same numbers a local download would.
-func (m *Manager) TaskProgress(task model.WorkerTask, done, total int) {
+func (m *Manager) TaskProgress(task model.WorkerTask, done, total int, bytesIn int64) {
 	job := &model.DownloadJob{ID: task.JobID}
-	m.progress(job, done, total)
+	m.progress(job, done, total, bytesIn)
 }
 
 // collectPages reads what was uploaded into a working directory, in order.

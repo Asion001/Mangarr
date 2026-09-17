@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from "react";
 import type { S } from "../api/client";
+import { bytes } from "./format";
 import { onServerEvent } from "./events";
 
 export type LiveProgress = S["LiveProgress"];
@@ -42,6 +43,7 @@ export function describe(p: LiveProgress): string {
   const parts = [`${stageLabel[p.stage] ?? p.stage} ${p.done}/${p.total}`];
   if (p.rate > 0) parts.push(p.rate >= 1 ? `${p.rate.toFixed(1)} p/s` : `${(p.rate * 60).toFixed(1)} p/min`);
   if (p.bytesIn > 0 && p.bytesOut > 0 && p.stage === "encode") parts.push(`${Math.round((p.bytesOut / p.bytesIn - 1) * 100)}%`);
+  if (p.bytesIn > 0 && p.stage === "download") parts.push(bytes(p.bytesIn));
   if (p.eta > 0) parts.push(`${eta(p.eta)} left`);
   return parts.join(" · ");
 }
