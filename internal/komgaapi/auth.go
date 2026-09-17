@@ -252,8 +252,19 @@ func (s *Service) authenticate(r *http.Request) (p Principal, issue bool, ok boo
 		if !found || !withKey(rk) {
 			return p, false, false
 		}
-		_, hasCookie := r.Cookie(SessionCookie)
-		return p, r.Header.Get("X-Auth-Token") == "" && hasCookie != nil, true
+		// The extension authenticates with its API key, but Mihon's enhanced
+		// tracker uses the shared cookie jar without that header. A cookie's
+		// presence alone says nothing about its expiry or owning device.
+		matches := func(token string) bool {
+			keyID, userID, exp, err := s.verifyToken(ctx, token)
+			return err == nil && keyID == rk.ID && userID == p.User.UserID && time.Until(exp) >= sessionTTL/2
+		}
+		cookie, err := r.Cookie(SessionCookie)
+		renew := err != nil || !matches(cookie.Value)
+		if token := r.Header.Get("X-Auth-Token"); token != "" && !matches(token) {
+			renew = true
+		}
+		return p, renew, true
 	}
 	tok := r.Header.Get("X-Auth-Token")
 	if tok == "" {
