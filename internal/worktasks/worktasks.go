@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/uptrace/bun"
@@ -35,6 +36,9 @@ var ErrNotYours = errors.New("this task is not leased to you")
 type Ledger struct {
 	db  *db.DB
 	log *slog.Logger
+	// DataDir is where a task's payload is staged, for the work that trades
+	// files rather than page uploads.
+	DataDir string
 	// Changed (optional) is called whenever a task's state changes, so the
 	// download manager can look at the job again without waiting for a tick.
 	Changed func(jobID int64)
@@ -46,6 +50,20 @@ type Ledger struct {
 func New(d *db.DB, log *slog.Logger) *Ledger {
 	return &Ledger{db: d, log: log}
 }
+
+// DB is the database the ledger lives in, for callers that have the ledger
+// and nothing else (a module implementation, say).
+func (l *Ledger) DB() *db.DB { return l.db }
+
+// theLedger is this process's ledger. Module implementations hand work to
+// workers through it, and the core may not import them to pass it in.
+var theLedger atomic.Pointer[Ledger]
+
+// SetDefault publishes the ledger for those modules.
+func SetDefault(l *Ledger) { theLedger.Store(l) }
+
+// Default is the process's ledger (nil before the server has wired one).
+func Default() *Ledger { return theLedger.Load() }
 
 // Add stores a task to be picked up. Kind, JobID and Spec must be set.
 func (l *Ledger) Add(ctx context.Context, t *model.WorkerTask) error {

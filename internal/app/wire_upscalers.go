@@ -4,7 +4,10 @@ import (
 	"context"
 	"strings"
 
+	"github.com/uptrace/bun"
+
 	"github.com/Asion001/mangarr/internal/config"
+	"github.com/Asion001/mangarr/internal/downloads"
 	"github.com/Asion001/mangarr/internal/model"
 	"github.com/Asion001/mangarr/internal/modules"
 	"github.com/Asion001/mangarr/internal/upscaler"
@@ -65,4 +68,33 @@ func (a *App) OfferWorkersUpscaler(ctx context.Context) {
 	}
 	a.Log.Info("added the upscaler that hands batches to the workers")
 	a.PushProcessBacklog("worker-online") // chapters that were waiting for one
+}
+
+// NameWorkers says which machine is doing each queued job, for the queue
+// page: a job with a task out at a worker is not being done here.
+func (a *App) NameWorkers(ctx context.Context, items []downloads.JobView) {
+	if a.Tasks == nil || len(items) == 0 {
+		return
+	}
+	ids := make([]int64, 0, len(items))
+	for _, it := range items {
+		ids = append(ids, it.ID)
+	}
+	var rows []struct {
+		JobID int64  `bun:"job_id"`
+		Name  string `bun:"name"`
+	}
+	err := a.DB.NewSelect().TableExpr("worker_tasks AS t").ColumnExpr("t.job_id, w.name").
+		Join("JOIN workers AS w ON w.id = t.worker_id").
+		Where("t.state = ? AND t.job_id IN (?)", model.TaskLeased, bun.In(ids)).Scan(ctx, &rows)
+	if err != nil || len(rows) == 0 {
+		return
+	}
+	byJob := make(map[int64]string, len(rows))
+	for _, r := range rows {
+		byJob[r.JobID] = r.Name
+	}
+	for i := range items {
+		items[i].Worker = byJob[items[i].ID]
+	}
 }

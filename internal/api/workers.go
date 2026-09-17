@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/uptrace/bun"
 
 	"github.com/Asion001/mangarr/internal/access"
 	"github.com/Asion001/mangarr/internal/auth"
@@ -16,12 +17,39 @@ import (
 
 func init() { register((*Server).registerWorkers) }
 
-// WorkerResource is a worker as the UI sees it, with the live state the
-// server keeps for it.
+// WorkerResource is a worker as the UI sees it, with what it is doing now
+// and what it has done lately.
 type WorkerResource struct {
 	model.Worker
 	// Online: the worker has been here recently.
 	Online bool `json:"online"`
+	// Busy is what it holds right now.
+	Busy []WorkerBusy `json:"busy,omitempty"`
+	// Recent is what it did in the last day.
+	Recent WorkerRecent `json:"recent"`
+}
+
+// WorkerBusy is one task a worker is doing now.
+type WorkerBusy struct {
+	TaskID     int64     `json:"taskId"`
+	Kind       string    `json:"kind"`
+	Series     string    `json:"series,omitempty"`
+	Chapter    string    `json:"chapter,omitempty"`
+	PagesDone  int       `json:"pagesDone"`
+	PagesTotal int       `json:"pagesTotal"`
+	BytesIn    int64     `json:"bytesIn"`
+	Started    time.Time `json:"started"`
+}
+
+// WorkerRecent is what a worker did in the last 24 hours.
+type WorkerRecent struct {
+	Tasks    int   `json:"tasks"`
+	Failed   int   `json:"failed"`
+	Pages    int   `json:"pages"`
+	BytesIn  int64 `json:"bytesIn"`
+	BytesOut int64 `json:"bytesOut"`
+	// Seconds is how long it was busy, so the UI can show a rate.
+	Seconds float64 `json:"seconds"`
 }
 
 // NewWorkerOutput carries the key, which is shown once and never again.
@@ -45,9 +73,10 @@ func (s *Server) registerWorkers() {
 			if err := s.app.DB.NewSelect().Model(&list).Order("name").Scan(ctx); err != nil {
 				return nil, toHTTPError(err)
 			}
+			busy, recent := s.workerWork(ctx)
 			out := make([]WorkerResource, 0, len(list))
 			for _, w := range list {
-				out = append(out, WorkerResource{Worker: w, Online: online(w)})
+				out = append(out, WorkerResource{Worker: w, Online: online(w), Busy: busy[w.ID], Recent: recent[w.ID]})
 			}
 			return &struct{ Body []WorkerResource }{out}, nil
 		})
@@ -141,4 +170,66 @@ func (s *Server) registerWorkers() {
 
 func online(w model.Worker) bool {
 	return w.Enabled && w.LastSeenAt != nil && time.Since(*w.LastSeenAt) < onlineWithin
+}
+
+// workerWork reads what each worker holds now and what it did in the last
+// day, from the task ledger.
+func (s *Server) workerWork(ctx context.Context) (map[int64][]WorkerBusy, map[int64]WorkerRecent) {
+	busy := map[int64][]WorkerBusy{}
+	recent := map[int64]WorkerRecent{}
+
+	var live []struct {
+		model.WorkerTask
+		Series  string `bun:"series"`
+		Chapter string `bun:"chapter"`
+	}
+	err := s.app.DB.NewSelect().TableExpr("worker_tasks AS t").
+		ColumnExpr("t.*, COALESCE(s.title, '') AS series, COALESCE(c.number_key, '') AS chapter").
+		Join("LEFT JOIN download_jobs AS j ON j.id = t.job_id").
+		Join("LEFT JOIN series AS s ON s.id = j.series_id").
+		Join("LEFT JOIN chapters AS c ON c.id = j.chapter_id").
+		Where("t.state = ?", model.TaskLeased).Scan(ctx, &live)
+	if err == nil {
+		for _, t := range live {
+			started := t.CreatedAt
+			if t.StartedAt != nil {
+				started = *t.StartedAt
+			}
+			busy[t.WorkerID] = append(busy[t.WorkerID], WorkerBusy{TaskID: t.ID, Kind: t.Kind, Series: t.Series, Chapter: t.Chapter,
+				PagesDone: t.PagesDone, PagesTotal: t.PagesTotal, BytesIn: t.BytesIn, Started: started})
+		}
+	}
+
+	var sums []struct {
+		WorkerID int64   `bun:"worker_id"`
+		Tasks    int     `bun:"tasks"`
+		Failed   int     `bun:"failed"`
+		Pages    int     `bun:"pages"`
+		BytesIn  int64   `bun:"bytes_in"`
+		BytesOut int64   `bun:"bytes_out"`
+		Seconds  float64 `bun:"seconds"`
+	}
+	since := time.Now().UTC().Add(-24 * time.Hour)
+	err = s.app.DB.NewSelect().TableExpr("worker_tasks").
+		ColumnExpr("worker_id, COUNT(*) AS tasks").
+		ColumnExpr("SUM(CASE WHEN state = ? THEN 1 ELSE 0 END) AS failed", model.TaskFailed).
+		ColumnExpr("SUM(pages_done) AS pages, SUM(bytes_in) AS bytes_in, SUM(bytes_out) AS bytes_out").
+		ColumnExpr("SUM(CASE WHEN started_at IS NOT NULL THEN ? ELSE 0 END) AS seconds", bun.Safe(elapsedSeconds(s.app.DB.Dialect().Name().String()))).
+		Where("finished_at IS NOT NULL AND finished_at > ? AND worker_id IS NOT NULL", since).
+		GroupExpr("worker_id").Scan(ctx, &sums)
+	if err == nil {
+		for _, r := range sums {
+			recent[r.WorkerID] = WorkerRecent{Tasks: r.Tasks, Failed: r.Failed, Pages: r.Pages, BytesIn: r.BytesIn,
+				BytesOut: r.BytesOut, Seconds: r.Seconds}
+		}
+	}
+	return busy, recent
+}
+
+// elapsedSeconds is how long a finished task took, in the dialect's own way.
+func elapsedSeconds(dialect string) string {
+	if dialect == "pg" {
+		return "EXTRACT(EPOCH FROM (finished_at - started_at))"
+	}
+	return "(julianday(finished_at) - julianday(started_at)) * 86400"
 }

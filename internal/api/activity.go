@@ -85,6 +85,7 @@ func (s *Server) registerActivity() {
 					p.Items[i].Live = &lp
 				}
 			}
+			s.app.NameWorkers(ctx, p.Items)
 			return &struct{ Body QueueResponse }{QueueResponse{QueuePage: *p, State: s.queueState(ctx)}}, nil
 		})
 	huma.Register(s.api, huma.Operation{OperationID: "queue-bulk", Method: http.MethodPost, Path: "/api/v1/queue/bulk", Tags: tags,

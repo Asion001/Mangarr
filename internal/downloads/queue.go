@@ -101,6 +101,8 @@ type JobView struct {
 	Scanlator   string  `json:"scanlator"`
 	// Live is the progress of a running job (not stored).
 	Live *LiveProgress `json:"live,omitempty" bun:"-"`
+	// Worker is the machine doing it, when it isn't this one.
+	Worker string `json:"worker,omitempty" bun:"-"`
 }
 
 // ListFilter selects queue entries.

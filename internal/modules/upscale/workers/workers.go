@@ -16,10 +16,8 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 
-	"github.com/Asion001/mangarr/internal/db"
 	"github.com/Asion001/mangarr/internal/model"
 	"github.com/Asion001/mangarr/internal/modules"
 	"github.com/Asion001/mangarr/internal/modules/upscale"
@@ -31,23 +29,6 @@ type Settings struct {
 	// TimeoutMinutes is how long a batch may take on a worker before the
 	// server does it itself.
 	TimeoutMinutes int `json:"timeoutMinutes" label:"Give up after (minutes)" order:"1" advanced:"true"`
-}
-
-// deps are what this module needs from the server; there is one of each per
-// process, so they are set once at start-up rather than per instance.
-var deps struct {
-	mu      sync.Mutex
-	db      *db.DB
-	tasks   *worktasks.Ledger
-	dataDir string
-}
-
-// Use gives the module the ledger it hands work to. The app calls it while
-// wiring; without it the module reports that no worker is available.
-func Use(d *db.DB, tasks *worktasks.Ledger, dataDir string) {
-	deps.mu.Lock()
-	deps.db, deps.tasks, deps.dataDir = d, tasks, dataDir
-	deps.mu.Unlock()
 }
 
 func init() {
@@ -114,7 +95,7 @@ func (m *Module) Info(ctx context.Context) (*upscale.Info, error) {
 
 // Upscale sends a batch to a worker and waits for it to come back.
 func (m *Module) Upscale(ctx context.Context, images []upscale.Image, p upscale.Params) ([]upscale.Image, error) {
-	d, err := ready(ctx)
+	tasks, err := ready(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +103,7 @@ func (m *Module) Upscale(ctx context.Context, images []upscale.Image, p upscale.
 	if jobID == 0 {
 		return nil, errors.New("upscaling on a worker only happens as part of a download job")
 	}
-	dir := filepath.Join(d.dataDir, "staging", "upscale")
+	dir := filepath.Join(tasks.DataDir, "staging", "upscale")
 	if err := os.MkdirAll(dir, 0o775); err != nil {
 		return nil, err
 	}
@@ -147,11 +128,11 @@ func (m *Module) Upscale(ctx context.Context, images []upscale.Image, p upscale.
 	params, _ := json.Marshal(p)
 	spec := map[string]any{"params": json.RawMessage(params), "input": inPath, "output": outPath, "pages": len(images)}
 	task := &model.WorkerTask{JobID: jobID, Kind: model.TaskUpscale, Spec: spec, PagesTotal: len(images)}
-	if err := d.tasks.Add(ctx, task); err != nil {
+	if err := tasks.Add(ctx, task); err != nil {
 		return nil, err
 	}
-	done := d.tasks.Await(task.ID)
-	defer d.tasks.Forget(task.ID)
+	done := tasks.Await(task.ID)
+	defer tasks.Forget(task.ID)
 
 	select {
 	case err := <-done:
@@ -159,10 +140,10 @@ func (m *Module) Upscale(ctx context.Context, images []upscale.Image, p upscale.
 			return nil, err
 		}
 	case <-time.After(m.timeout):
-		_ = d.tasks.CancelTask(ctx, task.ID)
+		_ = tasks.CancelTask(ctx, task.ID)
 		return nil, fmt.Errorf("no worker finished this batch in %s", m.timeout)
 	case <-ctx.Done():
-		_ = d.tasks.CancelTask(ctx, task.ID)
+		_ = tasks.CancelTask(ctx, task.ID)
 		return nil, ctx.Err()
 	}
 	out, err := readZip(outPath)
@@ -175,37 +156,27 @@ func (m *Module) Upscale(ctx context.Context, images []upscale.Image, p upscale.
 	return out, nil
 }
 
-// ready is the shared state, once it is set up.
-func ready(ctx context.Context) (struct {
-	db      *db.DB
-	tasks   *worktasks.Ledger
-	dataDir string
-}, error) {
-	deps.mu.Lock()
-	out := struct {
-		db      *db.DB
-		tasks   *worktasks.Ledger
-		dataDir string
-	}{deps.db, deps.tasks, deps.dataDir}
-	deps.mu.Unlock()
-	if out.db == nil || out.tasks == nil {
-		return out, ErrNoWorker
+// ready is the ledger this process hands work to, once there is a worker
+// that could take it.
+func ready(ctx context.Context) (*worktasks.Ledger, error) {
+	l := worktasks.Default()
+	if l == nil {
+		return nil, ErrNoWorker
 	}
 	if list, err := online(ctx); err != nil || len(list) == 0 {
-		return out, ErrNoWorker
+		return nil, ErrNoWorker
 	}
-	return out, nil
+	return l, nil
 }
 
 // online is the enabled workers with the upscale role that have been here
 // recently.
 func online(ctx context.Context) ([]model.Worker, error) {
-	deps.mu.Lock()
-	d := deps.db
-	deps.mu.Unlock()
-	if d == nil {
+	l := worktasks.Default()
+	if l == nil {
 		return nil, ErrNoWorker
 	}
+	d := l.DB()
 	var list []model.Worker
 	if err := d.NewSelect().Model(&list).Where("enabled = ?", true).Scan(ctx); err != nil {
 		return nil, err
