@@ -126,6 +126,11 @@ export function QueuePage() {
       <Td>
         <Badge tone={tone(j.status)}>{j.status}</Badge>
         {j.attempt > 0 && j.status !== "completed" && <span className="ml-1 text-xs text-muted">try {j.attempt + 1}</span>}
+        {j.worker && (
+          <Badge tone="info" title="Being done on this worker">
+            {j.worker}
+          </Badge>
+        )}
         {j.error && (
           <div className="mt-1 max-w-sm truncate text-xs text-err" title={j.error}>
             {j.error}

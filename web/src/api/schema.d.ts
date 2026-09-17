@@ -3752,6 +3752,7 @@ export interface components {
             status: string;
             /** Format: date-time */
             updatedAt: string;
+            worker?: string;
         };
         LinkedAccount: {
             externalUser: string;
@@ -5288,6 +5289,21 @@ export interface components {
         "Worker-leaseRequest": {
             kinds: string[];
         };
+        WorkerBusy: {
+            /** Format: int64 */
+            bytesIn: number;
+            chapter?: string;
+            kind: string;
+            /** Format: int64 */
+            pagesDone: number;
+            /** Format: int64 */
+            pagesTotal: number;
+            series?: string;
+            /** Format: date-time */
+            started: string;
+            /** Format: int64 */
+            taskId: number;
+        };
         WorkerHello: {
             info?: {
                 [key: string]: unknown;
@@ -5296,7 +5312,22 @@ export interface components {
             roles?: string[];
             version?: string;
         };
+        WorkerRecent: {
+            /** Format: int64 */
+            bytesIn: number;
+            /** Format: int64 */
+            bytesOut: number;
+            /** Format: int64 */
+            failed: number;
+            /** Format: int64 */
+            pages: number;
+            /** Format: double */
+            seconds: number;
+            /** Format: int64 */
+            tasks: number;
+        };
         WorkerResource: {
+            busy?: components["schemas"]["WorkerBusy"][];
             /** Format: double */
             busySeconds: number;
             /** Format: int64 */
@@ -5322,6 +5353,7 @@ export interface components {
             pagesDone: number;
             platform: string;
             prefix: string;
+            recent: components["schemas"]["WorkerRecent"];
             roles: string[];
             /** Format: int64 */
             tasksDone: number;

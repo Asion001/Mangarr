@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Plus, Trash2 } from "lucide-react";
 import { api, unwrap, type S } from "../../api/client";
 import { Button, EmptyState, ErrorBox, IconButton, Input, Loading, Modal, PageHeader, Switch, Table, Td, Th } from "../../components/ui";
-import { relative } from "../../lib/format";
+import { bytes, relative } from "../../lib/format";
 import { useToast } from "../../lib/toast";
 
 type Worker = S["WorkerResource"];
@@ -62,8 +62,9 @@ export function WorkersPage() {
             <tr>
               <Th>Worker</Th>
               <Th>Roles</Th>
-              <Th>Seen</Th>
-              <Th>Done</Th>
+              <Th>Doing now</Th>
+              <Th>Last 24 hours</Th>
+              <Th>Lifetime</Th>
               <Th>Enabled</Th>
               <Th />
             </tr>
@@ -97,10 +98,49 @@ export function WorkersPage() {
                     })}
                   </div>
                 </Td>
-                <Td className="text-muted">{w.lastSeenAt ? relative(w.lastSeenAt) : "never"}</Td>
                 <Td className="text-muted">
-                  {w.tasksDone} tasks
-                  {w.tasksFailed > 0 && <span className="text-err"> · {w.tasksFailed} failed</span>}
+                  {w.busy?.length ? (
+                    <div className="flex flex-col gap-1">
+                      {w.busy.map((b) => (
+                        <div key={b.taskId}>
+                          <div className="text-xs text-fg">
+                            {b.kind} · {b.series || "?"} {b.chapter && `ch. ${b.chapter}`}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="h-1 w-24 rounded bg-border">
+                              <div className="h-1 rounded bg-accent" style={{ width: `${b.pagesTotal ? (100 * b.pagesDone) / b.pagesTotal : 0}%` }} />
+                            </div>
+                            <span className="text-xs">
+                              {b.pagesDone}/{b.pagesTotal || "?"} · {bytes(b.bytesIn)}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-xs">idle · seen {w.lastSeenAt ? relative(w.lastSeenAt) : "never"}</span>
+                  )}
+                </Td>
+                <Td className="text-muted">
+                  <div className="text-xs">
+                    {w.recent.tasks} tasks{w.recent.failed > 0 && <span className="text-err"> · {w.recent.failed} failed</span>}
+                  </div>
+                  <div className="text-xs">
+                    {w.recent.pages} pages · {bytes(w.recent.bytesIn)} in · {bytes(w.recent.bytesOut)} out
+                  </div>
+                  {w.recent.seconds > 0 && (
+                    <div className="text-xs">
+                      {((w.recent.bytesIn / w.recent.seconds) / (1 << 20)).toFixed(1)} MB/s while busy
+                    </div>
+                  )}
+                </Td>
+                <Td className="text-muted">
+                  <div className="text-xs">
+                    {w.tasksDone} tasks{w.tasksFailed > 0 && <span className="text-err"> · {w.tasksFailed} failed</span>}
+                  </div>
+                  <div className="text-xs">
+                    {w.pagesDone} pages · {bytes(w.bytesIn)} in
+                  </div>
                 </Td>
                 <Td>
                   <Switch checked={w.enabled} onChange={(v) => update(w, { enabled: v })} />
