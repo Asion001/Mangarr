@@ -287,6 +287,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Personal recommendations, recent library updates and popular titles from prioritized sources */
+        get: operations["discover"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/discover/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A signed thumbnail returned by the discover feed */
+        get: operations["discover-thumbnail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/groups": {
         parameters: {
             query?: never;
@@ -3328,6 +3362,56 @@ export interface components {
             lastSeen: string;
             origin: string;
         };
+        DiscoverLibraryItem: {
+            /** Format: int64 */
+            books: number;
+            /** Format: date-time */
+            changedAt: string;
+            coverUrl: string;
+            description?: string;
+            genres: string[];
+            language: string;
+            latestChapter?: string;
+            matchingGenres?: string[];
+            /** @enum {string} */
+            reason?: "matches-genres" | "followed" | "recently-added" | "recent-update";
+            /** Format: int64 */
+            seriesId: number;
+            status: string;
+            title: string;
+            /** Format: int64 */
+            unread: number;
+        };
+        DiscoverResponse: {
+            /** Format: date-time */
+            generatedAt: string;
+            popular: components["schemas"]["DiscoverSourceItem"][];
+            popularCached: boolean;
+            recommendations: components["schemas"]["DiscoverLibraryItem"][];
+            sourceErrors: components["schemas"]["DiscoverSourceError"][];
+            updates: components["schemas"]["DiscoverLibraryItem"][];
+        };
+        DiscoverSourceError: {
+            error: string;
+            name: string;
+            source: string;
+        };
+        DiscoverSourceItem: {
+            /** Format: int64 */
+            chapterCount?: number;
+            engineRef?: string;
+            /** Format: int64 */
+            existingSeriesId?: number;
+            language: string;
+            /** Format: int64 */
+            moduleId: number;
+            moduleName: string;
+            sourceId: string;
+            sourceName: string;
+            thumbnailUrl?: string;
+            title: string;
+            url: string;
+        };
         DownloadJob: {
             /** Format: int64 */
             attempt: number;
@@ -6186,6 +6270,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Command"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    discover: {
+        parameters: {
+            query?: {
+                rootFolderId?: number;
+                lang?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoverResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "discover-thumbnail": {
+        parameters: {
+            query?: {
+                token?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    "Content-Type"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string;
                 };
             };
             /** @description Error */

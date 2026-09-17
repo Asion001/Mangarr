@@ -28,6 +28,8 @@ database-get GET /api/v1/system/database -> admin
 database-move POST /api/v1/system/database/move -> admin
 database-move-cancel POST /api/v1/system/database/cancel -> admin
 database-test POST /api/v1/system/database/test -> admin
+discover GET /api/v1/discover -> signedin
+discover-thumbnail GET /api/v1/discover/thumbnail -> signedin
 extensions-action POST /api/v1/modules/{id}/extensions/{pkg}/{action} -> admin
 extensions-list GET /api/v1/modules/{id}/extensions -> admin
 groups-create POST /api/v1/groups -> admin

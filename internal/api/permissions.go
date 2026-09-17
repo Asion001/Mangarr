@@ -48,6 +48,8 @@ var operationPermissions = map[string][]string{
 	"me-notifications-test":     {permSignedIn},
 	"series-follow":             {permSignedIn},
 	"series-unfollow":           {permSignedIn},
+	"discover":                  {permSignedIn},
+	"discover-thumbnail":        {permSignedIn},
 
 	"source-priorities-list":    {access.LibraryManage},
 	"source-priorities-save":    {access.LibraryManage},
