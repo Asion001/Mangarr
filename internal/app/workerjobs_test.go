@@ -192,3 +192,40 @@ func TestAbandonedDownloadComesBack(t *testing.T) {
 		t.Fatalf("a worker going away blocklisted %d releases", n)
 	}
 }
+
+// TestUnplacedChapterIsDownloadedHere: a chapter written for a worker that
+// then went away is not held against the release — it goes back to the
+// queue at once and this server downloads it.
+func TestUnplacedChapterIsDownloadedHere(t *testing.T) {
+	sc := fakesource.NewScenario("worker-vanished")
+	sc.Sources = []source.SourceInfo{{ID: "A", Name: "Source A", Lang: "en"}}
+	sc.AddManga(&fakesource.Manga{SourceID: "A", URL: "/m", Title: "Left Behind", Status: source.StatusOngoing,
+		Chapters: []fakesource.Chapter{{URL: "/c1", Name: "Chapter 1", Number: 1, Uploaded: time.Now()}}})
+
+	e := newTestApp(t, dbtest.DSNs(t)["sqlite"])
+	mod := e.addFakeModule(t, "worker-vanished")
+	ser, err := e.App.Series.Add(e.Ctx, series.AddRequest{Title: "Left Behind", RootFolderID: e.RFID, Monitor: model.MonitorAll, SearchMissing: true,
+		Sources: []series.SourceLink{{ModuleID: mod, SourceID: "A", URL: "/m", SourceName: "Source A", Lang: "en"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// a worker that was here when the chapter was queued, and has since gone
+	long := time.Now().UTC().Add(-time.Hour)
+	if _, err := e.App.DB.NewInsert().Model(&model.Worker{Name: "was-here", KeyHash: "h3", Prefix: "mgw_z",
+		Roles: []string{model.RoleDownload}, Enabled: true, Info: map[string]any{}, CreatedAt: long, LastSeenAt: &long}).Exec(e.Ctx); err != nil {
+		t.Fatal(err)
+	}
+	e.runCommand(t, "RefreshSeries", map[string]any{"seriesId": ser.ID})
+	waitFor(t, 20*time.Second, "the chapter to be queued", func() bool {
+		n, _ := e.App.DB.NewSelect().Model((*model.DownloadJob)(nil)).Where("series_id = ?", ser.ID).Count(e.Ctx)
+		return n > 0
+	})
+	// the chapter was never handed over (no worker is online), so this
+	// server downloads it
+	waitFor(t, 30*time.Second, "the chapter to be downloaded here", func() bool {
+		return len(e.chapterFiles(t, ser.ID)) == 1
+	})
+	if n, _ := e.App.DB.NewSelect().Model((*model.Blocklist)(nil)).Count(e.Ctx); n != 0 {
+		t.Fatalf("%d releases were blocklisted", n)
+	}
+}

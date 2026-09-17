@@ -27,6 +27,15 @@ const Lease = 2 * time.Minute
 // A worker that dies mid-chapter costs one attempt.
 const MaxAttempts = 3
 
+// Unclaimed is how long a task may wait for a worker that never comes. It
+// only applies while no worker that could do it is online — a queue behind
+// busy workers waits as long as it needs to.
+const Unclaimed = time.Minute
+
+// OnlineWithin is how long after its last word a worker still counts as
+// being here.
+const OnlineWithin = 2 * time.Minute
+
 // ErrNotYours is returned when a worker acts on a task it doesn't hold —
 // its lease expired and someone else has it now. The worker drops the task
 // and asks for another.
@@ -307,6 +316,60 @@ func (l *Ledger) Reap(ctx context.Context) (requeued, abandoned int, err error) 
 	return requeued, abandoned, nil
 }
 
+// DropUnclaimed gives up on tasks nobody can do: they were written for a
+// worker that was online at the time and has since gone away. It is part of
+// the reaper, and separate so a test can run it on its own.
+func (l *Ledger) DropUnclaimed(ctx context.Context) (int, error) {
+	var waiting []model.WorkerTask
+	err := l.db.NewSelect().Model(&waiting).
+		Where("state = ? AND created_at < ?", model.TaskPending, time.Now().UTC().Add(-Unclaimed)).
+		Limit(100).Scan(ctx)
+	if err != nil || len(waiting) == 0 {
+		return 0, err
+	}
+	dropped := 0
+	for _, t := range waiting {
+		ok, err := l.someoneCanDo(ctx, t.Kind)
+		if err != nil {
+			return dropped, err
+		}
+		if ok {
+			continue // a worker for this is here; it is just busy
+		}
+		reason := "no worker that can do this is online"
+		res, err := l.db.NewUpdate().Model((*model.WorkerTask)(nil)).
+			Set("state = ?", model.TaskAbandoned).Set("finished_at = ?", time.Now().UTC()).Set("error = ?", reason).
+			Where("id = ? AND state = ?", t.ID, model.TaskPending).Exec(ctx)
+		if err != nil {
+			return dropped, err
+		}
+		if n, _ := res.RowsAffected(); n != 1 {
+			continue
+		}
+		dropped++
+		l.log.Info("nobody can do this task; handing it back", "task", t.ID, "job", t.JobID, "kind", t.Kind)
+		l.settle(t.ID, ErrGivenUp)
+		t.State, t.Error = model.TaskAbandoned, reason
+		l.givenUp(t)
+	}
+	return dropped, nil
+}
+
+// someoneCanDo reports whether a worker that may do this kind of work has
+// been here recently.
+func (l *Ledger) someoneCanDo(ctx context.Context, kind string) (bool, error) {
+	var list []model.Worker
+	if err := l.db.NewSelect().Model(&list).Where("enabled = ?", true).Scan(ctx); err != nil {
+		return false, err
+	}
+	for _, w := range list {
+		if w.HasRole(kind) && w.LastSeenAt != nil && time.Since(*w.LastSeenAt) < OnlineWithin {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // OfJob lists a job's tasks, oldest first.
 func (l *Ledger) OfJob(ctx context.Context, jobID int64) ([]model.WorkerTask, error) {
 	var out []model.WorkerTask
@@ -377,6 +440,9 @@ func (l *Ledger) Start(ctx context.Context) error {
 			case <-reap.C:
 				if _, _, err := l.Reap(ctx); err != nil && ctx.Err() == nil {
 					l.log.Warn("could not take back expired worker tasks", "err", err)
+				}
+				if _, err := l.DropUnclaimed(ctx); err != nil && ctx.Err() == nil {
+					l.log.Warn("could not hand back unclaimed worker tasks", "err", err)
 				}
 			case <-prune.C:
 				if n, err := l.Prune(ctx, keepFinished); err != nil && ctx.Err() == nil {

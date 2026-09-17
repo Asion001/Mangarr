@@ -272,8 +272,19 @@ func (m *Manager) TaskAbandoned(ctx context.Context, task model.WorkerTask, reas
 	if job.Status == model.JobCompleted || job.Status == model.JobFailed {
 		return
 	}
-	jc, _ := m.load(ctx, &job)
 	_ = os.RemoveAll(m.workDir(job.ID))
+	if task.Attempt == 0 {
+		// nobody ever started it: the worker that was there when the task was
+		// written went away. Nothing was tried, so nothing is held against
+		// this release — the job goes straight back to the queue and is
+		// downloaded here (or by the next worker) at once.
+		m.log.Info("a chapter came back from the workers", "job", job.ID, "reason", reason)
+		m.requeue(ctx, &job)
+		m.bus.Changed("queue", "updated", job.ID)
+		m.queue.signal()
+		return
+	}
+	jc, _ := m.load(ctx, &job)
 	if reason == "" {
 		reason = "no worker finished this chapter"
 	}

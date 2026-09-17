@@ -262,3 +262,52 @@ func TestPrune(t *testing.T) {
 		}
 	})
 }
+
+// TestUnclaimedComesBack: a task written while a worker was online, for a
+// worker that has since gone away, is handed back instead of waiting
+// forever — but one waiting behind a busy worker is left alone.
+func TestUnclaimedComesBack(t *testing.T) {
+	each(t, func(t *testing.T, d *db.DB) {
+		ctx := context.Background()
+		l := ledger(d)
+		job := seedJob(t, d)
+		worker := seedWorker(t, d, "gone")
+		var given []model.WorkerTask
+		l.Abandoned = func(task model.WorkerTask) { given = append(given, task) }
+		if err := l.Add(ctx, &model.WorkerTask{JobID: job, Kind: model.TaskDownload}); err != nil {
+			t.Fatal(err)
+		}
+		age := func() {
+			t.Helper()
+			if _, err := d.NewUpdate().Model((*model.WorkerTask)(nil)).Set("created_at = ?", time.Now().UTC().Add(-time.Hour)).
+				Where("state = ?", model.TaskPending).Exec(ctx); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		// the worker is here, just busy: the task waits for it
+		seen := time.Now().UTC()
+		if _, err := d.NewUpdate().Model((*model.Worker)(nil)).Set("last_seen_at = ?", seen).Where("id = ?", worker).Exec(ctx); err != nil {
+			t.Fatal(err)
+		}
+		age()
+		if n, err := l.DropUnclaimed(ctx); err != nil || n != 0 {
+			t.Fatalf("a task waiting for a worker that is here was dropped: %v %d", err, n)
+		}
+
+		// now it goes away
+		gone := time.Now().UTC().Add(-10 * time.Minute)
+		if _, err := d.NewUpdate().Model((*model.Worker)(nil)).Set("last_seen_at = ?", gone).Where("id = ?", worker).Exec(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if n, err := l.DropUnclaimed(ctx); err != nil || n != 1 {
+			t.Fatalf("drop: %v %d", err, n)
+		}
+		if len(given) != 1 || given[0].JobID != job {
+			t.Fatalf("the job wasn't told: %+v", given)
+		}
+		if _, err := l.Claim(ctx, worker, []string{model.TaskDownload}); err != nil {
+			t.Fatal(err)
+		}
+	})
+}
