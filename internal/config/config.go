@@ -12,7 +12,7 @@ import (
 
 type Config struct {
 	// Mode: integrated (server + built-in upscaler when the image has the
-	// tools), server (no local upscaling) or upscaler (processing node only).
+	// tools), server (no local upscaling) or worker (does work for a server).
 	Mode string
 	// Listen address, e.g. ":8787".
 	Listen string
@@ -48,7 +48,7 @@ type VarDoc struct{ Name, Default, Description string }
 
 // Vars lists the process-level variables read by Load.
 var Vars = []VarDoc{
-	{"MANGARR_MODE", "integrated", "integrated (server, plus a built-in upscaler when the image has the tools), server, or upscaler (processing node only)."},
+	{"MANGARR_MODE", "integrated", "integrated (server, plus a built-in upscaler when the image has the tools), server, or worker (asks a server for work; upscaler is a deprecated alias)."},
 	{"MANGARR_LISTEN", ":8787", "HTTP listen address."},
 	{"MANGARR_DATA_DIR", "./config (/config in Docker)", "Database, staging, backups, recycle bin and caches."},
 	{"MANGARR_DB", "sqlite://$MANGARR_DATA_DIR/mangarr.db", "Database DSN: sqlite://… or postgres://user:pass@host:5432/db."},

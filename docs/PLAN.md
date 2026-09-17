@@ -37,14 +37,14 @@ Decisions made with the user:
  Browser/API ─►│ API + embedded UI │ command queue/scheduler │ decision engine          │
                │ pipeline: fetch pages → validate → [upscale] → CBZ → atomic import    │
                │ ─────────────────── module registry (Go interfaces) ───────────────── │
-               │ source: suwayomi │ metadata: anilist, source-fallback                  │
+               │ source: native (own sites), suwayomi │ metadata: anilist, source       │
                │ library: komga, kavita │ notify: telegram, discord, ntfy, gotify,      │
-               │ apprise, webhook │ upscale: ncnn-worker                                │
+               │ apprise, webhook │ upscale: local, workers                             │
+               │ worker task ledger ◄── /api/v1/worker/ ──────────────────────────────  │
                └────┬─────────────────┬───────────────┬────────────────────┬───────────┘
-                    ▼                 ▼               ▼                    ▼
-   suwayomi (sidecar) ─► flaresolverr   anilist.co   Komga/Kavita API    mangarr-upscaler
-   runs Keiyoushi extensions                          (rescan + per-      (ncnn + Vulkan; N100 iGPU
-                                                       reader progress)    or desktop GPU)
+                    ▼                 ▼               ▼                    ▲
+   manga sites (HTTP) ─► flaresolverr  anilist.co   Komga/Kavita API    workers (pull)
+   suwayomi (optional sidecar)         (rescan + per-reader progress)   download / upscale / encode
    mangarr writes /data/manga/<lang>/<Series>/*.cbz ─► Komga/Kavita (read-only mount) ─► apps
 ```
 
@@ -65,11 +65,11 @@ An import-lint rule in CI enforces this.
 
 | Kind | Interface (short form) | Optional capabilities | v1 implementations |
 |---|---|---|---|
-| `source` | `Sources()`, `Search(src, q, page, filters)`, `Series(ref) (details, chapters)`, `Pages(chRef)`, `FetchPage(pageRef) io.ReadCloser` | `ExtensionManager` (stores/install/update), `Latest`, `Filters`, `SourcePreferences` | `suwayomi` |
+| `source` | `Sources()`, `Search(src, q, page, filters)`, `Series(ref) (details, chapters)`, `Pages(chRef)`, `FetchPage(pageRef) io.ReadCloser` | `ExtensionManager` (stores/install/update), `Latest`, `Filters`, `SourcePreferences`, `Fetchable` (a request another machine can make) | `native`, `suwayomi` |
 | `metadata` | `Search(q) []Candidate`, `Get(id) SeriesMetadata` | `LookupByExternalID(kind, id)` (cross-provider join) | `anilist`, `source` (fallback from the linked source's details) |
 | `library` | `Rescan(paths)`, `Test` | `ReadProgress(account, seriesPath) []BookProgress` | `komga`, `kavita` |
 | `notify` | `Send(event)` | batching hints | telegram, discord, ntfy, gotify, apprise, webhook |
-| `upscale` | `Info() (models, devices)`, `Upscale(ctx, pages, params) pages` | — | `ncnn-worker` |
+| `upscale` | `Info() (models, devices)`, `Upscale(ctx, pages, params) pages` | — | `local`, `workers` |
 
 **Portable source identity.**
 - A series source link stores `(moduleInstanceId, sourceId, mangaUrl)` and a chapter stores
@@ -218,20 +218,17 @@ module.
 5. Tell the user in the docs to enable "empty trash after scan" in Komga.
 
 ## Upscaling (v1, off by default, configured per profile or series)
-**Upscale module:** `ncnn-worker` talks to **`mangarr-upscaler`**, a small Go HTTP worker from the
-same repo (`cmd/mangarr-upscaler`).
+**Upscale modules:** `local` runs the engine in the server process; `workers` hands batches to the
+machines that have the upscale role (see *Workers*). Both wrap the same engine.
 - It wraps the ncnn/Vulkan CLIs `waifu2x-ncnn-vulkan` and `realcugan-ncnn-vulkan` (both MIT) and
   `realesrgan-ncnn-vulkan`, running each on a whole folder at a time so every chapter loads the
   model once.
-- API:
-  - `GET /v1/info` returns devices, models and version.
-  - `POST /v1/upscale` takes the pages plus params as multipart and returns the results.
-  - Token auth, and one job at a time per GPU.
+- One job at a time per GPU, whichever module drives it.
 - Docker image: `debian:trixie-slim` with `mesa-vulkan-drivers` (Intel ANV, plus lavapipe as a CPU
   fallback for CI), the binaries and the models.
   - It can run on the N100 with `/dev/dri` passed through.
-  - A Windows build (Go exe plus the ncnn binaries) can run on the desktop GPU.
-  - Several worker instances can be registered, ordered by priority.
+  - A Windows build (`cmd/mangarr-worker` plus the ncnn binaries) can run on the desktop GPU.
+  - Any number of workers; each has its own key and roles.
 - The core image stays distroless.
 
 **Settings:**
@@ -351,12 +348,12 @@ quality on B/W and color pages.
 - **Web:** React, Vite, TypeScript, TanStack Query and Router, Tailwind and shadcn/ui, embedded with
   `//go:embed`. In development, Vite proxies to `air`.
 - **Build:** a multi-stage Dockerfile ending in distroless/static. The images
-  `ghcr.io/asion001/mangarr` and `…/mangarr-upscaler` are multi-arch, built by GitHub Actions: lint,
-  import-lint, test, build.
+  `ghcr.io/asion001/mangarr` (full and slim) is multi-arch, built by GitHub Actions: lint,
+  import-lint, test, build. The same image is the server and the worker (`MANGARR_MODE`).
 
 **Repo layout:**
 ```
-cmd/mangarr/  cmd/mangarr-upscaler/
+cmd/mangarr/  cmd/mangarr-worker/
 internal/
   api/  events/  jobs/  health/  config/
   db/            open(dsn) → bun.DB (sqlite|postgres), migrations/{sqlite,postgres}, repositories
@@ -368,14 +365,17 @@ internal/
   metadata/      aggregator, merge, provenance
   modules/
     registry.go  provider.go  fields.go      (definitions, schema, Test)
-    source/{source.go, suwayomi/}
+    source/{source.go, native/, suwayomi/}
     metadata/{metadata.go, anilist/, sourcemeta/}
     library/{library.go, komga/, kavita/}
     notify/{notify.go, telegram/, discord/, ntfy/, gotify/, apprise/, webhook/}
-    upscale/{upscale.go, ncnnworker/}
-  upscaler/      worker server (used by cmd/mangarr-upscaler)
+    upscale/{upscale.go, local/, workers/}
+  sources/       sourcekit/ (the site SDK: leaf package) + sites/ (one file per site)
+  upscaler/      the ncnn engine (in the server, or on a worker)
+  worker/        the worker process: lease → do → upload
+  worktasks/     the ledger of work handed to workers
 web/
-docker/{Dockerfile, Dockerfile.upscaler, compose.example.yml}   (mangarr, suwayomi, flaresolverr, komga, upscaler)
+docker/{Dockerfile, compose.example.yml}   (mangarr, optional suwayomi/flaresolverr, komga, workers)
 ```
 
 ## Milestones
@@ -405,7 +405,7 @@ docker/{Dockerfile, Dockerfile.upscaler, compose.example.yml}   (mangarr, suwayo
 - **M6 – Read tracking and cleanup:** readers and accounts, progress sync, the rules engine, preview
   and dry-run, recycle bin, the Cleaned state and restore.
 - **M7 – Upscaling:**
-  - The `mangarr-upscaler` worker and image, the `ncnn-worker` module.
+  - The ncnn engine and its image, in the server and on workers.
   - The pipeline stage with fallback, "upscale existing", settings UI.
 - **Later:**
   - Metadata modules: MangaUpdates, MangaDex, MAL/Jikan, Kitsu, ComicVine.
@@ -429,8 +429,6 @@ docker/{Dockerfile, Dockerfile.upscaler, compose.example.yml}   (mangarr, suwayo
   drives pipeline tests without Suwayomi, which proves the core doesn't depend on it.
 - **Integration tests** (`-tags integration`, testcontainers-go):
   - The pinned Suwayomi adds the Keiyoushi store, installs MangaDex, and fetches one chapter.
-  - `mangarr-upscaler` with lavapipe upscales a sample page, checking the output is 2× wide and a
-    valid WebP.
   - Komga is created with two users and their API keys; read progress is marked for each user, then
     the sync runs and cleanup deletes the expected files.
 - **End-to-end on the homelab**, with `docker compose up`:

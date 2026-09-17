@@ -10,7 +10,7 @@ Lists are comma-separated (`a,b,c`) or JSON; key/value settings use `key=value,k
 
 | Variable | Default | Description |
 |---|---|---|
-| `MANGARR_MODE` | `integrated` | integrated (server, plus a built-in upscaler when the image has the tools), server, or upscaler (processing node only). |
+| `MANGARR_MODE` | `integrated` | integrated (server, plus a built-in upscaler when the image has the tools), server, or worker (asks a server for work; upscaler is a deprecated alias). |
 | `MANGARR_LISTEN` | `:8787` | HTTP listen address. |
 | `MANGARR_DATA_DIR` | `./config (/config in Docker)` | Database, staging, backups, recycle bin and caches. |
 | `MANGARR_DB` | `sqlite://$MANGARR_DATA_DIR/mangarr.db` | Database DSN: sqlite://… or postgres://user:pass@host:5432/db. |

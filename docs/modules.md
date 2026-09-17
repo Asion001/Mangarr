@@ -47,11 +47,28 @@ Then add a blank import to `internal/modules/all/all.go`.
 
 | Kind | Required interface | Optional capabilities |
 |---|---|---|
-| `source` | `source.Module`: `Sources`, `Search`, `Manga`, `Pages`, `FetchPage` | `Latest` (latest/popular), `ExtensionManager`, `Preferences`, `Thumbnails`, `Assets`, `Maintainer`, `AutoUpdater` |
+| `source` | `source.Module`: `Sources`, `Search`, `Manga`, `Pages`, `FetchPage` | `Latest` (latest/popular), `ExtensionManager`, `Preferences`, `Thumbnails`, `Assets`, `Maintainer`, `AutoUpdater`, `Fetchable` (hand a page to another machine) |
 | `metadata` | `metadata.Module`: `Search`, `Get` | `ExternalLookup` (join by another provider's id) |
 | `library` | `library.Module`: `Rescan` | `ProgressReader` (per-reader credentials + progress) |
 | `notify` | `notify.Module`: `Send` | — |
 | `upscale` | `upscale.Module`: `Info`, `Upscale` | — |
+
+### Fetchable: pages a worker can get
+
+A module that can say how a page is fetched — its address and the headers the
+site expects — implements `Fetchable`. The server resolves the page list (that
+needs the module's session and its pacing) and a download worker makes those
+requests itself. A module without it is always downloaded on the server, so
+nothing is ever undownloadable.
+
+### Sites of our own
+
+`internal/sources/sourcekit` is the toolkit mangarr's own sites are written
+against, and it deliberately imports nothing else from mangarr; `sites/` has
+one file per site and imports only the toolkit (a test enforces both, so they
+can move to a repository of their own). A site's id is
+`sourcekit.KeiyoushiID(name, lang, version)` — the id Mihon gives the same
+extension — which is what keeps a backup import linking to it.
 
 ### Source identity
 

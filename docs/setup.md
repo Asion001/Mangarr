@@ -20,14 +20,18 @@ cross-mount moves are needed.
 Start from [docker/compose.example.yml](../docker/compose.example.yml):
 
 - **mangarr** — `/config` volume + the library.
-- **suwayomi** — pin the tested version (`v2.3.2243`). Keep its web UI off and
-  don't publish its port: extensions run as code inside it, and it doesn't
-  need the library. `JAVA_TOOL_OPTIONS=-Xmx512m` + `mem_limit: 1g` keeps it
-  around 400–700 MB. Only enable `KCEF_ENABLED` (Chromium WebView) if a
-  source you need requires it (+ a few hundred MB RAM).
-- **flaresolverr** — reuse your existing one (or Byparr).
+- **suwayomi** (optional) — only for catalogs mangarr doesn't speak itself.
+  It is no longer required: mangarr has sites of its own (see §3). If you do run it,
+  pin the tested version (`v2.3.2243`), keep its web UI off and don't publish
+  its port: extensions run as code inside it, and it doesn't need the library.
+  `JAVA_TOOL_OPTIONS=-Xmx512m` + `mem_limit: 1g` keeps it around 400–700 MB.
+  Only enable `KCEF_ENABLED` (Chromium WebView) if a source you need requires
+  it (+ a few hundred MB RAM).
+- **flaresolverr** (optional) — reuse your existing one (or Byparr). Only
+  sites behind a browser check need it.
 - **komga** (or kavita) — library mounted read-only.
-- **mangarr-upscaler** (optional) — see below.
+- **workers** (optional) — other machines that download, upscale or
+  re-encode; see §12.
 
 Behind Traefik, route only mangarr (and Komga) publicly; mangarr has its own
 login and API key. With an auth proxy in front you may set
@@ -45,11 +49,18 @@ when it loads pages. mangarr itself speaks HTTP/1.1 and cleartext HTTP/2
 2. Settings → Media management → add the root folder(s). Keep the default
    naming `{Series Title} Ch.{Chapter:0000}`; don't put scanlator, source or
    volume in file names.
-3. Settings → Source modules → *Suwayomi*: URL `http://suwayomi:4567`,
-   *Use FlareSolverr* on, URL `http://flaresolverr:8191`. "Manage Suwayomi
-   settings" turns off Suwayomi's own updater and auto-download (mangarr
-   schedules everything). Press **Test**.
-4. Sources → Extensions → install what you need (e.g. MangaDex).
+3. Settings → Source modules → *mangarr sources* is there by default: the
+   sites mangarr talks to itself (MangaDex, Weeb Central, Atsumaru, MangaLib,
+   Senkuro). Set *FlareSolverr URL* only if a site you use is behind a
+   browser check. For anything else, add *Suwayomi*: URL
+   `http://suwayomi:4567`, *Use FlareSolverr* on, URL
+   `http://flaresolverr:8191`. "Manage Suwayomi settings" turns off
+   Suwayomi's own updater and auto-download (mangarr schedules everything).
+   Press **Test**.
+4. Sources → Catalogs → put the catalogs you want searched first at the top,
+   and open a catalog's settings (the gear) for what it offers: the language
+   its titles come in, which of its servers to read pages from, whether to
+   include adult titles. With Suwayomi, Sources → Extensions installs more.
 5. Settings → Metadata → *AniList*.
 6. Settings → Library servers → *Komga*:
    - URL `http://komga:25600`, an **admin** API key (Komga → Account →
@@ -60,7 +71,50 @@ when it loads pages. mangarr itself speaks HTTP/1.1 and cleartext HTTP/2
      cleanup.
 7. Settings → Notifications → e.g. *Telegram* (bot token + chat id).
 
-## 4. Reading apps
+## 4. Sources: where chapters come from
+
+mangarr speaks to several sites itself — MangaDex, Weeb Central, Atsumaru,
+MangaLib, Senkuro — with no extension engine in between. That is the *mangarr
+sources* module, and it needs nothing running beside it. Suwayomi is still
+there for everything else, and the two live side by side: a series can have
+links to both.
+
+- **Catalog order.** Sources → Catalogs lists every catalog of a module with
+  its order, whether it is searched, and how gently it is hit. Searches go
+  top-down; downloads prefer the sources a series already has, in the order
+  they were linked.
+- **A catalog's own settings** are behind the gear on its row: the language
+  its titles come in, which of its page servers to read from, whether adult
+  titles are included — whatever that site offers.
+- **Sites behind a browser check** need FlareSolverr; set its address on the
+  module (Settings → Source modules → *mangarr sources*). Sites that don't
+  need it never pay for it.
+
+### A backup source for a whole library
+
+A series with a single source stalls whenever that source does. Select series
+in the library (Select → pick them, or select all) and use **Sources…** in the
+bar at the bottom:
+
+- *Add as a fallback source* looks each series up at the catalog by title and
+  links it **last**, so downloads keep preferring what the series already has.
+- **Preview** first: it reports what it found for each series, how sure the
+  match is, and why the rest were skipped. Applying runs as a command, since a
+  search per series takes a while.
+- The same action removes a catalog from the selection, or switches it off
+  without unlinking it.
+
+### Moving a library off Suwayomi
+
+Sources → **Switch engine…** moves existing links from one source module to
+another. A link moves when both modules know the catalog by the same id —
+which is the case wherever a site is built in under the id its Keiyoushi
+extension has, so MangaDex links move as they are. Preview shows, catalog by
+catalog, what moves and what stays; nothing is re-matched and no file is
+touched. Catalogs the new module doesn't have stay where they are, and a site
+it has under a *different* id says so: those have to be linked again by hand.
+
+## 5. Reading apps
 
 There are two ways to read.
 
@@ -111,7 +165,7 @@ or Kavita. They then only see downloaded chapters:
 | Panels / Chunky | OPDS `http://komga:25600/opds/v1.2/catalog` (Panels also has a Komga integration) |
 | KOReader | OPDS + Komga's KOReader sync |
 
-## 5. Accounts: reading together
+## 6. Accounts: reading together
 
 Everyone who reads here gets an account, with their own progress, their own
 devices and their own notifications. The library itself is shared.
@@ -149,7 +203,7 @@ devices and their own notifications. The library itself is shared.
    (30 from one address) lock signing in there for 15 minutes; it covers the
    web login, invite links and the Komga API.
 
-## 6. Requests, following series and personal notifications
+## 7. Requests, following series and personal notifications
 
 **Requests** (Jellyseerr-style) let people ask for series without giving them
 the run of the library.
@@ -180,7 +234,7 @@ requests, or both. These targets can only reach public addresses — for one
 inside your network, ask an administrator to add it under Settings →
 Notifications.
 
-## 7. Reading in the browser
+## 8. Reading in the browser
 
 mangarr has its own reader, so a browser is enough: open a chapter from the
 chapters table, the **Continue reading** shelf or the button on a series
@@ -203,7 +257,24 @@ the source and queued, as in the apps.
 - Settings are kept **per series** (like Mihon), and *Use for all series*
   makes them your default. Everything is per account.
 
-## 8. Single sign-on (optional)
+### What the reader asks the server for
+
+Worth knowing when a page feels slow, or when you put a proxy in front:
+
+- Pages are **streamed** from the archive with a length, an `ETag` and a
+  `Last-Modified`, so a page you have already seen comes back as a 304 and
+  costs nothing. Give the proxy nothing to do here: don't buffer, don't
+  re-compress.
+- A phone gets a **page its own size** (`?w=`), made once and kept in the
+  cache; the full-size page is served to anything wide enough for it. Turn it
+  off in Settings → Reading if you'd rather always serve originals.
+- The blurred page you see for a moment is the thumbnail the library already
+  had; the real page replaces it when it arrives.
+- Every response carries `Server-Timing` and an `X-Request-Id`, so the
+  browser's network panel says where a slow request went, and the same id is
+  in the log.
+
+## 9. Single sign-on (optional)
 
 Sign in with Authentik, Authelia, Keycloak, Pocket ID, Google or any other
 OpenID Connect provider: **Settings → Single sign-on**.
@@ -226,7 +297,7 @@ OpenID Connect provider: **Settings → Single sign-on**.
 5. **Passwords**: turn *Keep password sign-in for everyone* off to make
    single sign-on the only way in. Administrators may still use a password,
    so you can get back in when the provider is down.
-## 9. Readers and cleanup (optional)
+## 10. Readers and cleanup (optional)
 
 Cleanup deletes chapters **every reader** has finished.
 
@@ -248,7 +319,7 @@ seconds (the Readers page shows *live*). Kavita is checked on a timer
 its readers got (*Continue: ch. N*, a read bar on the Series page, and a link
 to open it in Komga).
 
-## 10. Processing: upscaling and re-encoding (optional)
+## 11. Processing: upscaling and re-encoding (optional)
 
 Processing is configured per profile (Settings → Profiles). By default it runs
 **in the background**: chapters are imported as downloaded (readable right
@@ -267,22 +338,15 @@ threshold (default 1400 px) with waifu2x / Real-CUGAN / Real-ESRGAN.
      render group (`group_add`, see the compose example). mangarr then adds a
      *Built-in (this server)* upscaler automatically (enabled when a real GPU
      is visible).
-   - **On another machine** (a desktop GPU): run the same image with
-     `MANGARR_MODE=upscaler`, `MANGARR_SERVER_URL=http://<server>:8787` and
-     `MANGARR_API_KEY`. It registers itself and shows up under Settings →
-     Upscalers; it's preferred over the built-in one while online, and
-     chapters simply wait while it's off. Set `MANGARR_NODE_URL` if the server
-     can't reach it by host name (default `http://<hostname>:8788`). NVIDIA
-     needs the container toolkit.
-   - Without registration you can still add a *mangarr-upscaler* module by hand
-     (URL + `MANGARR_UPSCALER_TOKEN`).
-2. Benchmark your hardware and pick a model:
-   ```bash
-   scripts/upscale-bench.sh http://host:8788 <token> "/data/manga/en/Series/Series Ch.0001.cbz" 4
-   ```
-   Rough guidance: `realesr-animevideov3` is fastest (good for color
+   - **On another machine** (a desktop GPU): run it as a worker with the
+     upscale role (§12). The *Workers* upscaler appears by itself the first
+     time such a worker dials in; it is preferred over the built-in one while
+     one is online, and chapters wait while none is. NVIDIA needs the
+     container toolkit.
+2. Pick a model: `realesr-animevideov3` is fastest (good for colour
    webtoons), `waifu2x-cunet` cleans black & white manga well, `realcugan`
-   is sharper and slower.
+   is sharper and slower. Profile → *Preview on a chapter* shows what each
+   does to your own pages.
 3. Settings → Profiles → enable upscaling, choose model and widths. If the
    upscaler is offline, chapters wait and are upscaled when it's back.
 
@@ -310,7 +374,60 @@ resume it (System → Status).
 - Originals go to the recycle bin unless you turn that off (to free the space
   immediately).
 
-## 11. Moving and renaming
+## 12. Workers: other machines
+
+A worker is the same image started with `MANGARR_MODE=worker`, the address of
+this server and a key of its own. It asks the server for work and uploads what
+it produced, so it needs **no port and no inbound access** — a worker behind
+someone else's NAT works exactly like one in the same rack.
+
+1. System → Workers → **Add worker**. Give it a name, tick what it may do, and
+   copy the key: only its hash is kept here, so that is the one time it can be
+   read.
+2. Run it:
+   ```yaml
+   mangarr-worker:
+     image: ghcr.io/asion001/mangarr:latest
+     environment:
+       MANGARR_MODE: worker
+       MANGARR_SERVER_URL: http://mangarr:8787
+       MANGARR_WORKER_KEY: mgw_…          # from System → Workers
+     devices:
+       - /dev/dri:/dev/dri                # only for upscaling
+     restart: unless-stopped
+   ```
+   It appears online in System → Workers within a few seconds, with its build,
+   its platform and (for upscaling) the models and devices it found.
+
+The roles:
+
+| Role | What it does | Why |
+|---|---|---|
+| Download | Fetches a chapter's pages and uploads them here | The requests come from the worker's address, so a second machine spreads the load a site sees — and a slow uplink at home isn't the bottleneck |
+| Upscale | Runs the upscaler on batches of pages | The GPU box does the work; the server keeps the library |
+| Encode | Re-encodes pages | CPU work, off the server |
+
+Notes:
+
+- **Who downloads what.** With Settings → Downloads → *worker placement* on
+  `auto` (the default), a chapter goes to a worker when one with the download
+  role is online and is downloaded here otherwise; `workers` waits for one and
+  `local` never uses them. The server still resolves the page addresses —
+  that needs the source module's session — and still paces each catalog, so a
+  worker cannot hammer a site harder than the throttling allows.
+- **Pages are checked on arrival** and written into the same staging folder a
+  local download uses, so importing, processing and history are identical
+  either way.
+- **A worker that dies mid-chapter** loses its task after a lease (two
+  minutes) and another worker — or this server — picks it up. After three
+  tries the chapter is failed as an infrastructure error and retried later,
+  never blocklisted.
+- **Switching one off** in System → Workers stops it being given work at
+  once; removing it invalidates its key.
+- `MANGARR_MODE=upscaler` still starts a worker (it says so), but the old
+  push-based node with its own port and the server's admin key is gone.
+
+## 13. Moving and renaming
 
 - **Move a series** to another root folder or folder name: Edit on the series
   page, or select several on the Series page (*Select* → *Move…*). Files move
@@ -328,7 +445,7 @@ resume it (System → Status).
   writes it back once the server has scanned the new files (readers need linked
   accounts, see section 9). It never lowers progress on the server.
 
-## 12. Importing from Mihon, Tachiyomi, Suwayomi or Aidoku
+## 14. Importing from Mihon, Tachiyomi, Suwayomi or Aidoku
 
 Import library → upload a backup:
 
@@ -369,7 +486,7 @@ request throttling, so a library of hundreds of series takes a while; the page
 shows progress and can be left. Running an import again only picks up
 entries that aren't imported yet (and retries failed ones).
 
-## 13. PostgreSQL (optional)
+## 15. PostgreSQL (optional)
 
 mangarr starts on SQLite. To move to PostgreSQL (13 or newer), create an
 empty database and a user for mangarr, then open **System → Database**:
@@ -382,7 +499,7 @@ on the same page copies the data back.
 If you set `MANGARR_DB` yourself, the page still copies the data, and then
 tells you to change the variable and restart the container.
 
-## 14. Logs, caches and bug reports
+## 16. Logs, caches and bug reports
 
 - **Logs** are written to `/config/logs/mangarr.txt` (rotated at 5 MB, 5 files
   kept; `MANGARR_LOG_DIR=off` disables them). System → Logs downloads them as a
@@ -398,7 +515,7 @@ tells you to change the variable and restart the container.
   default) by removing the oldest images; System → Status shows its size and
   can *Compact* or clear it.
 
-## 15. Backups & upgrades
+## 17. Backups & upgrades
 
 Daily backups go to `/config/backups` (System → Backups). They hold the
 whole database as a SQLite file on both SQLite and PostgreSQL installs, so a

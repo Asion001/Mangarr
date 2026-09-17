@@ -84,9 +84,14 @@ func TestSwitchSourceModule(t *testing.T) {
 	if again, err := e.App.Series.SwitchSources(e.Ctx, req, nil); err != nil || again != 0 {
 		t.Fatalf("a second run moved %d: %v", again, err)
 	}
-	// and the series still refreshes, now through the new module
-	res, err := e.App.Refresher.SyncSeries(e.Ctx, ser.ID, false)
-	if err != nil || res.NewChapters == 0 {
-		t.Fatalf("refresh after the switch: %v %+v", err, res)
+	// and the series still refreshes, now through the new module: its
+	// chapters are found again (whether this call or a scheduled one got
+	// there first)
+	if _, err := e.App.Refresher.SyncSeries(e.Ctx, ser.ID, false); err != nil {
+		t.Fatalf("refresh after the switch: %v", err)
+	}
+	n, err := e.App.DB.NewSelect().Model((*model.Chapter)(nil)).Where("series_id = ?", ser.ID).Count(e.Ctx)
+	if err != nil || n == 0 {
+		t.Fatalf("no chapters after the switch: %v %d", err, n)
 	}
 }

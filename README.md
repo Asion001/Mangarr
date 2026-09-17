@@ -27,9 +27,11 @@ which mangarr tells to rescan after every change.
   progress in Komga/Kavita survives).
 - **Everything external is a module** behind a Go interface — see
   [docs/modules.md](docs/modules.md):
-  - `source` — **Suwayomi** (Keiyoushi extensions, FlareSolverr, extension
-    manager, per-source settings). Replaceable; identities are portable
-    `(sourceId, url)` so another engine can take over existing series.
+  - `source` — **mangarr's own sites** (MangaDex, Weeb Central, Atsumaru,
+    MangaLib, Senkuro — no extension engine to run) and **Suwayomi**
+    (Keiyoushi extensions, FlareSolverr, extension manager, per-source
+    settings) for the rest. Identities are portable `(sourceId, url)`, so
+    *Switch engine* moves an existing library from one to the other.
   - `metadata` — **AniList**; all metadata modules are searched by priority
     and merged field by field with provenance and user locks.
   - `library` — **Komga**, **Kavita** (rescans, path mappings, per-user
@@ -37,8 +39,12 @@ which mangarr tells to rescan after every change.
   - `notify` — **Telegram, Discord, ntfy, Gotify, Apprise, Webhook**, with
     per-series digests ("One Piece: 3 new chapters (1120–1122)").
   - `upscale` — waifu2x / Real-CUGAN / Real-ESRGAN via ncnn + Vulkan, built
-    into the server or on processing nodes that register themselves (e.g. a
-    desktop GPU used whenever it's on).
+    into the server or on a worker with the upscale role (e.g. a desktop GPU
+    used whenever it's on).
+- **Workers** — other machines that download, upscale and re-encode. Each
+  has a key of its own and asks the server for work, so it needs no port and
+  no inbound access; downloading from a worker also spreads the requests a
+  site sees across addresses.
 - **Library that works on its own** — flat series folders, stable file names,
   `ComicInfo.xml` (validated against the v2.1 schema), `series.json` for
   Komga, `cover.jpg`. Files are written atomically.
