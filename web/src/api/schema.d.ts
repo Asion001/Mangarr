@@ -1270,6 +1270,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/read/series/{id}/chapters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lightweight chapter list for the web reader picker */
+        get: operations["read-chapter-picker"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/read/settings": {
         parameters: {
             query?: never;
@@ -1668,6 +1685,23 @@ export interface paths {
         put?: never;
         /** Files (and folders) that don't match the current naming format */
         post: operations["series-rename-preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search, filter, sort and paginate visible series */
+        get: operations["series-query"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4385,6 +4419,29 @@ export interface components {
             title?: string;
             volume?: string;
         };
+        ReadChapterItem: {
+            available: boolean;
+            completed: boolean;
+            downloaded: boolean;
+            /** Format: int64 */
+            id: number;
+            number: string;
+            /** Format: double */
+            numberSort: number;
+            /** Format: int64 */
+            page?: number;
+            title?: string;
+            volume?: string;
+        };
+        ReadChapterPickerResponse: {
+            items: components["schemas"]["ReadChapterItem"][];
+            /** Format: int64 */
+            page: number;
+            /** Format: int64 */
+            pageSize: number;
+            /** Format: int64 */
+            total: number;
+        };
         ReadPage: {
             mediaType: string;
             /** Format: int64 */
@@ -4850,6 +4907,18 @@ export interface components {
             title: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        SeriesSearchResponse: {
+            items: components["schemas"]["SeriesResource"][];
+            languages: string[];
+            /** Format: int64 */
+            page: number;
+            /** Format: int64 */
+            pageSize: number;
+            /** Format: int64 */
+            total: number;
+            /** Format: int64 */
+            totalSize: number;
         };
         SeriesSource: {
             /** Format: date-time */
@@ -8523,6 +8592,42 @@ export interface operations {
             };
         };
     };
+    "read-chapter-picker": {
+        parameters: {
+            query?: {
+                q?: string;
+                currentId?: number;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadChapterPickerResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "read-settings": {
         parameters: {
             query?: {
@@ -9549,6 +9654,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SeriesRename"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "series-query": {
+        parameters: {
+            query?: {
+                q?: string;
+                filter?: "all" | "following" | "monitored" | "missing" | "ongoing" | "completed" | "unread" | "reading";
+                sort?: "title" | "added" | "latest" | "missing" | "size" | "read";
+                rootFolderId?: number;
+                language?: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesSearchResponse"];
                 };
             };
             /** @description Error */

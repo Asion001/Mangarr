@@ -6,6 +6,23 @@ export const useAuthStatus = () => useQuery({ queryKey: ["auth"], queryFn: () =>
 
 export const useSeriesList = () => useQuery({ queryKey: ["series"], queryFn: () => unwrap(api.GET("/api/v1/series")) });
 
+export type SeriesSearchQuery = {
+  q?: string;
+  filter?: "all" | "following" | "monitored" | "missing" | "ongoing" | "completed" | "unread" | "reading";
+  sort?: "title" | "added" | "latest" | "missing" | "size" | "read";
+  rootFolderId?: number;
+  language?: string;
+  page?: number;
+  pageSize?: number;
+};
+
+export const useSeriesSearch = (query: SeriesSearchQuery) =>
+  useQuery({
+    queryKey: ["series", "search", query],
+    queryFn: () => unwrap(api.GET("/api/v1/series/search", { params: { query } })),
+    placeholderData: (previous) => previous,
+  });
+
 export const useSeries = (id: number) =>
   useQuery({ queryKey: ["series", id], queryFn: () => unwrap(api.GET("/api/v1/series/{id}", { params: { path: { id } } })), enabled: id > 0 });
 

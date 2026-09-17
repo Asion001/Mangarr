@@ -2,7 +2,7 @@ import { t as tr, t } from "../../lib/i18n/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ChevronLeft, ChevronRight, Download, Maximize, Minimize, Settings2 } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Download, List, Maximize, Minimize, Settings2 } from "lucide-react";
 import clsx from "clsx";
 import { api, apiUrl, basePath, unwrap } from "../../api/client";
 import { ErrorBox, Spinner } from "../../components/ui";
@@ -11,6 +11,7 @@ import { displayWidth, pageUrl, useDims, useViewport, type Half } from "./page";
 import { buildViews, indexOf, PagedViewer } from "./PagedViewer";
 import { WebtoonViewer } from "./WebtoonViewer";
 import { SettingsPanel } from "./SettingsPanel";
+import { ChapterPicker } from "./ChapterPicker";
 
 const chapterQuery = (id: number) => ({
   queryKey: ["read-chapter", id],
@@ -38,6 +39,7 @@ function Reader({ chapterId }: { chapterId: number }) {
   const [pos, setPos] = useState<Pos | null>(null);
   const [bars, setBars] = useState(true);
   const [panel, setPanel] = useState(false);
+  const [pickingChapter, setPickingChapter] = useState(false);
   const [full, setFull] = useState(!!document.fullscreenElement);
 
   // where to start: ?page=, else where you left off
@@ -267,6 +269,9 @@ function Reader({ chapterId }: { chapterId: number }) {
             <Download className="size-5" />
           </a>
         )}
+        <button type="button" className="rounded p-2 hover:bg-neutral-800" onClick={() => setPickingChapter(true)} aria-label={t("Choose chapter")}>
+          <List className="size-5" />
+        </button>
         <button type="button" className="rounded p-2 hover:bg-neutral-800" onClick={toggleFull} aria-label={t("Full screen")}>
           {full ? <Minimize className="size-5" /> : <Maximize className="size-5" />}
         </button>
@@ -327,6 +332,18 @@ function Reader({ chapterId }: { chapterId: number }) {
       )}
 
       {panel && <SettingsPanel s={s} set={set} onClose={() => setPanel(false)} hasOwn={hasOwn} saveAsDefault={saveAsDefault} reset={reset} />}
+      {pickingChapter && (
+        <ChapterPicker
+          seriesId={ch.seriesId}
+          currentId={ch.id}
+          onClose={() => setPickingChapter(false)}
+          onPick={(id) => {
+            flush();
+            setPickingChapter(false);
+            navigate(`/read/${id}`, { replace: true });
+          }}
+        />
+      )}
     </div>
   );
 }

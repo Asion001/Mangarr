@@ -55,12 +55,14 @@ var operationPermissions = map[string][]string{
 
 	// reading the library (limited to the series the group sees)
 	"series-list":         {permSignedIn},
+	"series-query":        {permSignedIn},
 	"series-get":          {permSignedIn},
 	"series-chapters":     {permSignedIn},
 	"series-cover":        {permSignedIn},
 	"reading-shelf":       {permSignedIn},
 	"tags-list":           {permSignedIn},
 	"read-chapter":        {permSignedIn},
+	"read-chapter-picker": {permSignedIn},
 	"read-page":           {permSignedIn},
 	"read-page-bounds":    {permSignedIn},
 	"read-chapter-bounds": {permSignedIn},
