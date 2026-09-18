@@ -68,6 +68,14 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
       toast.fromError(e);
     }
   };
+  const mark = async (c: Chapter, read: boolean) => {
+    try {
+      await unwrap(api.PUT("/api/v1/read/chapters/{id}/mark", { params: { path: { id: c.id } }, body: { read, scope: "chapter" } }));
+      refresh();
+    } catch (e) {
+      toast.fromError(e);
+    }
+  };
   const toggle = (set: Set<number>, id: number) => {
     const n = new Set(set);
     if (n.has(id)) n.delete(id);
@@ -118,8 +126,7 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
               <Th>{t("Released")}</Th>
               <Th>{t("State")}</Th>
               <Th>{t("File")}</Th>
-              <Th>{t("Read by")}</Th>
-              <Th className="w-28" />
+              <Th className="w-48" />
             </tr>
           </thead>
           <tbody>
@@ -145,16 +152,6 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
                           <span className="line-clamp-1 min-w-40">{c.title || <span className="text-muted">{t("Chapter") + " "}{c.number}</span>}</span>
                           <span className="text-xs text-muted">({c.releases.length})</span>
                         </button>
-                        {readable(c) && (
-                          <Link
-                            to={`/read/${c.id}`}
-                            title={c.file ? tr("Read") : tr("Read (streamed from the source)")}
-                            aria-label={`Read chapter ${c.number}`}
-                            className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted hover:bg-panel-2 hover:text-accent-2"
-                          >
-                            <BookOpen className="size-4" />
-                          </Link>
-                        )}
                       </div>
                     </Td>
                     <Td className="whitespace-nowrap text-muted">{date(c.releaseDate)}</Td>
@@ -203,17 +200,13 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
                         <span className="text-muted">—</span>
                       )}
                     </Td>
-                    <Td>
-                      <div className="flex flex-wrap gap-1">
-                        {c.readBy.map((r) => (
-                          <Badge key={r.readerId} tone={r.completed ? "ok" : "info"} title={r.completed ? `read ${relative(r.readAt)}` : `page ${r.page}`}>
-                            <Eye className="size-3" /> {r.reader}
-                          </Badge>
-                        ))}
-                      </div>
-                    </Td>
                     <Td className="text-right">
-                      <div className="flex justify-end">
+                      <div className="flex items-center justify-end gap-1">
+                        {readable(c) && (
+                          <Link to={`/read/${c.id}`} title={c.file ? tr("Read") : tr("Read (streamed from the source)")}>
+                            <Button variant="primary" icon={<BookOpen className="size-4" />}>{t("Read")}</Button>
+                          </Link>
+                        )}
                         {manage && (c.state === "cleaned" ? (
                           <IconButton title={t("Restore (download again)")} onClick={() => restore(c)}>
                             <RotateCcw className="size-4" />
@@ -233,7 +226,7 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
                   </tr>
                   {open && (
                     <tr>
-                      <Td colSpan={9} className="bg-bg/60">
+                      <Td colSpan={8} className="bg-bg/60">
                         {c.releases.length === 0 ? (
                           <p className="text-xs text-muted">{t("No releases.")}</p>
                         ) : (
@@ -255,6 +248,19 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
                             ))}
                           </div>
                         )}
+                        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
+                          <span className="text-xs font-medium text-muted">{t("Read by")}</span>
+                          {c.readBy.map((r) => (
+                            <Badge key={r.readerId} tone={r.completed ? "ok" : "info"} title={r.completed ? `read ${relative(r.readAt)}` : `page ${r.page}`}>
+                              <Eye className="size-3" /> {r.reader}
+                            </Badge>
+                          ))}
+                          {c.readBy.length === 0 && <span className="text-xs text-muted">{t("Nobody yet")}</span>}
+                          <span className="ml-auto flex gap-1">
+                            <Button size="sm" onClick={() => mark(c, true)}>{t("Mark read")}</Button>
+                            <Button size="sm" onClick={() => mark(c, false)}>{t("Mark unread")}</Button>
+                          </span>
+                        </div>
                         {c.job?.error && <p className="mt-2 text-xs text-err">{t("Last error:") + " "}{c.job.error}</p>}
                       </Td>
                     </tr>

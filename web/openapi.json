@@ -4955,6 +4955,39 @@
         ],
         "type": "object"
       },
+      "Read-markRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "read": {
+            "type": "boolean"
+          },
+          "scope": {
+            "enum": [
+              "chapter",
+              "previous"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "read",
+          "scope"
+        ],
+        "type": "object"
+      },
+      "Read-markResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "changed": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "changed"
+        ],
+        "type": "object"
+      },
       "Read-progressRequest": {
         "additionalProperties": false,
         "properties": {
@@ -12702,6 +12735,58 @@
           }
         },
         "summary": "Download a downloaded chapter's CBZ",
+        "tags": [
+          "Reader"
+        ]
+      }
+    },
+    "/api/v1/read/chapters/{id}/mark": {
+      "put": {
+        "operationId": "read-mark",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Read-markRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Read-markResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Mark this chapter, or every previous chapter, read or unread",
         "tags": [
           "Reader"
         ]

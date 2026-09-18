@@ -1219,6 +1219,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/read/chapters/{id}/mark": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Mark this chapter, or every previous chapter, read or unread */
+        put: operations["read-mark"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/read/chapters/{id}/pages/{n}": {
         parameters: {
             query?: never;
@@ -4345,6 +4362,15 @@ export interface components {
             /** Format: int64 */
             results: number;
             sourceName: string;
+        };
+        "Read-markRequest": {
+            read: boolean;
+            /** @enum {string} */
+            scope: "chapter" | "previous";
+        };
+        "Read-markResponse": {
+            /** Format: int64 */
+            changed: number;
         };
         "Read-progressRequest": {
             completed?: boolean;
@@ -8396,6 +8422,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "read-mark": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Read-markRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Read-markResponse"];
+                };
             };
             /** @description Error */
             default: {

@@ -291,6 +291,51 @@ func (s *Server) registerRead() {
 			return nil, nil
 		})
 
+	huma.Register(s.api, huma.Operation{OperationID: "read-mark", Method: http.MethodPut, Path: "/api/v1/read/chapters/{id}/mark", Tags: tags,
+		Summary: "Mark this chapter, or every previous chapter, read or unread"},
+		func(ctx context.Context, in *struct {
+			ID   int64 `path:"id"`
+			Body struct {
+				Read  bool   `json:"read"`
+				Scope string `json:"scope" enum:"chapter,previous"`
+			}
+		}) (*struct {
+			Body struct {
+				Changed int `json:"changed"`
+			}
+		}, error) {
+			rid, err := s.readerOf(ctx)
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			chapter, _, err := s.app.Reading.ChapterPages(ctx, in.ID)
+			if err != nil {
+				return nil, readError(err)
+			}
+			by := reading.By{Origin: model.EventOriginApp, Client: "Web reader", Device: browserName(access.ClientFrom(ctx).UserAgent)}
+			var outcomes []reading.Outcome
+			if in.Body.Scope == "previous" {
+				outcomes, err = s.app.Reading.MarkBeforeChapter(ctx, rid, chapter.SeriesID, chapter.ID, in.Body.Read, by)
+			} else {
+				change := reading.Change{ChapterID: chapter.ID, SeriesID: chapter.SeriesID, Completed: in.Body.Read, Unread: !in.Body.Read}
+				outcomes, err = s.app.Reading.Record(ctx, rid, []reading.Change{change}, by)
+			}
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			out := &struct {
+				Body struct {
+					Changed int `json:"changed"`
+				}
+			}{}
+			for _, outcome := range outcomes {
+				if outcome.Result == model.OutcomeApplied || outcome.Result == model.OutcomeUnread {
+					out.Body.Changed++
+				}
+			}
+			return out, nil
+		})
+
 	huma.Register(s.api, huma.Operation{OperationID: "read-file", Method: http.MethodGet, Path: "/api/v1/read/chapters/{id}/file", Tags: tags,
 		Summary: "Download a downloaded chapter's CBZ"},
 		func(ctx context.Context, in *IDPath) (*huma.StreamResponse, error) {
