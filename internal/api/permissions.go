@@ -64,6 +64,7 @@ var operationPermissions = map[string][]string{
 	"read-mark":           {permSignedIn},
 	"read-settings":       {permSignedIn},
 	"read-settings-save":  {permSignedIn},
+	"updates-list":        {permSignedIn},
 	"read-file":           {access.Download},
 
 	// reading apps (their own devices)

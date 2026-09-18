@@ -7663,6 +7663,62 @@
         ],
         "type": "object"
       },
+      "UpdateItem": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "chapterId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "coverUrl": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "series",
+              "chapter"
+            ],
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "languages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "number": {
+            "type": "string"
+          },
+          "readable": {
+            "type": "boolean"
+          },
+          "seriesId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "seriesTitle": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "at",
+          "seriesId",
+          "seriesTitle",
+          "coverUrl"
+        ],
+        "type": "object"
+      },
       "UpdateRequest": {
         "additionalProperties": false,
         "properties": {
@@ -17211,6 +17267,66 @@
         },
         "tags": [
           "Tags"
+        ]
+      }
+    },
+    "/api/v1/updates": {
+      "get": {
+        "operationId": "updates-list",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "days",
+            "schema": {
+              "default": 30,
+              "format": "int64",
+              "maximum": 365,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 100,
+              "format": "int64",
+              "maximum": 500,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/UpdateItem"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Recently discovered chapters and newly added titles visible to you",
+        "tags": [
+          "Updates"
         ]
       }
     },

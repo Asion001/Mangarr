@@ -41,6 +41,7 @@ import { DatabasePage } from "./pages/system/Database";
 import { WorkersPage } from "./pages/system/Workers";
 import { ImportsPage } from "./pages/import/Imports";
 import { ImportDetailPage } from "./pages/import/ImportDetail";
+import { UpdatesPage } from "./pages/updates/Updates";
 
 export function App() {
   useLocale();
@@ -80,6 +81,7 @@ export function App() {
       <Route element={<Layout />}>
         <Route index element={<SeriesIndex />} />
         <Route path="series/:id" element={<SeriesDetail />} />
+        <Route path="updates" element={<UpdatesPage />} />
         <Route path="account" element={<AccountPage />} />
         <Route path="add" element={<Need perm={["library.manage", "requests.manage"]}><AddSearchStep /></Need>} />
         <Route path="add/:moduleId/:metaId/sources" element={<Need perm={["library.manage", "requests.manage"]}><AddSourcesStep /></Need>} />

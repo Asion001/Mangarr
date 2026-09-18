@@ -2566,6 +2566,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/updates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Recently discovered chapters and newly added titles visible to you */
+        get: operations["updates-list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users": {
         parameters: {
             query?: never;
@@ -5161,6 +5178,23 @@ export interface components {
             mode: "reading" | "editing";
             /** Format: date-time */
             updatedAt: string;
+        };
+        UpdateItem: {
+            /** Format: date-time */
+            at: string;
+            /** Format: int64 */
+            chapterId?: number;
+            coverUrl: string;
+            /** @enum {string} */
+            kind: "series" | "chapter";
+            language?: string;
+            languages?: string[];
+            number?: string;
+            readable?: boolean;
+            /** Format: int64 */
+            seriesId: number;
+            seriesTitle: string;
+            title?: string;
         };
         UpdateRequest: {
             blockedScanlators?: string[];
@@ -11803,6 +11837,38 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "updates-list": {
+        parameters: {
+            query?: {
+                days?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateItem"][];
+                };
             };
             /** @description Error */
             default: {
