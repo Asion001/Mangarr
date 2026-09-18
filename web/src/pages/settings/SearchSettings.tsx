@@ -1,6 +1,7 @@
 import { t } from "../../lib/i18n/core";
 import { type S } from "../../api/client";
-import { Button, Card, ErrorBox, Field, Input, Loading, PageHeader, Select, Switch } from "../../components/ui";
+import { useCatalogs, useProfiles, useRootFolders } from "../../api/queries";
+import { Badge, Button, Card, ErrorBox, Field, Input, Loading, PageHeader, Select, Switch } from "../../components/ui";
 import { useSettingsDoc } from "./useSettingsDoc";
 
 type Sources = S["Sources"];
@@ -27,11 +28,19 @@ const throttleFields: { key: keyof Throttle; label: string; help?: string }[] = 
 
 export function SearchSettingsPage() {
   const doc = useSettingsDoc<Sources>("sources");
+  const { data: catalogs } = useCatalogs();
+  const { data: roots } = useRootFolders();
+  const { data: profiles } = useProfiles();
   const v = doc.value;
   const qs = v?.quickSearch;
   const setQS = (p: Partial<Sources["quickSearch"]>) => v && doc.patch({ quickSearch: { ...v.quickSearch, ...p } });
   const setT = (p: Partial<Throttle>) => v && doc.patch({ throttle: { ...v.throttle, ...p } });
   const preset = presets[v?.throttle.preset || "normal"];
+  const languageDefaults = v?.languageDefaults ?? [];
+  const patchLanguage = (index: number, patch: Partial<Sources["languageDefaults"][number]>) => {
+    if (!v) return;
+    doc.patch({ languageDefaults: languageDefaults.map((item, i) => i === index ? { ...item, ...patch } : item) });
+  };
   return (
     <>
       <PageHeader
@@ -45,6 +54,75 @@ export function SearchSettingsPage() {
       {doc.error && <ErrorBox error={doc.error} />}
       {v && qs && (
         <>
+          <Card title={t("Language defaults")} className="mb-6">
+            <p className="mb-4 text-sm text-muted">{t("Choose the source order, root folder, profile and reading direction used for each language.")}</p>
+            <div className="flex flex-col gap-4">
+              {languageDefaults.map((item, index) => {
+                const chosen = new Set(item.sources);
+                return (
+                  <div key={`${item.language}-${index}`} className="rounded-lg border border-border p-3">
+                    <div className="mb-3 grid gap-3 md:grid-cols-4">
+                      <Field label={t("Language")}>
+                        <Input value={item.language} onChange={(e) => patchLanguage(index, { language: e.target.value.trim().toLowerCase() })} />
+                      </Field>
+                      <Field label={t("Root folder")}>
+                        <Select value={item.rootFolderId || 0} onChange={(e) => patchLanguage(index, { rootFolderId: Number(e.target.value) })}>
+                          <option value={0}>{t("Automatic")}</option>
+                          {roots?.map((root) => <option key={root.id} value={root.id}>{root.path}</option>)}
+                        </Select>
+                      </Field>
+                      <Field label={t("Profile")}>
+                        <Select value={item.profileId || 0} onChange={(e) => patchLanguage(index, { profileId: Number(e.target.value) })}>
+                          <option value={0}>{t("Default")}</option>
+                          {profiles?.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
+                        </Select>
+                      </Field>
+                      <Field label={t("Reading direction")}>
+                        <Select value={item.readingDirection || ""} onChange={(e) => patchLanguage(index, { readingDirection: e.target.value as typeof item.readingDirection })}>
+                          <option value="">{t("Automatic")}</option>
+                          <option value="rtl">{t("Right to left (manga)")}</option>
+                          <option value="ltr">{t("Left to right")}</option>
+                          <option value="webtoon">{t("Webtoon (long strip)")}</option>
+                        </Select>
+                      </Field>
+                    </div>
+                    <div className="mb-2 text-sm font-medium">{t("Source priority")}</div>
+                    <div className="mb-2 flex flex-col gap-1">
+                      {item.sources.map((key, sourceIndex) => {
+                        const catalog = catalogs?.items.find((candidate) => `${candidate.moduleId}:${candidate.id}` === key);
+                        return (
+                          <div key={key} className="flex items-center gap-2 rounded bg-panel-2 px-2 py-1 text-sm">
+                            <span className="w-5 text-muted">{sourceIndex + 1}.</span>
+                            <span className="flex-1">{catalog?.displayName ?? key}</span>
+                            {catalog?.lang && <Badge>{catalog.lang}</Badge>}
+                            <Button size="sm" disabled={sourceIndex === 0} onClick={() => patchLanguage(index, { sources: swap(item.sources, sourceIndex, sourceIndex - 1) })}>{t("Up")}</Button>
+                            <Button size="sm" disabled={sourceIndex === item.sources.length - 1} onClick={() => patchLanguage(index, { sources: swap(item.sources, sourceIndex, sourceIndex + 1) })}>{t("Down")}</Button>
+                            <Button size="sm" onClick={() => patchLanguage(index, { sources: item.sources.filter((value) => value !== key) })}>{t("Remove")}</Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="flex gap-2">
+                      <Select value="" onChange={(e) => e.target.value && patchLanguage(index, { sources: [...item.sources, e.target.value] })}>
+                        <option value="">{t("Add source…")}</option>
+                        {catalogs?.items.filter((catalog) => !catalog.hidden && !chosen.has(`${catalog.moduleId}:${catalog.id}`)).map((catalog) => (
+                          <option key={`${catalog.moduleId}:${catalog.id}`} value={`${catalog.moduleId}:${catalog.id}`}>{catalog.displayName} ({catalog.lang})</option>
+                        ))}
+                      </Select>
+                      <Button onClick={() => doc.patch({ languageDefaults: languageDefaults.filter((_, i) => i !== index) })}>{t("Remove")}</Button>
+                    </div>
+                  </div>
+                );
+              })}
+              <Button
+                onClick={() => {
+                  const known = Array.from(new Set(["en", "ru", ...(catalogs?.items ?? []).map((catalog) => catalog.lang)])).filter((language) => language !== "all" && language !== "multi");
+                  const language = known.find((candidate) => !languageDefaults.some((item) => item.language === candidate)) ?? "";
+                  doc.patch({ languageDefaults: [...languageDefaults, { language, sources: [], rootFolderId: 0, profileId: 0, readingDirection: "" }] });
+                }}
+              >{t("Add language")}</Button>
+            </div>
+          </Card>
           <Card title={t("Quick search")} className="mb-6">
             <div className="flex flex-col gap-4">
               <Switch
@@ -102,4 +180,10 @@ export function SearchSettingsPage() {
       )}
     </>
   );
+}
+
+function swap<T>(values: T[], a: number, b: number): T[] {
+  const copy = [...values];
+  [copy[a], copy[b]] = [copy[b], copy[a]];
+  return copy;
 }

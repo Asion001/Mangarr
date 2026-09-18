@@ -5,6 +5,7 @@ import (
 	_ "github.com/Asion001/mangarr/internal/modules/library/kavita"
 	_ "github.com/Asion001/mangarr/internal/modules/library/komga"
 	_ "github.com/Asion001/mangarr/internal/modules/metadata/anilist"
+	_ "github.com/Asion001/mangarr/internal/modules/metadata/shikimori"
 	_ "github.com/Asion001/mangarr/internal/modules/notify/apprise"
 	_ "github.com/Asion001/mangarr/internal/modules/notify/discord"
 	_ "github.com/Asion001/mangarr/internal/modules/notify/gotify"

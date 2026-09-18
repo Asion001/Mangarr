@@ -3796,6 +3796,16 @@ export interface components {
             updatedAt: string;
             worker?: string;
         };
+        LanguageDefault: {
+            language: string;
+            /** Format: int64 */
+            profileId?: number;
+            /** @enum {string} */
+            readingDirection?: "" | "rtl" | "ltr" | "webtoon";
+            /** Format: int64 */
+            rootFolderId?: number;
+            sources: string[];
+        };
         LinkedAccount: {
             externalUser: string;
             lastError?: string;
@@ -5028,6 +5038,7 @@ export interface components {
         Sources: {
             defaultLanguages: string[];
             hideNsfw: boolean;
+            languageDefaults: components["schemas"]["LanguageDefault"][];
             quickSearch: components["schemas"]["QuickSearch"];
             throttle: components["schemas"]["ThrottleConfig"];
         };
@@ -9412,6 +9423,7 @@ export interface operations {
         parameters: {
             query?: {
                 q?: string;
+                lang?: string;
             };
             header?: never;
             path?: never;
@@ -9441,7 +9453,9 @@ export interface operations {
     };
     "series-lookup-get": {
         parameters: {
-            query?: never;
+            query?: {
+                lang?: string;
+            };
             header?: never;
             path: {
                 moduleId: number;

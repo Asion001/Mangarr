@@ -40,6 +40,18 @@ type Module interface {
 	Get(ctx context.Context, id string) (*SeriesMetadata, error)
 }
 
+// LanguageSearcher lets a provider localize search result titles for one
+// request. Providers without it continue to use Search.
+type LanguageSearcher interface {
+	SearchLanguage(ctx context.Context, query, language string, limit int) ([]SeriesMetadata, error)
+}
+
+// LanguageGetter lets an add flow keep the selected edition language when it
+// resolves the full metadata record.
+type LanguageGetter interface {
+	GetLanguage(ctx context.Context, id, language string) (*SeriesMetadata, error)
+}
+
 // ExternalLookup is implemented by providers that can resolve a series from
 // another provider's id (e.g. AniList by MAL id). Used to join providers.
 type ExternalLookup interface {

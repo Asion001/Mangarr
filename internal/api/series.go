@@ -679,13 +679,14 @@ func (s *Server) registerSeries() {
 		Summary: "Search metadata modules (merged by priority) for a new series"},
 		func(ctx context.Context, in *struct {
 			Query string `query:"q" minLength:"1"`
+			Lang  string `query:"lang" required:"false"`
 		}) (*struct {
 			Body struct {
 				Results []LookupResult `json:"results"`
 				Errors  []string       `json:"errors"`
 			}
 		}, error) {
-			cands, errs := s.app.Metadata.Search(ctx, in.Query, 10)
+			cands, errs := s.app.Metadata.SearchLanguage(ctx, in.Query, in.Lang, 10)
 			out := &struct {
 				Body struct {
 					Results []LookupResult `json:"results"`
@@ -710,12 +711,18 @@ func (s *Server) registerSeries() {
 		func(ctx context.Context, in *struct {
 			ModuleID int64  `path:"moduleId"`
 			ID       string `path:"id"`
+			Lang     string `query:"lang" required:"false"`
 		}) (*struct{ Body LookupResult }, error) {
 			mod, def, err := modules.GetAs[metadata.Module](s.app.Modules, in.ModuleID)
 			if err != nil {
 				return nil, huma.Error404NotFound(err.Error())
 			}
-			md, err := mod.Get(ctx, in.ID)
+			var md *metadata.SeriesMetadata
+			if localized, ok := mod.(metadata.LanguageGetter); ok && in.Lang != "" {
+				md, err = localized.GetLanguage(ctx, in.ID, in.Lang)
+			} else {
+				md, err = mod.Get(ctx, in.ID)
+			}
 			if err != nil {
 				return nil, huma.Error404NotFound(err.Error())
 			}

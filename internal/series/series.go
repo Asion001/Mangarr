@@ -132,7 +132,7 @@ func (s *Service) Add(ctx context.Context, req AddRequest) (*model.Series, error
 	}
 	ser.BlockedScanlators = cleanNames(req.BlockedScanlators)
 	if req.Metadata != nil {
-		resolved, err := s.agg.Resolve(ctx, *req.Metadata, nil)
+		resolved, err := s.agg.ResolveLanguage(ctx, *req.Metadata, nil, ser.Language)
 		if err != nil {
 			return nil, fmt.Errorf("metadata: %w", err)
 		}

@@ -3098,6 +3098,42 @@
         ],
         "type": "object"
       },
+      "LanguageDefault": {
+        "additionalProperties": false,
+        "properties": {
+          "language": {
+            "type": "string"
+          },
+          "profileId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "readingDirection": {
+            "enum": [
+              "",
+              "rtl",
+              "ltr",
+              "webtoon"
+            ],
+            "type": "string"
+          },
+          "rootFolderId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "language",
+          "sources"
+        ],
+        "type": "object"
+      },
       "LinkedAccount": {
         "additionalProperties": false,
         "properties": {
@@ -7256,6 +7292,12 @@
           "hideNsfw": {
             "type": "boolean"
           },
+          "languageDefaults": {
+            "items": {
+              "$ref": "#/components/schemas/LanguageDefault"
+            },
+            "type": "array"
+          },
           "quickSearch": {
             "$ref": "#/components/schemas/QuickSearch"
           },
@@ -7266,6 +7308,7 @@
         "required": [
           "hideNsfw",
           "defaultLanguages",
+          "languageDefaults",
           "quickSearch",
           "throttle"
         ],
@@ -14013,6 +14056,14 @@
               "minLength": 1,
               "type": "string"
             }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "lang",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -14060,6 +14111,14 @@
             "in": "path",
             "name": "id",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "lang",
             "schema": {
               "type": "string"
             }

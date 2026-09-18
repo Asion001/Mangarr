@@ -47,6 +47,12 @@ func (a *Aggregator) HasProviders() bool {
 
 // Search queries every active module in parallel and merges duplicates.
 func (a *Aggregator) Search(ctx context.Context, q string, limit int) ([]Candidate, []error) {
+	return a.SearchLanguage(ctx, q, "", limit)
+}
+
+// SearchLanguage asks providers that support localized searches to return
+// titles in language. Other providers remain part of the merged result set.
+func (a *Aggregator) SearchLanguage(ctx context.Context, q, language string, limit int) ([]Candidate, []error) {
 	mods := modules.ActiveAs[metadata.Module](a.mods, modules.KindMetadata)
 	results := make([][]Candidate, len(mods))
 	errs := make([]error, len(mods))
@@ -55,7 +61,13 @@ func (a *Aggregator) Search(ctx context.Context, q string, limit int) ([]Candida
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			list, err := m.Instance.Search(ctx, q, limit)
+			var list []metadata.SeriesMetadata
+			var err error
+			if localized, ok := m.Instance.(metadata.LanguageSearcher); ok && language != "" {
+				list, err = localized.SearchLanguage(ctx, q, language, limit)
+			} else {
+				list, err = m.Instance.Search(ctx, q, limit)
+			}
 			if err != nil {
 				errs[i] = errors.New(m.Def.Name + ": " + err.Error())
 				return
@@ -108,13 +120,25 @@ type Resolved struct {
 
 // Resolve fetches the primary series and enriches it from the other modules.
 func (a *Aggregator) Resolve(ctx context.Context, primary Ref, fallback *source.MangaDetails) (*Resolved, error) {
+	return a.ResolveLanguage(ctx, primary, fallback, "")
+}
+
+// ResolveLanguage preserves the requested edition language when its primary
+// metadata provider supports localized records.
+func (a *Aggregator) ResolveLanguage(ctx context.Context, primary Ref, fallback *source.MangaDetails, language string) (*Resolved, error) {
 	mods := modules.ActiveAs[metadata.Module](a.mods, modules.KindMetadata)
 	var parts []metadata.SeriesMetadata
 	var refs []Ref
 	var first *metadata.SeriesMetadata
 	for _, m := range mods {
 		if m.Def.ID == primary.ModuleID {
-			md, err := m.Instance.Get(ctx, primary.ID)
+			var md *metadata.SeriesMetadata
+			var err error
+			if localized, ok := m.Instance.(metadata.LanguageGetter); ok && language != "" {
+				md, err = localized.GetLanguage(ctx, primary.ID, language)
+			} else {
+				md, err = m.Instance.Get(ctx, primary.ID)
+			}
 			if err != nil {
 				return nil, err
 			}
