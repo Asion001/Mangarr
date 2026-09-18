@@ -200,7 +200,9 @@ type atsumaruPage struct {
 		ID   string `json:"id"`
 		Name string `json:"name"`
 	} `json:"scanlators"`
-	TotalChapterCount int `json:"totalChapterCount"`
+	// Atsumaru occasionally reports the latest fractional chapter number here
+	// (for example 37.5), despite naming the field like an integer count.
+	TotalChapterCount float64 `json:"totalChapterCount"`
 }
 
 func (a *atsumaru) page(ctx context.Context, id string) (*atsumaruPage, error) {
@@ -230,9 +232,12 @@ func (a *atsumaru) Details(ctx context.Context, ref sourcekit.Ref) (sourcekit.De
 		Manga:       sourcekit.Manga{URL: "/manga/" + p.ID, ID: p.ID, Title: atsumaruTitle(p.Title, p.EnglishTitle), CoverURL: a.image(p.Poster.Image)},
 		Description: strings.TrimSpace(p.Synopsis), Status: atsumaruStatus(p.Status), WebURL: a.site + "/manga/" + p.ID,
 	}
-	if p.TotalChapterCount > 0 {
+	// Only expose an actual count. Fractional values are chapter numbers rather
+	// than counts; the chapter listing fetched alongside details is authoritative.
+	if p.TotalChapterCount > 0 && p.TotalChapterCount == float64(int(p.TotalChapterCount)) {
 		n := p.TotalChapterCount
-		d.Chapters = &n
+		count := int(n)
+		d.Chapters = &count
 	}
 	var authors, artists []string
 	for _, x := range p.Authors {
