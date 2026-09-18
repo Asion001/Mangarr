@@ -31,6 +31,16 @@ var (
 	ErrExists   = errors.New("series already exists")
 )
 
+// ExistsError identifies the existing row so callers can make an add request
+// idempotent (notably when retrying request fulfilment after a partial failure).
+type ExistsError struct {
+	SeriesID int64
+	Title    string
+}
+
+func (e ExistsError) Error() string { return fmt.Sprintf("%s: %s", ErrExists, e.Title) }
+func (e ExistsError) Unwrap() error { return ErrExists }
+
 type ValidationError struct{ Msg string }
 
 func (e ValidationError) Error() string { return e.Msg }
@@ -125,7 +135,7 @@ func (s *Service) Add(ctx context.Context, req AddRequest) (*model.Series, error
 		if dup, err := s.findByExternal(ctx, resolved.Metadata.ExternalIDs); err != nil {
 			return nil, err
 		} else if dup != nil {
-			return nil, fmt.Errorf("%w: %s", ErrExists, dup.Title)
+			return nil, ExistsError{SeriesID: dup.ID, Title: dup.Title}
 		}
 		metadataagg.Apply(ser, resolved)
 		if req.ReadingDirection != "" {

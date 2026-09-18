@@ -105,8 +105,14 @@ func TestMangaLib(t *testing.T) {
 	if chs[0].Number != 1 || chs[0].Scanlator != "Неизвестный" || chs[0].URL != "/41--kuroshitsuji/chapter?number=1&volume=1" {
 		t.Fatalf("chapter %+v", chs[0])
 	}
+	if chs[0].WebURL != "https://mangalib.example/ru/41--kuroshitsuji/read/v1/c1" {
+		t.Fatalf("public chapter URL %q", chs[0].WebURL)
+	}
 	if chs[1].Scanlator != "Vesperum" || chs[1].URL != "/41--kuroshitsuji/chapter?branch_id=7&number=1&volume=1" {
 		t.Fatalf("the other team's chapter %+v", chs[1])
+	}
+	if chs[1].WebURL != "https://mangalib.example/ru/41--kuroshitsuji/read/v1/c1?bid=7" {
+		t.Fatalf("branch public chapter URL %q", chs[1].WebURL)
 	}
 	if chs[2].Name != "Глава 2" || chs[2].UploadedAt == nil {
 		t.Fatalf("a chapter with no name of its own: %+v", chs[2])

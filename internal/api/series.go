@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/Asion001/mangarr/internal/access"
+	"fmt"
 	"net/http"
 	"os"
 	"strconv"
@@ -14,6 +14,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/uptrace/bun"
 
+	"github.com/Asion001/mangarr/internal/access"
 	"github.com/Asion001/mangarr/internal/decision"
 	"github.com/Asion001/mangarr/internal/metadataagg"
 	"github.com/Asion001/mangarr/internal/model"
@@ -218,11 +219,12 @@ func (s *Server) readingInfo(ctx context.Context, ser *model.Series, fullPath st
 		ColumnExpr("MAX(rs.read_at) AS last_read").
 		Where("rs.series_id = ?", ser.ID).GroupExpr("rs.reader_id, r.name").OrderExpr("r.name").Scan(ctx, &rows)
 	own, onlyOwn := ownReaderOnly(ctx)
+	labels := s.progressReaderLabels(ctx)
 	for _, r := range rows {
 		if onlyOwn && r.ReaderID != own {
 			continue // others' progress is theirs
 		}
-		rp := ReaderProgress{ReaderID: r.ReaderID, Reader: r.Name, Read: r.Read, InProgress: r.InProgress}
+		rp := ReaderProgress{ReaderID: r.ReaderID, Reader: progressReaderLabel(ctx, labels, r.ReaderID, r.Name), Read: r.Read, InProgress: r.InProgress}
 		if !r.LastRead.IsZero() {
 			t := r.LastRead.Time
 			rp.LastReadAt = &t
@@ -255,6 +257,32 @@ func (s *Server) readingInfo(ctx context.Context, ser *model.Series, fullPath st
 		}
 	}
 	return info
+}
+
+// progressReaderLabels decouples a person's visible identity from the name of
+// the storage bucket their progress was first imported into.
+func (s *Server) progressReaderLabels(ctx context.Context) map[int64]string {
+	var users []model.User
+	_ = s.app.DB.NewSelect().Model(&users).Column("reader_id", "username", "display_name").Where("reader_id IS NOT NULL").Scan(ctx)
+	out := make(map[int64]string, len(users))
+	for _, u := range users {
+		name := strings.TrimSpace(u.DisplayName)
+		if name == "" {
+			name = u.Username
+		}
+		out[u.ReaderID] = name
+	}
+	return out
+}
+
+func progressReaderLabel(ctx context.Context, labels map[int64]string, readerID int64, fallback string) string {
+	if p := access.From(ctx); p != nil && p.Kind == access.KindUser && p.ReaderID == readerID {
+		return "You"
+	}
+	if name := labels[readerID]; name != "" {
+		return name
+	}
+	return fallback
 }
 
 func (s *Server) seriesResource(ctx context.Context, ser model.Series, stats map[int64]SeriesStats, detail bool) SeriesResource {
@@ -348,11 +376,13 @@ func (s *Server) chapterResources(ctx context.Context, seriesID int64) ([]Chapte
 	}
 	readBy := map[int64][]ReadStateView{}
 	own, onlyOwn := ownReaderOnly(ctx)
+	labels := s.progressReaderLabels(ctx)
 	for _, r := range reads {
 		if onlyOwn && r.ReaderID != own {
 			continue
 		}
-		readBy[r.ChapterID] = append(readBy[r.ChapterID], ReadStateView{ReaderID: r.ReaderID, Reader: r.Name, Completed: r.Completed, Page: r.Page, ReadAt: r.ReadAt})
+		readBy[r.ChapterID] = append(readBy[r.ChapterID], ReadStateView{ReaderID: r.ReaderID,
+			Reader: progressReaderLabel(ctx, labels, r.ReaderID, r.Name), Completed: r.Completed, Page: r.Page, ReadAt: r.ReadAt})
 	}
 	out := make([]ChapterResource, 0, len(chapters))
 	for _, ch := range chapters {
@@ -594,12 +624,19 @@ func (s *Server) registerSeries() {
 	huma.Register(s.api, huma.Operation{OperationID: "series-add", Method: http.MethodPost, Path: "/api/v1/series", Tags: tags},
 		func(ctx context.Context, in *struct{ Body series.AddRequest }) (*struct{ Body SeriesResource }, error) {
 			ser, err := s.app.Series.Add(ctx, in.Body)
+			var exists series.ExistsError
+			if err != nil && in.Body.RequestID > 0 && errors.As(err, &exists) {
+				// Retrying an add after the series row was committed but request
+				// fulfilment failed must finish the link, not create a duplicate.
+				ser, err = s.app.Series.Get(ctx, exists.SeriesID)
+			}
 			if err != nil {
 				return nil, seriesError(err)
 			}
 			if in.Body.RequestID > 0 {
 				if err := s.app.Requests.Link(ctx, in.Body.RequestID, ser.ID, access.From(ctx)); err != nil {
-					s.app.Log.Warn("link request", "request", in.Body.RequestID, "err", err)
+					return nil, huma.Error500InternalServerError(fmt.Sprintf(
+						"series %d was added, but the request is still pending: %v; retry Add or link it from Requests", ser.ID, err))
 				}
 			}
 			return &struct{ Body SeriesResource }{s.seriesResource(ctx, *ser, nil, true)}, nil

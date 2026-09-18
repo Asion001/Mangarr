@@ -219,11 +219,13 @@ func (s *Service) autoAdd(id int64) {
 	res, err := s.Search.Quick(ctx, sourcesearch.QuickSearchInput{Query: r.Title, Titles: append([]string{r.Title}, r.Metadata.AltTitles...)}, sourcesearch.QuickOptions{})
 	if err != nil || res.Match == nil {
 		s.Log.Info("request waits for a manager: no confident source", "request", r.Title, "err", err)
+		s.attemptFailed(ctx, id, "No confident source match was found; choose a source and retry Add.", err)
 		return
 	}
 	var roots []model.RootFolder
 	if err := s.DB.NewSelect().Model(&roots).Order("id").Scan(ctx); err != nil || len(roots) == 0 {
 		s.Log.Warn("request waits for a manager: no root folder", "request", r.Title)
+		s.attemptFailed(ctx, id, "No root folder is configured.", err)
 		return
 	}
 	m := res.Match
@@ -237,12 +239,33 @@ func (s *Service) autoAdd(id int64) {
 			Title: m.Manga.Title, SourceName: m.SourceName, Lang: m.Lang}},
 		RootFolderID: roots[0].ID, Monitor: model.MonitorAll, MonitorNew: model.MonitorAll, SearchMissing: true, ReadingDirection: dir,
 	})
+	var exists series.ExistsError
+	if errors.As(err, &exists) {
+		ser, err = s.Series.Get(ctx, exists.SeriesID)
+	}
 	if err != nil {
 		s.Log.Warn("request waits for a manager: couldn't add it", "request", r.Title, "err", err)
+		s.attemptFailed(ctx, id, "Automatic add failed.", err)
 		return
 	}
 	s.Log.Info("request added automatically", "request", r.Title, "series", ser.ID, "source", m.SourceName)
-	_ = s.Link(ctx, id, ser.ID, nil)
+	if err := s.Link(ctx, id, ser.ID, nil); err != nil {
+		s.Log.Warn("request added but could not be linked", "request", r.Title, "series", ser.ID, "err", err)
+		s.attemptFailed(ctx, id, fmt.Sprintf("Series %d was added, but request fulfilment failed; use Link to retry.", ser.ID), err)
+	}
+}
+
+func (s *Service) attemptFailed(ctx context.Context, id int64, message string, cause error) {
+	if cause != nil {
+		message += " " + cause.Error()
+	}
+	message = strings.TrimSpace(message)
+	if len(message) > 500 {
+		message = message[:500]
+	}
+	_, _ = s.DB.NewUpdate().Model((*model.Request)(nil)).Set("reason = ?", message).Set("updated_at = ?", time.Now().UTC()).
+		Where("id = ? AND status = ?", id, model.RequestPending).Exec(ctx)
+	s.Bus.Changed("request", "updated", id)
 }
 
 // Link marks a request fulfilled by a series (approved, or available when it

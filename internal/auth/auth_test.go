@@ -159,3 +159,34 @@ func TestUpgrade(t *testing.T) {
 		t.Fatalf("groups %d", n)
 	}
 }
+
+func TestUpgradeRenamesImportedReader(t *testing.T) {
+	ctx := context.Background()
+	d := dbtest.SQLite(t)
+	st := settings.NewStore(d)
+	_, _ = st.EnsureSecrets(ctx)
+	now := time.Now().UTC()
+	r := &model.Reader{Name: "Mihon backup", CountForCleanup: true, CreatedAt: now}
+	_, _ = d.NewInsert().Model(r).Exec(ctx)
+	event := &model.ReadEvent{ReaderID: r.ID, ChapterID: 10, SeriesID: 20, Chapters: 1, Completed: true,
+		Origin: model.EventOriginBackup, Outcome: model.OutcomeApplied, At: now}
+	if _, err := d.NewInsert().Model(event).Exec(ctx); err != nil {
+		t.Fatal(err)
+	}
+	u := &model.User{Username: "sam", DisplayName: "Sam", PasswordHash: "$2a$10$x", CreatedAt: now}
+	if _, err := d.NewInsert().Model(u).Exec(ctx); err != nil {
+		t.Fatal(err)
+	}
+	s := auth.NewService(d, st, false)
+	if err := s.Upgrade(ctx, r.ID); err != nil {
+		t.Fatal(err)
+	}
+	var got model.Reader
+	if err := d.NewSelect().Model(&got).Where("id = ?", r.ID).Scan(ctx); err != nil || got.Name != "Sam" {
+		t.Fatalf("reader after adoption: %+v %v", got, err)
+	}
+	var kept model.ReadEvent
+	if err := d.NewSelect().Model(&kept).Where("id = ?", event.ID).Scan(ctx); err != nil || kept.ReaderID != r.ID || kept.Origin != model.EventOriginBackup {
+		t.Fatalf("imported progress was not preserved: %+v %v", kept, err)
+	}
+}

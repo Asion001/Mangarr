@@ -54,7 +54,8 @@ func (f *fakeSite) Details(_ context.Context, ref sourcekit.Ref) (sourcekit.Deta
 
 func (f *fakeSite) Chapters(context.Context, sourcekit.Ref) ([]sourcekit.Chapter, error) {
 	at := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
-	return []sourcekit.Chapter{{URL: "/c/2", ID: "c-2", Name: "Ch. 2", Number: 2, Scanlator: "Group", UploadedAt: &at}}, nil
+	return []sourcekit.Chapter{{URL: "/c/2", ID: "c-2", Name: "Ch. 2", Number: 2, Scanlator: "Group", UploadedAt: &at,
+		WebURL: "/reader/c/2"}}, nil
 }
 
 func (f *fakeSite) Pages(_ context.Context, ch sourcekit.PageRef) ([]sourcekit.PageImage, error) {
@@ -111,6 +112,9 @@ func TestModuleServesASite(t *testing.T) {
 	if err != nil || d.Author != "A" || d.Status != source.StatusOngoing || len(chs) != 1 || chs[0].Number != 2 {
 		t.Fatalf("manga: %v %+v %+v", err, d, chs)
 	}
+	if chs[0].WebURL != srv.URL+"/reader/c/2" {
+		t.Fatalf("relative public chapter URL was not normalized: %q", chs[0].WebURL)
+	}
 	got, err := m.Pages(ctx, source.ChapterRef{Manga: d.MangaRef, URL: chs[0].URL, EngineRef: chs[0].EngineRef})
 	if err != nil || len(got) != 1 || got[0].SourceID != "fake" {
 		t.Fatalf("pages: %v %+v", err, got)
@@ -133,6 +137,20 @@ func TestModuleServesASite(t *testing.T) {
 	req, err := m.PageRequest(ctx, got[0])
 	if err != nil || req.URL != pages[0].URL || req.Headers["Referer"] == "" || req.Headers["User-Agent"] == "" {
 		t.Fatalf("page request: %v %+v", err, req)
+	}
+}
+
+func TestPublicURL(t *testing.T) {
+	for _, tc := range []struct{ raw, want string }{
+		{"chapter/1", "https://example.org/base/chapter/1"},
+		{"/chapter/1", "https://example.org/chapter/1"},
+		{"https://reader.example/chapter/1", "https://reader.example/chapter/1"},
+		{"javascript:alert(1)", ""},
+		{"//", ""},
+	} {
+		if got := publicURL("https://example.org/base/", tc.raw); got != tc.want {
+			t.Errorf("publicURL(%q) = %q, want %q", tc.raw, got, tc.want)
+		}
 	}
 }
 

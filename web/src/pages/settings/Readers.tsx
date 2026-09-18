@@ -2,7 +2,7 @@ import { t as tr, t } from "../../lib/i18n/core";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router";
-import { Plus, RefreshCw, Trash2, UserPlus } from "lucide-react";
+import { Plus, RefreshCw, Save, Trash2, UserPlus } from "lucide-react";
 import { api, unwrap, type Reader } from "../../api/client";
 import { useModules, usePushCommand, useReaders, useSchema } from "../../api/queries";
 import { DynamicForm } from "../../components/DynamicForm";
@@ -33,9 +33,13 @@ export function ReadersPage() {
       toast.fromError(e);
     }
   };
-  const update = async (r: Reader, countForCleanup: boolean) => {
-    await unwrap(api.PUT("/api/v1/readers/{id}", { params: { path: { id: r.id } }, body: { name: r.name, countForCleanup } }));
-    qc.invalidateQueries({ queryKey: ["readers"] });
+  const update = async (r: Reader, name: string, countForCleanup: boolean) => {
+    try {
+      await unwrap(api.PUT("/api/v1/readers/{id}", { params: { path: { id: r.id } }, body: { name: name.trim(), countForCleanup } }));
+      qc.invalidateQueries({ queryKey: ["readers"] });
+    } catch (e) {
+      toast.fromError(e);
+    }
   };
   const removeAccount = async (r: Reader, accountId: number) => {
     await unwrap(api.DELETE("/api/v1/readers/{id}/accounts/{accountId}", { params: { path: { id: r.id, accountId } } }));
@@ -84,7 +88,8 @@ export function ReadersPage() {
             }
           >
             <div className="flex flex-col gap-3">
-              <Switch checked={r.countForCleanup} onChange={(v) => update(r, v)} label={t("Counts for cleanup")} />
+              <ReaderNameEditor reader={r} save={(value) => update(r, value, r.countForCleanup)} />
+              <Switch checked={r.countForCleanup} onChange={(v) => update(r, r.name, v)} label={t("Counts for cleanup")} />
               {r.accounts.map((a) => (
                 <div key={a.id} className="flex items-center gap-2 rounded bg-panel-2 px-3 py-2 text-sm">
                   <Badge tone="info">{a.moduleName}</Badge>
@@ -118,6 +123,27 @@ export function ReadersPage() {
       {account && <AccountModal reader={account} onClose={() => setAccount(null)} />}
       <Confirm open={!!deleting} title={t("Delete reader")} danger confirmLabel={t("Delete")} message={`Delete ${deleting?.name} and their progress?`} onConfirm={remove} onClose={() => setDeleting(null)} />
     </>
+  );
+}
+
+function ReaderNameEditor({ reader, save }: { reader: Reader; save: (name: string) => Promise<void> }) {
+  const [name, setName] = useState(reader.name);
+  const [saving, setSaving] = useState(false);
+  const changed = name.trim() !== reader.name && name.trim() !== "";
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!changed) return;
+    setSaving(true);
+    await save(name);
+    setSaving(false);
+  };
+  return (
+    <form className="flex items-end gap-2" onSubmit={submit}>
+      <Field label={t("Progress label")} className="min-w-0 flex-1">
+        <Input value={name} onChange={(e) => setName(e.target.value)} />
+      </Field>
+      <Button type="submit" size="sm" loading={saving} disabled={!changed} icon={<Save className="size-4" />}>{t("Save")}</Button>
+    </form>
   );
 }
 

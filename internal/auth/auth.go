@@ -216,6 +216,8 @@ func (s *Service) Upgrade(ctx context.Context, preferredReader int64) error {
 					return err
 				}
 				rid = r.ID
+			} else if err := renameImportedReader(ctx, tx, rid, u); err != nil {
+				return err
 			}
 			_, err := tx.NewUpdate().Model((*model.User)(nil)).Set("reader_id = ?", rid).Where("id = ?", u.ID).Exec(ctx)
 			return err
@@ -233,6 +235,34 @@ func (s *Service) Upgrade(ctx context.Context, preferredReader int64) error {
 	}
 	s.Invalidate()
 	return nil
+}
+
+// renameImportedReader gives an unowned backup placeholder the account's
+// identity when it is adopted. The progress rows stay on the same reader, so
+// provenance and history are preserved. Non-placeholder and ambiguous names
+// are deliberately left alone.
+func renameImportedReader(ctx context.Context, tx bun.IDB, readerID int64, u *model.User) error {
+	var r model.Reader
+	if err := tx.NewSelect().Model(&r).Where("id = ?", readerID).Scan(ctx); err != nil {
+		return err
+	}
+	if r.Name != "Mihon backup" && r.Name != "Aidoku backup" {
+		return nil
+	}
+	name := strings.TrimSpace(u.DisplayName)
+	if name == "" {
+		name = u.Username
+	}
+	if name == "" {
+		return nil
+	}
+	if n, err := tx.NewSelect().Model((*model.Reader)(nil)).Where("name = ? AND id <> ?", name, readerID).Count(ctx); err != nil {
+		return err
+	} else if n > 0 {
+		return nil
+	}
+	_, err := tx.NewUpdate().Model((*model.Reader)(nil)).Set("name = ?", name).Where("id = ?", readerID).Exec(ctx)
+	return err
 }
 
 // PrincipalByName builds the principal of a user by username (nil when

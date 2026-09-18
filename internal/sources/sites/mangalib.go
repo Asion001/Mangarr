@@ -349,12 +349,18 @@ func (m *mangalib) Chapters(ctx context.Context, ref sourcekit.Ref) ([]sourcekit
 		}
 		for _, b := range branches {
 			q := url.Values{"number": {c.Number}, "volume": {c.Volume}}
+			webQuery := url.Values{}
 			if b.BranchID != nil {
 				q.Set("branch_id", strconv.FormatInt(*b.BranchID, 10))
+				webQuery.Set("bid", strconv.FormatInt(*b.BranchID, 10))
+			}
+			webURL := fmt.Sprintf("%s/ru/%s/read/v%s/c%s", m.site, slug, c.Volume, c.Number)
+			if encoded := webQuery.Encode(); encoded != "" {
+				webURL += "?" + encoded
 			}
 			ch := sourcekit.Chapter{URL: "/" + slug + "/chapter?" + q.Encode(), ID: strconv.FormatInt(b.ID, 10),
 				Name: name, Number: number,
-				WebURL: fmt.Sprintf("%s/ru/manga/%s/read/v%s/c%s", m.site, slug, c.Volume, c.Number)}
+				WebURL: webURL}
 			var teams []string
 			for _, t := range b.Teams {
 				teams = append(teams, t.Name)
