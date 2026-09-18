@@ -150,6 +150,7 @@ series-sources-bulk POST /api/v1/series/sources/bulk -> library.manage
 series-sources-switch POST /api/v1/series/sources/switch -> library.manage
 series-unfollow DELETE /api/v1/series/{id}/follow -> signedin
 series-update PUT /api/v1/series/{id} -> library.manage
+series-work-update PUT /api/v1/series/{id}/work -> library.manage
 settings-get-cleanup GET /api/v1/settings/cleanup -> admin
 settings-get-downloads GET /api/v1/settings/downloads -> admin
 settings-get-general GET /api/v1/settings/general -> admin

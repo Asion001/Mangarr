@@ -1888,6 +1888,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/series/{id}/work": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Group this language edition with a work, or separate it with workId 0 */
+        put: operations["series-work-update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/settings/cleanup": {
         parameters: {
             query?: never;
@@ -2865,6 +2882,8 @@ export interface components {
             sources: components["schemas"]["SourceLink"][];
             tags?: number[];
             title?: string;
+            /** Format: int64 */
+            workId?: number;
         };
         "Auth-passwordRequest": {
             /** @description Your current password */
@@ -3317,6 +3336,13 @@ export interface components {
             /** @description postgres://user:password@host:5432/database?sslmode=disable, or sqlite:///path/file.db */
             dsn: string;
             overwrite?: boolean;
+        };
+        EditionSummary: {
+            coverUrl: string;
+            /** Format: int64 */
+            id: number;
+            language?: string;
+            title: string;
         };
         EditorRequest: {
             /** @enum {string} */
@@ -4742,6 +4768,10 @@ export interface components {
             /** Format: int64 */
             toModuleId: number;
         };
+        "Series-work-updateRequest": {
+            /** Format: int64 */
+            workId: number;
+        };
         SeriesMetadata: {
             ageRating?: string;
             altTitles?: string[];
@@ -4782,6 +4812,7 @@ export interface components {
             addedAt: string;
             blockedScanlators?: string[];
             coverUrl: string;
+            editions?: components["schemas"]["EditionSummary"][];
             following: boolean;
             fullPath?: string;
             /** Format: int64 */
@@ -4807,6 +4838,9 @@ export interface components {
             title: string;
             /** Format: date-time */
             updatedAt: string;
+            /** Format: int64 */
+            workId?: number;
+            workTitle?: string;
         };
         SeriesSource: {
             /** Format: date-time */
@@ -10038,6 +10072,39 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "series-work-update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Series-work-updateRequest"];
+            };
+        };
         responses: {
             /** @description No Content */
             204: {

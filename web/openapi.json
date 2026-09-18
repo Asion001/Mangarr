@@ -176,6 +176,10 @@
           },
           "title": {
             "type": "string"
+          },
+          "workId": {
+            "format": "int64",
+            "type": "integer"
           }
         },
         "required": [
@@ -1623,6 +1627,30 @@
         },
         "required": [
           "dsn"
+        ],
+        "type": "object"
+      },
+      "EditionSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "coverUrl": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "language": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "coverUrl"
         ],
         "type": "object"
       },
@@ -6386,6 +6414,19 @@
         ],
         "type": "object"
       },
+      "Series-work-updateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "workId": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "workId"
+        ],
+        "type": "object"
+      },
       "SeriesMetadata": {
         "additionalProperties": false,
         "properties": {
@@ -6519,6 +6560,12 @@
           "coverUrl": {
             "type": "string"
           },
+          "editions": {
+            "items": {
+              "$ref": "#/components/schemas/EditionSummary"
+            },
+            "type": "array"
+          },
           "following": {
             "type": "boolean"
           },
@@ -6589,6 +6636,13 @@
           },
           "updatedAt": {
             "format": "date-time",
+            "type": "string"
+          },
+          "workId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "workTitle": {
             "type": "string"
           }
         },
@@ -14906,6 +14960,51 @@
             "description": "Error"
           }
         },
+        "tags": [
+          "Series"
+        ]
+      }
+    },
+    "/api/v1/series/{id}/work": {
+      "put": {
+        "operationId": "series-work-update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Series-work-updateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Group this language edition with a work, or separate it with workId 0",
         "tags": [
           "Series"
         ]

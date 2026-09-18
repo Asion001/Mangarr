@@ -281,6 +281,18 @@ type ThrottleConfig struct {
 
 // ---- Series -----------------------------------------------------------------
 
+// Work is a canonical title shared by one or more language editions. Series
+// owns all operational state; Work owns only identity and shared display data.
+type Work struct {
+	bun.BaseModel `bun:"table:works"`
+	ID            int64          `bun:"id,pk,autoincrement" json:"id"`
+	Title         string         `bun:"title,notnull" json:"title"`
+	SortTitle     string         `bun:"sort_title,notnull" json:"sortTitle"`
+	Metadata      SeriesMetadata `bun:"metadata,notnull" json:"metadata"`
+	CreatedAt     time.Time      `bun:"created_at,notnull" json:"createdAt"`
+	UpdatedAt     time.Time      `bun:"updated_at,notnull" json:"updatedAt"`
+}
+
 const (
 	StatusUnknown   = "unknown"
 	StatusOngoing   = "ongoing"
@@ -292,6 +304,7 @@ const (
 type Series struct {
 	bun.BaseModel    `bun:"table:series"`
 	ID               int64          `bun:"id,pk,autoincrement" json:"id"`
+	WorkID           int64          `bun:"work_id,nullzero" json:"workId,omitempty"`
 	Title            string         `bun:"title,notnull" json:"title"`
 	SortTitle        string         `bun:"sort_title,notnull" json:"sortTitle"`
 	Status           string         `bun:"status,notnull" json:"status"`

@@ -51,6 +51,9 @@ func (a *App) wire(ctx context.Context) error {
 	a.Downloads.Tasks = a.Tasks
 	a.AddService(a.Downloads)
 	a.Series = series.New(a.DB, a.Bus, a.Library, a.Metadata, a.Modules, a.Queue, log.With("component", "series"))
+	if err := a.Series.ReconcileWorks(ctx); err != nil {
+		return fmt.Errorf("group language editions: %w", err)
+	}
 	a.Series.UseSearch(a.Search) // adding a source in bulk finds each series at the catalog
 
 	a.Queue.Register(jobs.Definition{Name: "RefreshSources", Description: "Check linked sources that are due for new chapters",

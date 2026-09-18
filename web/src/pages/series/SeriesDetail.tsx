@@ -72,6 +72,7 @@ export function SeriesDetail() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <h1 className="text-2xl font-semibold leading-tight">{s.title}</h1>
+              {s.workTitle && s.workTitle !== s.title && <p className="mt-1 text-sm text-muted">{s.workTitle}</p>}
               {md.altTitles && md.altTitles.length > 0 && <p className="mt-1 line-clamp-1 text-sm text-muted">{md.altTitles.slice(0, 4).join(" · ")}</p>}
             </div>
             <div className="flex items-center gap-3">
@@ -79,6 +80,21 @@ export function SeriesDetail() {
               {manage && <Switch checked={s.monitored} onChange={setMonitored} label={s.monitored ? tr("Monitored") : tr("Unmonitored")} />}
             </div>
           </div>
+          {(s.editions?.length ?? 0) > 1 && (
+            <nav className="mt-3 flex flex-wrap gap-2" aria-label={t("Language editions")}>
+              {(s.editions ?? []).map((edition) => (
+                <Link
+                  key={edition.id}
+                  to={`/series/${edition.id}`}
+                  aria-current={edition.id === id ? "page" : undefined}
+                  className={`rounded-md border px-3 py-1.5 text-sm ${edition.id === id ? "border-accent bg-accent/15 text-accent-2" : "border-border bg-panel hover:border-accent/60"}`}
+                >
+                  <span className="font-medium uppercase">{edition.language || "?"}</span>
+                  {edition.title !== s.title && <span className="ml-2 text-muted">{edition.title}</span>}
+                </Link>
+              ))}
+            </nav>
+          )}
           <div className="mt-3 flex flex-wrap gap-1.5">
             <Badge tone={statusTone(s.status)}>{s.status}</Badge>
             {md.format && <Badge>{md.format}</Badge>}

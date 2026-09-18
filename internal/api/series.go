@@ -79,6 +79,17 @@ type SeriesResource struct {
 	Reading  *ReadingInfo         `json:"reading,omitempty"`
 	// Following: you follow it (new chapters on your notification targets).
 	Following bool `json:"following"`
+	// WorkTitle is the canonical list title; Editions are independently
+	// managed language variants of that work.
+	WorkTitle string           `json:"workTitle,omitempty"`
+	Editions  []EditionSummary `json:"editions,omitempty"`
+}
+
+type EditionSummary struct {
+	ID       int64  `json:"id"`
+	Title    string `json:"title"`
+	Language string `json:"language,omitempty"`
+	CoverURL string `json:"coverUrl"`
 }
 
 type statsRow struct {
@@ -294,6 +305,49 @@ func (s *Server) seriesResource(ctx context.Context, ser model.Series, stats map
 		r.Reading = s.readingInfo(ctx, &ser, r.FullPath)
 	}
 	return r
+}
+
+func editionSummary(ser model.Series) EditionSummary {
+	return EditionSummary{ID: ser.ID, Title: ser.Title, Language: ser.Language,
+		CoverURL: "api/v1/series/" + strconv.FormatInt(ser.ID, 10) + "/cover?v=" + strconv.FormatInt(ser.UpdatedAt.Unix(), 10)}
+}
+
+func addStats(a, b SeriesStats) SeriesStats {
+	a.ChapterCount += b.ChapterCount
+	a.MonitoredCount += b.MonitoredCount
+	a.FileCount += b.FileCount
+	a.MissingCount += b.MissingCount
+	a.CleanedCount += b.CleanedCount
+	a.SizeOnDisk += b.SizeOnDisk
+	a.SpaceSaved += b.SpaceSaved
+	a.ReadCount += b.ReadCount
+	a.InProgressCount += b.InProgressCount
+	if b.LastChapter > a.LastChapter {
+		a.LastChapter = b.LastChapter
+	}
+	if b.LastReadAt != nil && (a.LastReadAt == nil || b.LastReadAt.After(*a.LastReadAt)) {
+		a.LastReadAt = b.LastReadAt
+	}
+	return a
+}
+
+func (s *Server) workContext(ctx context.Context, seriesID int64) (string, []EditionSummary) {
+	var selected model.Series
+	if err := s.app.DB.NewSelect().Model(&selected).Column("work_id").Where("id = ?", seriesID).Scan(ctx); err != nil || selected.WorkID == 0 {
+		return "", nil
+	}
+	var work model.Work
+	_ = s.app.DB.NewSelect().Model(&work).Column("title").Where("id = ?", selected.WorkID).Scan(ctx)
+	var editions []model.Series
+	_ = s.app.DB.NewSelect().Model(&editions).Where("work_id = ?", selected.WorkID).Order("language", "id").Scan(ctx)
+	p := access.From(ctx)
+	out := make([]EditionSummary, 0, len(editions))
+	for _, edition := range editions {
+		if p.Sees(&edition) {
+			out = append(out, editionSummary(edition))
+		}
+	}
+	return work.Title, out
 }
 
 type ReleaseView struct {
@@ -546,13 +600,47 @@ func (s *Server) registerSeries() {
 			}
 			p := access.From(ctx)
 			following := s.follows(ctx)
-			out := make([]SeriesResource, 0, len(list))
+			visible := make([]model.Series, 0, len(list))
 			for _, ser := range list {
 				if p.Sees(&ser) {
-					r := s.seriesResource(ctx, ser, stats, false)
-					r.Following = following[ser.ID]
-					out = append(out, r)
+					visible = append(visible, ser)
 				}
+			}
+			works := map[int64]model.Work{}
+			var workRows []model.Work
+			_ = s.app.DB.NewSelect().Model(&workRows).Scan(ctx)
+			for _, work := range workRows {
+				works[work.ID] = work
+			}
+			groups := map[int64][]model.Series{}
+			var order []int64
+			for _, ser := range visible {
+				key := ser.WorkID
+				if key == 0 {
+					key = -ser.ID
+				}
+				if len(groups[key]) == 0 {
+					order = append(order, key)
+				}
+				groups[key] = append(groups[key], ser)
+			}
+			out := make([]SeriesResource, 0, len(groups))
+			for _, key := range order {
+				editions := groups[key]
+				representative := editions[0]
+				r := s.seriesResource(ctx, representative, stats, false)
+				r.Editions = make([]EditionSummary, 0, len(editions))
+				r.Stats = SeriesStats{}
+				for _, edition := range editions {
+					r.Editions = append(r.Editions, editionSummary(edition))
+					r.Stats = addStats(r.Stats, stats[edition.ID])
+					r.Following = r.Following || following[edition.ID]
+				}
+				if work, ok := works[representative.WorkID]; ok {
+					r.WorkTitle = work.Title
+					r.Title, r.SortTitle = work.Title, work.SortTitle
+				}
+				out = append(out, r)
 			}
 			return &struct{ Body []SeriesResource }{out}, nil
 		})
@@ -569,7 +657,22 @@ func (s *Server) registerSeries() {
 			}
 			r := s.seriesResource(ctx, *ser, stats, true)
 			r.Following = s.follows(ctx)[ser.ID]
+			r.WorkTitle, r.Editions = s.workContext(ctx, ser.ID)
 			return &struct{ Body SeriesResource }{r}, nil
+		})
+
+	huma.Register(s.api, huma.Operation{OperationID: "series-work-update", Method: http.MethodPut, Path: "/api/v1/series/{id}/work", Tags: tags,
+		Summary: "Group this language edition with a work, or separate it with workId 0"},
+		func(ctx context.Context, in *struct {
+			ID   int64 `path:"id"`
+			Body struct {
+				WorkID int64 `json:"workId"`
+			}
+		}) (*struct{}, error) {
+			if _, err := s.visibleSeries(ctx, in.ID); err != nil {
+				return nil, err
+			}
+			return nil, seriesError(s.app.Series.SetWork(ctx, in.ID, in.Body.WorkID))
 		})
 
 	huma.Register(s.api, huma.Operation{OperationID: "series-lookup", Method: http.MethodGet, Path: "/api/v1/series/lookup", Tags: tags,
