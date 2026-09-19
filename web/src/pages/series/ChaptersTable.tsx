@@ -10,6 +10,7 @@ import { bytes, date, relative } from "../../lib/format";
 import { useToast } from "../../lib/toast";
 import { eta } from "../../lib/liveProgress";
 import { useListParam } from "../../lib/urlState";
+import { useAccount } from "../../lib/account";
 
 const stateTone: Record<string, "ok" | "warn" | "err" | "info" | "default" | "accent"> = {
   imported: "ok",
@@ -28,6 +29,7 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
   const { data, isLoading, error } = useChapters(seriesId);
   const qc = useQueryClient();
   const toast = useToast();
+  const { account } = useAccount();
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [explain, setExplain] = useState<Chapter | null>(null);
@@ -313,7 +315,7 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
                           <span className="text-xs font-medium text-muted">{t("Read by")}</span>
                           {c.readBy.map((r) => (
                             <Badge key={r.readerId} tone={r.completed ? "ok" : "info"} title={r.completed ? `read ${relative(r.readAt)}` : `page ${r.page}`}>
-                              <Eye className="size-3" /> {r.reader}
+                              <Eye className="size-3" /> {account?.kind === "user" ? (r.completed ? t("Read") : `${t("Page")} ${r.page}`) : r.reader}
                             </Badge>
                           ))}
                           {c.readBy.length === 0 && <span className="text-xs text-muted">{t("Nobody yet")}</span>}

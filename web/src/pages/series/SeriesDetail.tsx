@@ -152,7 +152,7 @@ export function SeriesDetail() {
               {s.reading.readers.map((r) => (
                 <span key={r.readerId} className="text-muted" title={r.lastReadAt ? `last read ${relative(r.lastReadAt)}` : undefined}>
                   <Eye className="mr-1 inline size-3.5" />
-                  {r.reader}: {r.read}/{s.stats.chapterCount}{" " + t("read")}{r.inProgress > 0 && `, ${r.inProgress} started`}
+                  {account?.kind === "user" ? "" : `${r.reader}: `}{r.read}/{s.stats.chapterCount}{" " + t("read")}{r.inProgress > 0 && `, ${r.inProgress} started`}
                 </span>
               ))}
               {s.reading.webUrl && (
