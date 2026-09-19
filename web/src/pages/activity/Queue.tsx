@@ -14,19 +14,18 @@ import { describe, useLiveProgress } from "../../lib/liveProgress";
 const tone = (s: string) => (s === "completed" ? "ok" : s === "failed" ? "err" : s === "paused" ? "warn" : s === "queued" ? "default" : "info");
 const statuses = ["downloading", "processing", "importing", "queued", "paused", "failed", "completed"] as const;
 type Action = "pause" | "resume" | "retry" | "remove" | "blocklist" | "top" | "bottom";
-const PAGE = 100;
 
-export function QueuePage() {
+export function QueuePage({ mode }: { mode: "downloads" | "processing" }) {
   const qc = useQueryClient();
   const toast = useToast();
   const [status, setStatus] = useListParam("status");
-  const [kind, setKind] = useListParam("kind");
   const [q, setQ] = useQueryParam("q");
   const [pageStr, setPage] = useListParam("page", "1");
   const [group, setGroup] = useListParam("group");
   const page = Number(pageStr) || 1;
-  const filter = { status: status ? status.split(",") : undefined, kind: (kind || undefined) as "download" | "reprocess" | undefined, q: q || undefined, includeDone: true };
-  const { data, isLoading, error } = useQueue({ ...filter, page, pageSize: PAGE });
+  const pageSize = mode === "processing" ? 500 : 100;
+  const filter = { status: status ? status.split(",") : undefined, kind: mode === "processing" ? "reprocess" as const : "download" as const, q: q || undefined, includeDone: true };
+  const { data, isLoading, error } = useQueue({ ...filter, page, pageSize });
   const liveMap = useLiveProgress();
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [allMatching, setAllMatching] = useState(false);
@@ -172,9 +171,17 @@ export function QueuePage() {
             )
           )}
           {j.status !== "completed" && (
-            <IconButton title={t("Remove")} onClick={() => (setSelected(new Set([j.id])), setAllMatching(false), setConfirm({ action: "remove", label: "Remove" }))}>
-              <Trash2 className="size-4" />
-            </IconButton>
+            <>
+              <IconButton title={t("Move to top")} onClick={() => run("top", [j.id])}>
+                <ArrowUpToLine className="size-4" />
+              </IconButton>
+              <IconButton title={t("Move to bottom")} onClick={() => run("bottom", [j.id])}>
+                <ArrowDownToLine className="size-4" />
+              </IconButton>
+              <IconButton title={t("Remove")} onClick={() => (setSelected(new Set([j.id])), setAllMatching(false), setConfirm({ action: "remove", label: "Remove" }))}>
+                <Trash2 className="size-4" />
+              </IconButton>
+            </>
           )}
         </div>
       </Td>
@@ -185,8 +192,8 @@ export function QueuePage() {
   return (
     <>
       <PageHeader
-        title={t("Queue")}
-        subtitle={t("Chapters being downloaded, processed and imported")}
+        title={mode === "processing" ? t("Processing queue") : t("Download queue")}
+        subtitle={mode === "processing" ? t("Every chapter waiting to be upscaled or encoded, in processing order") : t("Chapters waiting to be downloaded and imported, in download order")}
         actions={
           <>
             {state?.paused ? (
@@ -233,11 +240,6 @@ export function QueuePage() {
             </button>
           );
         })}
-        <Select className="w-36" value={kind} onChange={(e) => (setKind(e.target.value), setPage("1"), resetSelection())}>
-          <option value="">{t("All kinds")}</option>
-          <option value="download">{t("Downloads")}</option>
-          <option value="reprocess">{t("Processing")}</option>
-        </Select>
         <Input className="max-w-xs" placeholder={t("Filter by series…")} defaultValue={q} onChange={(e) => (setQ(e.target.value), setPage("1"), resetSelection())} />
         <Switch checked={!!group} onChange={(v) => setGroup(v ? "series" : "")} label={t("Group by series")} />
       </div>
@@ -309,12 +311,12 @@ export function QueuePage() {
           </Table>
         </div>
       )}
-      {total > PAGE && (
+      {total > pageSize && (
         <div className="mt-4 flex items-center justify-center gap-3 text-sm">
           <Button size="sm" disabled={page <= 1} onClick={() => setPage(String(page - 1))}>{t("Previous")}</Button>
-          <span className="text-muted">{t("Page") + " "}{page}{" " + t("of") + " "}{Math.ceil(total / PAGE)}
+          <span className="text-muted">{t("Page") + " "}{page}{" " + t("of") + " "}{Math.ceil(total / pageSize)}
           </span>
-          <Button size="sm" disabled={page * PAGE >= total} onClick={() => setPage(String(page + 1))}>{t("Next")}</Button>
+          <Button size="sm" disabled={page * pageSize >= total} onClick={() => setPage(String(page + 1))}>{t("Next")}</Button>
         </div>
       )}
       <Confirm

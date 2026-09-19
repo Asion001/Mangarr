@@ -1,7 +1,7 @@
 import { t as tr, t } from "../../lib/i18n/core";
 import { Fragment, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, ChevronDown, ChevronRight, ExternalLink, HelpCircle, RotateCcw, Search, Sparkles, Eye } from "lucide-react";
+import { ArrowDownToLine, ArrowUpToLine, BookOpen, ChevronDown, ChevronRight, ExternalLink, HelpCircle, Pause, Play, RotateCcw, Search, Sparkles, Eye } from "lucide-react";
 import { Link } from "react-router";
 import { api, unwrap, type Chapter } from "../../api/client";
 import { useChapters } from "../../api/queries";
@@ -72,6 +72,15 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
     try {
       await unwrap(api.PUT("/api/v1/read/chapters/{id}/mark", { params: { path: { id: c.id } }, body: { read, scope: "chapter" } }));
       refresh();
+    } catch (e) {
+      toast.fromError(e);
+    }
+  };
+  const queueAction = async (jobID: number, action: "top" | "bottom" | "pause" | "resume") => {
+    try {
+      await unwrap(api.POST("/api/v1/queue/bulk", { body: { action, ids: [jobID] } }));
+      refresh();
+      qc.invalidateQueries({ queryKey: ["queue"] });
     } catch (e) {
       toast.fromError(e);
     }
@@ -206,6 +215,21 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
                           <Link to={`/read/${c.id}`} title={c.file ? tr("Read") : tr("Read (streamed from the source)")}>
                             <Button variant="primary" icon={<BookOpen className="size-4" />}>{t("Read")}</Button>
                           </Link>
+                        )}
+                        {manage && c.job && !["completed", "failed"].includes(c.job.status) && (
+                          <>
+                            <IconButton title={t("Move to top")} onClick={() => queueAction(c.job!.id, "top")}>
+                              <ArrowUpToLine className="size-4" />
+                            </IconButton>
+                            <IconButton title={t("Move to bottom")} onClick={() => queueAction(c.job!.id, "bottom")}>
+                              <ArrowDownToLine className="size-4" />
+                            </IconButton>
+                            {c.job.status === "paused" ? (
+                              <IconButton title={t("Resume")} onClick={() => queueAction(c.job!.id, "resume")}><Play className="size-4" /></IconButton>
+                            ) : (
+                              <IconButton title={t("Pause")} onClick={() => queueAction(c.job!.id, "pause")}><Pause className="size-4" /></IconButton>
+                            )}
+                          </>
                         )}
                         {manage && (c.state === "cleaned" ? (
                           <IconButton title={t("Restore (download again)")} onClick={() => restore(c)}>

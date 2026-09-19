@@ -99,7 +99,8 @@ export function Layout() {
       icon: <Download className="size-4" />,
       need: "library.manage",
       children: [
-        { to: "/activity/queue", label: "Queue" },
+        { to: "/activity/downloads", label: "Downloads" },
+        { to: "/activity/processing", label: "Processing" },
         { to: "/activity/history", label: "History" },
         { to: "/activity/blocklist", label: "Blocklist" },
       ],
