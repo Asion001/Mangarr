@@ -5782,6 +5782,19 @@
         ],
         "type": "object"
       },
+      "Reading-mihon-backupRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Public HTTP(S) address of mangarr's Komga-compatible API",
+            "type": "string"
+          }
+        },
+        "required": [
+          "address"
+        ],
+        "type": "object"
+      },
       "ReadingInfo": {
         "additionalProperties": false,
         "properties": {
@@ -14163,6 +14176,65 @@
           }
         },
         "summary": "Revoke a device key (yours; admins any)",
+        "tags": [
+          "Reading apps"
+        ]
+      }
+    },
+    "/api/v1/reading/mihon-backup": {
+      "post": {
+        "operationId": "reading-mihon-backup",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Reading-mihon-backupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "contentEncoding": "base64",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Type": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Download the caller's visible library and progress as a Mihon backup with mangarr's Komga address and a new revocable device key",
         "tags": [
           "Reading apps"
         ]

@@ -76,10 +76,11 @@ var operationPermissions = map[string][]string{
 	"read-file":           {access.Download},
 
 	// reading apps (their own devices)
-	"reading-status":      {access.Apps},
-	"reading-keys":        {access.Apps},
-	"reading-keys-create": {access.Apps},
-	"reading-keys-delete": {access.Apps},
+	"reading-status":       {access.Apps},
+	"reading-keys":         {access.Apps},
+	"reading-keys-create":  {access.Apps},
+	"reading-keys-delete":  {access.Apps},
+	"reading-mihon-backup": {access.Apps},
 
 	// finding series (to add, or to request)
 	"series-lookup":     {access.LibraryManage, access.RequestsCreate},

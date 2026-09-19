@@ -187,6 +187,30 @@
     "ru": "Приложения для чтения",
     "uk": "Застосунки для читання"
   },
+  "Set up Mihon from a backup": {
+    "ru": "Настроить Mihon из резервной копии",
+    "uk": "Налаштувати Mihon із резервної копії"
+  },
+  "Download your visible library and current progress with this server address already configured. The file contains a new device key; revoke that device below if the file is lost or replaced.": {
+    "ru": "Скачайте доступную вам библиотеку и текущий прогресс с уже настроенным адресом сервера. Файл содержит новый ключ устройства; отзовите это устройство ниже, если файл потерян или заменён.",
+    "uk": "Завантажте доступну вам бібліотеку та поточний прогрес із уже налаштованою адресою сервера. Файл містить новий ключ пристрою; відкличте цей пристрій нижче, якщо файл втрачено або замінено."
+  },
+  "Download Mihon setup backup": {
+    "ru": "Скачать резервную копию для настройки Mihon",
+    "uk": "Завантажити резервну копію для налаштування Mihon"
+  },
+  "Install the Komga extension, then restore this file in Mihon under More → Backup and restore. Select library entries and source settings during restore.": {
+    "ru": "Установите расширение Komga, затем восстановите этот файл в Mihon через Ещё → Резервное копирование. При восстановлении выберите библиотеку и настройки источников.",
+    "uk": "Установіть розширення Komga, потім відновіть цей файл у Mihon через Більше → Резервне копіювання. Під час відновлення виберіть бібліотеку та налаштування джерел."
+  },
+  "Mihon setup backup downloaded": {
+    "ru": "Резервная копия для настройки Mihon скачана",
+    "uk": "Резервну копію для налаштування Mihon завантажено"
+  },
+  "Could not export Mihon backup": {
+    "ru": "Не удалось экспортировать резервную копию Mihon",
+    "uk": "Не вдалося експортувати резервну копію Mihon"
+  },
   "Schedule": {
     "ru": "Расписание",
     "uk": "Розклад"

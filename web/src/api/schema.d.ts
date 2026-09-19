@@ -1473,6 +1473,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reading/mihon-backup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Download the caller's visible library and progress as a Mihon backup with mangarr's Komga address and a new revocable device key */
+        post: operations["reading-mihon-backup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/reading/shelf": {
         parameters: {
             query?: never;
@@ -4722,6 +4739,10 @@ export interface components {
         "Reading-keys-createRequest": {
             /** @description Device name, e.g. "Mihon phone" */
             comment: string;
+        };
+        "Reading-mihon-backupRequest": {
+            /** @description Public HTTP(S) address of mangarr's Komga-compatible API */
+            address: string;
         };
         ReadingInfo: {
             nextUnread?: components["schemas"]["NextChapter"];
@@ -9298,6 +9319,42 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "reading-mihon-backup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Reading-mihon-backupRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    "Content-Disposition"?: string;
+                    "Content-Type"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string;
+                };
             };
             /** @description Error */
             default: {

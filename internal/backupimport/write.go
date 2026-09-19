@@ -5,12 +5,21 @@ import (
 	"compress/gzip"
 	"encoding/binary"
 	"math"
+	"sort"
 	"strconv"
 )
 
+// MihonSourcePreferences are source settings restored with a Mihon backup.
+// Secrets are intentionally supported: callers should use a dedicated,
+// revocable credential and treat the resulting file as sensitive.
+type MihonSourcePreferences struct {
+	SourceID string
+	Strings  map[string]string
+}
+
 // MarshalMihon writes b as a gzipped Mihon backup (the fields this package
-// reads). Tests use it to build backups.
-func MarshalMihon(b *Backup) []byte {
+// reads), optionally with per-source string preferences.
+func MarshalMihon(b *Backup, preferences ...MihonSourcePreferences) []byte {
 	var out enc
 	cats := map[string]int64{}
 	for i, c := range b.Categories {
@@ -41,6 +50,8 @@ func MarshalMihon(b *Backup) []byte {
 			n, _ := strconv.ParseInt(id, 10, 64)
 			if sync != 0 && n != 0 {
 				m.msg(18, (&enc{}).varint(1, sync).varint(100, n))
+			} else if tracker == TrackerMangaUpdates && id != "" {
+				m.msg(18, (&enc{}).varint(1, sync).str(4, "https://www.mangaupdates.com/series/"+id))
 			}
 		}
 		if !e.Favorite {
@@ -63,6 +74,24 @@ func MarshalMihon(b *Backup) []byte {
 	for id, name := range b.Sources {
 		n, _ := strconv.ParseInt(id, 10, 64)
 		out.msg(101, (&enc{}).str(1, name).varint(2, n))
+	}
+	for _, source := range preferences {
+		keys := make([]string, 0, len(source.Strings))
+		for key := range source.Strings {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		sp := (&enc{}).str(1, "source_"+source.SourceID)
+		for _, key := range keys {
+			// PreferenceValue is a kotlinx.serialization sealed class. Its
+			// protobuf representation stores the concrete class name in field
+			// 1 and that class' message in field 2.
+			value := (&enc{}).
+				str(1, "eu.kanade.tachiyomi.data.backup.models.StringPreferenceValue").
+				msg(2, (&enc{}).str(1, source.Strings[key]))
+			sp.msg(2, (&enc{}).str(1, key).msg(2, value))
+		}
+		out.msg(105, sp)
 	}
 	var buf bytes.Buffer
 	w := gzip.NewWriter(&buf)
