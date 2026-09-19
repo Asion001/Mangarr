@@ -4,8 +4,8 @@ import { basePath } from "../api/client";
 
 // resource name (from the server) -> query key prefixes to invalidate
 const map: Record<string, string[][]> = {
-  series: [["series"], ["wanted"], ["calendar"]],
-  chapter: [["series"], ["wanted"]],
+  series: [["series"], ["wanted"], ["calendar"], ["discover"]],
+  chapter: [["series"], ["wanted"], ["discover"]],
   seriessource: [["series"]],
   queue: [["queue"], ["series"]],
   command: [["commands"], ["tasks"]],
@@ -13,17 +13,17 @@ const map: Record<string, string[][]> = {
   module: [["modules"], ["sources"], ["health"], ["me-notifications"], ["me-library-accounts"]],
   extension: [["extensions"], ["sources"]],
   // catalog set changed: cached searches/browses may include removed catalogs
-  catalogs: [["sources"], ["catalogs"], ["source-search"], ["browse"], ["source-manga"]],
-  cache: [["cache"], ["source-search"], ["browse"], ["source-manga"]],
+  catalogs: [["sources"], ["catalogs"], ["source-search"], ["browse"], ["source-manga"], ["discover"]],
+  cache: [["cache"], ["source-search"], ["browse"], ["source-manga"], ["discover"]],
   processing: [["processing"], ["health"]],
   settings: [["settings"]],
   readers: [["readers"], ["series"], ["me-library-accounts"]],
-  reading: [["reading"], ["settings"]],
+  reading: [["reading"], ["settings"], ["discover"]],
   database: [["database"]],
   users: [["users"], ["auth"]],
   request: [["requests"], ["lookup"]],
-  follow: [["series"], ["follows"]],
-  rootfolder: [["rootfolders"]],
+  follow: [["series"], ["follows"], ["discover"]],
+  rootfolder: [["rootfolders"], ["discover"]],
   profile: [["profiles"]],
   tag: [["tags"]],
   blocklist: [["blocklist"]],
