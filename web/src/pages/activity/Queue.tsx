@@ -98,6 +98,7 @@ export function QueuePage({ mode }: { mode: "downloads" | "processing" }) {
       <Td className="w-8">
         <input type="checkbox" aria-label={t("Select")} checked={allMatching || selected.has(j.id)} onChange={() => undefined} onClick={(e) => toggle(idx, e.shiftKey)} />
       </Td>
+      <Td className="w-14 font-mono text-xs text-muted">{(page - 1) * pageSize + idx + 1}</Td>
       {!group && (
         <Td>
           <Link to={`/series/${j.seriesId}`} className="font-medium hover:text-accent-2">
@@ -277,6 +278,7 @@ export function QueuePage({ mode }: { mode: "downloads" | "processing" }) {
                     onChange={() => (pageAllSelected ? resetSelection() : setSelected(new Set(items.map((j) => j.id))))}
                   />
                 </Th>
+                <Th className="w-14">{t("Order")}</Th>
                 {!group && <Th>{t("Series")}</Th>}
                 <Th>{t("Chapter")}</Th>
                 <Th>{t("Source")}</Th>
@@ -361,7 +363,7 @@ function SeriesGroup({
         <Td className="w-8">
           <input type="checkbox" aria-label={`Select ${title}`} checked={selected} onChange={(e) => onSelect(e.target.checked)} />
         </Td>
-        <Td colSpan={6}>
+        <Td colSpan={7}>
           <button className="mr-2 text-muted" onClick={() => setOpen(!open)} aria-label={open ? tr("Collapse") : tr("Expand")}>
             {open ? "▾" : "▸"}
           </button>

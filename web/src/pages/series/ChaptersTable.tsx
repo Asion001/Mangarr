@@ -1,7 +1,7 @@
 import { t as tr, t } from "../../lib/i18n/core";
 import { Fragment, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDownToLine, ArrowUpToLine, BookOpen, ChevronDown, ChevronRight, ExternalLink, HelpCircle, Pause, Play, RotateCcw, Search, Sparkles, Eye } from "lucide-react";
+import { ArrowDownToLine, ArrowUpToLine, BookOpen, ChevronDown, ChevronRight, ExternalLink, HelpCircle, Pause, Play, RotateCcw, RotateCw, Search, Sparkles, Eye, Trash2 } from "lucide-react";
 import { Link } from "react-router";
 import { api, unwrap, type Chapter } from "../../api/client";
 import { useChapters } from "../../api/queries";
@@ -85,6 +85,28 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
       toast.fromError(e);
     }
   };
+  const queueBulk = async (action: "top" | "bottom" | "pause" | "resume" | "retry" | "remove") => {
+    const ids = list.filter((chapter) => selected.has(chapter.id) && chapter.job).map((chapter) => chapter.job!.id);
+    if (ids.length === 0) return;
+    try {
+      const result = await unwrap(api.POST("/api/v1/queue/bulk", { body: { action, ids } }));
+      toast.success(`${result.affected} ${result.affected === 1 ? "queue entry" : "queue entries"} updated`);
+      refresh();
+      qc.invalidateQueries({ queryKey: ["queue"] });
+    } catch (e) {
+      toast.fromError(e);
+    }
+  };
+  const processSelected = async () => {
+    try {
+      await unwrap(api.POST("/api/v1/commands", { body: { name: "ProcessExisting", body: { seriesId, chapterIds: sel } } }));
+      toast.info(`Queued processing for ${sel.length} chapter${sel.length === 1 ? "" : "s"}`);
+      refresh();
+      qc.invalidateQueries({ queryKey: ["queue"] });
+    } catch (e) {
+      toast.fromError(e);
+    }
+  };
   const toggle = (set: Set<number>, id: number) => {
     const n = new Set(set);
     if (n.has(id)) n.delete(id);
@@ -93,6 +115,7 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
   };
 
   const sel = [...selected];
+  const selectedJobs = list.filter((chapter) => selected.has(chapter.id) && chapter.job).length;
   return (
     <Card
       title={`Chapters (${data?.length ?? 0})`}
@@ -104,6 +127,17 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
               <Button size="sm" onClick={() => monitor(sel, true)}>{t("Monitor")}</Button>
               <Button size="sm" onClick={() => monitor(sel, false)}>{t("Unmonitor")}</Button>
               <Button size="sm" icon={<Search className="size-3.5" />} onClick={() => search(sel)}>{t("Search")}</Button>
+              <Button size="sm" icon={<Sparkles className="size-3.5" />} onClick={processSelected}>{t("Process")}</Button>
+              {selectedJobs > 0 && (
+                <>
+                  <Button size="sm" icon={<ArrowUpToLine className="size-3.5" />} onClick={() => queueBulk("top")}>{t("Top")}</Button>
+                  <Button size="sm" icon={<ArrowDownToLine className="size-3.5" />} onClick={() => queueBulk("bottom")}>{t("Bottom")}</Button>
+                  <Button size="sm" icon={<Pause className="size-3.5" />} onClick={() => queueBulk("pause")}>{t("Pause")}</Button>
+                  <Button size="sm" icon={<Play className="size-3.5" />} onClick={() => queueBulk("resume")}>{t("Resume")}</Button>
+                  <Button size="sm" icon={<RotateCw className="size-3.5" />} onClick={() => queueBulk("retry")}>{t("Retry")}</Button>
+                  <Button size="sm" variant="danger" icon={<Trash2 className="size-3.5" />} onClick={() => queueBulk("remove")}>{t("Remove")}</Button>
+                </>
+              )}
               <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>{t("Clear")}</Button>
             </>
           )}
@@ -171,6 +205,9 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
                           <div className="w-20">
                             <Progress value={c.job.progress} />
                           </div>
+                        )}
+                        {manage && c.job && !["completed", "failed"].includes(c.job.status) && (
+                          <span className="text-[11px] text-muted">{t("Priority")}: {c.job.priority}</span>
                         )}
                       </div>
                     </Td>
