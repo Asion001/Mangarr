@@ -71,7 +71,7 @@ ENTRYPOINT ["/mangarr"]
 # ---- full: every role ----------------------------------------------------------------
 FROM debian:trixie-slim AS full
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      ca-certificates tzdata libvulkan1 mesa-vulkan-drivers libgomp1 vulkan-tools \
+      ca-certificates tzdata libvulkan1 mesa-vulkan-drivers libgomp1 libegl1 vulkan-tools \
       webp libavif-bin libjxl-tools libjpeg-progs \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --system --uid 65532 --gid 0 --home /config mangarr \
