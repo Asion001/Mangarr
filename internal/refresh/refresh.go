@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/uptrace/bun"
 
@@ -187,7 +188,7 @@ func jitter(d time.Duration) time.Duration {
 	return d + j
 }
 
-var titlePrefix = regexp.MustCompile(`(?i)^\s*(?:(?:vol(?:ume)?\.?\s*[0-9]+(?:\.[0-9]+)?)\s*)?(?:(?:ch(?:apter)?|ep(?:isode)?|#)\.?\s*[0-9]+(?:[.,][0-9]+)?[a-z]?)\s*(?:[-:–|]\s*)?`)
+var titlePrefix = regexp.MustCompile(`(?i)^\s*(?:(?:vol(?:ume)?\.?\s*[0-9]+(?:\.[0-9]+)?)\s*)?(?:(?:ch(?:apter)?|ep(?:isode)?|#)\.?\s*[0-9]+(?:[.,][0-9]+)?[a-z]?)`)
 
 // ChapterTitle extracts a title from names like "Vol.2 Ch.10 - The Fight".
 func ChapterTitle(name string) string {
@@ -195,7 +196,44 @@ func ChapterTitle(name string) string {
 	if loc == nil {
 		return ""
 	}
-	return strings.TrimSpace(name[loc[1]:])
+	rest := strings.TrimSpace(name[loc[1]:])
+	explicit := false
+	if runes := []rune(rest); len(runes) > 0 && strings.ContainsRune("-:–|", runes[0]) {
+		rest = strings.TrimSpace(string(runes[1:]))
+		explicit = true
+	}
+	// Some catalogs spell an alphabetic chapter suffix with a space
+	// ("Chapter 78 P"). It is part of the number, not a one-letter title.
+	// An explicit separator still permits real titles such as "Ch. 78 - X".
+	if !explicit && singleLetter(rest) {
+		return ""
+	}
+	return rest
+}
+
+func singleLetter(s string) bool {
+	r := []rune(strings.TrimSpace(s))
+	return len(r) == 1 && unicode.IsLetter(r[0])
+}
+
+// reconciledChapterTitle repairs the old spaced-suffix parsing result when a
+// chapter is refreshed. All current releases are considered so a genuine
+// one-letter title with an explicit separator is preserved.
+func reconciledChapterTitle(current string, releaseNames []string) (string, bool) {
+	if !singleLetter(current) {
+		return current, false
+	}
+	next := ""
+	for _, name := range releaseNames {
+		title := ChapterTitle(name)
+		if strings.EqualFold(title, current) {
+			return title, title != current
+		}
+		if next == "" && title != "" {
+			next = title
+		}
+	}
+	return next, next != current
 }
 
 // recentDetails returns details fetched in the last 10 minutes (while the
@@ -302,6 +340,7 @@ func (r *Refresher) syncSource(ctx context.Context, s *model.Series, ss *model.S
 			byURL[releases[i].ChapterURL] = &releases[i]
 		}
 		seen := map[string]bool{}
+		touched := map[int64]*model.Chapter{}
 		for _, c := range chs {
 			if seen[c.URL] {
 				continue
@@ -344,6 +383,7 @@ func (r *Refresher) syncSource(ctx context.Context, s *model.Series, ss *model.S
 				}
 				id := ch.ID
 				chapterID = &id
+				touched[ch.ID] = ch
 			}
 			rel := byURL[c.URL]
 			if rel == nil {
@@ -368,6 +408,26 @@ func (r *Refresher) syncSource(ctx context.Context, s *model.Series, ss *model.S
 		for url, rel := range byURL {
 			if !seen[url] && !rel.Removed {
 				if _, err := tx.NewUpdate().Model(rel).Set("removed = ?", true).WherePK().Exec(ctx); err != nil {
+					return err
+				}
+			}
+		}
+		// Releases are the source of chapter titles. Earlier versions treated a
+		// spaced alphabetic number suffix as a one-letter title and then never
+		// revisited the stored value. Repair only that narrow shape, using every
+		// still-present release so a legitimate title from another source wins.
+		for id, ch := range touched {
+			if !singleLetter(ch.Title) {
+				continue
+			}
+			var names []string
+			if err := tx.NewSelect().TableExpr("chapter_releases").Column("name").
+				Where("chapter_id = ? AND removed = ?", id, false).OrderExpr("id").Scan(ctx, &names); err != nil {
+				return err
+			}
+			if title, changed := reconciledChapterTitle(ch.Title, names); changed {
+				ch.Title, ch.UpdatedAt = title, now
+				if _, err := tx.NewUpdate().Model(ch).Column("title", "updated_at").WherePK().Exec(ctx); err != nil {
 					return err
 				}
 			}
