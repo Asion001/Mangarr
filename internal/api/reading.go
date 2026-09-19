@@ -3,7 +3,9 @@ package api
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -32,6 +34,13 @@ type ReadingKeyView struct {
 type NewReadingKey struct {
 	model.ReadingKey
 	Key string `json:"key"`
+}
+
+type mihonBackupOutput struct {
+	ContentType        string `header:"Content-Type"`
+	ContentDisposition string `header:"Content-Disposition"`
+	CacheControl       string `header:"Cache-Control"`
+	Body               []byte
 }
 
 // ShelfItem is a series on the "Continue reading" shelf.
@@ -170,5 +179,49 @@ func (s *Server) registerReading() {
 			s.app.Komga.InvalidateKeys()
 			s.app.Bus.Changed("reading", "key-deleted", in.ID)
 			return nil, nil
+		})
+
+	huma.Register(s.api, huma.Operation{OperationID: "reading-mihon-backup", Method: http.MethodPost, Path: "/api/v1/reading/mihon-backup", Tags: tags,
+		Summary: "Download the caller's visible library and progress as a Mihon backup with mangarr's Komga address and a new revocable device key"},
+		func(ctx context.Context, in *struct {
+			Body struct {
+				Address string `json:"address" doc:"Public HTTP(S) address of mangarr's Komga-compatible API"`
+			}
+		}) (*mihonBackupOutput, error) {
+			settings, err := s.app.Settings.Reading(ctx)
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			if !settings.Enabled {
+				return nil, huma.Error409Conflict("reading apps are turned off")
+			}
+			address := strings.TrimRight(strings.TrimSpace(in.Body.Address), "/")
+			u, err := url.Parse(address)
+			if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+				return nil, huma.Error422UnprocessableEntity("address must be an HTTP(S) server address without credentials, query or fragment")
+			}
+			principal := access.From(ctx)
+			readerID := principal.ReaderID
+			if readerID == 0 {
+				readerID, err = s.app.Reading.ReaderID(ctx)
+				if err != nil {
+					return nil, toHTTPError(err)
+				}
+			}
+			comment := "Mihon backup " + time.Now().Format("2006-01-02")
+			key, device, err := s.app.Komga.CreateKey(ctx, principal.UserID, comment, "Mihon backup export")
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			data, err := s.app.Reading.MihonBackup(ctx, readerID, address, key)
+			if err != nil {
+				_, _ = s.app.DB.NewDelete().Model(device).WherePK().Exec(ctx)
+				s.app.Komga.InvalidateKeys()
+				return nil, toHTTPError(err)
+			}
+			s.app.Bus.Changed("reading", "key-created", device.ID)
+			name := "mangarr-mihon-" + time.Now().Format("2006-01-02_15-04") + ".tachibk"
+			return &mihonBackupOutput{ContentType: "application/octet-stream", ContentDisposition: `attachment; filename="` + name + `"`,
+				CacheControl: "no-store", Body: data}, nil
 		})
 }

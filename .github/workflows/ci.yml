@@ -48,13 +48,63 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
         working-directory: web
-      - run: npm run lint --if-present
+      - name: lint
+        run: npm run lint --if-present
         working-directory: web
-      - run: npm run build
+      - name: typecheck
+        run: npm run typecheck
         working-directory: web
+      - name: translations
+        run: npm run check:i18n
+        working-directory: web
+      - name: unit tests
+        run: npm test
+        working-directory: web
+      - name: production build
+        run: npm run build
+        working-directory: web
+      - name: install Chromium
+        run: npm exec playwright install --with-deps chromium
+        working-directory: web
+      - name: browser tests
+        run: npm run test:e2e
+        working-directory: web
+      - name: upload browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failure-${{ github.run_id }}
+          path: |
+            web/playwright-report
+            web/test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
+  generated:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - name: regenerate OpenAPI schema
+        run: |
+          mkdir -p bin
+          go build -o bin/mangarr ./cmd/mangarr
+          ./bin/mangarr openapi > web/openapi.json
+          npm run gen --prefix web
+      - name: reject generated schema drift
+        run: git diff --exit-code -- web/openapi.json web/src/api/schema.d.ts
 
   images:
-    needs: [test, web]
+    needs: [test, web, generated]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:

@@ -1,10 +1,10 @@
 import { useUIMode } from "../../lib/uiPreferences";
 import { t } from "../../lib/i18n/core";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { CheckSquare, LayoutGrid, List, PlusCircle, RefreshCw, Search } from "lucide-react";
 import { apiUrl, type Series } from "../../api/client";
-import { usePushCommand, useSeriesList } from "../../api/queries";
+import { usePushCommand, useRootFolders, useSeriesSearch } from "../../api/queries";
 import { Cover } from "../../components/Cover";
 import { Badge, Button, EmptyState, ErrorBox, Input, Loading, PageHeader, Progress, Select, Table, Td, Th } from "../../components/ui";
 import { bytes, date } from "../../lib/format";
@@ -38,15 +38,38 @@ function ReadBar({ s }: { s: Series }) {
 }
 
 export function SeriesIndex() {
-  const { data, isLoading, error } = useSeriesList();
+  const { data: roots } = useRootFolders();
   const { editing } = useUIMode();
   const manage = useAccount().can("library.manage") && editing;
   const push = usePushCommand();
   const [q, setQ] = useQueryParam("q");
   const [filterParam, setFilter] = useListParam("filter", "all");
   const [sortParam, setSort] = useListParam("sort", "title");
+  const [rootParam, setRoot] = useListParam("root", "");
+  const [language, setLanguage] = useListParam("language", "");
+  const [pageParam, setPage] = useListParam("page", "1");
+  const [pageSizeParam, setPageSize] = useListParam("pageSize", "36");
   const filter = filterParam as Filter;
   const sort = sortParam as Sort;
+  const page = Math.max(1, Number(pageParam) || 1);
+  const pageSize = [24, 36, 48, 72].includes(Number(pageSizeParam)) ? Number(pageSizeParam) : 36;
+  const rootFolderId = Number(rootParam) || undefined;
+  const [searchDraft, setSearchDraft] = useState(q);
+  useEffect(() => setSearchDraft(q), [q]);
+  useEffect(() => {
+    if (searchDraft === q) return;
+    const timeout = window.setTimeout(() => {
+      setQ(searchDraft);
+      setPage("1");
+    }, 250);
+    return () => window.clearTimeout(timeout);
+  }, [searchDraft, q]);
+  const { data, isLoading, isFetching, error } = useSeriesSearch({ q: q || undefined, filter, sort, rootFolderId, language: language || undefined, page, pageSize });
+  useEffect(() => {
+    if (!data?.total) return;
+    const last = Math.max(1, Math.ceil(data.total / pageSize));
+    if (page > last) setPage(String(last));
+  }, [data?.total, page, pageSize, setPage]);
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   useEffect(()=>{if(!manage){setSelecting(false);setSelected(new Set());}},[manage]);
@@ -59,31 +82,9 @@ export function SeriesIndex() {
     });
   const [view, setView] = useState<"posters" | "table">(() => (localStorage.getItem("seriesView") as "posters" | "table") || "posters");
 
-  const list = useMemo(() => {
-    let l = [...(data ?? [])];
-    const needle = q.trim().toLowerCase();
-    if (needle) l = l.filter((s) =>
-      s.title.toLowerCase().includes(needle) ||
-      s.metadata.altTitles?.some((t) => t.toLowerCase().includes(needle)) ||
-      s.editions?.some((edition) => edition.title.toLowerCase().includes(needle)),
-    );
-    if (filter === "monitored") l = l.filter((s) => s.monitored);
-    if (filter === "following") l = l.filter((s) => s.following);
-    if (filter === "missing") l = l.filter((s) => s.stats.missingCount > 0);
-    if (filter === "unread") l = l.filter((s) => s.stats.readCount < s.stats.chapterCount);
-    if (filter === "reading") l = l.filter((s) => s.stats.readCount > 0 && s.stats.readCount < s.stats.chapterCount);
-    if (filter === "ongoing") l = l.filter((s) => s.status === "ongoing");
-    if (filter === "completed") l = l.filter((s) => s.status === "completed");
-    const by: Record<Sort, (a: Series, b: Series) => number> = {
-      title: (a, b) => a.sortTitle.localeCompare(b.sortTitle),
-      added: (a, b) => b.addedAt.localeCompare(a.addedAt),
-      latest: (a, b) => b.stats.lastChapter - a.stats.lastChapter,
-      missing: (a, b) => b.stats.missingCount - a.stats.missingCount,
-      read: (a, b) => (b.stats.lastReadAt ?? "").localeCompare(a.stats.lastReadAt ?? ""),
-      size: (a, b) => b.stats.sizeOnDisk - a.stats.sizeOnDisk,
-    };
-    return l.sort(by[sort]);
-  }, [data, q, filter, sort]);
+  const list = data?.items ?? [];
+  const setFilterAndReset = (value: string) => { setFilter(value); setPage("1"); };
+  const setSortAndReset = (value: string) => { setSort(value); setPage("1"); };
 
   const setViewPersist = (v: "posters" | "table") => {
     setView(v);
@@ -94,7 +95,7 @@ export function SeriesIndex() {
     <>
       <PageHeader
         title={t("Series")}
-        subtitle={data ? `${data.length} series · ${bytes(data.reduce((n, s) => n + s.stats.sizeOnDisk, 0))}` : undefined}
+        subtitle={data ? `${data.total} series · ${bytes(data.totalSize)}` : undefined}
         actions={
           manage && (
             <>
@@ -106,13 +107,13 @@ export function SeriesIndex() {
           )
         }
       />
-      {!q && filter === "all" && <ContinueReading />}
+      {!q && filter === "all" && !rootFolderId && !language && <ContinueReading />}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="relative w-full max-w-xs">
           <Search className="absolute left-2.5 top-2.5 size-4 text-muted" />
-          <Input className="pl-8" placeholder={t("Filter series…")} defaultValue={q} onChange={(e) => setQ(e.target.value)} />
+          <Input className="pl-8" placeholder={t("Search titles and alternative titles…")} value={searchDraft} onChange={(e) => setSearchDraft(e.target.value)} />
         </div>
-        <Select className="w-auto" value={filter} onChange={(e) => setFilter(e.target.value as Filter)}>
+        <Select className="w-auto" value={filter} onChange={(e) => setFilterAndReset(e.target.value)}>
           <option value="all">{t("All")}</option>
           <option value="following">{t("Following")}</option>
           <option value="monitored">{t("Monitored")}</option>
@@ -122,7 +123,7 @@ export function SeriesIndex() {
           <option value="unread">{t("With unread chapters")}</option>
           <option value="reading">{t("Started reading")}</option>
         </Select>
-        <Select className="w-auto" value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
+        <Select className="w-auto" value={sort} onChange={(e) => setSortAndReset(e.target.value)}>
           <option value="title">{t("Sort: title")}</option>
           <option value="added">{t("Sort: recently added")}</option>
           <option value="latest">{t("Sort: latest chapter")}</option>
@@ -130,6 +131,18 @@ export function SeriesIndex() {
           <option value="size">{t("Sort: size")}</option>
           <option value="read">{t("Sort: recently read")}</option>
         </Select>
+        {(roots?.length ?? 0) > 1 && (
+          <Select className="w-auto max-w-xs" value={rootParam} onChange={(e) => { setRoot(e.target.value); setPage("1"); }}>
+            <option value="">{t("All libraries")}</option>
+            {roots?.map((root) => <option key={root.id} value={root.id}>{root.path}</option>)}
+          </Select>
+        )}
+        {(data?.languages?.length ?? 0) > 1 && (
+          <Select className="w-auto" value={language} onChange={(e) => { setLanguage(e.target.value); setPage("1"); }}>
+            <option value="">{t("All languages")}</option>
+            {data?.languages?.map((item) => <option key={item} value={item}>{item}</option>)}
+          </Select>
+        )}
         <div className="ml-auto flex gap-1">
           {manage && (
             <Button
@@ -146,10 +159,14 @@ export function SeriesIndex() {
           <Button variant={view === "table" ? "primary" : "secondary"} size="sm" onClick={() => setViewPersist("table")} icon={<List className="size-3.5" />} />
         </div>
       </div>
+      {isFetching && data && <div className="mb-2 h-0.5 overflow-hidden rounded bg-panel-2"><div className="h-full w-1/3 animate-pulse rounded bg-accent" /></div>}
       {isLoading && <Loading />}
       {error && <ErrorBox error={error} />}
-      {data && data.length === 0 && (
+      {data && data.total === 0 && !q && filter === "all" && !rootFolderId && !language && (
         <EmptyState title={t("No series yet")}>{manage?t("Add a source module (Settings → Source modules), a root folder (Settings → Media management), then add your first series."):t("No series available yet.")}</EmptyState>
+      )}
+      {data && data.total === 0 && (q || filter !== "all" || rootFolderId || language) && (
+        <EmptyState title={t("No series match these filters")}>{t("Try a shorter title or clear one of the filters.")}</EmptyState>
       )}
       {view === "posters" ? (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-4">
@@ -242,6 +259,16 @@ export function SeriesIndex() {
             ))}
           </tbody>
         </Table>
+      )}
+      {data && data.total > 0 && (
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+          <Button size="sm" disabled={page <= 1} onClick={() => setPage(String(page - 1))}>{t("Previous")}</Button>
+          <span className="px-2 text-sm text-muted">{t("Page")} {page} {t("of")} {Math.max(1, Math.ceil(data.total / pageSize))}</span>
+          <Button size="sm" disabled={page * pageSize >= data.total} onClick={() => setPage(String(page + 1))}>{t("Next")}</Button>
+          <Select className="ml-2 w-auto" value={pageSize} onChange={(e) => { setPageSize(e.target.value); setPage("1"); }}>
+            {[24, 36, 48, 72].map((size) => <option key={size} value={size}>{size} {t("per page")}</option>)}
+          </Select>
+        </div>
       )}
       {selecting && selected.size > 0 && (
         <>

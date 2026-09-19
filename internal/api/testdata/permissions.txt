@@ -28,6 +28,8 @@ database-get GET /api/v1/system/database -> admin
 database-move POST /api/v1/system/database/move -> admin
 database-move-cancel POST /api/v1/system/database/cancel -> admin
 database-test POST /api/v1/system/database/test -> admin
+discover GET /api/v1/discover -> signedin
+discover-thumbnail GET /api/v1/discover/thumbnail -> signedin
 extensions-action POST /api/v1/modules/{id}/extensions/{pkg}/{action} -> admin
 extensions-list GET /api/v1/modules/{id}/extensions -> admin
 groups-create POST /api/v1/groups -> admin
@@ -97,6 +99,7 @@ queue-resume POST /api/v1/queue/resume -> library.manage
 queue-retry POST /api/v1/queue/{id}/retry -> library.manage
 read-chapter GET /api/v1/read/chapters/{id} -> signedin
 read-chapter-bounds GET /api/v1/read/chapters/{id}/bounds -> signedin
+read-chapter-picker GET /api/v1/read/series/{id}/chapters -> signedin
 read-file GET /api/v1/read/chapters/{id}/file -> download
 read-mark PUT /api/v1/read/chapters/{id}/mark -> signedin
 read-page GET /api/v1/read/chapters/{id}/pages/{n} -> signedin
@@ -114,6 +117,7 @@ readers-update PUT /api/v1/readers/{id} -> admin
 reading-keys GET /api/v1/reading/keys -> apps
 reading-keys-create POST /api/v1/reading/keys -> apps
 reading-keys-delete DELETE /api/v1/reading/keys/{id} -> apps
+reading-mihon-backup POST /api/v1/reading/mihon-backup -> apps
 reading-shelf GET /api/v1/reading/shelf -> signedin
 reading-status GET /api/v1/reading/status -> apps
 requests-count GET /api/v1/requests/count -> requests.manage | library.manage
@@ -140,6 +144,7 @@ series-lookup GET /api/v1/series/lookup -> library.manage | requests.create
 series-lookup-get GET /api/v1/series/lookup/{moduleId}/{id} -> library.manage | requests.create
 series-metadata-link PUT /api/v1/series/{id}/metadata -> library.manage
 series-metadata-refresh POST /api/v1/series/{id}/metadata/refresh -> library.manage
+series-query GET /api/v1/series/search -> signedin
 series-refresh POST /api/v1/series/{id}/refresh -> library.manage
 series-rename POST /api/v1/series/rename -> library.manage
 series-rename-preview POST /api/v1/series/rename/preview -> library.manage
@@ -174,6 +179,9 @@ settings-put-sso PUT /api/v1/settings/sso -> admin
 settings-regenerate-apikey POST /api/v1/settings/general/apikey -> admin
 source-preferences GET /api/v1/sources/{moduleId}/{sourceId}/preferences -> admin
 source-preferences-set PUT /api/v1/sources/{moduleId}/{sourceId}/preferences -> admin
+source-priorities-inherit POST /api/v1/source-priorities/inherit -> library.manage
+source-priorities-list GET /api/v1/source-priorities -> library.manage
+source-priorities-save PUT /api/v1/source-priorities -> library.manage
 sources-browse GET /api/v1/sources/{moduleId}/{sourceId}/browse -> library.manage | requests.manage
 sources-list GET /api/v1/sources -> library.manage | requests.manage
 sources-manga GET /api/v1/sources/{moduleId}/{sourceId}/manga -> library.manage | requests.manage

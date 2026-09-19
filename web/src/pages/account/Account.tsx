@@ -2,8 +2,8 @@ import { t as tr, t, label } from "../../lib/i18n/core";
 import { useUIPreferences } from "../../lib/uiPreferences";
 import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, KeyRound, Link2, LogOut, Monitor, Pencil, Plus, Trash2, Unlink } from "lucide-react";
-import { api, unwrap, type Implementation, type ModuleResource } from "../../api/client";
+import { Bell, Download, KeyRound, Link2, LogOut, Monitor, Pencil, Plus, Trash2, Unlink } from "lucide-react";
+import { api, apiUrl, unwrap, type Implementation, type ModuleResource } from "../../api/client";
 import { DynamicForm, defaultsOf } from "../../components/DynamicForm";
 import { Badge, Button, Card, Confirm, ErrorBox, Field, IconButton, Input, Modal, PageHeader, Select, Tabs } from "../../components/ui";
 import { ModuleEditor, type Draft } from "../settings/Modules";
@@ -61,6 +61,9 @@ export function AccountPage() {
 function ReadingAppsCard() {
   const { data: st } = useQuery({ queryKey: ["reading", "status"], queryFn: () => unwrap(api.GET("/api/v1/reading/status")) });
   const [app, setApp] = useState<App>("mihon");
+  const [exporting, setExporting] = useState(false);
+  const qc = useQueryClient();
+  const toast = useToast();
   if (!st) return null;
   if (!st.enabled) {
     return (
@@ -69,6 +72,35 @@ function ReadingAppsCard() {
       </Card>
     );
   }
+  const address = appAddress(st.publicUrl, st.address);
+  const exportMihon = async () => {
+    setExporting(true);
+    try {
+      const response = await fetch(apiUrl("api/v1/reading/mihon-backup"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({})) as { detail?: string; title?: string };
+        throw new Error(body.detail || body.title || response.statusText);
+      }
+      const blob = await response.blob();
+      const file = response.headers.get("Content-Disposition")?.match(/filename="([^"]+)"/)?.[1] || "mangarr-mihon.tachibk";
+      const href = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = href;
+      link.download = file;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(href), 0);
+      qc.invalidateQueries({ queryKey: ["reading", "keys"] });
+      toast.success(tr("Mihon setup backup downloaded"));
+    } catch (error) {
+      toast.fromError(error, tr("Could not export Mihon backup"));
+    } finally {
+      setExporting(false);
+    }
+  };
   return (
     <>
       <Card title={t("Reading apps")}>
@@ -83,8 +115,16 @@ function ReadingAppsCard() {
           onChange={setApp}
         />
         <div className="mt-4 text-sm">
-          <Guide app={app} address={appAddress(st.publicUrl, st.address)} />
+          <Guide app={app} address={address} />
         </div>
+        {app === "mihon" && (
+          <div className="mt-5 rounded-lg border border-border bg-panel-2 p-4">
+            <h3 className="font-medium">{t("Set up Mihon from a backup")}</h3>
+            <p className="mt-1 text-sm text-muted">{t("Download your visible library and current progress with this server address already configured. The file contains a new device key; revoke that device below if the file is lost or replaced.")}</p>
+            <Button className="mt-3" icon={<Download className="size-4" />} loading={exporting} onClick={exportMihon}>{t("Download Mihon setup backup")}</Button>
+            <p className="mt-2 text-xs text-muted">{t("Install the Komga extension, then restore this file in Mihon under More → Backup and restore. Select library entries and source settings during restore.")}</p>
+          </div>
+        )}
       </Card>
       <DevicesCard />
     </>

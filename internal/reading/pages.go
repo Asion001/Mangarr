@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -30,6 +31,7 @@ import (
 	"github.com/Asion001/mangarr/internal/model"
 	"github.com/Asion001/mangarr/internal/modules"
 	"github.com/Asion001/mangarr/internal/modules/source"
+	"github.com/Asion001/mangarr/internal/sourcepriority"
 )
 
 // ErrNoSource means a chapter isn't downloaded and no enabled source has it.
@@ -325,7 +327,24 @@ func (s *Service) loadStream(ctx context.Context, ch model.Chapter) (*stream, er
 		return nil, err
 	}
 	var ser model.Series
-	_ = s.DB.NewSelect().Model(&ser).Column("id", "title").Where("id = ?", ch.SeriesID).Scan(ctx)
+	if err := s.DB.NewSelect().Model(&ser).Where("id = ?", ch.SeriesID).Scan(ctx); err != nil {
+		return nil, err
+	}
+	var sources []model.SeriesSource
+	if err := s.DB.NewSelect().Model(&sources).Where("series_id = ?", ch.SeriesID).Scan(ctx); err != nil {
+		return nil, err
+	}
+	ranks, err := sourcepriority.Ranks(ctx, s.DB, ser, sources)
+	if err != nil {
+		return nil, err
+	}
+	sort.SliceStable(rels, func(i, j int) bool {
+		a, b := ranks[rels[i].SeriesSourceID], ranks[rels[j].SeriesSourceID]
+		if a != b {
+			return a < b
+		}
+		return rels[i].ID < rels[j].ID
+	})
 	lastErr := ErrNoSource
 	links := map[int64]*model.SeriesSource{}
 	for _, rel := range rels {

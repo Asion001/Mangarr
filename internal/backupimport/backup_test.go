@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"encoding/binary"
 	"errors"
+	"io"
 	"math"
 	"testing"
 	"time"
@@ -266,5 +267,87 @@ func TestMarshalMihonRoundTrip(t *testing.T) {
 		!b.Chapters[0].Read || b.Chapters[0].ReadAt == nil || b.Chapters[1].LastPageRead != 11 || len(b.Categories) != 2 ||
 		out.Entries[1].Favorite || len(b.ExcludedScanlators) != 1 || out.Sources[a.SourceID] != "MangaDex" {
 		t.Fatalf("round trip lost data:\n%+v\n%+v", a, b)
+	}
+}
+
+func TestMarshalMihonSourcePreferences(t *testing.T) {
+	in, err := Parse(mihonFixture())
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := MarshalMihon(in, MihonSourcePreferences{SourceID: "4508733312114627536", Strings: map[string]string{
+		"Address": "https://manga.example.com", "API key": "mangarr_test_key",
+	}})
+	zr, err := gzip.NewReader(bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := io.ReadAll(zr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	if err := fields(raw, func(f field) error {
+		if f.num != 105 {
+			return nil
+		}
+		var source string
+		var prefs [][]byte
+		if err := fields(f.bytes, func(g field) error {
+			if g.num == 1 {
+				source = g.str()
+			} else if g.num == 2 {
+				prefs = append(prefs, g.bytes)
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+		if source != "source_4508733312114627536" {
+			return nil
+		}
+		for _, rawPref := range prefs {
+			var key string
+			var wrapped []byte
+			if err := fields(rawPref, func(g field) error {
+				if g.num == 1 {
+					key = g.str()
+				} else if g.num == 2 {
+					wrapped = g.bytes
+				}
+				return nil
+			}); err != nil {
+				return err
+			}
+			var className string
+			var valueMessage []byte
+			if err := fields(wrapped, func(g field) error {
+				if g.num == 1 {
+					className = g.str()
+				} else if g.num == 2 {
+					valueMessage = g.bytes
+				}
+				return nil
+			}); err != nil {
+				return err
+			}
+			if className != "eu.kanade.tachiyomi.data.backup.models.StringPreferenceValue" {
+				t.Fatalf("preference class = %q", className)
+			}
+			if err := fields(valueMessage, func(g field) error {
+				if g.num == 1 {
+					got[key] = g.str()
+				}
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got["Address"] != "https://manga.example.com" || got["API key"] != "mangarr_test_key" {
+		t.Fatalf("source preferences = %v", got)
 	}
 }

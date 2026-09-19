@@ -24,6 +24,7 @@ import (
 	"github.com/Asion001/mangarr/internal/naming"
 	"github.com/Asion001/mangarr/internal/organize"
 	"github.com/Asion001/mangarr/internal/series"
+	"github.com/Asion001/mangarr/internal/sourcepriority"
 )
 
 func init() { register((*Server).registerSeries) }
@@ -301,6 +302,12 @@ func (s *Server) seriesResource(ctx context.Context, ser model.Series, stats map
 		CoverURL: "api/v1/series/" + strconv.FormatInt(ser.ID, 10) + "/cover?v=" + strconv.FormatInt(ser.UpdatedAt.Unix(), 10)}
 	if detail {
 		_ = s.app.DB.NewSelect().Model(&r.Sources).Where("series_id = ?", ser.ID).Order("priority", "id").Scan(ctx)
+		if ranks, err := sourcepriority.Ranks(ctx, s.app.DB, ser, r.Sources); err == nil {
+			for i := range r.Sources {
+				rank := ranks[r.Sources[i].ID]
+				r.Sources[i].EffectivePriority = &rank
+			}
+		}
 		r.FullPath, _ = s.app.Library.SeriesDir(ctx, &ser)
 		r.Reading = s.readingInfo(ctx, &ser, r.FullPath)
 	}
@@ -586,6 +593,63 @@ func (s *Server) visibleSeries(ctx context.Context, id int64) (*model.Series, er
 	return ser, nil
 }
 
+// groupedSeriesResources turns visible language editions into one row per
+// canonical work. Callers may pre-filter list by library or language; only
+// those editions then contribute to the row and its aggregate statistics.
+func (s *Server) groupedSeriesResources(ctx context.Context, list []model.Series) ([]SeriesResource, error) {
+	stats, err := s.seriesStats(ctx, 0)
+	if err != nil {
+		return nil, err
+	}
+	p := access.From(ctx)
+	following := s.follows(ctx)
+	visible := make([]model.Series, 0, len(list))
+	for _, ser := range list {
+		if p.Sees(&ser) {
+			visible = append(visible, ser)
+		}
+	}
+	works := map[int64]model.Work{}
+	var workRows []model.Work
+	if err := s.app.DB.NewSelect().Model(&workRows).Scan(ctx); err != nil {
+		return nil, err
+	}
+	for _, work := range workRows {
+		works[work.ID] = work
+	}
+	groups := map[int64][]model.Series{}
+	var order []int64
+	for _, ser := range visible {
+		key := ser.WorkID
+		if key == 0 {
+			key = -ser.ID
+		}
+		if len(groups[key]) == 0 {
+			order = append(order, key)
+		}
+		groups[key] = append(groups[key], ser)
+	}
+	out := make([]SeriesResource, 0, len(groups))
+	for _, key := range order {
+		editions := groups[key]
+		representative := editions[0]
+		r := s.seriesResource(ctx, representative, stats, false)
+		r.Editions = make([]EditionSummary, 0, len(editions))
+		r.Stats = SeriesStats{}
+		for _, edition := range editions {
+			r.Editions = append(r.Editions, editionSummary(edition))
+			r.Stats = addStats(r.Stats, stats[edition.ID])
+			r.Following = r.Following || following[edition.ID]
+		}
+		if work, ok := works[representative.WorkID]; ok {
+			r.WorkTitle = work.Title
+			r.Title, r.SortTitle = work.Title, work.SortTitle
+		}
+		out = append(out, r)
+	}
+	return out, nil
+}
+
 func (s *Server) registerSeries() {
 	tags := []string{"Series"}
 	huma.Register(s.api, huma.Operation{OperationID: "series-list", Method: http.MethodGet, Path: "/api/v1/series", Tags: tags},
@@ -594,53 +658,9 @@ func (s *Server) registerSeries() {
 			if err := s.app.DB.NewSelect().Model(&list).Order("sort_title").Scan(ctx); err != nil {
 				return nil, toHTTPError(err)
 			}
-			stats, err := s.seriesStats(ctx, 0)
+			out, err := s.groupedSeriesResources(ctx, list)
 			if err != nil {
 				return nil, toHTTPError(err)
-			}
-			p := access.From(ctx)
-			following := s.follows(ctx)
-			visible := make([]model.Series, 0, len(list))
-			for _, ser := range list {
-				if p.Sees(&ser) {
-					visible = append(visible, ser)
-				}
-			}
-			works := map[int64]model.Work{}
-			var workRows []model.Work
-			_ = s.app.DB.NewSelect().Model(&workRows).Scan(ctx)
-			for _, work := range workRows {
-				works[work.ID] = work
-			}
-			groups := map[int64][]model.Series{}
-			var order []int64
-			for _, ser := range visible {
-				key := ser.WorkID
-				if key == 0 {
-					key = -ser.ID
-				}
-				if len(groups[key]) == 0 {
-					order = append(order, key)
-				}
-				groups[key] = append(groups[key], ser)
-			}
-			out := make([]SeriesResource, 0, len(groups))
-			for _, key := range order {
-				editions := groups[key]
-				representative := editions[0]
-				r := s.seriesResource(ctx, representative, stats, false)
-				r.Editions = make([]EditionSummary, 0, len(editions))
-				r.Stats = SeriesStats{}
-				for _, edition := range editions {
-					r.Editions = append(r.Editions, editionSummary(edition))
-					r.Stats = addStats(r.Stats, stats[edition.ID])
-					r.Following = r.Following || following[edition.ID]
-				}
-				if work, ok := works[representative.WorkID]; ok {
-					r.WorkTitle = work.Title
-					r.Title, r.SortTitle = work.Title, work.SortTitle
-				}
-				out = append(out, r)
 			}
 			return &struct{ Body []SeriesResource }{out}, nil
 		})

@@ -180,7 +180,7 @@ func (s *Service) bulkOne(ctx context.Context, req BulkRequest, ser model.Series
 	}
 	titles := append([]string{ser.Title}, ser.Metadata.AltTitles...)
 	match, err := s.search.Quick(ctx, sourcesearch.QuickSearchInput{Query: ser.Title, Titles: titles,
-		Sources: []string{fmt.Sprintf("%d:%s", req.ModuleID, req.SourceID)}}, sourcesearch.QuickOptions{})
+		Sources: []string{fmt.Sprintf("%d:%s", req.ModuleID, req.SourceID)}, RootFolderID: ser.RootFolderID, Lang: ser.Language}, sourcesearch.QuickOptions{})
 	if err != nil {
 		res.Reason = err.Error()
 		return res

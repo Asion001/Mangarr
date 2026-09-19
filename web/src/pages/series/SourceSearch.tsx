@@ -292,9 +292,9 @@ export function HeroMatch({ c, selected, onUse }: { c: QuickCandidate; selected:
 }
 
 /** useQuickSearch runs the one-by-one search on the server. */
-export function useQuickSearch(opts: { query: string; titles: string[]; scope: Scope; keys: string[]; lang: string; enabled: boolean; gen?: number }) {
+export function useQuickSearch(opts: { query: string; titles: string[]; scope: Scope; keys: string[]; lang: string; rootFolderId?: number; enabled: boolean; gen?: number }) {
   return useQuery({
-    queryKey: ["quick-search", opts.gen, opts.query, opts.titles, opts.scope, opts.keys, opts.lang],
+    queryKey: ["quick-search", opts.gen, opts.query, opts.titles, opts.scope, opts.keys, opts.lang, opts.rootFolderId],
     queryFn: () =>
       unwrap(
         api.POST("/api/v1/sources/quick-search", {
@@ -304,6 +304,7 @@ export function useQuickSearch(opts: { query: string; titles: string[]; scope: S
             scope: opts.scope === "custom" ? undefined : opts.scope,
             sources: opts.scope === "custom" ? opts.keys : undefined,
             lang: opts.lang || undefined,
+            rootFolderId: opts.rootFolderId || undefined,
           },
         }),
       ),
@@ -327,6 +328,7 @@ export function SourceSearch({
   more,
   setMore,
   selected,
+  rootFolderId,
   onPick,
 }: {
   query: string;
@@ -341,11 +343,12 @@ export function SourceSearch({
   more: boolean;
   setMore: (v: boolean) => void;
   selected: Picked[];
+  rootFolderId?: number;
   onPick: (m: SourceManga, g: PickGroup, only?: boolean) => void;
 }) {
   const { targets, gen, settings } = useCatalogTargets(scope, lang, keys);
   const quickEnabled = (settings?.quickSearch.enabled ?? true) && !more;
-  const quick = useQuickSearch({ query, titles, scope, keys, lang, enabled: quickEnabled, gen });
+  const quick = useQuickSearch({ query, titles, scope, keys, lang, rootFolderId, enabled: quickEnabled, gen });
   const sel = new Set(selected.map(pickKey));
   const match = quick.data?.match;
   const showGrid = more || !quickEnabled || (quick.isSuccess && !match);
@@ -383,12 +386,16 @@ export function SourceSearch({
 /** SourceSearchModal links a source to an existing series. */
 export function SourceSearchModal({
   initialQuery,
+  initialLang = "",
+  rootFolderId,
   title,
   titles,
   onPick,
   onClose,
 }: {
   initialQuery: string;
+  initialLang?: string;
+  rootFolderId?: number;
   title: string;
   titles?: string[];
   onPick: (m: SourceManga, g: PickGroup) => void;
@@ -396,7 +403,7 @@ export function SourceSearchModal({
 }) {
   const [query, setQuery] = useState(initialQuery);
   const [scope, setScope] = useState<Scope>("active");
-  const [lang, setLang] = useState("");
+  const [lang, setLang] = useState(initialLang);
   const [keys, setKeys] = useState<string[]>([]);
   const [more, setMore] = useState(false);
   return (
@@ -414,6 +421,7 @@ export function SourceSearchModal({
         more={more}
         setMore={setMore}
         selected={[]}
+        rootFolderId={rootFolderId}
         onPick={(m, g) => onPick(m, g)}
       />
     </Modal>

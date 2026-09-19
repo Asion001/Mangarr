@@ -287,6 +287,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Personal recommendations, recent library updates and popular titles from prioritized sources */
+        get: operations["discover"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/discover/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A signed thumbnail returned by the discover feed */
+        get: operations["discover-thumbnail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/groups": {
         parameters: {
             query?: never;
@@ -1287,6 +1321,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/read/series/{id}/chapters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lightweight chapter list for the web reader picker */
+        get: operations["read-chapter-picker"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/read/settings": {
         parameters: {
             query?: never;
@@ -1417,6 +1468,23 @@ export interface paths {
         post?: never;
         /** Revoke a device key (yours; admins any) */
         delete: operations["reading-keys-delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reading/mihon-backup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Download the caller's visible library and progress as a Mihon backup with mangarr's Komga address and a new revocable device key */
+        post: operations["reading-mihon-backup"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1685,6 +1753,23 @@ export interface paths {
         put?: never;
         /** Files (and folders) that don't match the current naming format */
         post: operations["series-rename-preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search, filter, sort and paginate visible series */
+        get: operations["series-query"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2111,6 +2196,38 @@ export interface paths {
         /** Save single sign-on settings (send the masked secret to keep the stored one) */
         put: operations["settings-put-sso"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/source-priorities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["source-priorities-list"];
+        put: operations["source-priorities-save"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/source-priorities/inherit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["source-priorities-inherit"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3315,6 +3432,56 @@ export interface components {
             lastSeen: string;
             origin: string;
         };
+        DiscoverLibraryItem: {
+            /** Format: int64 */
+            books: number;
+            /** Format: date-time */
+            changedAt: string;
+            coverUrl: string;
+            description?: string;
+            genres: string[];
+            language: string;
+            latestChapter?: string;
+            matchingGenres?: string[];
+            /** @enum {string} */
+            reason?: "matches-genres" | "followed" | "recently-added" | "recent-update";
+            /** Format: int64 */
+            seriesId: number;
+            status: string;
+            title: string;
+            /** Format: int64 */
+            unread: number;
+        };
+        DiscoverResponse: {
+            /** Format: date-time */
+            generatedAt: string;
+            popular: components["schemas"]["DiscoverSourceItem"][];
+            popularCached: boolean;
+            recommendations: components["schemas"]["DiscoverLibraryItem"][];
+            sourceErrors: components["schemas"]["DiscoverSourceError"][];
+            updates: components["schemas"]["DiscoverLibraryItem"][];
+        };
+        DiscoverSourceError: {
+            error: string;
+            name: string;
+            source: string;
+        };
+        DiscoverSourceItem: {
+            /** Format: int64 */
+            chapterCount?: number;
+            engineRef?: string;
+            /** Format: int64 */
+            existingSeriesId?: number;
+            language: string;
+            /** Format: int64 */
+            moduleId: number;
+            moduleName: string;
+            sourceId: string;
+            sourceName: string;
+            thumbnailUrl?: string;
+            title: string;
+            url: string;
+        };
         DownloadJob: {
             /** Format: int64 */
             attempt: number;
@@ -4202,6 +4369,13 @@ export interface components {
             seconds: number;
             token: string;
         };
+        PriorityPreview: {
+            previousMode: string;
+            /** Format: int64 */
+            seriesId: number;
+            sources: components["schemas"]["SeriesSource"][];
+            title: string;
+        };
         ProcessEstimate: {
             /** Format: int64 */
             bytes: number;
@@ -4354,6 +4528,8 @@ export interface components {
         QuickSearchInput: {
             lang?: string;
             query: string;
+            /** Format: int64 */
+            rootFolderId?: number;
             /** @enum {string} */
             scope?: "active" | "all" | "";
             sources?: string[];
@@ -4422,6 +4598,29 @@ export interface components {
             seriesTitle: string;
             title?: string;
             volume?: string;
+        };
+        ReadChapterItem: {
+            available: boolean;
+            completed: boolean;
+            downloaded: boolean;
+            /** Format: int64 */
+            id: number;
+            number: string;
+            /** Format: double */
+            numberSort: number;
+            /** Format: int64 */
+            page?: number;
+            title?: string;
+            volume?: string;
+        };
+        ReadChapterPickerResponse: {
+            items: components["schemas"]["ReadChapterItem"][];
+            /** Format: int64 */
+            page: number;
+            /** Format: int64 */
+            pageSize: number;
+            /** Format: int64 */
+            total: number;
         };
         ReadPage: {
             mediaType: string;
@@ -4540,6 +4739,10 @@ export interface components {
         "Reading-keys-createRequest": {
             /** @description Device name, e.g. "Mihon phone" */
             comment: string;
+        };
+        "Reading-mihon-backupRequest": {
+            /** @description Public HTTP(S) address of mangarr's Komga-compatible API */
+            address: string;
         };
         ReadingInfo: {
             nextUnread?: components["schemas"]["NextChapter"];
@@ -4884,6 +5087,8 @@ export interface components {
             /** Format: int64 */
             rootFolderId: number;
             sortTitle: string;
+            /** @enum {string} */
+            sourcePriorityMode: "inherit" | "custom";
             sources?: components["schemas"]["SeriesSource"][];
             stats: components["schemas"]["SeriesStats"];
             status: string;
@@ -4895,6 +5100,18 @@ export interface components {
             workId?: number;
             workTitle?: string;
         };
+        SeriesSearchResponse: {
+            items: components["schemas"]["SeriesResource"][];
+            languages: string[];
+            /** Format: int64 */
+            page: number;
+            /** Format: int64 */
+            pageSize: number;
+            /** Format: int64 */
+            total: number;
+            /** Format: int64 */
+            totalSize: number;
+        };
         SeriesSource: {
             /** Format: date-time */
             backoffUntil?: string;
@@ -4904,6 +5121,8 @@ export interface components {
             consecutiveFailures: number;
             /** Format: date-time */
             createdAt: string;
+            /** Format: int64 */
+            effectivePriority?: number;
             enabled: boolean;
             /** Format: int64 */
             id: number;
@@ -4992,6 +5211,14 @@ export interface components {
             type: string;
             value: unknown;
         };
+        "Source-priorities-inheritRequest": {
+            dryRun: boolean;
+            seriesIds: number[];
+        };
+        "Source-priorities-saveRequest": {
+            scope: string;
+            sources: string[];
+        };
         SourceChapter: {
             engineRef?: string;
             name: string;
@@ -5068,6 +5295,10 @@ export interface components {
             type: string;
             value: unknown;
             visible: boolean;
+        };
+        SourcePriorityList: {
+            scope: string;
+            sources: string[];
         };
         SourceUpdate: {
             /** Format: int64 */
@@ -5226,6 +5457,8 @@ export interface components {
             readingDirection?: "rtl" | "ltr" | "vertical" | "webtoon";
             /** Format: int64 */
             rootFolderId?: number;
+            /** @enum {string} */
+            sourcePriorityMode?: "inherit" | "custom";
             /** @enum {string} */
             status?: "unknown" | "ongoing" | "completed" | "hiatus" | "cancelled";
             tags?: number[];
@@ -6177,6 +6410,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Command"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    discover: {
+        parameters: {
+            query?: {
+                rootFolderId?: number;
+                lang?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoverResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "discover-thumbnail": {
+        parameters: {
+            query?: {
+                token?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    "Content-Type"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string;
                 };
             };
             /** @description Error */
@@ -8618,6 +8917,42 @@ export interface operations {
             };
         };
     };
+    "read-chapter-picker": {
+        parameters: {
+            query?: {
+                q?: string;
+                currentId?: number;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadChapterPickerResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "read-settings": {
         parameters: {
             query?: {
@@ -8984,6 +9319,42 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "reading-mihon-backup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Reading-mihon-backupRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    "Content-Disposition"?: string;
+                    "Content-Type"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string;
+                };
             };
             /** @description Error */
             default: {
@@ -9647,6 +10018,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SeriesRename"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "series-query": {
+        parameters: {
+            query?: {
+                q?: string;
+                filter?: "all" | "following" | "monitored" | "missing" | "ongoing" | "completed" | "unread" | "reading";
+                sort?: "title" | "added" | "latest" | "missing" | "size" | "read";
+                rootFolderId?: number;
+                language?: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesSearchResponse"];
                 };
             };
             /** @description Error */
@@ -10884,6 +11292,101 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SSOSettings"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "source-priorities-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourcePriorityList"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "source-priorities-save": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Source-priorities-saveRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourcePriorityList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "source-priorities-inherit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Source-priorities-inheritRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriorityPreview"][];
                 };
             };
             /** @description Error */

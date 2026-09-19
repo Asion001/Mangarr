@@ -11,9 +11,10 @@ import { useToast } from "../../lib/toast";
 import { useListParam, useQueryParam } from "../../lib/urlState";
 import { Catalogs } from "./Catalogs";
 import { SourceSettings } from "./SourceSettings";
+import { SourcePriorities } from "./SourcePriorities";
 import { SwitchEngine } from "./SwitchEngine";
 
-type Tab = "extensions" | "catalogs" | "browse" | "stores";
+type Tab = "extensions" | "catalogs" | "priorities" | "browse" | "stores";
 
 export function SourcesPage() {
   const { data: modules, isLoading } = useModules("source");
@@ -38,6 +39,7 @@ export function SourcesPage() {
   const tabs: { value: Tab; label: string }[] = [
     ...(caps.includes("extensions") ? [{ value: "extensions" as const, label: "Extensions" }] : []),
     { value: "catalogs", label: "Catalogs" },
+    { value: "priorities", label: "Priorities" },
     { value: "browse", label: "Browse" },
     ...(caps.includes("extensions") ? [{ value: "stores" as const, label: "Stores" }] : []),
   ];
@@ -65,6 +67,7 @@ export function SourcesPage() {
       <Tabs value={tab} onChange={go} tabs={tabs} />
       {current && tab === "extensions" && <Extensions module={current} />}
       {current && tab === "catalogs" && <Catalogs module={current} />}
+      {tab === "priorities" && <SourcePriorities />}
       {current && tab === "browse" && <Browse module={current} />}
       {current && tab === "stores" && <Stores module={current} />}
       {switching && current && <SwitchEngine modules={mods} from={current} onClose={() => setSwitching(false)} />}

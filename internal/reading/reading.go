@@ -29,6 +29,7 @@ import (
 	"github.com/Asion001/mangarr/internal/modules"
 	"github.com/Asion001/mangarr/internal/modules/source"
 	"github.com/Asion001/mangarr/internal/settings"
+	"github.com/Asion001/mangarr/internal/sourcepriority"
 )
 
 // ErrNotFound is returned for unknown series or chapters.
@@ -375,10 +376,17 @@ func (s *Service) Cover(ctx context.Context, ser *model.Series) ([]byte, string,
 				resp.Body.Close()
 			}
 		}
-		var ss model.SeriesSource
-		if err := s.DB.NewSelect().Model(&ss).Where("series_id = ?", ser.ID).Order("priority").Limit(1).Scan(ctx); err != nil {
+		var links []model.SeriesSource
+		if err := s.DB.NewSelect().Model(&links).Where("series_id = ? AND enabled = ?", ser.ID, true).Scan(ctx); err != nil {
 			return nil, "", err
 		}
+		if err := sourcepriority.Apply(ctx, s.DB, *ser, links); err != nil {
+			return nil, "", err
+		}
+		if len(links) == 0 {
+			return nil, "", ErrNoSource
+		}
+		ss := links[0]
 		th, _, err := modules.GetAs[source.Thumbnails](s.Mods, ss.ModuleID)
 		if err != nil {
 			return nil, "", err

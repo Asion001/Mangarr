@@ -54,6 +54,28 @@ type imageOutput struct {
 	Body         []byte
 }
 
+// sourceThumbnail serves a catalog thumbnail through the shared disk cache.
+// Callers are responsible for checking that the catalog and reference are
+// allowed for the current request.
+func (s *Server) sourceThumbnail(ctx context.Context, moduleID int64, ref source.MangaRef) (*imageOutput, error) {
+	key := strconv.FormatInt(moduleID, 10) + "|" + ref.SourceID + "|" + ref.URL
+	data, ct, stale, err := s.app.ImageCache.Get(ctx, "thumbs", key, 7*24*time.Hour, func(ctx context.Context) (io.ReadCloser, string, error) {
+		mod, _, err := modules.GetAs[source.Thumbnails](s.app.Modules, moduleID)
+		if err != nil {
+			return nil, "", err
+		}
+		return mod.Thumbnail(ctx, ref)
+	})
+	if err != nil {
+		return nil, huma.Error404NotFound(err.Error())
+	}
+	cc := "public, max-age=86400"
+	if stale {
+		cc = "public, max-age=300"
+	}
+	return &imageOutput{ContentType: ct, CacheControl: cc, Body: data}, nil
+}
+
 // Cache TTLs for catalog responses.
 const browseTTL = 30 * time.Minute
 
@@ -228,22 +250,7 @@ func (s *Server) registerSources() {
 			if err := s.allowedCatalog(ctx, in.ModuleID, in.SourceID); err != nil {
 				return nil, err
 			}
-			key := strconv.FormatInt(in.ModuleID, 10) + "|" + in.SourceID + "|" + in.URL
-			data, ct, stale, err := s.app.ImageCache.Get(ctx, "thumbs", key, 7*24*time.Hour, func(ctx context.Context) (io.ReadCloser, string, error) {
-				mod, _, err := modules.GetAs[source.Thumbnails](s.app.Modules, in.ModuleID)
-				if err != nil {
-					return nil, "", err
-				}
-				return mod.Thumbnail(ctx, source.MangaRef{SourceID: in.SourceID, URL: in.URL, EngineRef: in.EngineRef})
-			})
-			if err != nil {
-				return nil, huma.Error404NotFound(err.Error())
-			}
-			cc := "public, max-age=86400"
-			if stale {
-				cc = "public, max-age=300"
-			}
-			return &imageOutput{ContentType: ct, CacheControl: cc, Body: data}, nil
+			return s.sourceThumbnail(ctx, in.ModuleID, source.MangaRef{SourceID: in.SourceID, URL: in.URL, EngineRef: in.EngineRef})
 		})
 
 	huma.Register(s.api, huma.Operation{OperationID: "modules-asset", Method: http.MethodGet, Path: "/api/v1/modules/{id}/asset", Tags: tags,

@@ -209,6 +209,7 @@ export function AddSourcesStep() {
   const nav = useNavigate();
   const loc = useLocation();
   const ctx = useAddContext();
+  const { data: roots } = useRootFolders();
   const [picked, setPicked] = usePicked(ctx.storageKey);
   const [sq, setSq] = useQueryParam("sq", ctx.title);
   const [scope, setScope] = useQueryParam("scope", "active");
@@ -217,6 +218,13 @@ export function AddSourcesStep() {
   const [more, setMore] = useQueryParam("more");
   const keys = src ? src.split(",") : [];
   const options = `${ctx.base}/options${ctx.search}`;
+  const storedOptions = sessionState.get<Partial<Options>>(ctx.storageKey + ":options", {});
+  const [rootId, setRootId] = useState(storedOptions.rootId ?? 0);
+  const effectiveRootId = rootId || roots?.[0]?.id || 0;
+  const selectRoot = (id: number) => {
+    setRootId(id);
+    sessionState.set(ctx.storageKey + ":options", { ...sessionState.get<Partial<Options>>(ctx.storageKey + ":options", {}), rootId: id });
+  };
 
   if (ctx.metaLoading) return <Loading />;
   if (ctx.metaError) return <ErrorBox error={ctx.metaError} />;
@@ -238,7 +246,14 @@ export function AddSourcesStep() {
           </>
         }
       >
-        <p className="mb-3 text-sm text-muted">{t("Pick one or more sources. The first one has the highest priority; others are fallbacks.")}</p>
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          <p className="text-sm text-muted">{t("Pick one or more sources. Search order follows the selected library and language priorities.")}</p>
+          {(roots?.length ?? 0) > 1 && (
+            <Select className="ml-auto max-w-sm" value={effectiveRootId} onChange={(event) => selectRoot(Number(event.target.value))}>
+              {roots?.map((root) => <option key={root.id} value={root.id}>{root.path}</option>)}
+            </Select>
+          )}
+        </div>
         {picked.length > 0 && (
           <div className="mb-4 flex flex-col gap-1.5">
             {picked.map((p, i) => (
@@ -273,6 +288,7 @@ export function AddSourcesStep() {
           more={more === "1"}
           setMore={(v) => setMore(v ? "1" : "", { replace: false })}
           selected={picked}
+          rootFolderId={effectiveRootId}
           onPick={(m, g, use) => {
             const p = { manga: m, group: g };
             if (use) {

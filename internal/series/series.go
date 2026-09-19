@@ -23,6 +23,7 @@ import (
 	"github.com/Asion001/mangarr/internal/modules"
 	"github.com/Asion001/mangarr/internal/modules/source"
 	"github.com/Asion001/mangarr/internal/naming"
+	"github.com/Asion001/mangarr/internal/sourcepriority"
 	"github.com/Asion001/mangarr/internal/sourcesearch"
 )
 
@@ -163,6 +164,7 @@ func (s *Service) Add(ctx context.Context, req AddRequest) (*model.Series, error
 		return nil, ValidationError{"title is required when no metadata is selected"}
 	}
 	ser.SortTitle = naming.SortTitle(ser.Title)
+	ser.SourcePriorityMode = "inherit"
 	folder, err := s.lib.UniqueFolder(ctx, rf.ID, s.lib.FolderName(ctx, ser.Title, ser.Metadata.Year))
 	if err != nil {
 		return nil, err
@@ -381,16 +383,17 @@ func (s *Service) Get(ctx context.Context, id int64) (*model.Series, error) {
 }
 
 type UpdateRequest struct {
-	Title            *string   `json:"title,omitempty"`
-	Monitored        *bool     `json:"monitored,omitempty"`
-	MonitorNew       *string   `json:"monitorNew,omitempty" enum:"all,none"`
-	ProfileID        *int64    `json:"profileId,omitempty"`
-	Tags             *[]int64  `json:"tags,omitempty"`
-	ReadingDirection *string   `json:"readingDirection,omitempty" enum:"rtl,ltr,vertical,webtoon"`
-	Language         *string   `json:"language,omitempty"`
-	Status           *string   `json:"status,omitempty" enum:"unknown,ongoing,completed,hiatus,cancelled"`
-	Description      *string   `json:"description,omitempty"`
-	Locks            *[]string `json:"locks,omitempty"`
+	SourcePriorityMode *string   `json:"sourcePriorityMode,omitempty" enum:"inherit,custom"`
+	Title              *string   `json:"title,omitempty"`
+	Monitored          *bool     `json:"monitored,omitempty"`
+	MonitorNew         *string   `json:"monitorNew,omitempty" enum:"all,none"`
+	ProfileID          *int64    `json:"profileId,omitempty"`
+	Tags               *[]int64  `json:"tags,omitempty"`
+	ReadingDirection   *string   `json:"readingDirection,omitempty" enum:"rtl,ltr,vertical,webtoon"`
+	Language           *string   `json:"language,omitempty"`
+	Status             *string   `json:"status,omitempty" enum:"unknown,ongoing,completed,hiatus,cancelled"`
+	Description        *string   `json:"description,omitempty"`
+	Locks              *[]string `json:"locks,omitempty"`
 	// BlockedScanlators replaces the series' blocked scanlator names.
 	BlockedScanlators *[]string `json:"blockedScanlators,omitempty"`
 	// Location changes are applied by a MoveSeries command (see the API).
@@ -406,6 +409,14 @@ func (s *Service) Update(ctx context.Context, id int64, req UpdateRequest) (*mod
 	ser, err := s.Get(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+	snapshotPriorities := false
+	if req.SourcePriorityMode != nil {
+		if *req.SourcePriorityMode != "inherit" && *req.SourcePriorityMode != "custom" {
+			return nil, ValidationError{"invalid source priority mode"}
+		}
+		snapshotPriorities = ser.SourcePriorityMode == "inherit" && *req.SourcePriorityMode == "custom"
+		ser.SourcePriorityMode = *req.SourcePriorityMode
 	}
 	lock := func(f string) {
 		if !ser.Metadata.Locked(f) {
@@ -458,7 +469,28 @@ func (s *Service) Update(ctx context.Context, id int64, req UpdateRequest) (*mod
 		ser.BlockedScanlators = cleanNames(*req.BlockedScanlators)
 	}
 	ser.UpdatedAt = time.Now().UTC()
-	if _, err := s.db.NewUpdate().Model(ser).WherePK().Exec(ctx); err != nil {
+	err = s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		if snapshotPriorities {
+			var links []model.SeriesSource
+			if err := tx.NewSelect().Model(&links).Where("series_id = ?", ser.ID).Scan(ctx); err != nil {
+				return err
+			}
+			inherited := *ser
+			inherited.SourcePriorityMode = "inherit"
+			ranks, err := sourcepriority.Ranks(ctx, tx, inherited, links)
+			if err != nil {
+				return err
+			}
+			for _, link := range links {
+				if _, err := tx.NewUpdate().Model((*model.SeriesSource)(nil)).Set("priority = ?", ranks[link.ID]).Where("id = ?", link.ID).Exec(ctx); err != nil {
+					return err
+				}
+			}
+		}
+		_, err := tx.NewUpdate().Model(ser).WherePK().Exec(ctx)
+		return err
+	})
+	if err != nil {
 		return nil, err
 	}
 	s.bus.Changed("series", "updated", ser.ID)
@@ -523,6 +555,13 @@ func (s *Service) UpdateSource(ctx context.Context, seriesID, linkID int64, u So
 		return nil, ErrNotFound
 	}
 	if u.Priority != nil {
+		var ser model.Series
+		if err := s.db.NewSelect().Model(&ser).Where("id = ?", seriesID).Scan(ctx); err != nil {
+			return nil, err
+		}
+		if ser.SourcePriorityMode == "inherit" {
+			return nil, ValidationError{"switch to custom source priorities before reordering"}
+		}
 		ss.Priority = *u.Priority
 	}
 	if u.Enabled != nil {

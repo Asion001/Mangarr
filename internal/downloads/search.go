@@ -12,6 +12,7 @@ import (
 	"github.com/Asion001/mangarr/internal/decision"
 	"github.com/Asion001/mangarr/internal/history"
 	"github.com/Asion001/mangarr/internal/model"
+	"github.com/Asion001/mangarr/internal/sourcepriority"
 )
 
 // Searcher runs the decision engine for chapters and enqueues approved releases.
@@ -63,6 +64,9 @@ func (s *Searcher) load(ctx context.Context, seriesID int64, chapterIDs []int64)
 	}
 	var sources []model.SeriesSource
 	if err := s.db.NewSelect().Model(&sources).Where("series_id = ?", seriesID).Scan(ctx); err != nil {
+		return nil, err
+	}
+	if err := sourcepriority.Apply(ctx, s.db, st.series, sources); err != nil {
 		return nil, err
 	}
 	srcByID := map[int64]model.SeriesSource{}

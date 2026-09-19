@@ -216,16 +216,16 @@ func (s *Service) autoAdd(id int64) {
 	if err := s.DB.NewSelect().Model(&r).Where("id = ?", id).Scan(ctx); err != nil || r.Status != model.RequestPending {
 		return
 	}
-	res, err := s.Search.Quick(ctx, sourcesearch.QuickSearchInput{Query: r.Title, Titles: append([]string{r.Title}, r.Metadata.AltTitles...)}, sourcesearch.QuickOptions{})
+	var roots []model.RootFolder
+	if err := s.DB.NewSelect().Model(&roots).Order("id").Scan(ctx); err != nil || len(roots) != 1 {
+		s.Log.Info("request waits for a manager: target library is ambiguous", "request", r.Title)
+		s.attemptFailed(ctx, id, "The target library is ambiguous; choose a library and retry Add.", err)
+		return
+	}
+	res, err := s.Search.Quick(ctx, sourcesearch.QuickSearchInput{Query: r.Title, Titles: append([]string{r.Title}, r.Metadata.AltTitles...), RootFolderID: roots[0].ID, Lang: roots[0].Language}, sourcesearch.QuickOptions{})
 	if err != nil || res.Match == nil {
 		s.Log.Info("request waits for a manager: no confident source", "request", r.Title, "err", err)
 		s.attemptFailed(ctx, id, "No confident source match was found; choose a source and retry Add.", err)
-		return
-	}
-	var roots []model.RootFolder
-	if err := s.DB.NewSelect().Model(&roots).Order("id").Scan(ctx); err != nil || len(roots) == 0 {
-		s.Log.Warn("request waits for a manager: no root folder", "request", r.Title)
-		s.attemptFailed(ctx, id, "No root folder is configured.", err)
 		return
 	}
 	m := res.Match

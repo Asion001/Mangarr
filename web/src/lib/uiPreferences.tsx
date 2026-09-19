@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, unwrap } from '../api/client';
 import { useAccount } from './account';
@@ -20,12 +20,16 @@ export function UIPreferencesProvider({children}:{children:ReactNode}) {
   useEffect(()=>{setLocal(readLocal(key));},[key]);
   const query = useQuery({queryKey:['ui-preferences',account?.id],enabled:personal,queryFn:()=>unwrap(api.GET('/api/v1/me/ui-preferences'))});
   const preferences:UIPreferences = {...(personal ? query.data ?? defaults : local),mode:canEdit ? (personal ? query.data?.mode ?? 'reading' : local.mode) : 'reading'};
+  const requested = useRef<UIPreferences|null>(null);
+  useEffect(()=>{requested.current=null;},[key]);
   useEffect(()=>{setLocale(resolveLocale(preferences.locale,navigator.languages));},[preferences.locale]);
   const mutation = useMutation({mutationFn:async(p:Partial<UIPreferences>)=>{
     // The API response also contains updatedAt. Build the strict request shape
     // explicitly so response-only fields are never sent back to the server.
-    const next:UIPreferences={locale:p.locale ?? preferences.locale,mode:p.mode ?? preferences.mode};
+    const current=requested.current ?? preferences;
+    const next:UIPreferences={locale:p.locale ?? current.locale,mode:p.mode ?? current.mode};
     if(!canEdit)next.mode='reading';
+    requested.current=next;
     if(personal){const result=await unwrap(api.PUT('/api/v1/me/ui-preferences',{body:next}));qc.setQueryData(['ui-preferences',account?.id],result);}
     else {localStorage.setItem(key,JSON.stringify(next));setLocal(next);}
   }});

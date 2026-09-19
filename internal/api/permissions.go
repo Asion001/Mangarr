@@ -48,15 +48,23 @@ var operationPermissions = map[string][]string{
 	"me-notifications-test":     {permSignedIn},
 	"series-follow":             {permSignedIn},
 	"series-unfollow":           {permSignedIn},
+	"discover":                  {permSignedIn},
+	"discover-thumbnail":        {permSignedIn},
+
+	"source-priorities-list":    {access.LibraryManage},
+	"source-priorities-save":    {access.LibraryManage},
+	"source-priorities-inherit": {access.LibraryManage},
 
 	// reading the library (limited to the series the group sees)
 	"series-list":         {permSignedIn},
+	"series-query":        {permSignedIn},
 	"series-get":          {permSignedIn},
 	"series-chapters":     {permSignedIn},
 	"series-cover":        {permSignedIn},
 	"reading-shelf":       {permSignedIn},
 	"tags-list":           {permSignedIn},
 	"read-chapter":        {permSignedIn},
+	"read-chapter-picker": {permSignedIn},
 	"read-page":           {permSignedIn},
 	"read-page-bounds":    {permSignedIn},
 	"read-chapter-bounds": {permSignedIn},
@@ -68,10 +76,11 @@ var operationPermissions = map[string][]string{
 	"read-file":           {access.Download},
 
 	// reading apps (their own devices)
-	"reading-status":      {access.Apps},
-	"reading-keys":        {access.Apps},
-	"reading-keys-create": {access.Apps},
-	"reading-keys-delete": {access.Apps},
+	"reading-status":       {access.Apps},
+	"reading-keys":         {access.Apps},
+	"reading-keys-create":  {access.Apps},
+	"reading-keys-delete":  {access.Apps},
+	"reading-mihon-backup": {access.Apps},
 
 	// finding series (to add, or to request)
 	"series-lookup":     {access.LibraryManage, access.RequestsCreate},

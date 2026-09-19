@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -57,6 +58,11 @@ type Scenario struct {
 	Searches    int
 	SearchDelay time.Duration
 	SearchErr   map[string]error
+	// Browses counts Popular/Latest calls by catalog. BrowseDelay and
+	// BrowseErr exercise aggregation, cancellation and partial failures.
+	Browses     map[string]int
+	BrowseDelay time.Duration
+	BrowseErr   map[string]error
 	// PageNoise fills pages with gray noise (large PNGs, like real scans).
 	PageNoise bool
 	// PageDelay slows down every page fetch (honoring cancellation).
@@ -88,11 +94,47 @@ var (
 
 // NewScenario registers and returns a scenario.
 func NewScenario(name string) *Scenario {
-	s := &Scenario{Mangas: map[string]*Manga{}, PageWidth: 64}
+	s := &Scenario{Mangas: map[string]*Manga{}, PageWidth: 64, Browses: map[string]int{}, BrowseErr: map[string]error{}}
 	mu.Lock()
 	scenarios[name] = s
 	mu.Unlock()
 	return s
+}
+
+func (m *Module) browse(ctx context.Context, sourceID string) (*source.MangaPage, error) {
+	m.sc.mu.Lock()
+	m.sc.Browses[sourceID]++
+	delay := m.sc.BrowseDelay
+	m.sc.mu.Unlock()
+	if delay > 0 {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(delay):
+		}
+	}
+	m.sc.mu.Lock()
+	defer m.sc.mu.Unlock()
+	if err := m.sc.BrowseErr[sourceID]; err != nil {
+		return nil, err
+	}
+	page := &source.MangaPage{Mangas: []source.Manga{}}
+	for _, manga := range m.sc.Mangas {
+		if manga.SourceID == sourceID {
+			page.Mangas = append(page.Mangas, source.Manga{MangaRef: source.MangaRef{SourceID: sourceID, URL: manga.URL},
+				Title: manga.Title, ThumbnailURL: manga.URL + "/thumbnail"})
+		}
+	}
+	sort.Slice(page.Mangas, func(i, j int) bool { return page.Mangas[i].Title < page.Mangas[j].Title })
+	return page, nil
+}
+
+func (m *Module) Latest(ctx context.Context, sourceID string, page int) (*source.MangaPage, error) {
+	return m.browse(ctx, sourceID)
+}
+
+func (m *Module) Popular(ctx context.Context, sourceID string, page int) (*source.MangaPage, error) {
+	return m.browse(ctx, sourceID)
 }
 
 func (s *Scenario) AddManga(m *Manga) {

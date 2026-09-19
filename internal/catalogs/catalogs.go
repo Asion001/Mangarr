@@ -29,6 +29,7 @@ import (
 	"github.com/Asion001/mangarr/internal/quiet"
 	"github.com/Asion001/mangarr/internal/settings"
 	"github.com/Asion001/mangarr/internal/sourcegov"
+	"github.com/Asion001/mangarr/internal/sourcepriority"
 )
 
 // ListTTL is how long a module's catalog list is reused.
@@ -253,7 +254,8 @@ const (
 
 // Filter narrows Select.
 type Filter struct {
-	Scope Scope
+	RootFolderID int64
+	Scope        Scope
 	// Lang overrides the default languages ("" = defaults for active scope).
 	Lang string
 	// Keys selects exact catalogs ("moduleId:sourceId"); disabled ones are allowed.
@@ -308,6 +310,19 @@ func (s *Service) Select(ctx context.Context, f Filter) ([]Catalog, []string) {
 		return out, errs
 	}
 	SortByPriority(out)
+	lang := f.Lang
+	if lang == "" && len(langs) == 1 {
+		lang = langs[0]
+	}
+	entries := make([]sourcepriority.Entry, 0, len(out))
+	for _, c := range out {
+		entries = append(entries, sourcepriority.Entry{Key: c.Key(), Priority: c.Priority})
+	}
+	ranks, err := sourcepriority.Resolve(ctx, s.db, f.RootFolderID, lang, entries)
+	if err != nil {
+		return nil, append(errs, err.Error())
+	}
+	sort.SliceStable(out, func(i, j int) bool { return ranks[out[i].Key()] < ranks[out[j].Key()] })
 	return out, errs
 }
 

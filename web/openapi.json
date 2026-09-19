@@ -1474,6 +1474,194 @@
         ],
         "type": "object"
       },
+      "DiscoverLibraryItem": {
+        "additionalProperties": false,
+        "properties": {
+          "books": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "changedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "coverUrl": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "genres": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "language": {
+            "type": "string"
+          },
+          "latestChapter": {
+            "type": "string"
+          },
+          "matchingGenres": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "reason": {
+            "enum": [
+              "matches-genres",
+              "followed",
+              "recently-added",
+              "recent-update"
+            ],
+            "type": "string"
+          },
+          "seriesId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "unread": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "seriesId",
+          "title",
+          "coverUrl",
+          "status",
+          "language",
+          "genres",
+          "unread",
+          "books",
+          "changedAt"
+        ],
+        "type": "object"
+      },
+      "DiscoverResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "generatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "popular": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoverSourceItem"
+            },
+            "type": "array"
+          },
+          "popularCached": {
+            "type": "boolean"
+          },
+          "recommendations": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoverLibraryItem"
+            },
+            "type": "array"
+          },
+          "sourceErrors": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoverSourceError"
+            },
+            "type": "array"
+          },
+          "updates": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoverLibraryItem"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "recommendations",
+          "updates",
+          "popular",
+          "sourceErrors",
+          "popularCached",
+          "generatedAt"
+        ],
+        "type": "object"
+      },
+      "DiscoverSourceError": {
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "name",
+          "error"
+        ],
+        "type": "object"
+      },
+      "DiscoverSourceItem": {
+        "additionalProperties": false,
+        "properties": {
+          "chapterCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "engineRef": {
+            "type": "string"
+          },
+          "existingSeriesId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "language": {
+            "type": "string"
+          },
+          "moduleId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "moduleName": {
+            "type": "string"
+          },
+          "sourceId": {
+            "type": "string"
+          },
+          "sourceName": {
+            "type": "string"
+          },
+          "thumbnailUrl": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "moduleId",
+          "moduleName",
+          "sourceId",
+          "sourceName",
+          "language",
+          "title",
+          "url"
+        ],
+        "type": "object"
+      },
       "DownloadJob": {
         "additionalProperties": false,
         "properties": {
@@ -4356,6 +4544,34 @@
         ],
         "type": "object"
       },
+      "PriorityPreview": {
+        "additionalProperties": false,
+        "properties": {
+          "previousMode": {
+            "type": "string"
+          },
+          "seriesId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SeriesSource"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "seriesId",
+          "title",
+          "previousMode",
+          "sources"
+        ],
+        "type": "object"
+      },
       "ProcessEstimate": {
         "additionalProperties": false,
         "properties": {
@@ -4847,6 +5063,10 @@
             "minLength": 1,
             "type": "string"
           },
+          "rootFolderId": {
+            "format": "int64",
+            "type": "integer"
+          },
           "scope": {
             "enum": [
               "active",
@@ -5094,6 +5314,80 @@
           "canDownload",
           "pages",
           "progress"
+        ],
+        "type": "object"
+      },
+      "ReadChapterItem": {
+        "additionalProperties": false,
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "completed": {
+            "type": "boolean"
+          },
+          "downloaded": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "number": {
+            "type": "string"
+          },
+          "numberSort": {
+            "format": "double",
+            "type": "number"
+          },
+          "page": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "volume": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "numberSort",
+          "available",
+          "downloaded",
+          "completed"
+        ],
+        "type": "object"
+      },
+      "ReadChapterPickerResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReadChapterItem"
+            },
+            "type": "array"
+          },
+          "page": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "pageSize": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
         ],
         "type": "object"
       },
@@ -5485,6 +5779,19 @@
         },
         "required": [
           "comment"
+        ],
+        "type": "object"
+      },
+      "Reading-mihon-backupRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Public HTTP(S) address of mangarr's Komga-compatible API",
+            "type": "string"
+          }
+        },
+        "required": [
+          "address"
         ],
         "type": "object"
       },
@@ -6681,6 +6988,13 @@
           "sortTitle": {
             "type": "string"
           },
+          "sourcePriorityMode": {
+            "enum": [
+              "inherit",
+              "custom"
+            ],
+            "type": "string"
+          },
           "sources": {
             "items": {
               "$ref": "#/components/schemas/SeriesSource"
@@ -6729,12 +7043,55 @@
           "path",
           "profileId",
           "language",
+          "sourcePriorityMode",
           "readingDirection",
           "tags",
           "metadata",
           "addOptions",
           "addedAt",
           "updatedAt"
+        ],
+        "type": "object"
+      },
+      "SeriesSearchResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SeriesResource"
+            },
+            "type": "array"
+          },
+          "languages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "page": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "pageSize": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "totalSize": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total",
+          "totalSize",
+          "languages"
         ],
         "type": "object"
       },
@@ -6756,6 +7113,10 @@
           "createdAt": {
             "format": "date-time",
             "type": "string"
+          },
+          "effectivePriority": {
+            "format": "int64",
+            "type": "integer"
           },
           "enabled": {
             "type": "boolean"
@@ -7020,6 +7381,49 @@
           "position",
           "type",
           "value"
+        ],
+        "type": "object"
+      },
+      "Source-priorities-inheritRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "dryRun": {
+            "type": "boolean"
+          },
+          "seriesIds": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "seriesIds",
+          "dryRun"
+        ],
+        "type": "object"
+      },
+      "Source-priorities-saveRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "scope": {
+            "maxLength": 80,
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "type": "array"
+          }
+        },
+        "required": [
+          "scope",
+          "sources"
         ],
         "type": "object"
       },
@@ -7289,6 +7693,25 @@
           "title",
           "value",
           "visible"
+        ],
+        "type": "object"
+      },
+      "SourcePriorityList": {
+        "additionalProperties": false,
+        "properties": {
+          "scope": {
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "scope",
+          "sources"
         ],
         "type": "object"
       },
@@ -7818,6 +8241,13 @@
           "rootFolderId": {
             "format": "int64",
             "type": "integer"
+          },
+          "sourcePriorityMode": {
+            "enum": [
+              "inherit",
+              "custom"
+            ],
+            "type": "string"
           },
           "status": {
             "enum": [
@@ -9734,6 +10164,123 @@
         },
         "tags": [
           "System"
+        ]
+      }
+    },
+    "/api/v1/discover": {
+      "get": {
+        "operationId": "discover",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "rootFolderId",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "lang",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 18,
+              "format": "int64",
+              "maximum": 50,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoverResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Personal recommendations, recent library updates and popular titles from prioritized sources",
+        "tags": [
+          "Discover"
+        ]
+      }
+    },
+    "/api/v1/discover/thumbnail": {
+      "get": {
+        "operationId": "discover-thumbnail",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "token",
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "contentEncoding": "base64",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Type": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "A signed thumbnail returned by the discover feed",
+        "tags": [
+          "Discover"
         ]
       }
     },
@@ -13061,6 +13608,89 @@
         ]
       }
     },
+    "/api/v1/read/series/{id}/chapters": {
+      "get": {
+        "operationId": "read-chapter-picker",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "maxLength": 100,
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "currentId",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 0,
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "pageSize",
+            "schema": {
+              "default": 50,
+              "format": "int64",
+              "maximum": 100,
+              "minimum": 20,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadChapterPickerResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Lightweight chapter list for the web reader picker",
+        "tags": [
+          "Reading"
+        ]
+      }
+    },
     "/api/v1/read/settings": {
       "get": {
         "operationId": "read-settings",
@@ -13546,6 +14176,65 @@
           }
         },
         "summary": "Revoke a device key (yours; admins any)",
+        "tags": [
+          "Reading apps"
+        ]
+      }
+    },
+    "/api/v1/reading/mihon-backup": {
+      "post": {
+        "operationId": "reading-mihon-backup",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Reading-mihon-backupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "contentEncoding": "base64",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Type": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Download the caller's visible library and progress as a Mihon backup with mangarr's Komga address and a new revocable device key",
         "tags": [
           "Reading apps"
         ]
@@ -14419,6 +15108,125 @@
           }
         },
         "summary": "Files (and folders) that don't match the current naming format",
+        "tags": [
+          "Series"
+        ]
+      }
+    },
+    "/api/v1/series/search": {
+      "get": {
+        "operationId": "series-query",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "maxLength": 200,
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "filter",
+            "schema": {
+              "default": "all",
+              "enum": [
+                "all",
+                "following",
+                "monitored",
+                "missing",
+                "ongoing",
+                "completed",
+                "unread",
+                "reading"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "default": "title",
+              "enum": [
+                "title",
+                "added",
+                "latest",
+                "missing",
+                "size",
+                "read"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "rootFolderId",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "language",
+            "schema": {
+              "maxLength": 20,
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "format": "int64",
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "pageSize",
+            "schema": {
+              "default": 36,
+              "format": "int64",
+              "maximum": 100,
+              "minimum": 12,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesSearchResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Search, filter, sort and paginate visible series",
         "tags": [
           "Series"
         ]
@@ -15982,6 +16790,120 @@
         "summary": "Save single sign-on settings (send the masked secret to keep the stored one)",
         "tags": [
           "Settings"
+        ]
+      }
+    },
+    "/api/v1/source-priorities": {
+      "get": {
+        "operationId": "source-priorities-list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SourcePriorityList"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Sources"
+        ]
+      },
+      "put": {
+        "operationId": "source-priorities-save",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Source-priorities-saveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourcePriorityList"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Sources"
+        ]
+      }
+    },
+    "/api/v1/source-priorities/inherit": {
+      "post": {
+        "operationId": "source-priorities-inherit",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Source-priorities-inheritRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PriorityPreview"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "Sources"
         ]
       }
     },
