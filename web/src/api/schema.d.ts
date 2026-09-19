@@ -2573,7 +2573,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Recently discovered chapters and newly added titles visible to you */
+        /** Recently discovered chapters and newly added titles visible to you; initial catalog chapters are suppressed */
         get: operations["updates-list"];
         put?: never;
         post?: never;
@@ -5185,16 +5185,30 @@ export interface components {
             /** Format: int64 */
             chapterId?: number;
             coverUrl: string;
+            downloaded?: boolean;
             /** @enum {string} */
             kind: "series" | "chapter";
             language?: string;
             languages?: string[];
             number?: string;
+            /** Format: int64 */
+            readPage?: number;
+            /** @enum {string} */
+            readState?: "" | "unread" | "in_progress" | "read";
             readable?: boolean;
             /** Format: int64 */
             seriesId: number;
             seriesTitle: string;
             title?: string;
+        };
+        UpdatePage: {
+            items: components["schemas"]["UpdateItem"][];
+            /** Format: int64 */
+            page: number;
+            /** Format: int64 */
+            pageSize: number;
+            /** Format: int64 */
+            total: number;
         };
         UpdateRequest: {
             blockedScanlators?: string[];
@@ -11853,7 +11867,9 @@ export interface operations {
         parameters: {
             query?: {
                 days?: number;
-                limit?: number;
+                kind?: "" | "all" | "chapter" | "series";
+                page?: number;
+                pageSize?: number;
             };
             header?: never;
             path?: never;
@@ -11867,7 +11883,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UpdateItem"][];
+                    "application/json": components["schemas"]["UpdatePage"];
                 };
             };
             /** @description Error */

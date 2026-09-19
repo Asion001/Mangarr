@@ -32,7 +32,7 @@ func TestUpdatesListsNewWorksAndChapters(t *testing.T) {
 		t.Fatal(err)
 	}
 	chapter := &model.Chapter{SeriesID: series.ID, NumberKey: "1", NumberSort: 1, Title: "Мечта", Monitored: true,
-		State: model.ChapterMissing, FirstSeenAt: now, UpdatedAt: now}
+		State: model.ChapterMissing, FirstSeenAt: now.Add(10 * time.Minute), UpdatedAt: now}
 	if _, err := app.DB.NewInsert().Model(chapter).Exec(t.Context()); err != nil {
 		t.Fatal(err)
 	}
@@ -42,17 +42,46 @@ func TestUpdatesListsNewWorksAndChapters(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
-	var items []api.UpdateItem
-	if err := json.NewDecoder(resp.Body).Decode(&items); err != nil {
+	var page api.UpdatePage
+	if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
 		t.Fatal(err)
 	}
-	if resp.StatusCode != http.StatusOK || len(items) != 2 {
-		t.Fatalf("status=%d updates=%+v", resp.StatusCode, items)
+	if resp.StatusCode != http.StatusOK || len(page.Items) != 2 || page.Total != 2 {
+		t.Fatalf("status=%d updates=%+v", resp.StatusCode, page)
 	}
-	if items[0].Kind != "chapter" || items[0].ChapterID != chapter.ID || items[0].Language != "ru" {
-		t.Fatalf("chapter update: %+v", items[0])
+	if page.Items[0].Kind != "chapter" || page.Items[0].ChapterID != chapter.ID || page.Items[0].Language != "ru" {
+		t.Fatalf("chapter update: %+v", page.Items[0])
 	}
-	if items[1].Kind != "series" || items[1].SeriesTitle != work.Title || len(items[1].Languages) != 1 {
-		t.Fatalf("series update: %+v", items[1])
+	if page.Items[1].Kind != "series" || page.Items[1].SeriesTitle != work.Title || len(page.Items[1].Languages) != 1 {
+		t.Fatalf("series update: %+v", page.Items[1])
+	}
+}
+
+func TestUpdatesSuppressesInitialCatalogAndPaginates(t *testing.T) {
+	server, app := newServer(t, true)
+	now := time.Now().UTC()
+	root := &model.RootFolder{Path: t.TempDir(), CreatedAt: now}
+	_, _ = app.DB.NewInsert().Model(root).Exec(t.Context())
+	profile := &model.Profile{Name: "Updates pagination", CreatedAt: now, UpdatedAt: now}
+	_, _ = app.DB.NewInsert().Model(profile).Exec(t.Context())
+	series := &model.Series{Title: "Feed", SortTitle: "feed", Status: model.StatusOngoing, Monitored: true, MonitorNew: model.MonitorAll,
+		RootFolderID: root.ID, Path: "feed", ProfileID: profile.ID, Tags: []int64{}, AddedAt: now, UpdatedAt: now}
+	_, _ = app.DB.NewInsert().Model(series).Exec(t.Context())
+	initial := &model.Chapter{SeriesID: series.ID, NumberKey: "1", NumberSort: 1, State: model.ChapterMissing, FirstSeenAt: now.Add(time.Minute), UpdatedAt: now}
+	newer := &model.Chapter{SeriesID: series.ID, NumberKey: "2", NumberSort: 2, State: model.ChapterMissing, FirstSeenAt: now.Add(10 * time.Minute), UpdatedAt: now}
+	_, _ = app.DB.NewInsert().Model(initial).Exec(t.Context())
+	_, _ = app.DB.NewInsert().Model(newer).Exec(t.Context())
+
+	resp, err := http.Get(server.URL + "/api/v1/updates?days=7&kind=chapter&pageSize=1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var page api.UpdatePage
+	if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
+		t.Fatal(err)
+	}
+	if page.Total != 1 || len(page.Items) != 1 || page.Items[0].ChapterID != newer.ID {
+		t.Fatalf("initial catalog was not suppressed: %+v", page)
 	}
 }

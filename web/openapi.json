@@ -7677,6 +7677,9 @@
           "coverUrl": {
             "type": "string"
           },
+          "downloaded": {
+            "type": "boolean"
+          },
           "kind": {
             "enum": [
               "series",
@@ -7694,6 +7697,19 @@
             "type": "array"
           },
           "number": {
+            "type": "string"
+          },
+          "readPage": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "readState": {
+            "enum": [
+              "",
+              "unread",
+              "in_progress",
+              "read"
+            ],
             "type": "string"
           },
           "readable": {
@@ -7716,6 +7732,36 @@
           "seriesId",
           "seriesTitle",
           "coverUrl"
+        ],
+        "type": "object"
+      },
+      "UpdatePage": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UpdateItem"
+            },
+            "type": "array"
+          },
+          "page": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "pageSize": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
         ],
         "type": "object"
       },
@@ -17289,7 +17335,32 @@
           {
             "explode": false,
             "in": "query",
-            "name": "limit",
+            "name": "kind",
+            "schema": {
+              "enum": [
+                "",
+                "all",
+                "chapter",
+                "series"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "format": "int64",
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "pageSize",
             "schema": {
               "default": 100,
               "format": "int64",
@@ -17304,10 +17375,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/UpdateItem"
-                  },
-                  "type": "array"
+                  "$ref": "#/components/schemas/UpdatePage"
                 }
               }
             },
@@ -17324,7 +17392,7 @@
             "description": "Error"
           }
         },
-        "summary": "Recently discovered chapters and newly added titles visible to you",
+        "summary": "Recently discovered chapters and newly added titles visible to you; initial catalog chapters are suppressed",
         "tags": [
           "Updates"
         ]
