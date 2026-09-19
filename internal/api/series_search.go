@@ -39,6 +39,9 @@ func matchesSeriesQuery(item SeriesResource, query SeriesSearchQuery) bool {
 		for _, title := range item.Metadata.AltTitles {
 			matched = matched || strings.Contains(strings.ToLower(title), needle)
 		}
+		for _, edition := range item.Editions {
+			matched = matched || strings.Contains(strings.ToLower(edition.Title), needle)
+		}
 		if !matched {
 			return false
 		}
@@ -103,14 +106,9 @@ func (s *Server) registerSeriesSearch() {
 			if err := s.app.DB.NewSelect().Model(&list).Order("sort_title").Scan(ctx); err != nil {
 				return nil, toHTTPError(err)
 			}
-			stats, err := s.seriesStats(ctx, 0)
-			if err != nil {
-				return nil, toHTTPError(err)
-			}
 			principal := access.From(ctx)
-			following := s.follows(ctx)
-			items := make([]SeriesResource, 0, len(list))
 			languages := map[string]bool{}
+			visible := make([]model.Series, 0, len(list))
 			for _, series := range list {
 				if !principal.Sees(&series) {
 					continue
@@ -118,9 +116,45 @@ func (s *Server) registerSeriesSearch() {
 				if series.Language != "" {
 					languages[series.Language] = true
 				}
-				item := s.seriesResource(ctx, series, stats, false)
-				item.Following = following[series.ID]
-				if matchesSeriesQuery(item, *in) {
+				if in.RootFolderID > 0 && series.RootFolderID != in.RootFolderID {
+					continue
+				}
+				if in.Language != "" && series.Language != in.Language {
+					continue
+				}
+				visible = append(visible, series)
+			}
+			needle := strings.ToLower(strings.TrimSpace(in.Query))
+			rawMatches := map[int64]bool{}
+			for _, series := range visible {
+				matched := strings.Contains(strings.ToLower(series.Title), needle)
+				for _, title := range series.Metadata.AltTitles {
+					matched = matched || strings.Contains(strings.ToLower(title), needle)
+				}
+				if matched && needle != "" {
+					key := series.WorkID
+					if key == 0 {
+						key = -series.ID
+					}
+					rawMatches[key] = true
+				}
+			}
+			grouped, err := s.groupedSeriesResources(ctx, visible)
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			items := make([]SeriesResource, 0, len(grouped))
+			filters := *in
+			filters.Query, filters.RootFolderID, filters.Language = "", 0, ""
+			for _, item := range grouped {
+				key := item.WorkID
+				if key == 0 {
+					key = -item.ID
+				}
+				if needle != "" && !rawMatches[key] && !matchesSeriesQuery(item, SeriesSearchQuery{Query: in.Query}) {
+					continue
+				}
+				if matchesSeriesQuery(item, filters) {
 					items = append(items, item)
 				}
 			}

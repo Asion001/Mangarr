@@ -22,6 +22,7 @@ import {
   FileUp,
   UserRound,
   Inbox,
+  BellRing,
 } from "lucide-react";
 import { api } from "../api/client";
 import { useHealth, usePendingRequests, useQueue } from "../api/queries";
@@ -88,6 +89,7 @@ export function Layout() {
 
   const nav: NavItem[] = [
     { to: "/", label: "Series", icon: <BookOpen className="size-4" /> },
+    { to: "/updates", label: "Updates", icon: <BellRing className="size-4" /> },
     { to: "/add", label: "Add series", icon: <PlusCircle className="size-4" />, need: "library.manage" },
     { to: "/requests", label: "Requests", icon: <Inbox className="size-4" />, need: ["requests.create", "requests.manage", "library.manage"] },
     { to: "/import", label: "Import library", icon: <FileUp className="size-4" />, need: "admin" },
@@ -97,7 +99,8 @@ export function Layout() {
       icon: <Download className="size-4" />,
       need: "library.manage",
       children: [
-        { to: "/activity/queue", label: "Queue" },
+        { to: "/activity/downloads", label: "Downloads" },
+        { to: "/activity/processing", label: "Processing" },
         { to: "/activity/history", label: "History" },
         { to: "/activity/blocklist", label: "Blocklist" },
       ],
@@ -161,7 +164,7 @@ export function Layout() {
         }}>{mobile?<X className="size-4"/>:compact?<PanelLeftOpen className="size-4"/>:<PanelLeftClose className="size-4"/>}</button>
       </div>
       <nav aria-label={t("Navigation")} className="min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain">
-        {nav.filter(item => (!item.need || can(item.need)) && (editing || item.to === "/" || (item.to === "/requests" && can("requests.create")))).map(item=>{
+        {nav.filter(item => (!item.need || can(item.need)) && (editing || item.to === "/" || item.to === "/updates" || (item.to === "/requests" && can("requests.create")))).map(item=>{
           const active = item.to === "/" ? loc.pathname === "/" || loc.pathname.startsWith("/series") : loc.pathname.startsWith(item.to);
           const count = item.to === "/activity" ? queued : item.to === "/requests" && editing ? pendingRequests : item.to === "/system" ? issues : 0;
           return <div key={item.to}>

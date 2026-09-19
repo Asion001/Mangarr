@@ -274,6 +274,11 @@ func langMatch(catalogLang string, langs []string) bool {
 func (s *Service) Select(ctx context.Context, f Filter) ([]Catalog, []string) {
 	all, errs := s.List(ctx, false)
 	st := s.sourceSettings()
+	if f.Scope != ScopeAll && len(f.Keys) == 0 && f.Lang != "" {
+		if preset, ok := st.ForLanguage(f.Lang); ok && len(preset.Sources) > 0 {
+			f.Keys = preset.Sources
+		}
+	}
 	var langs []string
 	switch {
 	case f.Lang != "":
@@ -282,20 +287,27 @@ func (s *Service) Select(ctx context.Context, f Filter) ([]Catalog, []string) {
 		langs = st.DefaultLanguages
 	}
 	var out []Catalog
+	byKey := map[string]Catalog{}
 	for _, c := range all {
 		if c.Hidden {
 			continue
 		}
+		byKey[c.Key()] = c
 		if len(f.Keys) > 0 {
-			if slices.Contains(f.Keys, c.Key()) {
-				out = append(out, c)
-			}
 			continue
 		}
 		if !langMatch(c.Lang, langs) || (f.Scope != ScopeAll && !c.Enabled) {
 			continue
 		}
 		out = append(out, c)
+	}
+	if len(f.Keys) > 0 {
+		for _, key := range f.Keys {
+			if c, ok := byKey[key]; ok {
+				out = append(out, c)
+			}
+		}
+		return out, errs
 	}
 	SortByPriority(out)
 	lang := f.Lang

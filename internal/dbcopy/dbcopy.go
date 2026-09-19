@@ -19,7 +19,7 @@ import (
 var Tables = []string{
 	"groups", "readers", "users", "user_ui_preferences", "source_priority_lists", "sessions", "invites",
 	"settings", "tags", "root_folders", "profiles", "provider_definitions", "catalog_prefs",
-	"series", "series_sources", "chapters", "chapter_releases", "chapter_files",
+	"works", "series", "series_sources", "chapters", "chapter_releases", "chapter_files",
 	"download_jobs", "history", "blocklist", "commands", "scheduled_tasks",
 	"reader_accounts", "chapter_read_states",
 	"imports", "import_entries", "reading_keys", "read_events", "reader_prefs",

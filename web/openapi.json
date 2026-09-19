@@ -176,6 +176,10 @@
           },
           "title": {
             "type": "string"
+          },
+          "workId": {
+            "format": "int64",
+            "type": "integer"
           }
         },
         "required": [
@@ -1814,6 +1818,30 @@
         ],
         "type": "object"
       },
+      "EditionSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "coverUrl": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "language": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "coverUrl"
+        ],
+        "type": "object"
+      },
       "EditorRequest": {
         "additionalProperties": false,
         "properties": {
@@ -3255,6 +3283,42 @@
           "notBefore",
           "createdAt",
           "updatedAt"
+        ],
+        "type": "object"
+      },
+      "LanguageDefault": {
+        "additionalProperties": false,
+        "properties": {
+          "language": {
+            "type": "string"
+          },
+          "profileId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "readingDirection": {
+            "enum": [
+              "",
+              "rtl",
+              "ltr",
+              "webtoon"
+            ],
+            "type": "string"
+          },
+          "rootFolderId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "language",
+          "sources"
         ],
         "type": "object"
       },
@@ -5111,6 +5175,39 @@
         ],
         "type": "object"
       },
+      "Read-markRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "read": {
+            "type": "boolean"
+          },
+          "scope": {
+            "enum": [
+              "chapter",
+              "previous"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "read",
+          "scope"
+        ],
+        "type": "object"
+      },
+      "Read-markResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "changed": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "changed"
+        ],
+        "type": "object"
+      },
       "Read-progressRequest": {
         "additionalProperties": false,
         "properties": {
@@ -6680,6 +6777,19 @@
         ],
         "type": "object"
       },
+      "Series-work-updateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "workId": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "workId"
+        ],
+        "type": "object"
+      },
       "SeriesMetadata": {
         "additionalProperties": false,
         "properties": {
@@ -6813,6 +6923,12 @@
           "coverUrl": {
             "type": "string"
           },
+          "editions": {
+            "items": {
+              "$ref": "#/components/schemas/EditionSummary"
+            },
+            "type": "array"
+          },
           "following": {
             "type": "boolean"
           },
@@ -6890,6 +7006,13 @@
           },
           "updatedAt": {
             "format": "date-time",
+            "type": "string"
+          },
+          "workId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "workTitle": {
             "type": "string"
           }
         },
@@ -7612,6 +7735,12 @@
           "hideNsfw": {
             "type": "boolean"
           },
+          "languageDefaults": {
+            "items": {
+              "$ref": "#/components/schemas/LanguageDefault"
+            },
+            "type": "array"
+          },
           "quickSearch": {
             "$ref": "#/components/schemas/QuickSearch"
           },
@@ -7622,6 +7751,7 @@
         "required": [
           "hideNsfw",
           "defaultLanguages",
+          "languageDefaults",
           "quickSearch",
           "throttle"
         ],
@@ -7940,6 +8070,108 @@
           "locale",
           "mode",
           "updatedAt"
+        ],
+        "type": "object"
+      },
+      "UpdateItem": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "chapterId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "coverUrl": {
+            "type": "string"
+          },
+          "downloaded": {
+            "type": "boolean"
+          },
+          "kind": {
+            "enum": [
+              "series",
+              "chapter"
+            ],
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "languages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "number": {
+            "type": "string"
+          },
+          "readPage": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "readState": {
+            "enum": [
+              "",
+              "unread",
+              "in_progress",
+              "read"
+            ],
+            "type": "string"
+          },
+          "readable": {
+            "type": "boolean"
+          },
+          "seriesId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "seriesTitle": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "at",
+          "seriesId",
+          "seriesTitle",
+          "coverUrl"
+        ],
+        "type": "object"
+      },
+      "UpdatePage": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UpdateItem"
+            },
+            "type": "array"
+          },
+          "page": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "pageSize": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
         ],
         "type": "object"
       },
@@ -13144,6 +13376,58 @@
         ]
       }
     },
+    "/api/v1/read/chapters/{id}/mark": {
+      "put": {
+        "operationId": "read-mark",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Read-markRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Read-markResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Mark this chapter, or every previous chapter, read or unread",
+        "tags": [
+          "Reader"
+        ]
+      }
+    },
     "/api/v1/read/chapters/{id}/pages/{n}": {
       "get": {
         "operationId": "read-page",
@@ -14576,6 +14860,14 @@
               "minLength": 1,
               "type": "string"
             }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "lang",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -14623,6 +14915,14 @@
             "in": "path",
             "name": "id",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "lang",
             "schema": {
               "type": "string"
             }
@@ -15642,6 +15942,51 @@
             "description": "Error"
           }
         },
+        "tags": [
+          "Series"
+        ]
+      }
+    },
+    "/api/v1/series/{id}/work": {
+      "put": {
+        "operationId": "series-work-update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Series-work-updateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Group this language edition with a work, or separate it with workId 0",
         "tags": [
           "Series"
         ]
@@ -17818,6 +18163,88 @@
         },
         "tags": [
           "Tags"
+        ]
+      }
+    },
+    "/api/v1/updates": {
+      "get": {
+        "operationId": "updates-list",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "days",
+            "schema": {
+              "default": 30,
+              "format": "int64",
+              "maximum": 365,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "kind",
+            "schema": {
+              "enum": [
+                "",
+                "all",
+                "chapter",
+                "series"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "format": "int64",
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "pageSize",
+            "schema": {
+              "default": 100,
+              "format": "int64",
+              "maximum": 500,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdatePage"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Recently discovered chapters and newly added titles visible to you; initial catalog chapters are suppressed",
+        "tags": [
+          "Updates"
         ]
       }
     },

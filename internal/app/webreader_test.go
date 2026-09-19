@@ -142,4 +142,30 @@ func TestWebReader(t *testing.T) {
 	if ev.Client != "Web reader" || ev.Device != "Safari on iPad" {
 		t.Fatalf("event %+v", ev)
 	}
+
+	// Manual controls can change the current chapter and every chapter before it.
+	if code, _ := call("PUT", "/api/v1/read/chapters/"+c2+"/mark", `{"read":true,"scope":"chapter"}`, nil); code != 200 {
+		t.Fatalf("mark current read: %d", code)
+	}
+	if code, _ := call("PUT", "/api/v1/read/chapters/"+c2+"/mark", `{"read":false,"scope":"previous"}`, nil); code != 200 {
+		t.Fatalf("mark previous unread: %d", code)
+	}
+	call("GET", "/api/v1/read/chapters/"+c1, "", &ch)
+	if ch.Progress.Page != 0 || ch.Progress.Completed {
+		t.Fatalf("previous chapter stayed read: %+v", ch.Progress)
+	}
+	if code, _ := call("PUT", "/api/v1/read/chapters/"+c2+"/mark", `{"read":true,"scope":"previous"}`, nil); code != 200 {
+		t.Fatalf("mark previous read: %d", code)
+	}
+	call("GET", "/api/v1/read/chapters/"+c1, "", &ch)
+	if !ch.Progress.Completed {
+		t.Fatalf("previous chapter was not marked read: %+v", ch.Progress)
+	}
+	if code, _ := call("PUT", "/api/v1/read/chapters/"+c2+"/mark", `{"read":false,"scope":"chapter"}`, nil); code != 200 {
+		t.Fatalf("mark current unread: %d", code)
+	}
+	call("GET", "/api/v1/read/chapters/"+c2, "", &ch)
+	if ch.Progress.Completed {
+		t.Fatalf("current chapter stayed read: %+v", ch.Progress)
+	}
 }

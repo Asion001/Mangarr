@@ -101,6 +101,7 @@ read-chapter GET /api/v1/read/chapters/{id} -> signedin
 read-chapter-bounds GET /api/v1/read/chapters/{id}/bounds -> signedin
 read-chapter-picker GET /api/v1/read/series/{id}/chapters -> signedin
 read-file GET /api/v1/read/chapters/{id}/file -> download
+read-mark PUT /api/v1/read/chapters/{id}/mark -> signedin
 read-page GET /api/v1/read/chapters/{id}/pages/{n} -> signedin
 read-page-bounds GET /api/v1/read/chapters/{id}/pages/{n}/bounds -> signedin
 read-progress PUT /api/v1/read/chapters/{id}/progress -> signedin
@@ -154,6 +155,7 @@ series-sources-bulk POST /api/v1/series/sources/bulk -> library.manage
 series-sources-switch POST /api/v1/series/sources/switch -> library.manage
 series-unfollow DELETE /api/v1/series/{id}/follow -> signedin
 series-update PUT /api/v1/series/{id} -> library.manage
+series-work-update PUT /api/v1/series/{id}/work -> library.manage
 settings-get-cleanup GET /api/v1/settings/cleanup -> admin
 settings-get-downloads GET /api/v1/settings/downloads -> admin
 settings-get-general GET /api/v1/settings/general -> admin
@@ -201,6 +203,7 @@ system-tasks GET /api/v1/system/tasks -> admin
 tags-create POST /api/v1/tags -> library.manage
 tags-delete DELETE /api/v1/tags/{id} -> library.manage
 tags-list GET /api/v1/tags -> signedin
+updates-list GET /api/v1/updates -> signedin
 upscaler-info GET /api/v1/modules/{id}/upscaler-info -> admin
 users-create POST /api/v1/users -> admin
 users-delete DELETE /api/v1/users/{id} -> admin

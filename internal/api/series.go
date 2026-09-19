@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/Asion001/mangarr/internal/access"
+	"fmt"
 	"net/http"
 	"os"
 	"strconv"
@@ -14,6 +14,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/uptrace/bun"
 
+	"github.com/Asion001/mangarr/internal/access"
 	"github.com/Asion001/mangarr/internal/decision"
 	"github.com/Asion001/mangarr/internal/metadataagg"
 	"github.com/Asion001/mangarr/internal/model"
@@ -79,6 +80,17 @@ type SeriesResource struct {
 	Reading  *ReadingInfo         `json:"reading,omitempty"`
 	// Following: you follow it (new chapters on your notification targets).
 	Following bool `json:"following"`
+	// WorkTitle is the canonical list title; Editions are independently
+	// managed language variants of that work.
+	WorkTitle string           `json:"workTitle,omitempty"`
+	Editions  []EditionSummary `json:"editions,omitempty"`
+}
+
+type EditionSummary struct {
+	ID       int64  `json:"id"`
+	Title    string `json:"title"`
+	Language string `json:"language,omitempty"`
+	CoverURL string `json:"coverUrl"`
 }
 
 type statsRow struct {
@@ -219,11 +231,12 @@ func (s *Server) readingInfo(ctx context.Context, ser *model.Series, fullPath st
 		ColumnExpr("MAX(rs.read_at) AS last_read").
 		Where("rs.series_id = ?", ser.ID).GroupExpr("rs.reader_id, r.name").OrderExpr("r.name").Scan(ctx, &rows)
 	own, onlyOwn := ownReaderOnly(ctx)
+	labels := s.progressReaderLabels(ctx)
 	for _, r := range rows {
 		if onlyOwn && r.ReaderID != own {
 			continue // others' progress is theirs
 		}
-		rp := ReaderProgress{ReaderID: r.ReaderID, Reader: r.Name, Read: r.Read, InProgress: r.InProgress}
+		rp := ReaderProgress{ReaderID: r.ReaderID, Reader: progressReaderLabel(ctx, labels, r.ReaderID, r.Name), Read: r.Read, InProgress: r.InProgress}
 		if !r.LastRead.IsZero() {
 			t := r.LastRead.Time
 			rp.LastReadAt = &t
@@ -258,6 +271,32 @@ func (s *Server) readingInfo(ctx context.Context, ser *model.Series, fullPath st
 	return info
 }
 
+// progressReaderLabels decouples a person's visible identity from the name of
+// the storage bucket their progress was first imported into.
+func (s *Server) progressReaderLabels(ctx context.Context) map[int64]string {
+	var users []model.User
+	_ = s.app.DB.NewSelect().Model(&users).Column("reader_id", "username", "display_name").Where("reader_id IS NOT NULL").Scan(ctx)
+	out := make(map[int64]string, len(users))
+	for _, u := range users {
+		name := strings.TrimSpace(u.DisplayName)
+		if name == "" {
+			name = u.Username
+		}
+		out[u.ReaderID] = name
+	}
+	return out
+}
+
+func progressReaderLabel(ctx context.Context, labels map[int64]string, readerID int64, fallback string) string {
+	if p := access.From(ctx); p != nil && p.Kind == access.KindUser && p.ReaderID == readerID {
+		return "You"
+	}
+	if name := labels[readerID]; name != "" {
+		return name
+	}
+	return fallback
+}
+
 func (s *Server) seriesResource(ctx context.Context, ser model.Series, stats map[int64]SeriesStats, detail bool) SeriesResource {
 	r := SeriesResource{Series: ser, Stats: stats[ser.ID],
 		CoverURL: "api/v1/series/" + strconv.FormatInt(ser.ID, 10) + "/cover?v=" + strconv.FormatInt(ser.UpdatedAt.Unix(), 10)}
@@ -273,6 +312,49 @@ func (s *Server) seriesResource(ctx context.Context, ser model.Series, stats map
 		r.Reading = s.readingInfo(ctx, &ser, r.FullPath)
 	}
 	return r
+}
+
+func editionSummary(ser model.Series) EditionSummary {
+	return EditionSummary{ID: ser.ID, Title: ser.Title, Language: ser.Language,
+		CoverURL: "api/v1/series/" + strconv.FormatInt(ser.ID, 10) + "/cover?v=" + strconv.FormatInt(ser.UpdatedAt.Unix(), 10)}
+}
+
+func addStats(a, b SeriesStats) SeriesStats {
+	a.ChapterCount += b.ChapterCount
+	a.MonitoredCount += b.MonitoredCount
+	a.FileCount += b.FileCount
+	a.MissingCount += b.MissingCount
+	a.CleanedCount += b.CleanedCount
+	a.SizeOnDisk += b.SizeOnDisk
+	a.SpaceSaved += b.SpaceSaved
+	a.ReadCount += b.ReadCount
+	a.InProgressCount += b.InProgressCount
+	if b.LastChapter > a.LastChapter {
+		a.LastChapter = b.LastChapter
+	}
+	if b.LastReadAt != nil && (a.LastReadAt == nil || b.LastReadAt.After(*a.LastReadAt)) {
+		a.LastReadAt = b.LastReadAt
+	}
+	return a
+}
+
+func (s *Server) workContext(ctx context.Context, seriesID int64) (string, []EditionSummary) {
+	var selected model.Series
+	if err := s.app.DB.NewSelect().Model(&selected).Column("work_id").Where("id = ?", seriesID).Scan(ctx); err != nil || selected.WorkID == 0 {
+		return "", nil
+	}
+	var work model.Work
+	_ = s.app.DB.NewSelect().Model(&work).Column("title").Where("id = ?", selected.WorkID).Scan(ctx)
+	var editions []model.Series
+	_ = s.app.DB.NewSelect().Model(&editions).Where("work_id = ?", selected.WorkID).Order("language", "id").Scan(ctx)
+	p := access.From(ctx)
+	out := make([]EditionSummary, 0, len(editions))
+	for _, edition := range editions {
+		if p.Sees(&edition) {
+			out = append(out, editionSummary(edition))
+		}
+	}
+	return work.Title, out
 }
 
 type ReleaseView struct {
@@ -355,11 +437,13 @@ func (s *Server) chapterResources(ctx context.Context, seriesID int64) ([]Chapte
 	}
 	readBy := map[int64][]ReadStateView{}
 	own, onlyOwn := ownReaderOnly(ctx)
+	labels := s.progressReaderLabels(ctx)
 	for _, r := range reads {
 		if onlyOwn && r.ReaderID != own {
 			continue
 		}
-		readBy[r.ChapterID] = append(readBy[r.ChapterID], ReadStateView{ReaderID: r.ReaderID, Reader: r.Name, Completed: r.Completed, Page: r.Page, ReadAt: r.ReadAt})
+		readBy[r.ChapterID] = append(readBy[r.ChapterID], ReadStateView{ReaderID: r.ReaderID,
+			Reader: progressReaderLabel(ctx, labels, r.ReaderID, r.Name), Completed: r.Completed, Page: r.Page, ReadAt: r.ReadAt})
 	}
 	out := make([]ChapterResource, 0, len(chapters))
 	for _, ch := range chapters {
@@ -509,6 +593,63 @@ func (s *Server) visibleSeries(ctx context.Context, id int64) (*model.Series, er
 	return ser, nil
 }
 
+// groupedSeriesResources turns visible language editions into one row per
+// canonical work. Callers may pre-filter list by library or language; only
+// those editions then contribute to the row and its aggregate statistics.
+func (s *Server) groupedSeriesResources(ctx context.Context, list []model.Series) ([]SeriesResource, error) {
+	stats, err := s.seriesStats(ctx, 0)
+	if err != nil {
+		return nil, err
+	}
+	p := access.From(ctx)
+	following := s.follows(ctx)
+	visible := make([]model.Series, 0, len(list))
+	for _, ser := range list {
+		if p.Sees(&ser) {
+			visible = append(visible, ser)
+		}
+	}
+	works := map[int64]model.Work{}
+	var workRows []model.Work
+	if err := s.app.DB.NewSelect().Model(&workRows).Scan(ctx); err != nil {
+		return nil, err
+	}
+	for _, work := range workRows {
+		works[work.ID] = work
+	}
+	groups := map[int64][]model.Series{}
+	var order []int64
+	for _, ser := range visible {
+		key := ser.WorkID
+		if key == 0 {
+			key = -ser.ID
+		}
+		if len(groups[key]) == 0 {
+			order = append(order, key)
+		}
+		groups[key] = append(groups[key], ser)
+	}
+	out := make([]SeriesResource, 0, len(groups))
+	for _, key := range order {
+		editions := groups[key]
+		representative := editions[0]
+		r := s.seriesResource(ctx, representative, stats, false)
+		r.Editions = make([]EditionSummary, 0, len(editions))
+		r.Stats = SeriesStats{}
+		for _, edition := range editions {
+			r.Editions = append(r.Editions, editionSummary(edition))
+			r.Stats = addStats(r.Stats, stats[edition.ID])
+			r.Following = r.Following || following[edition.ID]
+		}
+		if work, ok := works[representative.WorkID]; ok {
+			r.WorkTitle = work.Title
+			r.Title, r.SortTitle = work.Title, work.SortTitle
+		}
+		out = append(out, r)
+	}
+	return out, nil
+}
+
 func (s *Server) registerSeries() {
 	tags := []string{"Series"}
 	huma.Register(s.api, huma.Operation{OperationID: "series-list", Method: http.MethodGet, Path: "/api/v1/series", Tags: tags},
@@ -517,19 +658,9 @@ func (s *Server) registerSeries() {
 			if err := s.app.DB.NewSelect().Model(&list).Order("sort_title").Scan(ctx); err != nil {
 				return nil, toHTTPError(err)
 			}
-			stats, err := s.seriesStats(ctx, 0)
+			out, err := s.groupedSeriesResources(ctx, list)
 			if err != nil {
 				return nil, toHTTPError(err)
-			}
-			p := access.From(ctx)
-			following := s.follows(ctx)
-			out := make([]SeriesResource, 0, len(list))
-			for _, ser := range list {
-				if p.Sees(&ser) {
-					r := s.seriesResource(ctx, ser, stats, false)
-					r.Following = following[ser.ID]
-					out = append(out, r)
-				}
 			}
 			return &struct{ Body []SeriesResource }{out}, nil
 		})
@@ -546,20 +677,36 @@ func (s *Server) registerSeries() {
 			}
 			r := s.seriesResource(ctx, *ser, stats, true)
 			r.Following = s.follows(ctx)[ser.ID]
+			r.WorkTitle, r.Editions = s.workContext(ctx, ser.ID)
 			return &struct{ Body SeriesResource }{r}, nil
+		})
+
+	huma.Register(s.api, huma.Operation{OperationID: "series-work-update", Method: http.MethodPut, Path: "/api/v1/series/{id}/work", Tags: tags,
+		Summary: "Group this language edition with a work, or separate it with workId 0"},
+		func(ctx context.Context, in *struct {
+			ID   int64 `path:"id"`
+			Body struct {
+				WorkID int64 `json:"workId"`
+			}
+		}) (*struct{}, error) {
+			if _, err := s.visibleSeries(ctx, in.ID); err != nil {
+				return nil, err
+			}
+			return nil, seriesError(s.app.Series.SetWork(ctx, in.ID, in.Body.WorkID))
 		})
 
 	huma.Register(s.api, huma.Operation{OperationID: "series-lookup", Method: http.MethodGet, Path: "/api/v1/series/lookup", Tags: tags,
 		Summary: "Search metadata modules (merged by priority) for a new series"},
 		func(ctx context.Context, in *struct {
 			Query string `query:"q" minLength:"1"`
+			Lang  string `query:"lang" required:"false"`
 		}) (*struct {
 			Body struct {
 				Results []LookupResult `json:"results"`
 				Errors  []string       `json:"errors"`
 			}
 		}, error) {
-			cands, errs := s.app.Metadata.Search(ctx, in.Query, 10)
+			cands, errs := s.app.Metadata.SearchLanguage(ctx, in.Query, in.Lang, 10)
 			out := &struct {
 				Body struct {
 					Results []LookupResult `json:"results"`
@@ -584,12 +731,18 @@ func (s *Server) registerSeries() {
 		func(ctx context.Context, in *struct {
 			ModuleID int64  `path:"moduleId"`
 			ID       string `path:"id"`
+			Lang     string `query:"lang" required:"false"`
 		}) (*struct{ Body LookupResult }, error) {
 			mod, def, err := modules.GetAs[metadata.Module](s.app.Modules, in.ModuleID)
 			if err != nil {
 				return nil, huma.Error404NotFound(err.Error())
 			}
-			md, err := mod.Get(ctx, in.ID)
+			var md *metadata.SeriesMetadata
+			if localized, ok := mod.(metadata.LanguageGetter); ok && in.Lang != "" {
+				md, err = localized.GetLanguage(ctx, in.ID, in.Lang)
+			} else {
+				md, err = mod.Get(ctx, in.ID)
+			}
 			if err != nil {
 				return nil, huma.Error404NotFound(err.Error())
 			}
@@ -601,12 +754,19 @@ func (s *Server) registerSeries() {
 	huma.Register(s.api, huma.Operation{OperationID: "series-add", Method: http.MethodPost, Path: "/api/v1/series", Tags: tags},
 		func(ctx context.Context, in *struct{ Body series.AddRequest }) (*struct{ Body SeriesResource }, error) {
 			ser, err := s.app.Series.Add(ctx, in.Body)
+			var exists series.ExistsError
+			if err != nil && in.Body.RequestID > 0 && errors.As(err, &exists) {
+				// Retrying an add after the series row was committed but request
+				// fulfilment failed must finish the link, not create a duplicate.
+				ser, err = s.app.Series.Get(ctx, exists.SeriesID)
+			}
 			if err != nil {
 				return nil, seriesError(err)
 			}
 			if in.Body.RequestID > 0 {
 				if err := s.app.Requests.Link(ctx, in.Body.RequestID, ser.ID, access.From(ctx)); err != nil {
-					s.app.Log.Warn("link request", "request", in.Body.RequestID, "err", err)
+					return nil, huma.Error500InternalServerError(fmt.Sprintf(
+						"series %d was added, but the request is still pending: %v; retry Add or link it from Requests", ser.ID, err))
 				}
 			}
 			return &struct{ Body SeriesResource }{s.seriesResource(ctx, *ser, nil, true)}, nil

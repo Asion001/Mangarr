@@ -196,6 +196,11 @@ export function SeriesIndex() {
                 <Progress value={p.pct} tone={p.tone} />
                 {s.stats.readCount > 0 && <ReadBar s={s} />}
                 <div className="line-clamp-2 text-sm font-medium leading-tight">{s.title}</div>
+                {(s.editions?.length ?? 0) > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {(s.editions ?? []).map((edition) => <Badge key={edition.id}>{edition.language || "—"}</Badge>)}
+                  </div>
+                )}
                 <div className="-mt-1 text-xs text-muted">
                   {s.stats.fileCount}/{s.stats.chapterCount}{" " + t("chapters")}{s.stats.readCount > 0 && ` · ${s.stats.readCount} read`}
                 </div>
@@ -228,6 +233,11 @@ export function SeriesIndex() {
                   <Link to={`/series/${s.id}`} className="font-medium hover:text-accent-2">
                     {s.title}
                   </Link>
+                  {(s.editions?.length ?? 0) > 0 && (
+                    <span className="ml-2 inline-flex gap-1">
+                      {(s.editions ?? []).map((edition) => <Badge key={edition.id}>{edition.language || "—"}</Badge>)}
+                    </span>
+                  )}
                   {manage && !s.monitored && <span className="ml-2"><Badge>{t("unmonitored")}</Badge></span>}
                 </Td>
                 <Td>

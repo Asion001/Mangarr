@@ -1253,6 +1253,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/read/chapters/{id}/mark": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Mark this chapter, or every previous chapter, read or unread */
+        put: operations["read-mark"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/read/chapters/{id}/pages/{n}": {
         parameters: {
             query?: never;
@@ -1956,6 +1973,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/series/{id}/work": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Group this language edition with a work, or separate it with workId 0 */
+        put: operations["series-work-update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/settings/cleanup": {
         parameters: {
             query?: never;
@@ -2632,6 +2666,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/updates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Recently discovered chapters and newly added titles visible to you; initial catalog chapters are suppressed */
+        get: operations["updates-list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users": {
         parameters: {
             query?: never;
@@ -2965,6 +3016,8 @@ export interface components {
             sources: components["schemas"]["SourceLink"][];
             tags?: number[];
             title?: string;
+            /** Format: int64 */
+            workId?: number;
         };
         "Auth-passwordRequest": {
             /** @description Your current password */
@@ -3468,6 +3521,13 @@ export interface components {
             dsn: string;
             overwrite?: boolean;
         };
+        EditionSummary: {
+            coverUrl: string;
+            /** Format: int64 */
+            id: number;
+            language?: string;
+            title: string;
+        };
         EditorRequest: {
             /** @enum {string} */
             monitorNew?: "all" | "none";
@@ -3919,6 +3979,16 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
             worker?: string;
+        };
+        LanguageDefault: {
+            language: string;
+            /** Format: int64 */
+            profileId?: number;
+            /** @enum {string} */
+            readingDirection?: "" | "rtl" | "ltr" | "webtoon";
+            /** Format: int64 */
+            rootFolderId?: number;
+            sources: string[];
         };
         LinkedAccount: {
             externalUser: string;
@@ -4469,6 +4539,15 @@ export interface components {
             results: number;
             sourceName: string;
         };
+        "Read-markRequest": {
+            read: boolean;
+            /** @enum {string} */
+            scope: "chapter" | "previous";
+        };
+        "Read-markResponse": {
+            /** Format: int64 */
+            changed: number;
+        };
         "Read-progressRequest": {
             completed?: boolean;
             /** Format: int64 */
@@ -4924,6 +5003,10 @@ export interface components {
             /** Format: int64 */
             toModuleId: number;
         };
+        "Series-work-updateRequest": {
+            /** Format: int64 */
+            workId: number;
+        };
         SeriesMetadata: {
             ageRating?: string;
             altTitles?: string[];
@@ -4964,6 +5047,7 @@ export interface components {
             addedAt: string;
             blockedScanlators?: string[];
             coverUrl: string;
+            editions?: components["schemas"]["EditionSummary"][];
             following: boolean;
             fullPath?: string;
             /** Format: int64 */
@@ -4991,6 +5075,9 @@ export interface components {
             title: string;
             /** Format: date-time */
             updatedAt: string;
+            /** Format: int64 */
+            workId?: number;
+            workTitle?: string;
         };
         SeriesSearchResponse: {
             items: components["schemas"]["SeriesResource"][];
@@ -5204,6 +5291,7 @@ export interface components {
         Sources: {
             defaultLanguages: string[];
             hideNsfw: boolean;
+            languageDefaults: components["schemas"]["LanguageDefault"][];
             quickSearch: components["schemas"]["QuickSearch"];
             throttle: components["schemas"]["ThrottleConfig"];
         };
@@ -5300,6 +5388,37 @@ export interface components {
             mode: "reading" | "editing";
             /** Format: date-time */
             updatedAt: string;
+        };
+        UpdateItem: {
+            /** Format: date-time */
+            at: string;
+            /** Format: int64 */
+            chapterId?: number;
+            coverUrl: string;
+            downloaded?: boolean;
+            /** @enum {string} */
+            kind: "series" | "chapter";
+            language?: string;
+            languages?: string[];
+            number?: string;
+            /** Format: int64 */
+            readPage?: number;
+            /** @enum {string} */
+            readState?: "" | "unread" | "in_progress" | "read";
+            readable?: boolean;
+            /** Format: int64 */
+            seriesId: number;
+            seriesTitle: string;
+            title?: string;
+        };
+        UpdatePage: {
+            items: components["schemas"]["UpdateItem"][];
+            /** Format: int64 */
+            page: number;
+            /** Format: int64 */
+            pageSize: number;
+            /** Format: int64 */
+            total: number;
         };
         UpdateRequest: {
             blockedScanlators?: string[];
@@ -8641,6 +8760,41 @@ export interface operations {
             };
         };
     };
+    "read-mark": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Read-markRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Read-markResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "read-page": {
         parameters: {
             query?: {
@@ -9692,6 +9846,7 @@ export interface operations {
         parameters: {
             query?: {
                 q?: string;
+                lang?: string;
             };
             header?: never;
             path?: never;
@@ -9721,7 +9876,9 @@ export interface operations {
     };
     "series-lookup-get": {
         parameters: {
-            query?: never;
+            query?: {
+                lang?: string;
+            };
             header?: never;
             path: {
                 moduleId: number;
@@ -10389,6 +10546,39 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "series-work-update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Series-work-updateRequest"];
+            };
+        };
         responses: {
             /** @description No Content */
             204: {
@@ -12107,6 +12297,40 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "updates-list": {
+        parameters: {
+            query?: {
+                days?: number;
+                kind?: "" | "all" | "chapter" | "series";
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdatePage"];
+                };
             };
             /** @description Error */
             default: {

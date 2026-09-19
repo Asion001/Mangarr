@@ -25,7 +25,7 @@ const (
 	  "synopsis":"His name is Guts.","poster":{"image":"posters/abc.jpg"},
 	  "authors":[{"name":"MIURA Kentaro","type":"Author"},{"name":"Studio Gaga","type":"Artist"}],
 	  "genres":[{"name":"Action"},{"name":"Fantasy"}],
-	  "scanlators":[{"id":"team-1","name":"Alpha"}],"totalChapterCount":403}}`
+	  "scanlators":[{"id":"team-1","name":"Alpha"}],"totalChapterCount":37.5}}`
 
 	atChaptersJSON = `{"chapters":[
 	  {"id":"KrQuF","scanlationMangaId":"team-1","title":"Chapter 386","number":386,"createdAt":1783633137519},
@@ -101,7 +101,7 @@ func TestAtsumaru(t *testing.T) {
 
 	d, err := a.Details(ctx, sourcekit.Ref{URL: got.URL, ID: got.ID})
 	if err != nil || d.Status != sourcekit.StatusOngoing || d.Author != "MIURA Kentaro" || d.Artist != "Studio Gaga" ||
-		len(d.Genres) != 2 || d.Description != "His name is Guts." {
+		len(d.Genres) != 2 || d.Description != "His name is Guts." || d.Chapters != nil {
 		t.Fatalf("details: %v %+v", err, d)
 	}
 

@@ -12,6 +12,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -185,7 +186,7 @@ func (m *Module) Manga(ctx context.Context, ref source.MangaRef, withChapters bo
 		Manga: source.Manga{MangaRef: source.MangaRef{SourceID: ref.SourceID, URL: d.URL, EngineRef: d.ID, TitleHint: d.Title},
 			Title: d.Title, ThumbnailURL: d.CoverURL, ChapterCount: d.Chapters},
 		Author: d.Author, Artist: d.Artist, Description: d.Description, Genres: d.Genres,
-		Status: status(d.Status), WebURL: d.WebURL,
+		Status: status(d.Status), WebURL: publicURL(s.Info().BaseURL, d.WebURL),
 	}
 	if details.URL == "" {
 		details.URL = ref.URL
@@ -200,9 +201,38 @@ func (m *Module) Manga(ctx context.Context, ref source.MangaRef, withChapters bo
 	out := make([]source.Chapter, 0, len(chapters))
 	for _, c := range chapters {
 		out = append(out, source.Chapter{URL: c.URL, EngineRef: c.ID, Name: c.Name, Scanlator: c.Scanlator, Number: c.Number,
-			UploadDate: c.UploadedAt, WebURL: c.WebURL})
+			UploadDate: c.UploadedAt, WebURL: publicURL(s.Info().BaseURL, c.WebURL)})
 	}
 	return details, out, nil
+}
+
+// publicURL is the last boundary before a source link reaches the browser.
+// Native sites may return a path, but only absolute HTTP(S) links are safe to
+// expose; malformed and API-only values are omitted instead of becoming links
+// relative to mangarr itself.
+func publicURL(base, raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	if u.Host == "" && u.Path == "" && u.RawQuery == "" && u.Fragment == "" {
+		return ""
+	}
+	if !u.IsAbs() {
+		b, err := url.Parse(strings.TrimSpace(base))
+		if err != nil || b.Host == "" || (b.Scheme != "http" && b.Scheme != "https") {
+			return ""
+		}
+		u = b.ResolveReference(u)
+	}
+	if u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return ""
+	}
+	return u.String()
 }
 
 func status(s string) string {

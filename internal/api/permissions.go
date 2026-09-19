@@ -69,8 +69,10 @@ var operationPermissions = map[string][]string{
 	"read-page-bounds":    {permSignedIn},
 	"read-chapter-bounds": {permSignedIn},
 	"read-progress":       {permSignedIn},
+	"read-mark":           {permSignedIn},
 	"read-settings":       {permSignedIn},
 	"read-settings-save":  {permSignedIn},
+	"updates-list":        {permSignedIn},
 	"read-file":           {access.Download},
 
 	// reading apps (their own devices)
@@ -95,6 +97,7 @@ var operationPermissions = map[string][]string{
 
 	// managing the library
 	"series-add":              {access.LibraryManage, access.RequestsManage},
+	"series-work-update":      {access.LibraryManage},
 	"series-update":           {access.LibraryManage},
 	"series-delete":           {access.LibraryManage},
 	"series-editor":           {access.LibraryManage},

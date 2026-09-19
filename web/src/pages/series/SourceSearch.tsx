@@ -22,6 +22,11 @@ export function selectCatalogs(items: Catalog[], settings: S["Sources"] | null, 
   if (scope === "custom") {
     out = out.filter((c) => keys.includes(catKey(c)));
   } else {
+    const preset = scope === "active" && lang ? settings?.languageDefaults?.find((p) => p.language.toLowerCase() === lang.toLowerCase()) : undefined;
+    if (preset?.sources.length) {
+      const byKey = new Map(out.map((c) => [catKey(c), c]));
+      return preset.sources.map((key) => byKey.get(key)).filter((c): c is Catalog => !!c);
+    }
     const langs = lang ? [lang] : scope === "active" ? (settings?.defaultLanguages ?? []) : [];
     if (langs.length) out = out.filter((c) => c.lang === "all" || c.lang === "multi" || langs.includes(c.lang));
     if (scope === "active") out = out.filter((c) => c.enabled);

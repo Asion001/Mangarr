@@ -15,6 +15,7 @@ import (
 
 	"github.com/Asion001/mangarr/internal/api"
 	"github.com/Asion001/mangarr/internal/app"
+	"github.com/Asion001/mangarr/internal/catalogs"
 	"github.com/Asion001/mangarr/internal/model"
 	"github.com/Asion001/mangarr/internal/modules/source"
 	"github.com/Asion001/mangarr/internal/settings"
@@ -144,6 +145,20 @@ func TestDisabledCatalogsAndScopes(t *testing.T) {
 	doJSON(t, http.MethodGet, e.url+"/api/v1/catalogs", "", &cl)
 	if len(cl.Items) != 3 || cl.Generation == 0 {
 		t.Fatalf("catalog list: %+v", cl)
+	}
+}
+
+func TestLanguageDefaultsSelectSourcesInConfiguredOrder(t *testing.T) {
+	e := newCacheEnv(t, "language-defaults")
+	e.setSources(func(s *settings.Sources) {
+		s.LanguageDefaults = []settings.LanguageDefault{{Language: "ru", Sources: []string{e.key("J"), e.key("A")}}}
+	})
+	selected, errs := e.app.Catalogs.Select(context.Background(), catalogs.Filter{Scope: catalogs.ScopeActive, Lang: "ru"})
+	if len(errs) != 0 {
+		t.Fatalf("select errors: %v", errs)
+	}
+	if len(selected) != 2 || selected[0].ID != "J" || selected[1].ID != "A" {
+		t.Fatalf("language source order was not preserved: %+v", selected)
 	}
 }
 

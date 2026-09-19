@@ -3,12 +3,13 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, BookPlus, Search, X } from "lucide-react";
-import { api, unwrap, type AddRequest, type LookupResult } from "../../api/client";
-import { useProfiles, useRootFolders } from "../../api/queries";
+import { api, unwrap, type AddRequest, type LookupResult, type S } from "../../api/client";
+import { useCatalogs, useProfiles, useRootFolders } from "../../api/queries";
 import { Cover } from "../../components/Cover";
 import { Badge, Button, Card, ErrorBox, Field, IconButton, Input, Loading, PageHeader, Select, Switch } from "../../components/ui";
 import { sessionState, useQueryParam } from "../../lib/urlState";
 import { useToast } from "../../lib/toast";
+import { useSettingsDoc } from "../settings/useSettingsDoc";
 import { SourceSearch, pickKey, type Picked, type Scope } from "./SourceSearch";
 
 /** MetadataSearch looks up series across metadata modules. */
@@ -19,6 +20,7 @@ export function MetadataSearch({
   onPick,
   action,
   placeholder = "Search by title (AniList and other metadata modules)",
+  language = "",
 }: {
   initialQuery?: string;
   query?: string;
@@ -27,6 +29,7 @@ export function MetadataSearch({
   /** action replaces the Select button (e.g. Request). */
   action?: (c: LookupResult) => ReactNode;
   placeholder?: string;
+  language?: string;
 }) {
   const [local, setLocal] = useState(initialQuery);
   const query = controlled ?? local;
@@ -34,8 +37,8 @@ export function MetadataSearch({
   const [draft, setDraft] = useState(query);
   useEffect(() => setDraft(query), [query]);
   const { data, isFetching, error } = useQuery({
-    queryKey: ["lookup", query],
-    queryFn: () => unwrap(api.GET("/api/v1/series/lookup", { params: { query: { q: query } } })),
+    queryKey: ["lookup", query, language],
+    queryFn: () => unwrap(api.GET("/api/v1/series/lookup", { params: { query: { q: query, lang: language || undefined } } })),
     enabled: query.length > 0,
     staleTime: 5 * 60_000,
   });
@@ -121,23 +124,33 @@ export function AddSearchStep() {
   const nav = useNavigate();
   const qc = useQueryClient();
   const [q, setQ] = useQueryParam("q");
+  const [lang, setLang] = useQueryParam("lang");
+  const { data: catalogs } = useCatalogs();
+  const languages = Array.from(new Set(["en", "ru", ...(catalogs?.items ?? []).map((c) => c.lang).filter((v) => v !== "all" && v !== "multi")])).sort();
   const [title, setTitle] = useState(q);
   const pick = (r: LookupResult) => {
     qc.setQueryData(["lookup-item", r.moduleId, r.id], r);
-    nav(`/add/${r.moduleId}/${encodeURIComponent(r.id)}/sources`);
+    nav(`/add/${r.moduleId}/${encodeURIComponent(r.id)}/sources${lang ? `?lang=${encodeURIComponent(lang)}` : ""}`);
   };
   return (
     <>
       <StepHeader step={0} />
       <Card>
-        <MetadataSearch query={q} setQuery={(v) => setQ(v, { replace: false })} onPick={pick} />
+        <div className="mb-3 flex items-center gap-2">
+          <span className="text-sm text-muted">{t("Language")}</span>
+          <Select className="w-40" value={lang} onChange={(e) => setLang(e.target.value, { replace: false })}>
+            <option value="">{t("Any language")}</option>
+            {languages.map((value) => <option key={value} value={value}>{value}</option>)}
+          </Select>
+        </div>
+        <MetadataSearch query={q} language={lang} setQuery={(v) => setQ(v, { replace: false })} onPick={pick} />
         <div className="mt-4 border-t border-border pt-4">
           <p className="mb-2 text-sm text-muted">{t("Not on any metadata site? Add it using only the source's information.")}</p>
           <form
             className="flex gap-2"
             onSubmit={(e) => {
               e.preventDefault();
-              if (title.trim()) nav(`/add/manual/-/sources?title=${encodeURIComponent(title.trim())}`);
+              if (title.trim()) nav(`/add/manual/-/sources?title=${encodeURIComponent(title.trim())}${lang ? `&lang=${encodeURIComponent(lang)}` : ""}`);
             }}
           >
             <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("Series title")} />
@@ -158,21 +171,25 @@ function useAddContext() {
   const [params] = useSearchParams();
   const manual = moduleId === "manual";
   const meta = useQuery({
-    queryKey: ["lookup-item", Number(moduleId), metaId],
-    queryFn: () => unwrap(api.GET("/api/v1/series/lookup/{moduleId}/{id}", { params: { path: { moduleId: Number(moduleId), id: metaId } } })),
+    queryKey: ["lookup-item", Number(moduleId), metaId, params.get("lang") ?? ""],
+    queryFn: () => unwrap(api.GET("/api/v1/series/lookup/{moduleId}/{id}", { params: { path: { moduleId: Number(moduleId), id: metaId }, query: { lang: params.get("lang") || undefined } } })),
     enabled: !manual && !!metaId,
     staleTime: 30 * 60_000,
   });
   const title = manual ? (params.get("title") ?? "") : (meta.data?.title ?? "");
   const base = `/add/${moduleId}/${encodeURIComponent(metaId)}`;
-  const search = manual ? `?title=${encodeURIComponent(title)}` : "";
+  const language = params.get("lang") ?? "";
+  const query = new URLSearchParams();
+  if (manual) query.set("title", title);
+  if (language) query.set("lang", language);
+  const search = query.size ? `?${query.toString()}` : "";
   const storageKey = `mangarr.add:${moduleId}:${manual ? title : metaId}`;
   // adding for a request (from the Requests page): link it when added
   const fromRequest = Number(params.get("request") ?? 0);
   if (fromRequest > 0) sessionState.set(storageKey + ":request", fromRequest);
   const requestId = fromRequest || sessionState.get<number>(storageKey + ":request", 0);
   const titles = [title, ...(meta.data?.altTitles ?? [])].filter(Boolean);
-  return { manual, meta: meta.data ?? null, metaLoading: meta.isLoading, metaError: meta.error, title, titles, base, search, storageKey, requestId };
+  return { manual, meta: meta.data ?? null, metaLoading: meta.isLoading, metaError: meta.error, title, titles, language, base, search, storageKey, requestId };
 }
 
 function usePicked(storageKey: string): [Picked[], (fn: (cur: Picked[]) => Picked[]) => void] {
@@ -309,6 +326,8 @@ export function AddOptionsStep() {
   const [picked] = usePicked(ctx.storageKey);
   const { data: roots } = useRootFolders();
   const { data: profiles } = useProfiles();
+  const sourceSettings = useSettingsDoc<S["Sources"]>("sources");
+  const languageDefaults = sourceSettings.value?.languageDefaults?.find((p) => p.language.toLowerCase() === ctx.language.toLowerCase());
   const defaults: Options = {
     rootId: 0,
     profileId: 0,
@@ -317,7 +336,7 @@ export function AddOptionsStep() {
     fromChapter: 1,
     monitorNew: "all",
     searchMissing: true,
-    direction: ctx.meta?.format === "manhwa" || ctx.meta?.format === "manhua" ? "webtoon" : "",
+    direction: "__default",
   };
   const [o, setO] = useState<Options>(() => ({ ...defaults, ...sessionState.get<Partial<Options>>(ctx.storageKey + ":options", {}) }));
   const patch = (p: Partial<Options>) =>
@@ -330,8 +349,9 @@ export function AddOptionsStep() {
   const back = (loc.state as { from?: string } | null)?.from ?? `${ctx.base}/sources${ctx.search}`;
 
   if (ctx.metaLoading) return <Loading />;
-  const rootId = o.rootId || roots?.[0]?.id || 0;
-  const profileId = o.profileId || profiles?.find((p) => p.isDefault)?.id || profiles?.[0]?.id || 0;
+  const rootId = o.rootId || languageDefaults?.rootFolderId || roots?.find((r) => r.language === ctx.language)?.id || roots?.[0]?.id || 0;
+  const profileId = o.profileId || languageDefaults?.profileId || profiles?.find((p) => p.isDefault)?.id || profiles?.[0]?.id || 0;
+  const direction = o.direction === "__default" ? (languageDefaults?.readingDirection || (ctx.meta?.format === "manhwa" || ctx.meta?.format === "manhua" ? "webtoon" : "")) : o.direction;
 
   const add = async () => {
     setAdding(true);
@@ -350,6 +370,7 @@ export function AddOptionsStep() {
               sourceName: p.group.sourceName,
               lang: p.group.lang,
             })),
+            language: ctx.language || picked[0]?.group.lang || undefined,
             rootFolderId: rootId,
             profileId: profileId || undefined,
             monitor: o.monitor as AddRequest["monitor"],
@@ -357,7 +378,7 @@ export function AddOptionsStep() {
             fromChapter: o.monitor === "from" ? o.fromChapter : undefined,
             monitorNew: o.monitorNew as AddRequest["monitorNew"],
             searchMissing: o.searchMissing,
-            readingDirection: (o.direction || undefined) as AddRequest["readingDirection"],
+            readingDirection: (direction || undefined) as AddRequest["readingDirection"],
             requestId: ctx.requestId || undefined,
           },
         }),
@@ -449,7 +470,7 @@ export function AddOptionsStep() {
               </Select>
             </Field>
             <Field label={t("Reading direction")}>
-              <Select value={o.direction} onChange={(e) => patch({ direction: e.target.value })}>
+              <Select value={direction} onChange={(e) => patch({ direction: e.target.value })}>
                 <option value="">{t("Automatic")}</option>
                 <option value="rtl">{t("Right to left (manga)")}</option>
                 <option value="ltr">{t("Left to right")}</option>

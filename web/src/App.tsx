@@ -41,6 +41,7 @@ import { DatabasePage } from "./pages/system/Database";
 import { WorkersPage } from "./pages/system/Workers";
 import { ImportsPage } from "./pages/import/Imports";
 import { ImportDetailPage } from "./pages/import/ImportDetail";
+import { UpdatesPage } from "./pages/updates/Updates";
 
 export function App() {
   useLocale();
@@ -80,6 +81,7 @@ export function App() {
       <Route element={<Layout />}>
         <Route index element={<SeriesIndex />} />
         <Route path="series/:id" element={<SeriesDetail />} />
+        <Route path="updates" element={<UpdatesPage />} />
         <Route path="account" element={<AccountPage />} />
         <Route path="add" element={<Need perm={["library.manage", "requests.manage"]}><AddSearchStep /></Need>} />
         <Route path="add/:moduleId/:metaId/sources" element={<Need perm={["library.manage", "requests.manage"]}><AddSourcesStep /></Need>} />
@@ -87,8 +89,10 @@ export function App() {
         <Route path="requests" element={<Need perm={["requests.create", "requests.manage", "library.manage"]}><RequestsPage /></Need>} />
         <Route path="import" element={<Need perm="admin"><ImportsPage /></Need>} />
         <Route path="import/:id" element={<Need perm="admin"><ImportDetailPage /></Need>} />
-        <Route path="activity" element={<Navigate to="/activity/queue" replace />} />
-        <Route path="activity/queue" element={<Need perm="library.manage"><QueuePage /></Need>} />
+        <Route path="activity" element={<Navigate to="/activity/downloads" replace />} />
+        <Route path="activity/queue" element={<Navigate to="/activity/downloads" replace />} />
+        <Route path="activity/downloads" element={<Need perm="library.manage"><QueuePage mode="downloads" /></Need>} />
+        <Route path="activity/processing" element={<Need perm="library.manage"><QueuePage mode="processing" /></Need>} />
         <Route path="activity/history" element={<Need perm="library.manage"><HistoryPage /></Need>} />
         <Route path="activity/blocklist" element={<Need perm="library.manage"><BlocklistPage /></Need>} />
         <Route path="wanted" element={<Need perm="library.manage"><WantedPage /></Need>} />

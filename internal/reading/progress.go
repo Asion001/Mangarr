@@ -210,6 +210,36 @@ func (s *Service) MarkReadUpTo(ctx context.Context, readerID, seriesID int64, nu
 	return s.Record(ctx, readerID, changes, by)
 }
 
+// MarkBeforeChapter marks every chapter before chapterID read or unread. It
+// uses the stable reading order, so duplicate/special chapter numbers behave
+// the same way as Previous in the reader.
+func (s *Service) MarkBeforeChapter(ctx context.Context, readerID, seriesID, chapterID int64, read bool, by By) ([]Outcome, error) {
+	list, err := s.seriesStates(ctx, readerID, seriesID)
+	if err != nil {
+		return nil, err
+	}
+	current := -1
+	for i, chapter := range list {
+		if chapter.ID == chapterID {
+			current = i
+			break
+		}
+	}
+	if current < 0 {
+		return nil, ErrNotFound
+	}
+	changes := make([]Change, 0, current)
+	for _, chapter := range list[:current] {
+		switch {
+		case read && (chapter.State == nil || !chapter.State.Completed):
+			changes = append(changes, Change{ChapterID: chapter.ID, SeriesID: seriesID, Completed: true})
+		case !read && chapter.State != nil:
+			changes = append(changes, Change{ChapterID: chapter.ID, SeriesID: seriesID, Unread: true})
+		}
+	}
+	return s.Record(ctx, readerID, changes, by)
+}
+
 // MarkReadUpToIndex is MarkReadUpTo by 1-based position (the v1 tracker API).
 func (s *Service) MarkReadUpToIndex(ctx context.Context, readerID, seriesID int64, index int, by By) ([]Outcome, error) {
 	list, err := s.seriesStates(ctx, readerID, seriesID)

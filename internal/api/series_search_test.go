@@ -15,10 +15,12 @@ func searchSeries(id int64, title string) SeriesResource {
 func TestMatchesSeriesQueryScopesTitlesAndReading(t *testing.T) {
 	item := searchSeries(1, "Moonlit Journey")
 	item.Following = true
+	item.Editions = []EditionSummary{{ID: 2, Title: "Лунное путешествие", Language: "ru"}}
 	item.Stats = SeriesStats{ChapterCount: 10, ReadCount: 3, MissingCount: 2}
 	for _, query := range []SeriesSearchQuery{
 		{Query: "moonlit"},
 		{Query: "alternate"},
+		{Query: "лунное"},
 		{Filter: "following"},
 		{Filter: "missing"},
 		{Filter: "unread"},

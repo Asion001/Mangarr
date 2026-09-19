@@ -138,10 +138,54 @@ type ReadAhead struct {
 type Sources struct {
 	HideNSFW bool `json:"hideNsfw" desc:"Hide NSFW catalogs in search and browse."`
 	// DefaultLanguages limits searches to these catalog languages (empty = all).
-	DefaultLanguages []string    `json:"defaultLanguages" desc:"Catalog languages searched by default (empty = all)."`
-	QuickSearch      QuickSearch `json:"quickSearch"`
+	DefaultLanguages []string          `json:"defaultLanguages" desc:"Catalog languages searched by default (empty = all)."`
+	LanguageDefaults []LanguageDefault `json:"languageDefaults" desc:"Default catalogs, root folder and profile for each edition language."`
+	QuickSearch      QuickSearch       `json:"quickSearch"`
 	// Throttle is the default request throttling for every catalog.
 	Throttle model.ThrottleConfig `json:"throttle"`
+}
+
+// LanguageDefault configures the normal add path for one edition language.
+// Sources contains ordered "moduleId:sourceId" catalog keys.
+type LanguageDefault struct {
+	Language         string   `json:"language"`
+	Sources          []string `json:"sources"`
+	RootFolderID     int64    `json:"rootFolderId,omitempty"`
+	ProfileID        int64    `json:"profileId,omitempty"`
+	ReadingDirection string   `json:"readingDirection,omitempty" enum:",rtl,ltr,webtoon"`
+}
+
+// ForLanguage returns a case-insensitive language default.
+func (s Sources) ForLanguage(language string) (LanguageDefault, bool) {
+	for _, preset := range s.LanguageDefaults {
+		if strings.EqualFold(strings.TrimSpace(preset.Language), strings.TrimSpace(language)) {
+			return preset, true
+		}
+	}
+	return LanguageDefault{}, false
+}
+
+func (s Sources) Validate() error {
+	seen := map[string]bool{}
+	for _, preset := range s.LanguageDefaults {
+		language := strings.ToLower(strings.TrimSpace(preset.Language))
+		if language == "" {
+			return errors.New("language defaults require a language")
+		}
+		if seen[language] {
+			return fmt.Errorf("language %q has more than one default", preset.Language)
+		}
+		seen[language] = true
+		if preset.ReadingDirection != "" && preset.ReadingDirection != "rtl" && preset.ReadingDirection != "ltr" && preset.ReadingDirection != "webtoon" {
+			return fmt.Errorf("invalid reading direction for language %q", preset.Language)
+		}
+		for _, key := range preset.Sources {
+			if strings.TrimSpace(key) == "" {
+				return fmt.Errorf("language %q has an empty source", preset.Language)
+			}
+		}
+	}
+	return nil
 }
 
 // QuickSearch searches catalogs one by one by priority and stops at the
@@ -227,7 +271,7 @@ func (q QueueState) Active(now time.Time) bool {
 
 func DefaultSources() Sources {
 	return Sources{
-		HideNSFW: true, DefaultLanguages: []string{},
+		HideNSFW: true, DefaultLanguages: []string{}, LanguageDefaults: []LanguageDefault{},
 		QuickSearch: QuickSearch{Enabled: true, Threshold: 0.88, Details: "best", TopN: 3, BudgetSeconds: 45},
 		Throttle:    model.ThrottleConfig{Preset: "normal"},
 	}

@@ -32,6 +32,16 @@ var (
 	ErrExists   = errors.New("series already exists")
 )
 
+// ExistsError identifies the existing row so callers can make an add request
+// idempotent (notably when retrying request fulfilment after a partial failure).
+type ExistsError struct {
+	SeriesID int64
+	Title    string
+}
+
+func (e ExistsError) Error() string { return fmt.Sprintf("%s: %s", ErrExists, e.Title) }
+func (e ExistsError) Unwrap() error { return ErrExists }
+
 type ValidationError struct{ Msg string }
 
 func (e ValidationError) Error() string { return e.Msg }
@@ -72,6 +82,9 @@ type SourceLink struct {
 }
 
 type AddRequest struct {
+	// WorkID explicitly adds this language edition to an existing work. When
+	// omitted, trusted external IDs group it automatically.
+	WorkID           int64            `json:"workId,omitempty"`
 	Metadata         *metadataagg.Ref `json:"metadata,omitempty"`
 	Title            string           `json:"title,omitempty"`
 	Sources          []SourceLink     `json:"sources"`
@@ -114,19 +127,27 @@ func (s *Service) Add(ctx context.Context, req AddRequest) (*model.Series, error
 		AddOptions: model.AddOptions{Pending: true, Monitor: orDefault(req.Monitor, model.MonitorAll), LatestCount: req.LatestCount,
 			FromChapter: req.FromChapter, SearchMissing: req.SearchMissing},
 	}
+	ser.Language = firstNonEmpty(req.Language, rf.Language, req.Sources[0].Lang)
 	if ser.Tags == nil {
 		ser.Tags = []int64{}
 	}
 	ser.BlockedScanlators = cleanNames(req.BlockedScanlators)
 	if req.Metadata != nil {
-		resolved, err := s.agg.Resolve(ctx, *req.Metadata, nil)
+		resolved, err := s.agg.ResolveLanguage(ctx, *req.Metadata, nil, ser.Language)
 		if err != nil {
 			return nil, fmt.Errorf("metadata: %w", err)
 		}
-		if dup, err := s.findByExternal(ctx, resolved.Metadata.ExternalIDs); err != nil {
+		matches, err := s.findByExternal(ctx, resolved.Metadata.ExternalIDs)
+		if err != nil {
 			return nil, err
-		} else if dup != nil {
-			return nil, fmt.Errorf("%w: %s", ErrExists, dup.Title)
+		}
+		for _, match := range matches {
+			if sameLanguage(match.Language, ser.Language) {
+				return nil, ExistsError{SeriesID: match.ID, Title: match.Title}
+			}
+			if req.WorkID == 0 {
+				req.WorkID = match.WorkID
+			}
 		}
 		metadataagg.Apply(ser, resolved)
 		if req.ReadingDirection != "" {
@@ -144,7 +165,6 @@ func (s *Service) Add(ctx context.Context, req AddRequest) (*model.Series, error
 	}
 	ser.SortTitle = naming.SortTitle(ser.Title)
 	ser.SourcePriorityMode = "inherit"
-	ser.Language = firstNonEmpty(req.Language, rf.Language, req.Sources[0].Lang)
 	folder, err := s.lib.UniqueFolder(ctx, rf.ID, s.lib.FolderName(ctx, ser.Title, ser.Metadata.Year))
 	if err != nil {
 		return nil, err
@@ -152,6 +172,20 @@ func (s *Service) Add(ctx context.Context, req AddRequest) (*model.Series, error
 	ser.Path = folder
 
 	err = s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		if req.WorkID > 0 {
+			if n, err := tx.NewSelect().Model((*model.Work)(nil)).Where("id = ?", req.WorkID).Count(ctx); err != nil {
+				return err
+			} else if n == 0 {
+				return ValidationError{"work not found"}
+			}
+			ser.WorkID = req.WorkID
+		} else {
+			work := &model.Work{Title: ser.Title, SortTitle: ser.SortTitle, Metadata: ser.Metadata, CreatedAt: now, UpdatedAt: now}
+			if _, err := tx.NewInsert().Model(work).Exec(ctx); err != nil {
+				return err
+			}
+			ser.WorkID = work.ID
+		}
 		if _, err := tx.NewInsert().Model(ser).Exec(ctx); err != nil {
 			return err
 		}
@@ -233,22 +267,107 @@ func (s *Service) profileID(ctx context.Context, id int64) (int64, error) {
 	return p.ID, nil
 }
 
-func (s *Service) findByExternal(ctx context.Context, ids map[string]string) (*model.Series, error) {
+func sameLanguage(a, b string) bool {
+	return strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(b))
+}
+
+func (s *Service) findByExternal(ctx context.Context, ids map[string]string) ([]model.Series, error) {
 	if len(ids) == 0 {
-		return nil, nil
+		return []model.Series{}, nil
 	}
 	var all []model.Series
-	if err := s.db.NewSelect().Model(&all).Column("id", "title", "metadata").Scan(ctx); err != nil {
+	if err := s.db.NewSelect().Model(&all).Column("id", "work_id", "title", "language", "metadata").Scan(ctx); err != nil {
 		return nil, err
 	}
+	var out []model.Series
 	for i := range all {
 		for k, v := range ids {
 			if k != "mal" && v != "" && all[i].Metadata.ExternalIDs[k] == v {
-				return &all[i], nil
+				out = append(out, all[i])
+				break
 			}
 		}
 	}
-	return nil, nil
+	return out, nil
+}
+
+// ReconcileWorks groups editions created before the work model existed when a
+// trusted external ID proves they are the same title. Title text is never used.
+func (s *Service) ReconcileWorks(ctx context.Context) error {
+	var all []model.Series
+	if err := s.db.NewSelect().Model(&all).Order("id").Scan(ctx); err != nil {
+		return err
+	}
+	owner := map[string]int64{}
+	return s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		for _, ser := range all {
+			workID := ser.WorkID
+			for provider, id := range ser.Metadata.ExternalIDs {
+				if provider == "mal" || id == "" {
+					continue
+				}
+				key := provider + "\x00" + id
+				if existing := owner[key]; existing > 0 && (workID == 0 || existing < workID) {
+					workID = existing
+				}
+			}
+			if workID == 0 {
+				work := &model.Work{Title: ser.Title, SortTitle: ser.SortTitle, Metadata: ser.Metadata,
+					CreatedAt: ser.AddedAt, UpdatedAt: ser.UpdatedAt}
+				if _, err := tx.NewInsert().Model(work).Exec(ctx); err != nil {
+					return err
+				}
+				workID = work.ID
+			}
+			if workID != ser.WorkID {
+				if _, err := tx.NewUpdate().Model((*model.Series)(nil)).Set("work_id = ?", workID).Where("id = ?", ser.ID).Exec(ctx); err != nil {
+					return err
+				}
+			}
+			for provider, id := range ser.Metadata.ExternalIDs {
+				if provider != "mal" && id != "" {
+					owner[provider+"\x00"+id] = workID
+				}
+			}
+		}
+		_, err := tx.NewDelete().Model((*model.Work)(nil)).Where("id NOT IN (SELECT DISTINCT work_id FROM series)").Exec(ctx)
+		return err
+	})
+}
+
+// SetWork groups an edition with an existing work. A zero work id separates it
+// into a new work without moving files or changing any edition-owned state.
+func (s *Service) SetWork(ctx context.Context, seriesID, workID int64) error {
+	ser, err := s.Get(ctx, seriesID)
+	if err != nil {
+		return err
+	}
+	old := ser.WorkID
+	err = s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		if workID == 0 {
+			work := &model.Work{Title: ser.Title, SortTitle: ser.SortTitle, Metadata: ser.Metadata,
+				CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
+			if _, err := tx.NewInsert().Model(work).Exec(ctx); err != nil {
+				return err
+			}
+			workID = work.ID
+		} else if n, err := tx.NewSelect().Model((*model.Work)(nil)).Where("id = ?", workID).Count(ctx); err != nil {
+			return err
+		} else if n == 0 {
+			return ValidationError{"work not found"}
+		}
+		if _, err := tx.NewUpdate().Model((*model.Series)(nil)).Set("work_id = ?", workID).Where("id = ?", seriesID).Exec(ctx); err != nil {
+			return err
+		}
+		if old > 0 && old != workID {
+			_, _ = tx.NewDelete().Model((*model.Work)(nil)).Where("id = ? AND NOT EXISTS (SELECT 1 FROM series WHERE work_id = ?)", old, old).Exec(ctx)
+		}
+		return nil
+	})
+	if err == nil {
+		s.bus.Changed("series", "updated", seriesID)
+	}
+	return err
 }
 
 // Get loads a series.
@@ -388,6 +507,7 @@ func (s *Service) Delete(ctx context.Context, id int64, deleteFiles bool) error 
 	if _, err := s.db.NewDelete().Model((*model.Series)(nil)).Where("id = ?", id).Exec(ctx); err != nil {
 		return err
 	}
+	_, _ = s.db.NewDelete().Model((*model.Work)(nil)).Where("id = ? AND NOT EXISTS (SELECT 1 FROM series WHERE work_id = ?)", ser.WorkID, ser.WorkID).Exec(ctx)
 	// tables without FK cascade
 	_, _ = s.db.NewDelete().Model((*model.History)(nil)).Where("series_id = ?", id).Exec(ctx)
 	if deleteFiles && dir != "" {

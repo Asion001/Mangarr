@@ -275,7 +275,11 @@ function RequestRow({ r, actions, showRequesters }: { r: Request; actions?: Reac
               “{x.note}”{showRequesters && <span className="text-muted"> — {x.name}</span>}
             </p>
           ))}
-        {r.reason && <p className="mt-1 text-sm text-err">{t("Declined:") + " "}{r.reason}</p>}
+        {r.reason && (
+          <p className="mt-1 text-sm text-err">
+            {t(r.status === "declined" ? "Declined:" : "Last add attempt:") + " "}{r.reason}
+          </p>
+        )}
       </div>
       {actions && <div className="flex shrink-0 flex-wrap items-center gap-2 self-center">{actions}</div>}
     </div>
