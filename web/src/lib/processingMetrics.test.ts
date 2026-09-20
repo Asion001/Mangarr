@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sizeChange, sizeChangeLabel, throughput, signedBytes } from './processingMetrics';
+import { eta, sizeChange, sizeChangeLabel, throughput, signedBytes } from './processingMetrics';
 describe('processing size and speed',()=>{
   it('distinguishes growth, reduction and unchanged output',()=>{
     expect(sizeChangeLabel(100,153)).toBe('+53%');
@@ -18,4 +18,9 @@ describe('processing size and speed',()=>{
     expect(throughput(13,0)).toBe('—');
     expect(throughput(1,1000000)).not.toBe('0 p/min');
   });
+	it('does not render positive subsecond work as zero seconds',()=>{
+		expect(eta(0.1)).toBe('<1s');
+		expect(eta(0)).toBe('0s');
+		expect(eta(0.5)).toBe('1s');
+	});
 });

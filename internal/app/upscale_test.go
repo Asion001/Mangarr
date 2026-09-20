@@ -95,6 +95,9 @@ func TestReprocessWithNothingToDo(t *testing.T) {
 	if after.ProcessState != model.ProcessDone {
 		t.Fatalf("file should be marked processed: %+v", after)
 	}
+	if after.ProcessSeconds != 0 || after.ProcessPages != 0 {
+		t.Fatalf("no-op processing must not report throughput: %v s, %d pages", after.ProcessSeconds, after.ProcessPages)
+	}
 	var failed int
 	failed, _ = e.App.DB.NewSelect().Model((*model.DownloadJob)(nil)).Where("status = ?", model.JobFailed).Count(e.Ctx)
 	if failed != 0 {

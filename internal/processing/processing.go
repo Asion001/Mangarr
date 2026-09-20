@@ -81,7 +81,19 @@ func (p *Processor) Process(ctx context.Context, cfg model.ProfileConfig, pages 
 			res.Pages, res.Encoded, res.Encoder, res.Changed = pages, st.Encoded, st.Engine, true
 		}
 	}
+	res.ProcessedPages = changedPageCount(pages, res.Pages)
 	return res, nil
+}
+
+func changedPageCount(before, after []downloads.PageFile) int {
+	n := min(len(before), len(after))
+	changed := max(len(before), len(after)) - n
+	for i := 0; i < n; i++ {
+		if before[i] != after[i] {
+			changed++
+		}
+	}
+	return changed
 }
 
 var _ downloads.Processor = (*Processor)(nil)

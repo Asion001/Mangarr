@@ -17,6 +17,15 @@ export function throughput(pages:number, seconds:number):string {
   const number=new Intl.NumberFormat(getLocale(),{maximumSignificantDigits:3}).format(value);
   return `${number} ${rate>=1?t('p/s'):t('p/min')}`;
 }
+export function eta(seconds:number):string {
+  if(seconds>0&&seconds<0.5)return '<1s';
+  const s=Math.round(seconds);
+  if(s<60)return `${s}s`;
+  if(s<3600)return `${Math.floor(s/60)}m ${s%60}s`;
+  const h=Math.floor(s/3600);
+  if(h<48)return `${h}h ${Math.round((s%3600)/60)}m`;
+  return `${Math.round(h/24)} days`;
+}
 export function signedBytes(value:number):string {
   return `${value>0?'+':value<0?'−':''}${bytes(Math.abs(value))}`;
 }

@@ -48,12 +48,15 @@ type PageFile struct {
 // means pages were left untouched.
 // ProcessResult is the outcome of the processing stage.
 type ProcessResult struct {
-	Pages        []PageFile
-	Changed      bool // pages differ from the input
-	Upscaled     bool
-	UpscaleModel string
-	Encoded      int // pages re-encoded
-	Encoder      string
+	Pages   []PageFile
+	Changed bool // pages differ from the input
+	// ProcessedPages counts pages whose stored image changed. It deliberately
+	// excludes pages inspected by a no-op run so speed statistics stay honest.
+	ProcessedPages int
+	Upscaled       bool
+	UpscaleModel   string
+	Encoded        int // pages re-encoded
+	Encoder        string
 	// Seconds is how long processing took (set by the manager).
 	Seconds float64
 }
@@ -531,6 +534,9 @@ func (m *Manager) finish(ctx context.Context, job model.DownloadJob, jc *jobCtx,
 		started := time.Now()
 		res, perr := m.Processor.Process(ctx, cfg, pages, workDir)
 		res.Seconds = time.Since(started).Seconds()
+		if res.ProcessedPages == 0 {
+			res.Seconds = 0
+		}
 		var tmp interface{ Temporary() bool }
 		switch {
 		case perr != nil && ctx.Err() != nil:
@@ -948,7 +954,7 @@ func (m *Manager) importChapter(ctx context.Context, jc *jobCtx, proc ProcessRes
 	}
 	if params != "" {
 		file.ProcessParams, file.ProcessState, file.ProcessedAt = params, model.ProcessDone, &now
-		file.ProcessSeconds, file.ProcessPages = proc.Seconds, len(proc.Pages)
+		file.ProcessSeconds, file.ProcessPages = proc.Seconds, proc.ProcessedPages
 	}
 	if jc.release != nil {
 		file.ReleaseID, file.Scanlator = &jc.release.ID, jc.release.Scanlator

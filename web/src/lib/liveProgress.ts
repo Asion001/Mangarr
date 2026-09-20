@@ -1,4 +1,4 @@
-import { throughput } from "./processingMetrics";
+import { eta, throughput } from "./processingMetrics";
 import { useEffect, useSyncExternalStore } from "react";
 import type { S } from "../api/client";
 import { bytes } from "./format";
@@ -49,11 +49,4 @@ export function describe(p: LiveProgress): string {
   return parts.join(" · ");
 }
 
-export function eta(seconds: number): string {
-  const s = Math.round(seconds);
-  if (s < 60) return `${s}s`;
-  if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`;
-  const h = Math.floor(s / 3600);
-  if (h < 48) return `${h}h ${Math.round((s % 3600) / 60)}m`;
-  return `${Math.round(h / 24)} days`;
-}
+export { eta } from "./processingMetrics";
