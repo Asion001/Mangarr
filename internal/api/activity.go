@@ -169,10 +169,11 @@ func (s *Server) registerActivity() {
 			SeriesID  int64  `query:"seriesId"`
 			ChapterID int64  `query:"chapterId"`
 			EventType string `query:"eventType"`
+			Sort      string `query:"sort" default:"newest" enum:"newest,oldest,series,event"`
 			Page      int    `query:"page" default:"1"`
 			PageSize  int    `query:"pageSize" default:"50"`
 		}) (*struct{ Body *history.Page }, error) {
-			p, err := history.List(ctx, s.app.DB, history.Query{SeriesID: in.SeriesID, ChapterID: in.ChapterID, EventType: in.EventType, Page: in.Page, PageSize: in.PageSize})
+			p, err := history.List(ctx, s.app.DB, history.Query{SeriesID: in.SeriesID, ChapterID: in.ChapterID, EventType: in.EventType, Sort: in.Sort, Page: in.Page, PageSize: in.PageSize})
 			return &struct{ Body *history.Page }{p}, toHTTPError(err)
 		})
 

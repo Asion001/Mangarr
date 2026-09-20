@@ -23,16 +23,24 @@ const tone: Record<string, "ok" | "warn" | "err" | "info" | "default" | "accent"
   readAhead: "info",
   unparsed: "warn",
 };
+type HistorySort = "newest" | "oldest" | "series" | "event";
+const historySorts: HistorySort[] = ["newest", "oldest", "series", "event"];
 
 export function HistoryPage() {
   const [pageParam, setPage] = useListParam("page", "1");
   const [eventType, setEventType] = useListParam("event");
+  const [seriesParam, setSeries] = useListParam("series");
+  const [sortParam, setSort] = useListParam("sort", "newest");
   const page = Math.max(1, Number(pageParam) || 1);
+  const seriesId = Number(seriesParam) || undefined;
+  const sort: HistorySort = historySorts.includes(sortParam as HistorySort) ? sortParam as HistorySort : "newest";
   const { data: series } = useSeriesList();
   const titles = new Map((series ?? []).map((s) => [s.id, s.title]));
   const { data, isLoading, error } = useQuery({
-    queryKey: ["history", page, eventType],
-    queryFn: () => unwrap(api.GET("/api/v1/history", { params: { query: { page, pageSize: 50, eventType: eventType || undefined } } })),
+    queryKey: ["history", page, eventType, seriesId, sort],
+    queryFn: () => unwrap(api.GET("/api/v1/history", { params: { query: {
+      page, pageSize: 50, eventType: eventType || undefined, seriesId, sort,
+    } } })),
   });
   const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
   return (
@@ -40,14 +48,24 @@ export function HistoryPage() {
       <PageHeader
         title={t("History")}
         actions={
-          <Select className="w-44" value={eventType} onChange={(e) => (setEventType(e.target.value), setPage("1"))}>
-            <option value="">{t("All events")}</option>
-            {Object.keys(tone).map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </Select>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Select className="w-52" value={seriesParam} onChange={(e) => (setSeries(e.target.value), setPage("1"))}>
+              <option value="">{t("All titles")}</option>
+              {(series ?? []).slice().sort((a, b) => a.title.localeCompare(b.title)).map((s) => (
+                <option key={s.id} value={s.id}>{s.title}</option>
+              ))}
+            </Select>
+            <Select className="w-44" value={eventType} onChange={(e) => (setEventType(e.target.value), setPage("1"))}>
+              <option value="">{t("All events")}</option>
+              {Object.keys(tone).map((event) => <option key={event} value={event}>{event}</option>)}
+            </Select>
+            <Select className="w-48" value={sort} onChange={(e) => (setSort(e.target.value), setPage("1"))}>
+              <option value="newest">{t("Sort: recently added")}</option>
+              <option value="oldest">{t("Sort: oldest")}</option>
+              <option value="series">{t("Sort: title")}</option>
+              <option value="event">{t("Sort: event")}</option>
+            </Select>
+          </div>
         }
       />
       {isLoading && <Loading />}

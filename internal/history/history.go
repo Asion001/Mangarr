@@ -24,6 +24,7 @@ type Query struct {
 	SeriesID  int64
 	ChapterID int64
 	EventType string
+	Sort      string
 	Page      int
 	PageSize  int
 }
@@ -43,7 +44,7 @@ func List(ctx context.Context, db bun.IDB, q Query) (*Page, error) {
 		q.PageSize = 50
 	}
 	var items []model.History
-	sel := db.NewSelect().Model(&items)
+	sel := db.NewSelect().Model(&items).ColumnExpr("history.*")
 	if q.SeriesID > 0 {
 		sel = sel.Where("series_id = ?", q.SeriesID)
 	}
@@ -53,7 +54,18 @@ func List(ctx context.Context, db bun.IDB, q Query) (*Page, error) {
 	if q.EventType != "" {
 		sel = sel.Where("event_type = ?", q.EventType)
 	}
-	total, err := sel.Order("id DESC").Limit(q.PageSize).Offset((q.Page - 1) * q.PageSize).ScanAndCount(ctx)
+	switch q.Sort {
+	case "oldest":
+		sel = sel.OrderExpr("history.id ASC")
+	case "series":
+		sel = sel.Join("JOIN series AS history_series ON history_series.id = history.series_id").
+			OrderExpr("LOWER(history_series.title) ASC, history.id DESC")
+	case "event":
+		sel = sel.OrderExpr("history.event_type ASC, history.id DESC")
+	default:
+		sel = sel.OrderExpr("history.id DESC")
+	}
+	total, err := sel.Limit(q.PageSize).Offset((q.Page - 1) * q.PageSize).ScanAndCount(ctx)
 	if err != nil {
 		return nil, err
 	}

@@ -237,7 +237,7 @@ export function SeriesDetail() {
         </div>
       </Confirm>
       {manage && <div className="mt-6 text-xs text-muted">
-        <Link to="/activity/history" className="hover:text-fg">{t("View history →")}</Link>
+        <Link to={`/activity/history?series=${s.id}`} className="hover:text-fg">{t("View history →")}</Link>
       </div>}
     </>
   );

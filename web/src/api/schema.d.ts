@@ -6678,6 +6678,7 @@ export interface operations {
                 seriesId?: number;
                 chapterId?: number;
                 eventType?: string;
+                sort?: "newest" | "oldest" | "series" | "event";
                 page?: number;
                 pageSize?: number;
             };
