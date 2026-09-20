@@ -45,7 +45,7 @@ func main() {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "version":
-			fmt.Println(version.Version, version.Commit)
+			fmt.Println(version.Version, "build", version.Build, version.Commit)
 			return
 		case "openapi":
 			if err := dumpOpenAPI(); err != nil {
@@ -107,7 +107,7 @@ func run() error {
 		}
 	}
 	log, ring := logging.Setup(cfg.LogLevel, out)
-	log.Info("starting mangarr", "version", version.Version, "data", cfg.DataDir, "listen", cfg.Listen)
+	log.Info("starting mangarr", "version", version.Version, "build", version.Build, "commit", version.Commit, "data", cfg.DataDir, "listen", cfg.Listen)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -264,7 +264,7 @@ func runWorker() int {
 		case "healthcheck":
 			return 0
 		case "version":
-			fmt.Println(version.Version, version.Commit)
+			fmt.Println(version.Version, "build", version.Build, version.Commit)
 			return 0
 		}
 	}

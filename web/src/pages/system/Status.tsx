@@ -68,8 +68,10 @@ export function StatusPage() {
         <Card title={t("About")} className="mb-6">
           <dl className="grid grid-cols-[140px_1fr] gap-y-1.5 text-sm">
             <dt className="text-muted">{t("Version")}</dt>
+            <dd>{status.version}</dd>
+            <dt className="text-muted">{t("Build")}</dt>
             <dd>
-              {status.version} <span className="text-muted">({status.commit})</span>
+              {status.build} <span className="text-muted">({status.commit})</span>
             </dd>
             <dt className="text-muted">{t("Runtime")}</dt>
             <dd>

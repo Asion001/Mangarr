@@ -28,7 +28,7 @@ func main() {
 		case "healthcheck": // a worker listens on nothing: being up is being well
 			return
 		case "version":
-			fmt.Println(version.Version, version.Commit)
+			fmt.Println(version.Version, "build", version.Build, version.Commit)
 			return
 		}
 	}

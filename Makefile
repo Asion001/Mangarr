@@ -1,6 +1,7 @@
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+BUILD   ?= local
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
-LDFLAGS := -s -w -X github.com/Asion001/mangarr/internal/version.Version=$(VERSION) -X github.com/Asion001/mangarr/internal/version.Commit=$(COMMIT)
+LDFLAGS := -s -w -X github.com/Asion001/mangarr/internal/version.Version=$(VERSION) -X github.com/Asion001/mangarr/internal/version.Build=$(BUILD) -X github.com/Asion001/mangarr/internal/version.Commit=$(COMMIT)
 NODE_IMAGE ?= node:24-alpine
 
 .PHONY: build build-upscaler run test test-pg test-integration vet web web-types lint docker docker-slim clean
@@ -39,10 +40,10 @@ web-types: build
 	else docker run --rm -v "$(CURDIR)/web:/app" -w /app $(NODE_IMAGE) npx openapi-typescript openapi.json -o src/api/schema.d.ts; fi
 
 docker:
-	docker build -f docker/Dockerfile --target full -t ghcr.io/asion001/mangarr:dev --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) .
+	docker build -f docker/Dockerfile --target full -t ghcr.io/asion001/mangarr:dev --build-arg VERSION=$(VERSION) --build-arg BUILD=$(BUILD) --build-arg COMMIT=$(COMMIT) .
 
 docker-slim:
-	docker build -f docker/Dockerfile --target slim -t ghcr.io/asion001/mangarr:dev-slim --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) .
+	docker build -f docker/Dockerfile --target slim -t ghcr.io/asion001/mangarr:dev-slim --build-arg VERSION=$(VERSION) --build-arg BUILD=$(BUILD) --build-arg COMMIT=$(COMMIT) .
 
 
 clean:

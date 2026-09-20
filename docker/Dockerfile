@@ -24,6 +24,7 @@ FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS build
 ARG TARGETOS
 ARG TARGETARCH
 ARG VERSION=dev
+ARG BUILD=local
 ARG COMMIT=unknown
 WORKDIR /src
 COPY go.mod go.sum ./
@@ -31,7 +32,7 @@ RUN go mod download
 COPY . .
 COPY --from=web /web/dist ./web/dist
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -tags nodynamic \
-    -ldflags "-s -w -X github.com/Asion001/mangarr/internal/version.Version=${VERSION} -X github.com/Asion001/mangarr/internal/version.Commit=${COMMIT}" \
+    -ldflags "-s -w -X github.com/Asion001/mangarr/internal/version.Version=${VERSION} -X github.com/Asion001/mangarr/internal/version.Build=${BUILD} -X github.com/Asion001/mangarr/internal/version.Commit=${COMMIT}" \
     -o /out/mangarr ./cmd/mangarr && mkdir -p /out/config
 # nodynamic keeps the built-in AVIF encoder from loading a system libavif
 # (which would make the binary dynamically linked and break distroless)

@@ -5351,6 +5351,7 @@ export interface components {
         };
         SystemStatus: {
             arch: string;
+            build: string;
             commit: string;
             dataDir: string;
             database: string;

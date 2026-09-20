@@ -21,6 +21,7 @@ import (
 
 type SystemStatus struct {
 	Version   string    `json:"version"`
+	Build     string    `json:"build"`
 	Commit    string    `json:"commit"`
 	GoVersion string    `json:"goVersion"`
 	OS        string    `json:"os"`
@@ -75,7 +76,7 @@ func (s *Server) registerSystem() {
 	huma.Register(s.api, huma.Operation{OperationID: "system-status", Method: http.MethodGet, Path: "/api/v1/system/status", Tags: tags},
 		func(ctx context.Context, _ *struct{}) (*struct{ Body SystemStatus }, error) {
 			return &struct{ Body SystemStatus }{SystemStatus{
-				Version: version.Version, Commit: version.Commit, GoVersion: runtime.Version(), OS: runtime.GOOS, Arch: runtime.GOARCH,
+				Version: version.Version, Build: version.Build, Commit: version.Commit, GoVersion: runtime.Version(), OS: runtime.GOOS, Arch: runtime.GOARCH,
 				Database: string(s.app.DB.Kind), DataDir: s.app.Cfg.DataDir, StartedAt: s.app.StartedAt, URLBase: s.app.Cfg.URLBase,
 			}}, nil
 		})

@@ -138,6 +138,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           build-args: |
             VERSION=${{ github.ref_name }}
+            BUILD=${{ github.run_number }}
             COMMIT=${{ github.sha }}
       - id: meta-slim
         uses: docker/metadata-action@v5
@@ -159,4 +160,5 @@ jobs:
           tags: ${{ steps.meta-slim.outputs.tags }}
           build-args: |
             VERSION=${{ github.ref_name }}
+            BUILD=${{ github.run_number }}
             COMMIT=${{ github.sha }}

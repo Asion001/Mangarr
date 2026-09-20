@@ -57,7 +57,7 @@ func (s *Server) diagnostics(ctx context.Context) ([]byte, error) {
 		counts[name], _ = s.app.DB.NewSelect().Model(m).Count(ctx)
 	}
 	sys := diagnosticsSystem{
-		SystemStatus: SystemStatus{Version: version.Version, Commit: version.Commit, GoVersion: runtime.Version(), OS: runtime.GOOS, Arch: runtime.GOARCH,
+		SystemStatus: SystemStatus{Version: version.Version, Build: version.Build, Commit: version.Commit, GoVersion: runtime.Version(), OS: runtime.GOOS, Arch: runtime.GOARCH,
 			Database: string(s.app.DB.Kind), DataDir: s.app.Cfg.DataDir, StartedAt: s.app.StartedAt, URLBase: s.app.Cfg.URLBase},
 		Mode: s.app.Cfg.Mode, Uptime: time.Since(s.app.StartedAt).Round(time.Second).String(), Goroutines: runtime.NumGoroutine(),
 		Counts: counts, ImageCache: s.app.ImageCache.Size(), LogDir: s.app.Cfg.LogDir,
