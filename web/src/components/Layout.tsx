@@ -1,5 +1,5 @@
 import { t, label } from "../lib/i18n/core";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import clsx from "clsx";
 import { useQueryClient } from "@tanstack/react-query";
@@ -193,7 +193,8 @@ export function Layout() {
     </div>;
   };
 
-  return <div className="flex h-dvh overflow-hidden">
+  // --nav-width lets fixed bars in pages line up with the content column
+  return <div className="flex h-dvh overflow-hidden" style={{"--nav-width":collapsed?"4rem":"15rem"} as CSSProperties}>
     <aside data-testid="desktop-navigation" className={clsx("hidden shrink-0 border-r border-border bg-panel md:block",collapsed?"w-16":"w-60")}>{sidebar()}</aside>
     {open&&<div className="fixed inset-0 z-40 bg-black/60 md:hidden" onClick={()=>setOpen(false)}>
       <aside ref={drawer} role="dialog" aria-modal="true" aria-label={t("Navigation")} className="h-dvh w-72 max-w-[85vw] border-r border-border bg-panel" onClick={e=>e.stopPropagation()}>{sidebar(true)}</aside>

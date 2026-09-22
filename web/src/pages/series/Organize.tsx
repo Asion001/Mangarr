@@ -153,7 +153,7 @@ export function MassEditBar({
   // dialogs render outside the bar: its backdrop-blur would clip fixed children
   return (
     <>
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-panel/95 px-4 py-3 shadow-lg backdrop-blur md:left-56">
+      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-panel/95 px-4 py-3 shadow-lg backdrop-blur md:left-(--nav-width)">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-medium">{ids.length}{" " + t("selected")}</span>
           <Button size="sm" onClick={() => edit({ monitored: true })}>{t("Monitor")}</Button>
