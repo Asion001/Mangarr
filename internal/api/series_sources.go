@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/uptrace/bun"
 
 	"github.com/Asion001/mangarr/internal/model"
 	"github.com/Asion001/mangarr/internal/series"
@@ -13,6 +14,32 @@ import (
 func init() {
 	register((*Server).registerSeriesSources)
 	register((*Server).registerSwitchSources)
+	register((*Server).registerSourceUsage)
+}
+
+// SourceUsage is how many of the asked-about series link one catalog.
+type SourceUsage struct {
+	ModuleID   int64  `json:"moduleId" bun:"module_id"`
+	SourceID   string `json:"sourceId" bun:"source_id"`
+	SourceName string `json:"sourceName" bun:"source_name"`
+	Series     int    `json:"series" bun:"series"`
+}
+
+func (s *Server) registerSourceUsage() {
+	huma.Register(s.api, huma.Operation{OperationID: "series-sources-usage", Method: http.MethodPost, Path: "/api/v1/series/sources/usage", Tags: []string{"Series"},
+		Summary: "Which catalogs the given series link, and how many of them each"},
+		func(ctx context.Context, in *struct {
+			Body struct {
+				SeriesIDs []int64 `json:"seriesIds" minItems:"1"`
+			}
+		}) (*struct{ Body []SourceUsage }, error) {
+			out := []SourceUsage{}
+			err := s.app.DB.NewSelect().Model((*model.SeriesSource)(nil)).
+				ColumnExpr("module_id, source_id, MAX(source_name) AS source_name, COUNT(DISTINCT series_id) AS series").
+				Where("series_id IN (?)", bun.In(in.Body.SeriesIDs)).Group("module_id", "source_id").OrderExpr("series DESC, source_name").
+				Scan(ctx, &out)
+			return &struct{ Body []SourceUsage }{out}, toHTTPError(err)
+		})
 }
 
 // BulkSourcesOutput is a preview, or the command doing the work.
@@ -62,6 +89,7 @@ func (s *Server) registerSeriesSources() {
 			cmd, err := s.app.Queue.Push(ctx, "SeriesSources", map[string]any{
 				"action": req.Action, "moduleId": req.ModuleID, "sourceId": req.SourceID, "seriesIds": req.SeriesIDs,
 				"tagId": req.TagID, "rootFolderId": req.RootFolderID, "monitoredOnly": req.MonitoredOnly,
+				"fromModuleId": req.FromModuleID, "fromSourceId": req.FromSourceID, "picks": req.Picks,
 			}, "manual")
 			if err != nil {
 				return nil, toHTTPError(err)

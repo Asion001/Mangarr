@@ -5438,5 +5438,117 @@
   "Replace {source}": {
     "ru": "Заменить {source}",
     "uk": "Замінити {source}"
+  },
+  "used by {count}": {
+    "ru": "используют: {count}",
+    "uk": "використовують: {count}"
+  },
+  "No catalog matches.": {
+    "ru": "Нет подходящих каталогов.",
+    "uk": "Немає відповідних каталогів."
+  },
+  "Add fallback": {
+    "ru": "Добавить запасной",
+    "uk": "Додати запасне"
+  },
+  "Replace": {
+    "ru": "Заменить",
+    "uk": "Замінити"
+  },
+  "Turn on": {
+    "ru": "Включить",
+    "uk": "Увімкнути"
+  },
+  "Turn off": {
+    "ru": "Выключить",
+    "uk": "Вимкнути"
+  },
+  "will be added": {
+    "ru": "будут добавлены",
+    "uk": "буде додано"
+  },
+  "will be replaced": {
+    "ru": "будут заменены",
+    "uk": "буде замінено"
+  },
+  "will be removed": {
+    "ru": "будут удалены",
+    "uk": "буде видалено"
+  },
+  "will be turned on": {
+    "ru": "будут включены",
+    "uk": "буде увімкнено"
+  },
+  "will be turned off": {
+    "ru": "будут выключены",
+    "uk": "буде вимкнено"
+  },
+  "{catalog} queued for {count} series": {
+    "ru": "{catalog}: в очереди для серий ({count})",
+    "uk": "{catalog}: у черзі для серій ({count})"
+  },
+  "Change sources for {count} series": {
+    "ru": "Изменить источники серий ({count})",
+    "uk": "Змінити джерела серій ({count})"
+  },
+  "Apply to {count} series": {
+    "ru": "Применить к сериям ({count})",
+    "uk": "Застосувати до серій ({count})"
+  },
+  "Action": {
+    "ru": "Действие",
+    "uk": "Дія"
+  },
+  "Each series is found at the catalog by title and linked last, so downloads keep preferring the sources it already has.": {
+    "ru": "Каждая серия ищется в каталоге по названию и подключается последней, так что загрузки по-прежнему предпочитают уже подключённые источники.",
+    "uk": "Кожна серія шукається в каталозі за назвою й підключається останньою, тож завантаження й далі віддають перевагу вже підключеним джерелам."
+  },
+  "Each series is found at the new catalog and takes the old link’s place and priority. Downloaded files and read progress stay.": {
+    "ru": "Каждая серия ищется в новом каталоге и занимает место и приоритет старого источника. Скачанные файлы и прогресс сохраняются.",
+    "uk": "Кожна серія шукається в новому каталозі й займає місце та пріоритет старого джерела. Завантажені файли й прогрес зберігаються."
+  },
+  "Only series linked to the catalog are touched. Downloaded files stay.": {
+    "ru": "Затрагиваются только серии, подключённые к каталогу. Скачанные файлы сохраняются.",
+    "uk": "Зачіпаються лише серії, підключені до каталогу. Завантажені файли зберігаються."
+  },
+  "Review": {
+    "ru": "Проверка",
+    "uk": "Перевірка"
+  },
+  "{count} need a look": {
+    "ru": "требуют внимания: {count}",
+    "uk": "потребують уваги: {count}"
+  },
+  "{count} skipped": {
+    "ru": "пропущено: {count}",
+    "uk": "пропущено: {count}"
+  },
+  "Checked {done} of {total}": {
+    "ru": "Проверено {done} из {total}",
+    "uk": "Перевірено {done} з {total}"
+  },
+  "Include {title}": {
+    "ru": "Включить {title}",
+    "uk": "Включити {title}"
+  },
+  "instead of “{title}”": {
+    "ru": "вместо «{title}»",
+    "uk": "замість «{title}»"
+  },
+  "picked": {
+    "ru": "выбрано",
+    "uk": "вибрано"
+  },
+  "Change…": {
+    "ru": "Изменить…",
+    "uk": "Змінити…"
+  },
+  "Looking up each series…": {
+    "ru": "Ищем каждую серию…",
+    "uk": "Шукаємо кожну серію…"
+  },
+  "Find {title} at {catalog}": {
+    "ru": "Найти {title} в {catalog}",
+    "uk": "Знайти {title} у {catalog}"
   }
 }

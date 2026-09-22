@@ -23,13 +23,31 @@ const (
 	// BulkEnable and BulkDisable keep the link but change whether it is used.
 	BulkEnable  = "enable"
 	BulkDisable = "disable"
+	// BulkReplace moves each series from one catalog (From…) to another: the
+	// series is found at the new catalog and the old link is swapped for it
+	// in place, keeping its priority and downloaded files.
+	BulkReplace = "replace"
 )
+
+// BulkPick is a match someone reviewed for one series; applying uses it
+// instead of searching again.
+type BulkPick struct {
+	SeriesID  int64  `json:"seriesId"`
+	URL       string `json:"url"`
+	Title     string `json:"title,omitempty"`
+	EngineRef string `json:"engineRef,omitempty"`
+}
 
 // BulkRequest selects series and says what to do with one catalog.
 type BulkRequest struct {
-	Action   string `json:"action" enum:"add,remove,enable,disable"`
+	Action   string `json:"action" enum:"add,remove,enable,disable,replace"`
 	ModuleID int64  `json:"moduleId"`
 	SourceID string `json:"sourceId"`
+	// FromModuleID and FromSourceID are the catalog a replace moves away from.
+	FromModuleID int64  `json:"fromModuleId,omitempty"`
+	FromSourceID string `json:"fromSourceId,omitempty"`
+	// Picks are reviewed matches for add and replace, by series.
+	Picks []BulkPick `json:"picks,omitempty"`
 	// SeriesIDs picks series explicitly; empty means every series that passes
 	// the filters below.
 	SeriesIDs []int64 `json:"seriesIds,omitempty"`
@@ -48,9 +66,12 @@ type BulkResult struct {
 	// or skipped.
 	Done string `json:"done"`
 	// Match is the title found at the catalog, with how sure the match is.
-	Match string  `json:"match,omitempty"`
-	URL   string  `json:"url,omitempty"`
-	Score float64 `json:"score,omitempty"`
+	Match     string  `json:"match,omitempty"`
+	URL       string  `json:"url,omitempty"`
+	EngineRef string  `json:"engineRef,omitempty"`
+	Score     float64 `json:"score,omitempty"`
+	// Current is the title of the link a replace would swap out.
+	Current string `json:"current,omitempty"`
 	// Reason says why nothing was done.
 	Reason string `json:"reason,omitempty"`
 }
@@ -70,6 +91,12 @@ func (s *Service) BulkCount(ctx context.Context, req BulkRequest) (int, error) {
 func (s *Service) BulkSources(ctx context.Context, req BulkRequest, dryRun bool, progress func(done, total int)) ([]BulkResult, error) {
 	if req.ModuleID == 0 || req.SourceID == "" {
 		return nil, ValidationError{"pick a catalog"}
+	}
+	if req.Action == BulkReplace && (req.FromModuleID == 0 || req.FromSourceID == "") {
+		return nil, ValidationError{"pick the catalog to replace"}
+	}
+	if req.Action == BulkReplace && req.FromModuleID == req.ModuleID && req.FromSourceID == req.SourceID {
+		return nil, ValidationError{"pick a different catalog to move to"}
 	}
 	list, err := s.bulkSeries(ctx, req)
 	if err != nil {
@@ -169,37 +196,68 @@ func (s *Service) bulkOne(ctx context.Context, req BulkRequest, ser model.Series
 		return res
 	}
 
-	// add: find the series at the catalog first
+	// add and replace: find the series at the (new) catalog first
 	if linked {
 		res.Reason = "already linked to this catalog"
 		return res
 	}
-	if s.search == nil {
-		res.Reason = "searching catalogs isn't available"
+	var from model.SeriesSource
+	if req.Action == BulkReplace {
+		if err := s.db.NewSelect().Model(&from).Where("series_id = ? AND module_id = ? AND source_id = ?", ser.ID, req.FromModuleID, req.FromSourceID).
+			Limit(1).Scan(ctx); err != nil {
+			res.Reason = "not linked to the catalog being replaced"
+			return res
+		}
+		res.Current = from.Title
+	}
+	l, err := s.bulkMatch(ctx, req, ser, &res)
+	if err != nil {
+		res.Reason = err.Error()
 		return res
+	}
+	if !dryRun {
+		if req.Action == BulkReplace {
+			_, err = s.ReplaceSource(ctx, ser.ID, from.ID, l)
+		} else {
+			_, err = s.LinkSource(ctx, ser.ID, l)
+		}
+		if err != nil {
+			res.Done, res.Reason = "skipped", err.Error()
+			return res
+		}
+	}
+	res.Done = map[string]string{BulkReplace: "replaced"}[req.Action]
+	if res.Done == "" {
+		res.Done = "added"
+	}
+	return res
+}
+
+// bulkMatch is the manga a series gets at the request's catalog: the
+// reviewed pick when there is one, else the quick search's confident match.
+func (s *Service) bulkMatch(ctx context.Context, req BulkRequest, ser model.Series, res *BulkResult) (SourceLink, error) {
+	for _, p := range req.Picks {
+		if p.SeriesID == ser.ID && p.URL != "" {
+			res.Match, res.URL, res.EngineRef, res.Score = p.Title, p.URL, p.EngineRef, 1
+			return SourceLink{ModuleID: req.ModuleID, SourceID: req.SourceID, URL: p.URL, EngineRef: p.EngineRef, Title: p.Title}, nil
+		}
+	}
+	if s.search == nil {
+		return SourceLink{}, errors.New("searching catalogs isn't available")
 	}
 	titles := append([]string{ser.Title}, ser.Metadata.AltTitles...)
 	match, err := s.search.Quick(ctx, sourcesearch.QuickSearchInput{Query: ser.Title, Titles: titles,
 		Sources: []string{fmt.Sprintf("%d:%s", req.ModuleID, req.SourceID)}, RootFolderID: ser.RootFolderID, Lang: ser.Language}, sourcesearch.QuickOptions{})
 	if err != nil {
-		res.Reason = err.Error()
-		return res
+		return SourceLink{}, err
 	}
 	if match == nil || match.Match == nil {
-		res.Reason = "no confident match at this catalog"
-		return res
+		return SourceLink{}, errors.New("no confident match at this catalog")
 	}
 	m := match.Match
-	res.Match, res.URL, res.Score = m.Manga.Title, m.Manga.URL, m.Score
-	if !dryRun {
-		if _, err := s.LinkSource(ctx, ser.ID, SourceLink{ModuleID: m.ModuleID, SourceID: m.SourceID, URL: m.Manga.URL,
-			EngineRef: m.Manga.EngineRef, Title: m.Manga.Title, SourceName: m.SourceName, Lang: m.Lang}); err != nil {
-			res.Done, res.Reason = "skipped", err.Error()
-			return res
-		}
-	}
-	res.Done = "added"
-	return res
+	res.Match, res.URL, res.EngineRef, res.Score = m.Manga.Title, m.Manga.URL, m.Manga.EngineRef, m.Score
+	return SourceLink{ModuleID: m.ModuleID, SourceID: m.SourceID, URL: m.Manga.URL, EngineRef: m.Manga.EngineRef,
+		Title: m.Manga.Title, SourceName: m.SourceName, Lang: m.Lang}, nil
 }
 
 // BulkSummary counts what a run did, for a command's message.
@@ -209,7 +267,7 @@ func BulkSummary(results []BulkResult) string {
 		counts[r.Done]++
 	}
 	var parts []string
-	for _, k := range []string{"added", "removed", "enabled", "disabled", "skipped"} {
+	for _, k := range []string{"added", "replaced", "removed", "enabled", "disabled", "skipped"} {
 		if counts[k] > 0 {
 			parts = append(parts, fmt.Sprintf("%d %s", counts[k], k))
 		}

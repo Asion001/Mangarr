@@ -75,6 +75,15 @@ func TestReorderAndReplaceSources(t *testing.T) {
 	if len(get().Sources) != 2 {
 		t.Fatal("a failed replace must leave the old link in place")
 	}
+
+	// usage counts the selected series per catalog
+	var usage []struct {
+		SourceID string `json:"sourceId"`
+		Series   int    `json:"series"`
+	}
+	if code := doJSON(t, http.MethodPost, srv.URL+"/api/v1/series/sources/usage", `{"seriesIds":[`+itoa(ser.ID)+`]}`, &usage); code != 200 || len(usage) != 2 || usage[0].Series != 1 {
+		t.Fatalf("usage: %d %+v", code, usage)
+	}
 }
 
 func jsonString(s string) string { b, _ := json.Marshal(s); return string(b) }

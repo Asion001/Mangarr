@@ -1827,6 +1827,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/series/sources/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Which catalogs the given series link, and how many of them each */
+        post: operations["series-sources-usage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/series/{id}": {
         parameters: {
             query?: never;
@@ -3182,8 +3199,17 @@ export interface components {
             files: number;
             name: string;
         };
+        BulkPick: {
+            engineRef?: string;
+            /** Format: int64 */
+            seriesId: number;
+            title?: string;
+            url: string;
+        };
         BulkResult: {
+            current?: string;
             done: string;
+            engineRef?: string;
             match?: string;
             reason?: string;
             /** Format: double */
@@ -5079,11 +5105,15 @@ export interface components {
         };
         "Series-sources-bulkRequest": {
             /** @enum {string} */
-            action: "add" | "remove" | "enable" | "disable";
+            action: "add" | "remove" | "enable" | "disable" | "replace";
             dryRun?: boolean;
+            /** Format: int64 */
+            fromModuleId?: number;
+            fromSourceId?: string;
             /** Format: int64 */
             moduleId: number;
             monitoredOnly?: boolean;
+            picks?: components["schemas"]["BulkPick"][];
             /** Format: int64 */
             rootFolderId?: number;
             seriesIds?: number[];
@@ -5097,6 +5127,9 @@ export interface components {
             fromModuleId: number;
             /** Format: int64 */
             toModuleId: number;
+        };
+        "Series-sources-usageRequest": {
+            seriesIds: number[];
         };
         "Series-work-updateRequest": {
             /** Format: int64 */
@@ -5386,6 +5419,14 @@ export interface components {
             moduleId?: number;
             /** Format: int64 */
             priority?: number;
+        };
+        SourceUsage: {
+            /** Format: int64 */
+            moduleId: number;
+            /** Format: int64 */
+            series: number;
+            sourceId: string;
+            sourceName: string;
         };
         Sources: {
             defaultLanguages: string[];
@@ -10248,6 +10289,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SwitchSourcesOutput"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "series-sources-usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Series-sources-usageRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceUsage"][];
                 };
             };
             /** @description Error */

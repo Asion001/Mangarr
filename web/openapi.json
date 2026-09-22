@@ -495,10 +495,39 @@
         ],
         "type": "object"
       },
+      "BulkPick": {
+        "additionalProperties": false,
+        "properties": {
+          "engineRef": {
+            "type": "string"
+          },
+          "seriesId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "seriesId",
+          "url"
+        ],
+        "type": "object"
+      },
       "BulkResult": {
         "additionalProperties": false,
         "properties": {
+          "current": {
+            "type": "string"
+          },
           "done": {
+            "type": "string"
+          },
+          "engineRef": {
             "type": "string"
           },
           "match": {
@@ -6813,12 +6842,20 @@
               "add",
               "remove",
               "enable",
-              "disable"
+              "disable",
+              "replace"
             ],
             "type": "string"
           },
           "dryRun": {
             "type": "boolean"
+          },
+          "fromModuleId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "fromSourceId": {
+            "type": "string"
           },
           "moduleId": {
             "format": "int64",
@@ -6826,6 +6863,12 @@
           },
           "monitoredOnly": {
             "type": "boolean"
+          },
+          "picks": {
+            "items": {
+              "$ref": "#/components/schemas/BulkPick"
+            },
+            "type": "array"
           },
           "rootFolderId": {
             "format": "int64",
@@ -6871,6 +6914,23 @@
         "required": [
           "fromModuleId",
           "toModuleId"
+        ],
+        "type": "object"
+      },
+      "Series-sources-usageRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "seriesIds": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "seriesIds"
         ],
         "type": "object"
       },
@@ -7826,6 +7886,32 @@
             "type": "integer"
           }
         },
+        "type": "object"
+      },
+      "SourceUsage": {
+        "additionalProperties": false,
+        "properties": {
+          "moduleId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "series": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sourceId": {
+            "type": "string"
+          },
+          "sourceName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "moduleId",
+          "sourceId",
+          "sourceName",
+          "series"
+        ],
         "type": "object"
       },
       "Sources": {
@@ -15495,6 +15581,50 @@
           }
         },
         "summary": "Move a library's source links from one source module to another",
+        "tags": [
+          "Series"
+        ]
+      }
+    },
+    "/api/v1/series/sources/usage": {
+      "post": {
+        "operationId": "series-sources-usage",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Series-sources-usageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SourceUsage"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Which catalogs the given series link, and how many of them each",
         "tags": [
           "Series"
         ]

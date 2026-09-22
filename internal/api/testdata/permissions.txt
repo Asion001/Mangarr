@@ -157,6 +157,7 @@ series-source-unlink DELETE /api/v1/series/{id}/sources/{linkId} -> library.mana
 series-source-update PUT /api/v1/series/{id}/sources/{linkId} -> library.manage
 series-sources-bulk POST /api/v1/series/sources/bulk -> library.manage
 series-sources-switch POST /api/v1/series/sources/switch -> library.manage
+series-sources-usage POST /api/v1/series/sources/usage -> library.manage
 series-unfollow DELETE /api/v1/series/{id}/follow -> signedin
 series-update PUT /api/v1/series/{id} -> library.manage
 series-work-update PUT /api/v1/series/{id}/work -> library.manage

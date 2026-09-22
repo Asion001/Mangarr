@@ -110,6 +110,7 @@ var operationPermissions = map[string][]string{
 	"series-search":           {access.LibraryManage},
 	"series-source-link":      {access.LibraryManage},
 	"series-sources-bulk":     {access.LibraryManage},
+	"series-sources-usage":    {access.LibraryManage},
 	"series-sources-switch":   {access.LibraryManage},
 	"series-source-unlink":    {access.LibraryManage},
 	"series-source-update":    {access.LibraryManage},
