@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/uptrace/bun"
+
 	"github.com/Asion001/mangarr/internal/db"
 	"github.com/Asion001/mangarr/internal/dbtest"
 	"github.com/Asion001/mangarr/internal/model"
@@ -110,6 +112,46 @@ func TestOneWorkerWins(t *testing.T) {
 			if n != 1 {
 				t.Fatalf("task %d went to %d workers", id, n)
 			}
+		}
+	})
+}
+
+func TestClaimHonorsCapacityAndPriority(t *testing.T) {
+	each(t, func(t *testing.T, d *db.DB) {
+		ctx := context.Background()
+		l := ledger(d)
+		job := seedJob(t, d)
+		high, low := seedWorker(t, d, "high"), seedWorker(t, d, "low")
+		now := time.Now().UTC()
+		if _, err := d.NewUpdate().Model((*model.Worker)(nil)).
+			Set("last_seen_at = ?", now).Set("priority = CASE WHEN id = ? THEN 10 ELSE 20 END", high).
+			Where("id IN (?)", bun.In([]int64{high, low})).Exec(ctx); err != nil {
+			t.Fatal(err)
+		}
+		for i := range 3 {
+			if err := l.Add(ctx, &model.WorkerTask{JobID: job, Kind: model.TaskDownload, Seq: i}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if task, err := l.Claim(ctx, low, []string{model.TaskDownload}, 2, 1); err != nil || task != nil {
+			t.Fatalf("lower priority claimed while higher had capacity: %v %+v", err, task)
+		}
+		first, err := l.Claim(ctx, high, []string{model.TaskDownload}, 2, 1)
+		if err != nil || first == nil {
+			t.Fatalf("higher priority did not claim: %v %+v", err, first)
+		}
+		second, err := l.Claim(ctx, low, []string{model.TaskDownload}, 2, 1)
+		if err != nil || second == nil {
+			t.Fatalf("fallback worker did not claim when higher was full: %v %+v", err, second)
+		}
+		if task, err := l.Claim(ctx, high, []string{model.TaskDownload}, 2, 1); err != nil || task != nil {
+			t.Fatalf("global cap was exceeded: %v %+v", err, task)
+		}
+		if err := l.Finish(ctx, first.ID, high, worktasks.Progress{}); err != nil {
+			t.Fatal(err)
+		}
+		if task, err := l.Claim(ctx, high, []string{model.TaskDownload}, 2, 1); err != nil || task == nil {
+			t.Fatalf("released capacity was not reused: %v %+v", err, task)
 		}
 	})
 }

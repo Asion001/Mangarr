@@ -3556,6 +3556,8 @@ export interface components {
             /** Format: int64 */
             maxPerSource: number;
             /** Format: int64 */
+            maxWorkerTasks: number;
+            /** Format: int64 */
             pageConcurrency: number;
             /** Format: int64 */
             pageRetries: number;
@@ -5649,6 +5651,8 @@ export interface components {
             bytesIn: number;
             /** Format: int64 */
             bytesOut: number;
+            /** Format: int64 */
+            concurrent: number;
             /** Format: date-time */
             createdAt: string;
             /** Format: int64 */
@@ -5667,6 +5671,8 @@ export interface components {
             pagesDone: number;
             platform: string;
             prefix: string;
+            /** Format: int64 */
+            priority: number;
             roles: string[];
             /** Format: int64 */
             tasksDone: number;
@@ -5751,6 +5757,8 @@ export interface components {
             bytesIn: number;
             /** Format: int64 */
             bytesOut: number;
+            /** Format: int64 */
+            concurrent: number;
             /** Format: date-time */
             createdAt: string;
             /** Format: int64 */
@@ -5770,6 +5778,8 @@ export interface components {
             pagesDone: number;
             platform: string;
             prefix: string;
+            /** Format: int64 */
+            priority: number;
             recent: components["schemas"]["WorkerRecent"];
             roles: string[];
             /** Format: int64 */
@@ -5842,8 +5852,12 @@ export interface components {
             roles: string[];
         };
         "Workers-updateRequest": {
+            /** Format: int64 */
+            concurrent?: number;
             enabled?: boolean;
             name?: string;
+            /** Format: int64 */
+            priority?: number;
             roles?: string[];
         };
     };

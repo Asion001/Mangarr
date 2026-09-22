@@ -51,6 +51,13 @@ func TestWorkerKeys(t *testing.T) {
 	if !strings.HasPrefix(made.Key, "mgw_") || len(made.Worker.Roles) != 2 {
 		t.Fatalf("new worker: %+v", made)
 	}
+	resp = do(http.MethodPost, "/api/v1/worker/hello", `{"roles":["upscale","download"]}`, made.Key)
+	var welcome struct {
+		Concurrent int `json:"concurrent"`
+	}
+	if resp.StatusCode != http.StatusOK || json.NewDecoder(resp.Body).Decode(&welcome) != nil || welcome.Concurrent != 2 {
+		t.Fatalf("default concurrency: status=%d welcome=%+v", resp.StatusCode, welcome)
+	}
 
 	// the key is not an account: it opens nothing outside /api/v1/worker/
 	if resp := do(http.MethodGet, "/api/v1/series", "", made.Key); resp.StatusCode != http.StatusForbidden {
@@ -88,6 +95,19 @@ func TestWorkerKeys(t *testing.T) {
 	}
 
 	path := "/api/v1/workers/" + strconv.FormatInt(made.Worker.ID, 10)
+	resp = do(http.MethodPut, path, `{"enabled":true,"roles":["encode"],"priority":7,"concurrent":4}`, admin)
+	var updated struct {
+		Priority   int `json:"priority"`
+		Concurrent int `json:"concurrent"`
+	}
+	if resp.StatusCode != http.StatusOK || json.NewDecoder(resp.Body).Decode(&updated) != nil || updated.Priority != 7 || updated.Concurrent != 4 {
+		t.Fatalf("worker limits: status=%d worker=%+v", resp.StatusCode, updated)
+	}
+	resp = do(http.MethodPost, "/api/v1/worker/hello", `{"roles":["encode"]}`, made.Key)
+	welcome.Concurrent = 0
+	if resp.StatusCode != http.StatusOK || json.NewDecoder(resp.Body).Decode(&welcome) != nil || welcome.Concurrent != 4 {
+		t.Fatalf("worker concurrency override: status=%d welcome=%+v", resp.StatusCode, welcome)
+	}
 	if resp := do(http.MethodPut, path, `{"enabled":false,"roles":["encode"]}`, admin); resp.StatusCode != 200 {
 		t.Fatalf("update: %d", resp.StatusCode)
 	}

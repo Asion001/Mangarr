@@ -123,7 +123,7 @@ func (s *Service) CreateWorker(ctx context.Context, name string, roles []string,
 		return "", nil, ErrWorkerExists
 	}
 	key := NewWorkerKey()
-	w := &model.Worker{Name: name, KeyHash: HashWorkerKey(key), Prefix: key[:12], Roles: kept, Enabled: true,
+	w := &model.Worker{Name: name, KeyHash: HashWorkerKey(key), Prefix: key[:12], Roles: kept, Enabled: true, Priority: 100,
 		Info: map[string]any{}, CreatedBy: createdBy, CreatedAt: time.Now().UTC()}
 	if _, err := s.db.NewInsert().Model(w).Exec(ctx); err != nil {
 		return "", nil, err

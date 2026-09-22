@@ -78,8 +78,10 @@ type Downloads struct {
 	// "workers" waits for one, "local" never uses them.
 	WorkerPlacement string `json:"workerPlacement" desc:"Where chapters are downloaded: auto, workers or local."`
 	// MaxConcurrentPerWorker is how many chapters one worker downloads at a
-	// time.
-	MaxConcurrentPerWorker int `json:"maxConcurrentPerWorker" desc:"Chapters one worker downloads at a time."`
+	// time unless that worker has its own override.
+	MaxConcurrentPerWorker int `json:"maxConcurrentPerWorker" desc:"Default tasks one worker runs at a time."`
+	// MaxWorkerTasks caps tasks leased across all remote workers.
+	MaxWorkerTasks int `json:"maxWorkerTasks" desc:"Tasks all remote workers run at once."`
 	// WorkerPrefetch is how many pages a worker fetches ahead of what it has
 	// uploaded.
 	WorkerPrefetch int `json:"workerPrefetch" desc:"Pages a worker fetches ahead of what it has uploaded."`
@@ -296,7 +298,7 @@ func DefaultMediaManagement() MediaManagement {
 
 func DefaultDownloads() Downloads {
 	return Downloads{MaxConcurrent: 3, MaxPerSource: 1, PageConcurrency: 3, PageRetries: 3, MaxAttempts: 3, DefaultCheckIntervalMinutes: 360,
-		WorkerPlacement: PlaceAuto, MaxConcurrentPerWorker: 2, WorkerPrefetch: 50}
+		WorkerPlacement: PlaceAuto, MaxConcurrentPerWorker: 2, MaxWorkerTasks: 8, WorkerPrefetch: 50}
 }
 
 func DefaultCleanup() Cleanup {

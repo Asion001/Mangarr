@@ -91,9 +91,13 @@ func (s *Server) registerWorkerProtocol() {
 				s.app.OfferWorkersUpscaler(ctx)
 			}
 			dl, _ := s.app.Settings.Downloads(ctx)
+			concurrent := w.Concurrent
+			if concurrent <= 0 {
+				concurrent = dl.MaxConcurrentPerWorker
+			}
 			welcome := WorkerWelcome{WorkerID: w.ID, Name: w.Name, Roles: allowedRoles(w, in.Body.Roles),
 				LeaseSeconds: int(worktasks.Lease / time.Second), PollSeconds: int(workerPoll / time.Second),
-				Prefetch: dl.WorkerPrefetch, Concurrent: max(dl.MaxConcurrentPerWorker, 1), OutputChunkBytes: workerOutputChunkBytes,
+				Prefetch: dl.WorkerPrefetch, Concurrent: max(concurrent, 1), OutputChunkBytes: workerOutputChunkBytes,
 				ServerTime: now.Format(time.RFC3339)}
 			return &struct{ Body WorkerWelcome }{welcome}, nil
 		})
@@ -112,9 +116,10 @@ func (s *Server) registerWorkerProtocol() {
 				return nil, err
 			}
 			kinds := allowedRoles(w, in.Body.Kinds)
+			dl, _ := s.app.Settings.Downloads(ctx)
 			deadline := time.Now().Add(workerPoll)
 			for {
-				task, err := s.app.Tasks.Claim(ctx, w.ID, kinds)
+				task, err := s.app.Tasks.Claim(ctx, w.ID, kinds, dl.MaxWorkerTasks, dl.MaxConcurrentPerWorker)
 				if err != nil {
 					return nil, toHTTPError(err)
 				}

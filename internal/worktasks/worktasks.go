@@ -45,6 +45,9 @@ var ErrNotYours = errors.New("this task is not leased to you")
 type Ledger struct {
 	db  *db.DB
 	log *slog.Logger
+	// claimMu makes capacity checks and the following compare-and-set one
+	// scheduling decision, so simultaneous polls cannot overbook a limit.
+	claimMu sync.Mutex
 	// DataDir is where a task's payload is staged, for the work that trades
 	// files rather than page uploads.
 	DataDir string
@@ -97,9 +100,22 @@ func (l *Ledger) Add(ctx context.Context, t *model.WorkerTask) error {
 
 // Claim hands one waiting task to a worker: the first it may do, oldest
 // first. It returns nil when there is nothing for it.
-func (l *Ledger) Claim(ctx context.Context, workerID int64, kinds []string) (*model.WorkerTask, error) {
+func (l *Ledger) Claim(ctx context.Context, workerID int64, kinds []string, limits ...int) (*model.WorkerTask, error) {
 	if len(kinds) == 0 {
 		return nil, nil
+	}
+	l.claimMu.Lock()
+	defer l.claimMu.Unlock()
+	if len(limits) > 0 {
+		global := limits[0]
+		perWorker := 1
+		if len(limits) > 1 {
+			perWorker = max(limits[1], 1)
+		}
+		ok, err := l.workerHasCapacity(ctx, workerID, kinds, global, perWorker)
+		if err != nil || !ok {
+			return nil, err
+		}
 	}
 	now := time.Now().UTC()
 	var waiting []model.WorkerTask
@@ -131,6 +147,75 @@ func (l *Ledger) Claim(ctx context.Context, workerID int64, kinds []string) (*mo
 		return &got, nil
 	}
 	return nil, nil
+}
+
+// workerHasCapacity enforces the installation and per-worker limits, then
+// gives lower-priority workers a chance only when every compatible worker
+// above them is offline or full. Priority is ascending, like module priority.
+func (l *Ledger) workerHasCapacity(ctx context.Context, workerID int64, kinds []string, global, defaultPerWorker int) (bool, error) {
+	var workers []model.Worker
+	if err := l.db.NewSelect().Model(&workers).Where("enabled = ?", true).Scan(ctx); err != nil {
+		return false, err
+	}
+	var current *model.Worker
+	for i := range workers {
+		if workers[i].ID == workerID {
+			current = &workers[i]
+			break
+		}
+	}
+	if current == nil {
+		return false, nil
+	}
+	var counts []struct {
+		WorkerID int64 `bun:"worker_id"`
+		Count    int   `bun:"count"`
+	}
+	if err := l.db.NewSelect().Model((*model.WorkerTask)(nil)).
+		ColumnExpr("worker_id, COUNT(*) AS count").Where("state = ?", model.TaskLeased).
+		GroupExpr("worker_id").Scan(ctx, &counts); err != nil {
+		return false, err
+	}
+	held := map[int64]int{}
+	total := 0
+	for _, row := range counts {
+		held[row.WorkerID] = row.Count
+		total += row.Count
+	}
+	if global > 0 && total >= global {
+		return false, nil
+	}
+	limit := current.Concurrent
+	if limit <= 0 {
+		limit = defaultPerWorker
+	}
+	if held[current.ID] >= max(limit, 1) {
+		return false, nil
+	}
+	now := time.Now()
+	for i := range workers {
+		w := &workers[i]
+		if w.ID == current.ID || w.Priority >= current.Priority || w.LastSeenAt == nil || now.Sub(*w.LastSeenAt) >= OnlineWithin || !workerHasAnyRole(w, kinds) {
+			continue
+		}
+		limit := w.Concurrent
+		if limit <= 0 {
+			limit = defaultPerWorker
+		}
+		if held[w.ID] < max(limit, 1) {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+func workerHasAnyRole(w *model.Worker, kinds []string) bool {
+	for _, kind := range kinds {
+		if w.HasRole(kind) {
+			return true
+		}
+	}
+	return false
 }
 
 // Progress is what a worker reports while it works.

@@ -34,6 +34,10 @@ type Worker struct {
 	Prefix  string   `bun:"prefix,notnull" json:"prefix"`
 	Roles   []string `bun:"roles,type:jsonb,notnull" json:"roles"`
 	Enabled bool     `bun:"enabled,notnull" json:"enabled"`
+	// Priority orders workers in the remote pool (lower first).
+	Priority int `bun:"priority,notnull" json:"priority"`
+	// Concurrent overrides the installation default; 0 inherits it.
+	Concurrent int `bun:"concurrent,notnull" json:"concurrent"`
 	// Version, Platform and Info are what the worker said about itself when
 	// it last said hello (its build, its OS, its upscaling devices).
 	Version  string         `bun:"version,notnull" json:"version"`

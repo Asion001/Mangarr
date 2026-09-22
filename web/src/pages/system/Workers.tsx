@@ -4,11 +4,13 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Plus, Trash2 } from "lucide-react";
 import { api, unwrap, type ModuleResource, type S } from "../../api/client";
 import { useModules } from "../../api/queries";
-import { Badge, Button, Card, EmptyState, ErrorBox, IconButton, Input, Loading, Modal, PageHeader, Switch, Table, Td, Th } from "../../components/ui";
+import { Badge, Button, Card, EmptyState, ErrorBox, Field, IconButton, Input, Loading, Modal, PageHeader, Switch, Table, Td, Th } from "../../components/ui";
 import { bytes, relative } from "../../lib/format";
 import { useToast } from "../../lib/toast";
+import { useSettingsDoc } from "../settings/useSettingsDoc";
 
 type Worker = S["WorkerResource"];
+type Downloads = S["Downloads"];
 
 const roles = [
   { key: "download", label: "Download", help: "Fetches chapters from their source and uploads the pages here" },
@@ -20,6 +22,7 @@ const roles = [
 export function WorkersPage() {
   const qc = useQueryClient();
   const toast = useToast();
+  const limits = useSettingsDoc<Downloads>("downloads");
   const { data: engines, isLoading: enginesLoading, error: enginesError } = useModules("upscale");
   const { data, isLoading, error } = useQuery({
     queryKey: ["workers"],
@@ -51,7 +54,7 @@ export function WorkersPage() {
       toast.fromError(e, tr("Could not update the processing engine"));
     }
   };
-  const update = async (w: Worker, body: { enabled?: boolean; roles?: string[] }) => {
+  const update = async (w: Worker, body: { enabled?: boolean; roles?: string[]; priority?: number; concurrent?: number }) => {
     try {
       await unwrap(api.PUT("/api/v1/workers/{id}", { params: { path: { id: w.id } }, body }));
       reload();
@@ -91,6 +94,24 @@ export function WorkersPage() {
           </Table>
         )}
       </Card>
+      <Card
+        title={t("Worker concurrency")}
+        className="mb-6"
+        actions={<Button size="sm" loading={limits.saving} disabled={!limits.value} onClick={() => limits.save()}>{t("Save")}</Button>}
+      >
+        {limits.isLoading && <Loading />}
+        {limits.error && <ErrorBox error={limits.error} />}
+        {limits.value && (
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label={t("Tasks across all remote workers")}>
+              <Input type="number" min={1} value={limits.value.maxWorkerTasks} onChange={(e) => limits.patch({ maxWorkerTasks: Number(e.target.value) })} />
+            </Field>
+            <Field label={t("Default tasks per worker")} help={t("Per-worker overrides can be set below. 0 uses the default.")}>
+              <Input type="number" min={1} value={limits.value.maxConcurrentPerWorker} onChange={(e) => limits.patch({ maxConcurrentPerWorker: Number(e.target.value) })} />
+            </Field>
+          </div>
+        )}
+      </Card>
       {isLoading && <Loading />}
       {error && <ErrorBox error={error} />}
       {data && data.length === 0 && (
@@ -102,6 +123,8 @@ export function WorkersPage() {
             <tr>
               <Th>{t("Worker")}</Th>
               <Th>{t("Roles")}</Th>
+              <Th>{t("Priority")}</Th>
+              <Th>{t("Concurrent tasks")}</Th>
               <Th>{t("Doing now")}</Th>
               <Th>{t("Last 24 hours")}</Th>
               <Th>{t("Lifetime")}</Th>
@@ -137,6 +160,12 @@ export function WorkersPage() {
                       );
                     })}
                   </div>
+                </Td>
+                <Td>
+                  <DeferredNumber value={w.priority} onSave={(priority) => update(w, { priority })} title={t("Lower first")} />
+                </Td>
+                <Td>
+                  <DeferredNumber value={w.concurrent} min={0} onSave={(concurrent) => update(w, { concurrent })} title={t("0 = default")} />
                 </Td>
                 <Td className="text-muted">
                   {w.busy?.length ? (
@@ -230,6 +259,27 @@ export function WorkersPage() {
         </Modal>
       )}
     </>
+  );
+}
+
+function DeferredNumber({ value, onSave, min, title }: { value: number; onSave: (value: number) => void; min?: number; title: string }) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  const save = () => {
+    if (draft !== value) onSave(draft);
+  };
+  return (
+    <Input
+      className="w-24"
+      type="number"
+      min={min}
+      value={draft}
+      onChange={(e) => setDraft(Number(e.target.value))}
+      onBlur={save}
+      onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+      aria-label={title}
+      title={title}
+    />
   );
 }
 

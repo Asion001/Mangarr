@@ -108,9 +108,11 @@ func (s *Server) registerWorkers() {
 		func(ctx context.Context, in *struct {
 			ID   int64 `path:"id"`
 			Body struct {
-				Name    *string   `json:"name,omitempty"`
-				Roles   *[]string `json:"roles,omitempty"`
-				Enabled *bool     `json:"enabled,omitempty"`
+				Name       *string   `json:"name,omitempty"`
+				Roles      *[]string `json:"roles,omitempty"`
+				Enabled    *bool     `json:"enabled,omitempty"`
+				Priority   *int      `json:"priority,omitempty"`
+				Concurrent *int      `json:"concurrent,omitempty" minimum:"0"`
 			}
 		}) (*struct{ Body model.Worker }, error) {
 			var w model.Worker
@@ -144,7 +146,13 @@ func (s *Server) registerWorkers() {
 			if in.Body.Enabled != nil {
 				w.Enabled = *in.Body.Enabled
 			}
-			if _, err := s.app.DB.NewUpdate().Model(&w).Column("name", "roles", "enabled").WherePK().Exec(ctx); err != nil {
+			if in.Body.Priority != nil {
+				w.Priority = *in.Body.Priority
+			}
+			if in.Body.Concurrent != nil {
+				w.Concurrent = *in.Body.Concurrent
+			}
+			if _, err := s.app.DB.NewUpdate().Model(&w).Column("name", "roles", "enabled", "priority", "concurrent").WherePK().Exec(ctx); err != nil {
 				return nil, toHTTPError(err)
 			}
 			s.app.Auth.InvalidateWorkers()

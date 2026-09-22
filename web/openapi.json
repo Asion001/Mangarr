@@ -1818,6 +1818,10 @@
             "format": "int64",
             "type": "integer"
           },
+          "maxWorkerTasks": {
+            "format": "int64",
+            "type": "integer"
+          },
           "pageConcurrency": {
             "format": "int64",
             "type": "integer"
@@ -1843,6 +1847,7 @@
           "defaultCheckIntervalMinutes",
           "workerPlacement",
           "maxConcurrentPerWorker",
+          "maxWorkerTasks",
           "workerPrefetch"
         ],
         "type": "object"
@@ -8797,6 +8802,10 @@
             "format": "int64",
             "type": "integer"
           },
+          "concurrent": {
+            "format": "int64",
+            "type": "integer"
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string"
@@ -8836,6 +8845,10 @@
           "prefix": {
             "type": "string"
           },
+          "priority": {
+            "format": "int64",
+            "type": "integer"
+          },
           "roles": {
             "items": {
               "type": "string"
@@ -8860,6 +8873,8 @@
           "prefix",
           "roles",
           "enabled",
+          "priority",
+          "concurrent",
           "version",
           "platform",
           "info",
@@ -9105,6 +9120,10 @@
             "format": "int64",
             "type": "integer"
           },
+          "concurrent": {
+            "format": "int64",
+            "type": "integer"
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string"
@@ -9147,6 +9166,10 @@
           "prefix": {
             "type": "string"
           },
+          "priority": {
+            "format": "int64",
+            "type": "integer"
+          },
           "recent": {
             "$ref": "#/components/schemas/WorkerRecent"
           },
@@ -9176,6 +9199,8 @@
           "prefix",
           "roles",
           "enabled",
+          "priority",
+          "concurrent",
           "version",
           "platform",
           "info",
@@ -9374,11 +9399,20 @@
       "Workers-updateRequest": {
         "additionalProperties": false,
         "properties": {
+          "concurrent": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
           "enabled": {
             "type": "boolean"
           },
           "name": {
             "type": "string"
+          },
+          "priority": {
+            "format": "int64",
+            "type": "integer"
           },
           "roles": {
             "items": {
