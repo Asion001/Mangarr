@@ -1,4 +1,4 @@
-import { t as tr, t } from "../../lib/i18n/core";
+import { t } from "../../lib/i18n/core";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Plus, Trash2 } from "lucide-react";
@@ -51,7 +51,7 @@ export function WorkersPage() {
       }));
       qc.invalidateQueries({ queryKey: ["modules", "upscale"] });
     } catch (e) {
-      toast.fromError(e, tr("Could not update the processing engine"));
+      toast.fromError(e, t("Could not update the processing engine"));
     }
   };
   const update = async (w: Worker, body: { enabled?: boolean; roles?: string[]; priority?: number; concurrent?: number }) => {
@@ -59,7 +59,7 @@ export function WorkersPage() {
       await unwrap(api.PUT("/api/v1/workers/{id}", { params: { path: { id: w.id } }, body }));
       reload();
     } catch (e) {
-      toast.fromError(e, tr("Could not update the worker"));
+      toast.fromError(e, t("Could not update the worker"));
     }
   };
 
@@ -140,7 +140,7 @@ export function WorkersPage() {
               <tr key={w.id} className={w.enabled ? undefined : "opacity-60"}>
                 <Td>
                   <div className="flex items-center gap-2">
-                    <span className={`size-2 rounded-full ${w.online ? "bg-ok" : "bg-border"}`} title={w.online ? tr("online") : tr("offline")} />
+                    <span className={`size-2 rounded-full ${w.online ? "bg-ok" : "bg-border"}`} title={w.online ? t("online") : t("offline")} />
                     <span className="font-medium">{w.name}</span>
                   </div>
                   <div className="font-mono text-xs text-muted">
@@ -190,7 +190,7 @@ export function WorkersPage() {
                       ))}
                     </div>
                   ) : (
-                    <span className="text-xs">{t("idle · seen") + " "}{w.lastSeenAt ? relative(w.lastSeenAt) : tr("never")}</span>
+                    <span className="text-xs">{t("idle · seen") + " "}{w.lastSeenAt ? relative(w.lastSeenAt) : t("never")}</span>
                   )}
                 </Td>
                 <Td className="text-muted">
@@ -331,7 +331,7 @@ function AddWorker({ onClose, onCreated }: { onClose: () => void; onCreated: (na
       const r = await unwrap(api.POST("/api/v1/workers", { body: { name, roles: picked } }));
       onCreated(r.worker.name, r.key);
     } catch (e) {
-      toast.fromError(e, tr("Could not add the worker"));
+      toast.fromError(e, t("Could not add the worker"));
     } finally {
       setBusy(false);
     }
@@ -387,7 +387,7 @@ function IssuedKey({ name, value, onClose }: { name: string; value: string; onCl
             title={t("Copy")}
             onClick={async () => {
               await navigator.clipboard.writeText(value);
-              toast.success(tr("Key copied"));
+              toast.success(t("Key copied"));
             }}
           >
             <Copy className="size-4" />

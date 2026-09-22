@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"sort"
-	"strconv"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -74,51 +73,52 @@ func (s *Server) registerUpdates() {
 				}
 			}
 
-			var works []model.Work
-			_ = s.app.DB.NewSelect().Model(&works).Scan(ctx)
-			workByID := map[int64]model.Work{}
-			for _, work := range works {
-				workByID[work.ID] = work
-			}
-			groups := map[int64][]model.Series{}
-			for _, series := range seriesRows {
-				if _, ok := visible[series.ID]; !ok {
-					continue
-				}
-				key := series.WorkID
-				if key == 0 {
-					key = -series.ID
-				}
-				groups[key] = append(groups[key], series)
-			}
 			items := make([]UpdateItem, 0, in.PageSize)
-			for key, editions := range groups {
-				if in.Kind == "chapter" {
-					continue
+			if in.Kind != "chapter" {
+				var works []model.Work
+				_ = s.app.DB.NewSelect().Model(&works).Scan(ctx)
+				workByID := map[int64]model.Work{}
+				for _, work := range works {
+					workByID[work.ID] = work
 				}
-				representative := editions[0]
-				title, at := representative.Title, representative.AddedAt
-				if work, ok := workByID[key]; ok {
-					title, at = work.Title, work.CreatedAt
-				}
-				if at.Before(cutoff) {
-					continue
-				}
-				languages := make([]string, 0, len(editions))
-				for _, edition := range editions {
-					if edition.Language != "" {
-						languages = append(languages, edition.Language)
+				groups := map[int64][]model.Series{}
+				for _, series := range seriesRows {
+					if _, ok := visible[series.ID]; !ok {
+						continue
 					}
+					key := series.WorkID
+					if key == 0 {
+						key = -series.ID
+					}
+					groups[key] = append(groups[key], series)
 				}
-				sort.Strings(languages)
-				items = append(items, UpdateItem{Kind: "series", At: at, SeriesID: representative.ID, SeriesTitle: title,
-					Languages: languages, CoverURL: seriesCoverURL(representative)})
+				for key, editions := range groups {
+					representative := editions[0]
+					title, at := representative.Title, representative.AddedAt
+					if work, ok := workByID[key]; ok {
+						title, at = work.Title, work.CreatedAt
+					}
+					if at.Before(cutoff) {
+						continue
+					}
+					languages := make([]string, 0, len(editions))
+					for _, edition := range editions {
+						if edition.Language != "" {
+							languages = append(languages, edition.Language)
+						}
+					}
+					sort.Strings(languages)
+					items = append(items, UpdateItem{Kind: "series", At: at, SeriesID: representative.ID, SeriesTitle: title,
+						Languages: languages, CoverURL: seriesCoverURL(representative)})
+				}
 			}
 
 			var chapters []model.Chapter
-			if err := s.app.DB.NewSelect().Model(&chapters).Where("first_seen_at >= ?", cutoff).
-				OrderExpr("first_seen_at DESC, id DESC").Scan(ctx); err != nil {
-				return nil, toHTTPError(err)
+			if in.Kind != "series" {
+				if err := s.app.DB.NewSelect().Model(&chapters).Where("first_seen_at >= ?", cutoff).
+					OrderExpr("first_seen_at DESC, id DESC").Scan(ctx); err != nil {
+					return nil, toHTTPError(err)
+				}
 			}
 			chapterIDs := make([]int64, 0, len(chapters))
 			for _, chapter := range chapters {
@@ -148,9 +148,6 @@ func (s *Server) registerUpdates() {
 				}
 			}
 			for _, chapter := range chapters {
-				if in.Kind == "series" {
-					continue
-				}
 				series, ok := visible[chapter.SeriesID]
 				if !ok {
 					continue
@@ -186,8 +183,4 @@ func (s *Server) registerUpdates() {
 			}
 			return &struct{ Body UpdatePage }{page}, nil
 		})
-}
-
-func seriesCoverURL(series model.Series) string {
-	return "api/v1/series/" + strconv.FormatInt(series.ID, 10) + "/cover?v=" + strconv.FormatInt(series.UpdatedAt.Unix(), 10)
 }

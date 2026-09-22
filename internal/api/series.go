@@ -299,7 +299,7 @@ func progressReaderLabel(ctx context.Context, labels map[int64]string, readerID 
 
 func (s *Server) seriesResource(ctx context.Context, ser model.Series, stats map[int64]SeriesStats, detail bool) SeriesResource {
 	r := SeriesResource{Series: ser, Stats: stats[ser.ID],
-		CoverURL: "api/v1/series/" + strconv.FormatInt(ser.ID, 10) + "/cover?v=" + strconv.FormatInt(ser.UpdatedAt.Unix(), 10)}
+		CoverURL: seriesCoverURL(ser)}
 	if detail {
 		_ = s.app.DB.NewSelect().Model(&r.Sources).Where("series_id = ?", ser.ID).Order("priority", "id").Scan(ctx)
 		if ranks, err := sourcepriority.Ranks(ctx, s.app.DB, ser, r.Sources); err == nil {
@@ -314,9 +314,15 @@ func (s *Server) seriesResource(ctx context.Context, ser model.Series, stats map
 	return r
 }
 
+// seriesCoverURL is a series' cover, relative to the URL base, with the
+// series' last change as a cache-buster.
+func seriesCoverURL(ser model.Series) string {
+	return "api/v1/series/" + strconv.FormatInt(ser.ID, 10) + "/cover?v=" + strconv.FormatInt(ser.UpdatedAt.Unix(), 10)
+}
+
 func editionSummary(ser model.Series) EditionSummary {
 	return EditionSummary{ID: ser.ID, Title: ser.Title, Language: ser.Language,
-		CoverURL: "api/v1/series/" + strconv.FormatInt(ser.ID, 10) + "/cover?v=" + strconv.FormatInt(ser.UpdatedAt.Unix(), 10)}
+		CoverURL: seriesCoverURL(ser)}
 }
 
 func addStats(a, b SeriesStats) SeriesStats {

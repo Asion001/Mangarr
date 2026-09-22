@@ -16,6 +16,9 @@ import (
 
 func init() { register((*Server).registerSourcePriorities) }
 
+// priorityLanguage is a lowercase BCP 47-style tag ("en", "pt-br").
+var priorityLanguage = regexp.MustCompile(`^[a-z]{2,3}(-[a-z0-9]{2,8})*$`)
+
 type PriorityPreview struct {
 	SeriesID     int64                `json:"seriesId"`
 	Title        string               `json:"title"`
@@ -43,7 +46,7 @@ func (s *Server) registerSourcePriorities() {
 		switch kind {
 		case "language":
 			value = sourcepriority.Language(value)
-			if !regexp.MustCompile(`^[a-z]{2,3}(-[a-z0-9]{2,8})*$`).MatchString(value) {
+			if !priorityLanguage.MatchString(value) {
 				return nil, huma.Error400BadRequest("invalid language")
 			}
 			scope = sourcepriority.LanguageScope(value)

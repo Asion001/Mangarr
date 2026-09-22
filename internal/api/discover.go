@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -105,15 +104,11 @@ func discoverTitleKey(value string) string {
 	return out.String()
 }
 
-func discoverCover(ser model.Series) string {
-	return "/api/v1/series/" + strconv.FormatInt(ser.ID, 10) + "/cover?v=" + strconv.FormatInt(ser.UpdatedAt.Unix(), 10)
-}
-
 func discoverLibraryItem(info reading.SeriesInfo) DiscoverLibraryItem {
 	ser := info.Series
 	genres := append([]string{}, ser.Metadata.Genres...)
 	return DiscoverLibraryItem{SeriesID: ser.ID, Title: ser.Title, Description: ser.Metadata.Description,
-		CoverURL: discoverCover(ser), Status: ser.Status, Language: ser.Language, Genres: genres,
+		CoverURL: seriesCoverURL(ser), Status: ser.Status, Language: ser.Language, Genres: genres,
 		Unread: info.Unread(), Books: info.Books, ChangedAt: info.LastModified()}
 }
 
@@ -247,7 +242,7 @@ func (s *Server) discoverLatestChapters(ctx context.Context, items []DiscoverLib
 		ids = append(ids, item.SeriesID)
 	}
 	var chapters []model.Chapter
-	if err := s.app.DB.NewSelect().Model(&chapters).Where("series_id IN (?)", bun.In(ids)).
+	if err := s.app.DB.NewSelect().Model(&chapters).Column("series_id", "number_key").Where("series_id IN (?)", bun.In(ids)).
 		OrderExpr("COALESCE(release_date, updated_at) DESC").OrderExpr("number_sort DESC").Scan(ctx); err != nil {
 		return err
 	}

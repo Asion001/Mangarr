@@ -261,7 +261,8 @@ func (s *Service) attemptFailed(ctx context.Context, id int64, message string, c
 	}
 	message = strings.TrimSpace(message)
 	if len(message) > 500 {
-		message = message[:500]
+		// cut on a rune boundary: half a character is invalid UTF-8 to Postgres
+		message = strings.ToValidUTF8(message[:500], "")
 	}
 	_, _ = s.DB.NewUpdate().Model((*model.Request)(nil)).Set("reason = ?", message).Set("updated_at = ?", time.Now().UTC()).
 		Where("id = ? AND status = ?", id, model.RequestPending).Exec(ctx)

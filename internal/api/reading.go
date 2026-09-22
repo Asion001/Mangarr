@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -98,7 +97,7 @@ func (s *Server) registerReading() {
 			for _, n := range next[:min(in.Limit, len(next))] {
 				ser, ch := n.Series.Series, n.Book.Chapter
 				it := ShelfItem{SeriesID: ser.ID, Title: ser.Title,
-					CoverURL: "api/v1/series/" + strconv.FormatInt(ser.ID, 10) + "/cover?v=" + strconv.FormatInt(ser.UpdatedAt.Unix(), 10),
+					CoverURL: seriesCoverURL(ser),
 					Next:     NextChapter{ChapterID: ch.ID, Number: ch.NumberKey, Title: ch.Title, Available: n.Book.File != nil},
 					Read:     n.Series.Read, Total: n.Series.Books, LastReadAt: n.Series.LastRead}
 				if n.Book.State != nil && !n.Book.State.Completed {

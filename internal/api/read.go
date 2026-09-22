@@ -320,6 +320,9 @@ func (s *Server) registerRead() {
 				change := reading.Change{ChapterID: chapter.ID, SeriesID: chapter.SeriesID, Completed: in.Body.Read, Unread: !in.Body.Read}
 				outcomes, err = s.app.Reading.Record(ctx, rid, []reading.Change{change}, by)
 			}
+			if errors.Is(err, reading.ErrNotFound) {
+				return nil, readError(err)
+			}
 			if err != nil {
 				return nil, toHTTPError(err)
 			}
