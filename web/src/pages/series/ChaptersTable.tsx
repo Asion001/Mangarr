@@ -1,8 +1,9 @@
 import { t as tr, t } from "../../lib/i18n/core";
 import { Fragment, memo, useCallback, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDownToLine, ArrowUpToLine, BookOpen, ChevronDown, ChevronRight, ExternalLink, HelpCircle, Pause, Play, RotateCcw, RotateCw, Search, Sparkles, Eye, Trash2 } from "lucide-react";
+import { ArrowDownToLine, ArrowUpToLine, BookOpen, Check, ChevronDown, ChevronRight, ExternalLink, HelpCircle, Pause, Play, RotateCcw, RotateCw, Search, Sparkles, Eye, Trash2 } from "lucide-react";
 import { Link } from "react-router";
+import clsx from "clsx";
 import { api, unwrap, type Chapter } from "../../api/client";
 import { useChapters, useQueue } from "../../api/queries";
 import { Badge, Button, Card, Confirm, ErrorBox, IconButton, Loading, Modal, Progress, Switch, Table, Td, Th } from "../../components/ui";
@@ -36,7 +37,8 @@ const toggle = (set: Set<number>, id: number) => {
   return next;
 };
 
-export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; manage?: boolean }) {
+/** nextChapterId is the chapter to read next: the one row with a primary Continue. */
+export function ChaptersTable({ seriesId, manage = true, nextChapterId }: { seriesId: number; manage?: boolean; nextChapterId?: number }) {
   const { data, isLoading, error } = useChapters(seriesId);
   // same query as the sidebar's queue count, so no extra request
   const queuePaused = !!useQueue({ pageSize: 1 }, manage).data?.state?.paused;
@@ -246,6 +248,7 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
                   onQueueAction={queueAction}
                   onExplain={setExplain}
                   queuePaused={queuePaused}
+                  next={chapter.id === nextChapterId}
                 />
               ))}
             </tbody>
@@ -293,6 +296,8 @@ type ChapterRowProps = {
   onExplain: (chapter: Chapter) => void;
   /** queuePaused: the whole download queue is paused, so queued chapters wait. */
   queuePaused?: boolean;
+  /** next: this is the chapter to read next. */
+  next?: boolean;
 };
 
 /** A memoized row keeps queue progress updates from rerendering every chapter. */
@@ -312,17 +317,20 @@ const ChapterRow = memo(function ChapterRow({
   onQueueAction,
   onExplain,
   queuePaused,
+  next,
 }: ChapterRowProps) {
+  // read: everyone who opened it finished it (for a user account, that's you)
+  const read = c.readBy.length > 0 && c.readBy.every((r) => r.completed);
   return (
     <Fragment>
-      <tr className={c.monitored ? "" : "opacity-60"}>
+      <tr className={clsx(!c.monitored && "opacity-60", next && "bg-accent/5 shadow-[inset_3px_0_0_var(--color-accent)]")}>
         <Td>
           {manage && <input type="checkbox" checked={selected} onChange={() => onSelect(c.id)} />}
         </Td>
         <Td>
           {manage && <Switch checked={c.monitored} onChange={(monitored) => onMonitor(c.id, monitored)} />}
         </Td>
-        <Td className="font-mono text-xs">
+        <Td className={clsx("font-mono text-xs", read && "text-muted")}>
           {c.volume && <span className="text-muted">v{c.volume} </span>}
           {c.number}
         </Td>
@@ -330,9 +338,16 @@ const ChapterRow = memo(function ChapterRow({
           <div className="flex items-center gap-1">
             <button className="flex items-center gap-1 text-left hover:text-accent-2" onClick={() => onExpand(c.id)}>
               {open ? <ChevronDown className="size-3.5 shrink-0" /> : <ChevronRight className="size-3.5 shrink-0" />}
-              <span className="line-clamp-1 min-w-40">{c.title || <span className="text-muted">{t("Chapter") + " "}{c.number}</span>}</span>
-              <span className="text-xs text-muted">({c.releases.length})</span>
+              <span className={clsx("line-clamp-1", c.title && "min-w-40", read && "text-muted")}>{c.title || <span className="text-muted">—</span>}</span>
             </button>
+            {next && <Badge tone="accent">{t("Up next")}</Badge>}
+            {read && (
+              <span className="inline-flex items-center gap-0.5 text-xs text-ok">
+                <Check className="size-3" />
+                {t("read")}
+              </span>
+            )}
+            {c.releases.length > 1 && <Badge title={t("Expand to compare releases")}>{t("{count} releases", { count: c.releases.length })}</Badge>}
           </div>
         </Td>
         <Td className="whitespace-nowrap text-muted">{date(c.releaseDate)}</Td>
@@ -348,7 +363,7 @@ const ChapterRow = memo(function ChapterRow({
                 <Progress value={c.job.progress} />
               </div>
             )}
-            {manage && c.job && !["completed", "failed"].includes(c.job.status) && (
+            {manage && c.job && c.job.priority !== 0 && !["completed", "failed"].includes(c.job.status) && (
               <span className="text-[11px] text-muted">{t("Priority")}: {c.job.priority}</span>
             )}
           </div>
@@ -392,7 +407,9 @@ const ChapterRow = memo(function ChapterRow({
           <div className="flex items-center justify-end gap-1">
             {readable(c) && (
               <Link to={`/read/${c.id}`} title={c.file ? tr("Read") : tr("Read (streamed from the source)")}>
-                <Button variant="primary" icon={<BookOpen className="size-4" />}>{t("Read")}</Button>
+                <Button className="w-28" variant={next ? "primary" : read ? "ghost" : "secondary"} icon={<BookOpen className="size-4" />}>
+                  {next ? t("Continue") : read ? t("Re-read") : t("Read")}
+                </Button>
               </Link>
             )}
             {manage && c.job && !["completed", "failed"].includes(c.job.status) && (

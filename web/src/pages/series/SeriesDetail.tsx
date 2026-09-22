@@ -199,7 +199,7 @@ export function SeriesDetail() {
       </div>
 
       {manage && <SourcesPanel series={s} />}
-      <ChaptersTable key={String(manage)} seriesId={id} manage={manage} />
+      <ChaptersTable key={String(manage)} seriesId={id} manage={manage} nextChapterId={readTarget?.id} />
 
       {manage && edit && <EditSeriesModal series={s} onClose={() => setEdit(false)} />}
       {manage && renaming && <RenameModal seriesIds={[id]} onClose={() => setRenaming(false)} />}
