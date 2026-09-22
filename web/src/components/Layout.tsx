@@ -23,6 +23,7 @@ import {
   UserRound,
   Inbox,
   BellRing,
+  Pause,
 } from "lucide-react";
 import { api } from "../api/client";
 import { useHealth, usePendingRequests, useQueue } from "../api/queries";
@@ -81,6 +82,7 @@ export function Layout() {
   const { can, isAdmin, name } = useAccount();
   const { data: queue } = useQueue({ pageSize: 1 }, can("library.manage"));
   const queued = queue?.total ?? 0;
+  const queuePaused = !!queue?.state?.paused;
   const { data: health } = useHealth(isAdmin);
   const qc = useQueryClient();
   const issues = (health?.checks ?? []).filter((c) => c.type === "error" || c.type === "warning").length;
@@ -170,7 +172,7 @@ export function Layout() {
           return <div key={item.to}>
             <NavLink to={item.children?item.children[0].to:item.to} title={label(item.label)} aria-label={label(item.label)} onClick={()=>setOpen(false)} className={clsx("flex min-h-10 items-center gap-2.5 rounded-md px-2.5 py-2 font-medium",compact&&"justify-center",active?"bg-panel-2 text-fg":"text-muted hover:bg-panel-2 hover:text-fg")}>
               <span className="shrink-0">{item.icon}</span>
-              {!compact&&<><span className="flex-1">{label(item.label)}</span>{count>0&&<span className="rounded-full bg-primary px-1.5 text-xs font-medium text-white">{count}</span>}</>}
+              {!compact&&<><span className="flex-1">{label(item.label)}</span>{item.to==="/activity"&&queuePaused&&<span title={t("Queue paused")} aria-label={t("Queue paused")} className="flex items-center rounded-full bg-warn/15 px-1.5 py-0.5 text-warn"><Pause className="size-3"/></span>}{count>0&&<span className="rounded-full bg-primary px-1.5 text-xs font-medium text-white">{count}</span>}</>}
             </NavLink>
             {!compact&&item.children&&active&&<div className="mb-1 ml-8 mt-0.5 flex flex-col border-l border-border">
               {item.children.map(c=><NavLink key={c.to} to={c.to} onClick={()=>setOpen(false)} className={({isActive})=>clsx("-ml-px border-l px-3 py-1.5",isActive?"border-accent text-fg":"border-transparent text-muted hover:text-fg")}>{label(c.label)}</NavLink>)}
@@ -185,9 +187,9 @@ export function Layout() {
         <NavLink to="/account" title={name||t("My account")} aria-label={t("My account")} onClick={()=>setOpen(false)} className={({isActive})=>clsx("flex items-center gap-2.5 rounded-md px-2.5 py-2 font-medium",compact&&"justify-center",isActive?"bg-panel-2 text-fg":"text-muted hover:bg-panel-2 hover:text-fg")}>
           <UserRound className="size-4 shrink-0"/>{!compact&&<span className="min-w-0 flex-1 truncate">{name||t("My account")}</span>}
         </NavLink>
-        <div className={clsx("flex items-center px-2 text-xs text-muted",compact?"justify-center":"justify-between")}>
-          {!compact&&<span>{editing&&can("library.manage")&&<span className="flex items-center gap-1"><Activity className="size-3.5"/>{queued} {t("in queue")}</span>}</span>}
-          <button title={t("Log out")} aria-label={t("Log out")} className="flex items-center gap-1 py-2 hover:text-fg" onClick={logout}><LogOut className="size-3.5"/>{!compact&&t("Log out")}</button>
+        <div className={clsx("flex items-center gap-2 px-2 text-xs text-muted",compact?"justify-center":"justify-between")}>
+          {!compact&&<span>{editing&&can("library.manage")&&<span className="flex items-center gap-1">{queuePaused?<Pause className="size-3.5 text-warn"/>:<Activity className="size-3.5"/>}{queued} {queuePaused?`· ${t("paused")}`:t("in queue")}</span>}</span>}
+          <button title={t("Log out")} aria-label={t("Log out")} className="flex shrink-0 items-center gap-1 whitespace-nowrap py-2 hover:text-fg" onClick={logout}><LogOut className="size-3.5"/>{!compact&&t("Log out")}</button>
         </div>
       </footer>
     </div>;

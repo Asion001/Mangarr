@@ -15,13 +15,33 @@ const tone = (s: string) => (s === "completed" ? "ok" : s === "failed" ? "err" :
 const statuses = ["downloading", "processing", "importing", "queued", "paused", "failed", "completed"] as const;
 type Action = "pause" | "resume" | "retry" | "remove" | "blocklist" | "top" | "bottom";
 
+const groupKey = "mangarr:queue-group";
+const storedGroup = () => {
+  try {
+    return localStorage.getItem(groupKey) === "flat" ? "flat" : "series";
+  } catch {
+    return "series";
+  }
+};
+
 export function QueuePage({ mode }: { mode: "downloads" | "processing" }) {
   const qc = useQueryClient();
   const toast = useToast();
   const [status, setStatus] = useListParam("status");
   const [q, setQ] = useQueryParam("q");
   const [pageStr, setPage] = useListParam("page", "1");
-  const [group, setGroup] = useListParam("group");
+  // grouped by series unless you switched it off (remembered per browser)
+  const [groupParam, setGroupParam] = useListParam("group", storedGroup());
+  const group = groupParam === "series";
+  const setGroup = (on: boolean) => {
+    const v = on ? "series" : "flat";
+    try {
+      localStorage.setItem(groupKey, v);
+    } catch {
+      /* private mode: the URL still carries it */
+    }
+    setGroupParam(v);
+  };
   const page = Number(pageStr) || 1;
   const pageSize = mode === "processing" ? 500 : 100;
   const filter = { status: status ? status.split(",") : undefined, kind: mode === "processing" ? "reprocess" as const : "download" as const, q: q || undefined, includeDone: true };
@@ -144,6 +164,8 @@ export function QueuePage({ mode }: { mode: "downloads" | "processing" }) {
             <Progress value={live.total > 0 ? (live.done / live.total) * 100 : 0} tone="accent" />
             <div className="mt-1 text-xs text-muted">{describe(live)}</div>
           </>
+        ) : j.status === "queued" || j.status === "paused" ? (
+          <span className="text-xs text-muted">{j.status === "paused" || state?.paused ? t("paused") : t("waiting")}</span>
         ) : (
           <>
             <Progress value={j.progress} tone={j.status === "failed" ? "err" : j.status === "completed" ? "ok" : "accent"} />
@@ -197,10 +219,7 @@ export function QueuePage({ mode }: { mode: "downloads" | "processing" }) {
         subtitle={mode === "processing" ? t("Every chapter waiting to be upscaled or encoded, in processing order") : t("Chapters waiting to be downloaded and imported, in download order")}
         actions={
           <>
-            {state?.paused ? (
-              <Button variant="primary" icon={<Play className="size-4" />} onClick={() => pauseAll()}>{t("Resume queue")}{state.pausedUntil ? ` (paused until ${new Date(state.pausedUntil).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})` : ""}
-              </Button>
-            ) : (
+            {!state?.paused && (
               <Select className="w-44" value="" onChange={(e) => e.target.value && pauseAll(Number(e.target.value))} title={t("Pause the whole queue")}>
                 <option value="">{t("Pause queue…")}</option>
                 <option value="60">{t("for 1 hour")}</option>
@@ -213,6 +232,21 @@ export function QueuePage({ mode }: { mode: "downloads" | "processing" }) {
           </>
         }
       />
+      {state?.paused && (
+        <div role="status" className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-warn/40 bg-warn/10 px-4 py-3 text-sm">
+          <Pause className="size-4 shrink-0 text-warn" />
+          <span className="flex-1">
+            <span className="font-medium">{t("Queue paused")}</span>
+            <span className="text-muted">
+              {" · "}
+              {state.pausedUntil ? t("until {time}", { time: new Date(state.pausedUntil).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }) : t("until you resume")}
+              {" · "}
+              {t("{count} waiting", { count: data?.counts?.queued ?? 0 })}
+            </span>
+          </span>
+          <Button size="sm" variant="primary" icon={<Play className="size-3.5" />} onClick={() => pauseAll()}>{t("Resume queue")}</Button>
+        </div>
+      )}
       {state?.quiet?.windows?.length ? (
         <p className="mb-3 text-sm text-warn">{t("Quiet hours (")}{state.quiet.windows.join(", ")}):{" "}
           {[state.quiet.pauseDownloads && "downloads paused", state.quiet.pauseProcessing && "processing paused", state.quiet.throttle && `${state.quiet.throttle} throttling`]
@@ -242,7 +276,7 @@ export function QueuePage({ mode }: { mode: "downloads" | "processing" }) {
           );
         })}
         <Input className="max-w-xs" placeholder={t("Filter by series…")} defaultValue={q} onChange={(e) => (setQ(e.target.value), setPage("1"), resetSelection())} />
-        <Switch checked={!!group} onChange={(v) => setGroup(v ? "series" : "")} label={t("Group by series")} />
+        <Switch checked={group} onChange={setGroup} label={t("Group by series")} />
       </div>
       {count > 0 && (
         <div className="sticky top-0 z-10 mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-accent/40 bg-panel p-2 text-sm shadow">

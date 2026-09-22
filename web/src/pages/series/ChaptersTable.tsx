@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDownToLine, ArrowUpToLine, BookOpen, ChevronDown, ChevronRight, ExternalLink, HelpCircle, Pause, Play, RotateCcw, RotateCw, Search, Sparkles, Eye, Trash2 } from "lucide-react";
 import { Link } from "react-router";
 import { api, unwrap, type Chapter } from "../../api/client";
-import { useChapters } from "../../api/queries";
+import { useChapters, useQueue } from "../../api/queries";
 import { Badge, Button, Card, Confirm, ErrorBox, IconButton, Loading, Modal, Progress, Switch, Table, Td, Th } from "../../components/ui";
 import { bytes, date, relative } from "../../lib/format";
 import { useToast } from "../../lib/toast";
@@ -38,6 +38,8 @@ const toggle = (set: Set<number>, id: number) => {
 
 export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; manage?: boolean }) {
   const { data, isLoading, error } = useChapters(seriesId);
+  // same query as the sidebar's queue count, so no extra request
+  const queuePaused = !!useQueue({ pageSize: 1 }, manage).data?.state?.paused;
   const qc = useQueryClient();
   const toast = useToast();
   const { account } = useAccount();
@@ -243,6 +245,7 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
                   onMark={mark}
                   onQueueAction={queueAction}
                   onExplain={setExplain}
+                  queuePaused={queuePaused}
                 />
               ))}
             </tbody>
@@ -288,6 +291,8 @@ type ChapterRowProps = {
   onMark: (chapter: Chapter, read: boolean) => void;
   onQueueAction: (jobID: number, action: "top" | "bottom" | "pause" | "resume") => void;
   onExplain: (chapter: Chapter) => void;
+  /** queuePaused: the whole download queue is paused, so queued chapters wait. */
+  queuePaused?: boolean;
 };
 
 /** A memoized row keeps queue progress updates from rerendering every chapter. */
@@ -306,6 +311,7 @@ const ChapterRow = memo(function ChapterRow({
   onMark,
   onQueueAction,
   onExplain,
+  queuePaused,
 }: ChapterRowProps) {
   return (
     <Fragment>
@@ -332,7 +338,11 @@ const ChapterRow = memo(function ChapterRow({
         <Td className="whitespace-nowrap text-muted">{date(c.releaseDate)}</Td>
         <Td>
           <div className="flex flex-col gap-1">
-            <Badge tone={stateTone[c.state] ?? "default"}>{c.state}</Badge>
+            {queuePaused && c.job?.status === "queued" ? (
+              <Badge tone="warn" title={t("Queue paused")}>{c.state} · {t("paused")}</Badge>
+            ) : (
+              <Badge tone={stateTone[c.state] ?? "default"}>{c.state}</Badge>
+            )}
             {c.job && ["downloading", "processing", "importing"].includes(c.job.status) && (
               <div className="w-20">
                 <Progress value={c.job.progress} />
