@@ -120,6 +120,9 @@ func (m *Manager) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if err := m.failCrashedProcessing(ctx, live); err != nil {
+		return err
+	}
 	now := time.Now().UTC()
 	q := m.db.NewUpdate().Model((*model.DownloadJob)(nil)).
 		Set("status = ?", model.JobQueued).Set("not_before = ?", now).Set("updated_at = ?", now).
@@ -149,6 +152,70 @@ func keys(m map[int64]bool) []int64 {
 		out = append(out, k)
 	}
 	return out
+}
+
+// ErrStoppedWhileProcessing is recorded on a chapter whose processing was
+// running when mangarr died.
+var ErrStoppedWhileProcessing = errors.New("mangarr stopped while processing this chapter (most likely it ran out of memory); it is retried later")
+
+// failCrashedProcessing gives up, for now, on the reprocess jobs that were
+// processing when the process died. A clean stop hands its jobs back
+// (Release), so these were running when it was killed, and processing is
+// what kills a small server: re-running the chapter straight away would
+// kill it again, forever, and hold the processing slot while doing so. Each
+// such stop counts as a failed processing attempt of the file, and the
+// backlog retries it later with the usual growing delays.
+func (m *Manager) failCrashedProcessing(ctx context.Context, live map[int64]bool) error {
+	var jobs []model.DownloadJob
+	q := m.db.NewSelect().Model(&jobs).Where("kind = ? AND status = ?", model.JobKindReprocess, model.JobProcessing)
+	if len(live) > 0 {
+		q = q.Where("id NOT IN (?)", bun.In(keys(live)))
+	}
+	if err := q.Scan(ctx); err != nil {
+		return err
+	}
+	for i := range jobs {
+		job := &jobs[i]
+		m.log.Warn("mangarr stopped while this chapter was processing; it is retried later", "job", job.ID, "chapterId", job.ChapterID)
+		var ch model.Chapter
+		if m.db.NewSelect().Model(&ch).Where("id = ?", job.ChapterID).Scan(ctx) == nil && ch.FileID != nil {
+			var f model.ChapterFile
+			if m.db.NewSelect().Model(&f).Where("id = ?", *ch.FileID).Scan(ctx) == nil {
+				m.markProcessFailed(ctx, &f, ErrStoppedWhileProcessing)
+			}
+		}
+		job.Status, job.Attempt, job.Error, job.UpdatedAt = model.JobFailed, job.Attempt+1, ErrStoppedWhileProcessing.Error(), time.Now().UTC()
+		if _, err := m.db.NewUpdate().Model(job).Column("status", "attempt", "error", "updated_at").WherePK().Exec(ctx); err != nil {
+			return err
+		}
+		chID := job.ChapterID
+		_ = history.Record(ctx, m.db, job.SeriesID, &chID, model.HistoryFailed, "", map[string]string{"error": ErrStoppedWhileProcessing.Error()})
+	}
+	return nil
+}
+
+// Release hands the jobs running here back to the queue. It is called when
+// the server stops on purpose, so the next start can tell them from jobs
+// that were running when the process was killed.
+func (m *Manager) Release() {
+	m.mu.Lock()
+	ids := make([]int64, 0, len(m.running))
+	for id := range m.running {
+		ids = append(ids, id)
+	}
+	m.mu.Unlock()
+	if len(ids) == 0 {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	now := time.Now().UTC()
+	if _, err := m.db.NewUpdate().Model((*model.DownloadJob)(nil)).
+		Set("status = ?", model.JobQueued).Set("not_before = ?", now).Set("updated_at = ?", now).
+		Where("id IN (?) AND status IN (?)", bun.In(ids), bun.In([]string{model.JobDownloading, model.JobProcessing, model.JobImporting})).
+		Exec(ctx); err != nil {
+		m.log.Warn("could not hand running jobs back to the queue", "err", err)
+	}
 }
 
 // pruneStaging drops the working directories of jobs nobody is doing any

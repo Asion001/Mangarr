@@ -12,6 +12,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"runtime/debug"
 	"strconv"
 	"syscall"
 	"time"
@@ -104,6 +106,7 @@ func run() error {
 		} else {
 			defer rot.Close()
 			out = io.MultiWriter(os.Stdout, rot)
+			keepCrashes(cfg.LogDir)
 		}
 	}
 	log, ring := logging.Setup(cfg.LogLevel, out)
@@ -152,6 +155,18 @@ func run() error {
 		return errRestart
 	}
 	return nil
+}
+
+// keepCrashes copies what the Go runtime prints when the process dies (a
+// panic, or running out of memory) into crash.txt next to the logs: it goes
+// to stderr only, which the log files and the diagnostics bundle never see.
+func keepCrashes(dir string) {
+	f, err := os.OpenFile(filepath.Join(dir, "crash.txt"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return
+	}
+	defer f.Close() // SetCrashOutput keeps its own copy
+	_ = debug.SetCrashOutput(f, debug.CrashOptions{})
 }
 
 // dumpOpenAPI prints the OpenAPI document (used to generate web client types).

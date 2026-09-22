@@ -18,6 +18,8 @@ import (
 	"strings"
 	"sync"
 
+	"golang.org/x/sync/semaphore"
+
 	"github.com/Asion001/mangarr/internal/imagecheck"
 	"github.com/Asion001/mangarr/internal/model"
 	"github.com/Asion001/mangarr/internal/progress"
@@ -92,11 +94,25 @@ type Encoder struct {
 	engines []Engine
 	// Threads is the number of pages encoded at once.
 	Threads int
+	// MaxPixels bounds the pixels of the pages encoded at once (0 = no
+	// bound). A page is decoded whole (grayscale check) and the encoder holds
+	// it whole too, so one page per core of upscaled webtoon strips (100+
+	// megapixels each) is more memory than a small server has. A page larger
+	// than the bound is encoded alone.
+	MaxPixels int64
 }
+
+// DefaultMaxPixels is about 256 MB of pages decoded at once.
+const DefaultMaxPixels = 64 << 20
 
 // New returns an encoder using the given engines (earlier = preferred).
 func New(engines ...Engine) *Encoder {
-	return &Encoder{engines: engines, Threads: max(runtime.NumCPU()-1, 1)}
+	return &Encoder{engines: engines, Threads: max(runtime.NumCPU()-1, 1), MaxPixels: DefaultMaxPixels}
+}
+
+// pixels is what a page weighs against MaxPixels.
+func (e *Encoder) pixels(p Page) int64 {
+	return min(max(int64(p.Width)*int64(p.Height), 1), e.MaxPixels)
 }
 
 // Detect finds the installed engines: avifenc and cjxl on PATH, plus the
@@ -160,6 +176,10 @@ func (e *Encoder) EncodePages(ctx context.Context, pages []Page, cfg model.Encod
 	var mu sync.Mutex
 	var firstErr error
 	sem := make(chan struct{}, max(e.Threads, 1))
+	var budget *semaphore.Weighted
+	if e.MaxPixels > 0 {
+		budget = semaphore.NewWeighted(e.MaxPixels)
+	}
 	var wg sync.WaitGroup
 	for _, p := range pages {
 		if skip(p.Format, cfg.Format) {
@@ -177,7 +197,7 @@ func (e *Encoder) EncodePages(ctx context.Context, pages []Page, cfg model.Encod
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			np, before, after, err := e.encodeOne(ctx, eng, p, cfg, o, outDir)
+			np, before, after, err := e.encodeWithin(ctx, budget, eng, p, cfg, o, outDir)
 			mu.Lock()
 			if err != nil {
 				if firstErr == nil {
@@ -206,6 +226,18 @@ func (e *Encoder) EncodePages(ctx context.Context, pages []Page, cfg model.Encod
 		return nil, st, firstErr
 	}
 	return out, st, ctx.Err()
+}
+
+// encodeWithin encodes p once its pixels fit in budget (nil = no bound).
+func (e *Encoder) encodeWithin(ctx context.Context, budget *semaphore.Weighted, eng Engine, p Page, cfg model.EncodeConfig, o Options, outDir string) (*Page, int64, int64, error) {
+	if budget != nil {
+		n := e.pixels(p)
+		if err := budget.Acquire(ctx, n); err != nil {
+			return nil, 0, 0, err
+		}
+		defer budget.Release(n)
+	}
+	return e.encodeOne(ctx, eng, p, cfg, o, outDir)
 }
 
 func (e *Encoder) encodeOne(ctx context.Context, eng Engine, p Page, cfg model.EncodeConfig, o Options, outDir string) (*Page, int64, int64, error) {

@@ -166,7 +166,14 @@ func (a *App) Start(ctx context.Context) error {
 	return nil
 }
 
-func (a *App) Close() error { return a.DB.Close() }
+// Close hands running jobs back to the queue (a clean stop, not a crash)
+// and closes the database.
+func (a *App) Close() error {
+	if a.Downloads != nil {
+		a.Downloads.Release()
+	}
+	return a.DB.Close()
+}
 
 // upgradeAccounts creates the built-in groups and brings users from before
 // groups up to date. The first user gets the reader reading apps used.

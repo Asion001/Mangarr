@@ -285,8 +285,22 @@ func (s *Server) finish(ctx context.Context, src string, p Params) ([]byte, stri
 	if err != nil {
 		return nil, "", fmt.Errorf("engine produced no output: %w", err)
 	}
+	defer f.Close()
+	cfg, _, err := image.DecodeConfig(f)
+	if err != nil {
+		return nil, "", err
+	}
+	if p.Format == "png" && (p.MaxWidth <= 0 || cfg.Width <= p.MaxWidth) {
+		// the engine already wrote this PNG: decoding an upscaled webtoon
+		// strip (100+ megapixels) only to encode it again costs more memory
+		// than a small server has
+		data, err := os.ReadFile(src)
+		return data, ".png", err
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return nil, "", err
+	}
 	img, _, err := image.Decode(f)
-	f.Close()
 	if err != nil {
 		return nil, "", err
 	}

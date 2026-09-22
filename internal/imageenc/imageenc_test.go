@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -13,7 +14,9 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/Asion001/mangarr/internal/imagecheck"
 	"github.com/Asion001/mangarr/internal/model"
@@ -206,5 +209,44 @@ func TestWASMAvif(t *testing.T) {
 	info, err := imagecheck.Detect(data)
 	if err != nil || info.Format != "avif" || info.Width != 200 || info.Height != 300 {
 		t.Fatalf("wasm output: %+v %v", info, err)
+	}
+}
+
+// busyEngine counts how many pages it encodes at once.
+type busyEngine struct {
+	fakeEngine
+	now, peak atomic.Int32
+}
+
+func (b *busyEngine) Encode(ctx context.Context, src, srcFormat, dst string, o Options, gray bool) error {
+	n := b.now.Add(1)
+	defer b.now.Add(-1)
+	for p := b.peak.Load(); n > p && !b.peak.CompareAndSwap(p, n); p = b.peak.Load() {
+	}
+	time.Sleep(20 * time.Millisecond)
+	return b.fakeEngine.Encode(ctx, src, srcFormat, dst, o, gray)
+}
+
+// TestEncodePagesPixelBudget: big pages are not all decoded at once, one per
+// core, and a page bigger than the whole budget still gets encoded.
+func TestEncodePagesPixelBudget(t *testing.T) {
+	dir := t.TempDir()
+	var pages []Page
+	for i := range 6 {
+		pages = append(pages, writePage(t, dir, fmt.Sprintf("%04d.jpg", i+1), grayImg(), "jpeg"))
+	}
+	pages[5].Height = 3000 // ten times the others: more than the whole budget
+	eng := &busyEngine{fakeEngine: fakeEngine{accepts: []string{"jpeg"}, outSize: 600}}
+	enc := New(eng)
+	enc.Threads, enc.MaxPixels = 6, 2*200*300
+	_, st, err := enc.EncodePages(context.Background(), pages, model.EncodeConfig{Format: "avif", Grayscale: true, MinSavingsPct: 10}, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Encoded != 6 {
+		t.Fatalf("every page should be encoded: %+v", st)
+	}
+	if peak := eng.peak.Load(); peak > 2 {
+		t.Fatalf("%d pages encoded at once within a budget of two", peak)
 	}
 }
