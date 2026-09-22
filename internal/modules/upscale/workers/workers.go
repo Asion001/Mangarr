@@ -63,6 +63,25 @@ func (m *Module) Test(ctx context.Context) error {
 	return nil
 }
 
+// HealthCheck stays quiet when every upscale worker is intentionally
+// disabled. Once at least one is enabled, Test reports whether it is online
+// and has an upscaling model as before.
+func (m *Module) HealthCheck(ctx context.Context) (string, error) {
+	list, err := configured(ctx)
+	if err != nil {
+		return "", err
+	}
+	for _, w := range list {
+		if w.Enabled {
+			return "", m.Test(ctx)
+		}
+	}
+	if len(list) > 0 {
+		return "", nil // every configured upscale worker was switched off
+	}
+	return "", m.Test(ctx)
+}
+
 // Info merges what the online workers said they can do when they last
 // dialled in.
 func (m *Module) Info(ctx context.Context) (*upscale.Info, error) {
@@ -172,18 +191,47 @@ func ready(ctx context.Context) (*worktasks.Ledger, error) {
 // online is the enabled workers with the upscale role that have been here
 // recently.
 func online(ctx context.Context) ([]model.Worker, error) {
+	list, err := enabled(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]model.Worker, 0, len(list))
+	for _, w := range list {
+		if w.LastSeenAt != nil && time.Since(*w.LastSeenAt) < worktasks.OnlineWithin {
+			out = append(out, w)
+		}
+	}
+	return out, nil
+}
+
+// enabled is the set of workers an admin currently expects to upscale.
+func enabled(ctx context.Context) ([]model.Worker, error) {
+	list, err := configured(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]model.Worker, 0, len(list))
+	for _, w := range list {
+		if w.Enabled {
+			out = append(out, w)
+		}
+	}
+	return out, nil
+}
+
+func configured(ctx context.Context) ([]model.Worker, error) {
 	l := worktasks.Default()
 	if l == nil {
 		return nil, ErrNoWorker
 	}
 	d := l.DB()
 	var list []model.Worker
-	if err := d.NewSelect().Model(&list).Where("enabled = ?", true).Scan(ctx); err != nil {
+	if err := d.NewSelect().Model(&list).Scan(ctx); err != nil {
 		return nil, err
 	}
 	out := make([]model.Worker, 0, len(list))
 	for _, w := range list {
-		if w.HasRole(model.RoleUpscale) && w.LastSeenAt != nil && time.Since(*w.LastSeenAt) < 2*time.Minute {
+		if w.HasRole(model.RoleUpscale) {
 			out = append(out, w)
 		}
 	}
@@ -257,3 +305,4 @@ func models(v any) []upscale.Model {
 }
 
 var _ upscale.Module = (*Module)(nil)
+var _ modules.HealthChecker = (*Module)(nil)
