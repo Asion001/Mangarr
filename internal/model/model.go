@@ -203,7 +203,8 @@ type EncodeConfig struct {
 
 type UpscaleConfig struct {
 	Enabled bool `json:"enabled"`
-	// UpscalerID selects a specific upscale module instance; 0 = first enabled by priority.
+	// UpscalerID is retained for backup/API compatibility. The server clears it
+	// and selects an available installation-wide upscaler by priority.
 	UpscalerID int64 `json:"upscalerId"`
 	// MinWidth: pages narrower than this are upscaled.
 	MinWidth int `json:"minWidth"`

@@ -122,7 +122,7 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
   const setCfg = (c: Partial<Cfg>) => setP({ ...p, config: { ...cfg, ...c } });
   const up = cfg.upscale;
   const setUp = (u: Partial<Cfg["upscale"]>) => setCfg({ upscale: { ...up, ...u } });
-  const upscalerId = up.upscalerId || upscalers?.[0]?.id || 0;
+  const upscalerId = upscalers?.find((candidate) => candidate.enabled)?.id || 0;
   const { data: info } = useQuery({
     queryKey: ["upscaler-info", upscalerId],
     queryFn: () => unwrap(api.GET("/api/v1/modules/{id}/upscaler-info", { params: { path: { id: upscalerId } } })),
@@ -206,16 +206,6 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
         <Switch checked={up.enabled} onChange={(v) => setUp({ enabled: v })} label={t("Upscale small pages")} />
         {up.enabled && (
           <div className="grid gap-4 md:grid-cols-2">
-            <Field label={t("Upscaler")}>
-              <Select value={upscalerId} onChange={(e) => setUp({ upscalerId: Number(e.target.value) })}>
-                {upscalers?.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name}
-                  </option>
-                ))}
-                {!upscalers?.length && <option value={0}>{t("No upscaler configured")}</option>}
-              </Select>
-            </Field>
             <Field label={t("Model")} help={info?.devices?.length ? `GPU: ${info.devices.join(", ")}` : undefined}>
               <Select value={up.model} onChange={(e) => setUp({ model: e.target.value })}>
                 {(info?.models ?? [{ name: up.model, description: "" }]).map((m) => (

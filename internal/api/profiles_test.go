@@ -30,10 +30,14 @@ func TestSingleDefaultProfile(t *testing.T) {
 	doJSON(t, http.MethodGet, srv.URL+"/api/v1/profiles", "", &list)
 	p := list[0]
 	p.ID, p.Name, p.IsDefault = 0, "Webtoons", true
+	p.Config.Upscale.UpscalerID = 999 // worker selection is installation-wide
 	body, _ := json.Marshal(p)
 	var created model.Profile
 	if code := doJSON(t, http.MethodPost, srv.URL+"/api/v1/profiles", string(body), &created); code != 200 {
 		t.Fatalf("create: %d", code)
+	}
+	if created.Config.Upscale.UpscalerID != 0 {
+		t.Fatalf("profile pinned an upscaler: %+v", created.Config.Upscale)
 	}
 	list = nil
 	doJSON(t, http.MethodGet, srv.URL+"/api/v1/profiles", "", &list)

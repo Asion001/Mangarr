@@ -385,6 +385,9 @@ func validateProfile(p *model.Profile) error {
 		}
 	}
 	u := &p.Config.Upscale
+	// Upscalers are installation-wide workers selected by availability and
+	// priority. Profiles describe the desired output, not a specific machine.
+	u.UpscalerID = 0
 	if u.MinWidth <= 0 {
 		u.MinWidth = 1400
 	}
