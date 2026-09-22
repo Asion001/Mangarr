@@ -1,6 +1,7 @@
 # mangarr
 
-A Sonarr-style PVR for manga. mangarr monitors series, finds new chapters on
+A self-hosted, Sonarr-style PVR for manga. mangarr monitors series, finds new
+chapters on the sites it speaks itself or on
 [Keiyoushi](https://keiyoushi.github.io) (Mihon/Tachiyomi) extension sources,
 downloads them as CBZ files with `ComicInfo.xml`, and keeps a complete,
 self-contained local library. You read in Mihon, KMReader or Paperback
@@ -10,7 +11,8 @@ through [Komga](https://komga.org) or [Kavita](https://www.kavitareader.com),
 which mangarr tells to rescan after every change.
 
 ```
- mangarr ──► Suwayomi (runs Keiyoushi extensions) ──► FlareSolverr ──► sites
+ mangarr ──► its own sites (MangaDex, Weeb Central, …) ───────────────► sites
+    ├──► Suwayomi, optional (runs Keiyoushi extensions) ──► FlareSolverr ──►
     ├──► /data/manga/<lang>/<Series>/*.cbz  ◄── Komga / Kavita ◄── your apps
     │
     └──► Komga-compatible API (:25600) ◄── Mihon, KMReader, Paperback
@@ -24,7 +26,13 @@ which mangarr tells to rescan after every change.
 - **Multiple sources per series** with priorities: if a release fails it is
   blocklisted and the next source is tried; with upgrades on, a better
   source or preferred scanlator replaces the file **in place** (read
-  progress in Komga/Kavita survives).
+  progress in Komga/Kavita survives). Source order can differ per language
+  and per root folder, and a fallback source can be added to a whole library
+  at once.
+- **Several languages** — each language edition is a series of its own, with
+  its own files and sources; editions can be grouped under one title.
+  Per-language defaults pick the catalogs, root folder and profile of a new
+  series.
 - **Everything external is a module** behind a Go interface — see
   [docs/modules.md](docs/modules.md):
   - `source` — **mangarr's own sites** (MangaDex, Weeb Central, Atsumaru,
@@ -32,8 +40,9 @@ which mangarr tells to rescan after every change.
     (Keiyoushi extensions, FlareSolverr, extension manager, per-source
     settings) for the rest. Identities are portable `(sourceId, url)`, so
     *Switch engine* moves an existing library from one to the other.
-  - `metadata` — **AniList**; all metadata modules are searched by priority
-    and merged field by field with provenance and user locks.
+  - `metadata` — **AniList** and **Shikimori**; all metadata modules are
+    searched by priority and merged field by field with provenance and user
+    locks.
   - `library` — **Komga**, **Kavita** (rescans, path mappings, per-user
     read progress).
   - `notify` — **Telegram, Discord, ntfy, Gotify, Apprise, Webhook**, with
@@ -44,7 +53,8 @@ which mangarr tells to rescan after every change.
 - **Workers** — other machines that download, upscale and re-encode. Each
   has a key of its own and asks the server for work, so it needs no port and
   no inbound access; downloading from a worker also spreads the requests a
-  site sees across addresses.
+  site sees across addresses. Worker priorities and task limits decide which
+  machine goes first.
 - **Library that works on its own** — flat series folders, stable file names,
   `ComicInfo.xml` (validated against the v2.1 schema), `series.json` for
   Komga, `cover.jpg`. Files are written atomically.
@@ -73,6 +83,9 @@ which mangarr tells to rescan after every change.
 - **Follow series and your own notifications** — follow what you care about
   and get its new chapters on your own ntfy, Discord, Telegram, Gotify,
   Apprise or webhook, next to news about your requests.
+- **Discover and Updates** — recommendations from your unread library,
+  recently updated series and popular titles from your catalogs, and a feed
+  of new chapters and titles.
 - **Web reader** — read in the browser with Mihon's comforts: right to left,
   left to right, vertical and webtoon modes, two-page spreads, split double
   pages, crop borders, tap zones, keyboard and swipes, chapter transitions
@@ -82,7 +95,8 @@ which mangarr tells to rescan after every change.
   extension, KMReader and Paperback connect to mangarr's Komga-compatible
   API and see the whole library. Chapters that aren't downloaded are
   streamed from the source and queued for download, and the next chapters
-  are downloaded while you read. Each device gets its own API key.
+  are downloaded while you read. Each device gets its own API key, and Mihon
+  can be set up in one step from a backup mangarr writes for you.
 - **mangarr as the progress hub** — progress from apps and from Komga
   (live) or Kavita (on a timer) is merged, never lowered by a server that
   doesn't know a chapter yet, and passed on to every server. A *Continue
@@ -95,6 +109,8 @@ which mangarr tells to rescan after every change.
   review how each manga maps to your catalogs (exact for Keiyoushi sources,
   missing extensions installed for you), and import it with read chapters,
   categories and trackers; monitoring starts after the last chapter you read.
+- **UI in English, Russian and Ukrainian**, chosen per account, with a
+  reading mode that keeps the editing controls out of the way.
 - SQLite by default, **PostgreSQL** with one button (System → Database
   copies everything and restarts on it; backups hold the whole database
   either way and restore into either). Single ~30 MB static binary
@@ -105,14 +121,18 @@ which mangarr tells to rescan after every change.
 See [docker/compose.example.yml](docker/compose.example.yml) and the full
 [setup guide](docs/setup.md). In short:
 
-1. Start `mangarr`, `suwayomi` (pinned version, no published port),
-   `flaresolverr` and `komga` (library mounted read-only).
+1. Start `mangarr` and, if you want them, `komga` (library mounted
+   read-only), `flaresolverr` and `suwayomi` (pinned version, no published
+   port).
 2. Open `http://<host>:8787`, create the admin account.
 3. **Settings → Media management**: add a root folder (e.g. `/data/manga/en`).
-4. **Settings → Source modules**: add *Suwayomi* (`http://suwayomi:4567`,
-   enable FlareSolverr `http://flaresolverr:8191`). Keiyoushi is added.
-5. **Sources**: install extensions (e.g. MangaDex).
-6. **Settings → Metadata**: add *AniList*.
+4. **Settings → Source modules**: *mangarr sources* (MangaDex, Weeb Central,
+   Atsumaru, MangaLib, Senkuro) is there already. For other sites add
+   *Suwayomi* (`http://suwayomi:4567`, FlareSolverr
+   `http://flaresolverr:8191`) and install extensions under **Sources**.
+5. **Sources → Catalogs**: put the catalogs you want searched first on top.
+6. **Settings → Metadata**: add *AniList* (and *Shikimori* for Russian
+   titles).
 7. **Settings → Library servers**: add *Komga* with an admin API key and a
    path mapping if Komga mounts the library elsewhere.
 8. **Settings → Notifications**: add Telegram/ntfy/…
@@ -152,15 +172,34 @@ instances (`MANGARR_MODULE_KOMGA_IMPL=library/komga`,
 
 The API accepts the `X-Api-Key` header (Settings → General).
 
+## Documentation
+
+- [Setup guide](docs/setup.md): everything from folders and first run to
+  accounts, reading apps, workers, processing, imports and backups.
+- [Reading in Mihon](docs/mihon.md).
+- [Configuration](docs/configuration.md): every environment variable
+  (generated by `mangarr env --markdown`).
+- [Architecture](docs/architecture.md): how mangarr is put together.
+- [Writing modules](docs/modules.md).
+
+Planned work and bugs are tracked in
+[GitHub issues](https://github.com/Asion001/mangarr/issues).
+
 ## Development
 
 ```bash
 make build        # Go binary (UI embedded from web/dist)
+make build-worker # worker-only binary (cmd/mangarr-worker)
 make web          # build the UI (uses Docker if npm is not installed)
-make web-types    # regenerate web/src/api/schema.d.ts from the OpenAPI document
+make web-types    # regenerate web/openapi.json and web/src/api/schema.d.ts
 make test         # unit + app tests (SQLite)
 make test-pg      # also against Postgres (MANGARR_TEST_POSTGRES)
+scripts/gate.sh   # what CI checks: gofmt, vet, import rule, OpenAPI drift, tests
 scripts/integration.sh   # real Suwayomi + Komga in Docker
 ```
 
-Design notes and the implementation plan: [docs/PLAN.md](docs/PLAN.md).
+In `web/`: `npm run typecheck`, `npm run check:i18n` (every UI string has a
+Russian and Ukrainian translation), `npm test` (Vitest) and `npm run test:e2e`
+(Playwright). After changing a settings field or environment variable,
+regenerate [docs/configuration.md](docs/configuration.md) with
+`go run ./cmd/mangarr env --markdown > docs/configuration.md`.

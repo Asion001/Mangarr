@@ -21,7 +21,7 @@ Start from [docker/compose.example.yml](../docker/compose.example.yml):
 
 - **mangarr** — `/config` volume + the library.
 - **suwayomi** (optional) — only for catalogs mangarr doesn't speak itself.
-  It is no longer required: mangarr has sites of its own (see §3). If you do run it,
+  It is no longer required: mangarr has sites of its own (see §4). If you do run it,
   pin the tested version (`v2.3.2243`), keep its web UI off and don't publish
   its port: extensions run as code inside it, and it doesn't need the library.
   `JAVA_TOOL_OPTIONS=-Xmx512m` + `mem_limit: 1g` keeps it around 400–700 MB.
@@ -61,7 +61,8 @@ when it loads pages. mangarr itself speaks HTTP/1.1 and cleartext HTTP/2
    and open a catalog's settings (the gear) for what it offers: the language
    its titles come in, which of its servers to read pages from, whether to
    include adult titles. With Suwayomi, Sources → Extensions installs more.
-5. Settings → Metadata → *AniList*.
+5. Settings → Metadata → *AniList* (and *Shikimori* for Russian titles and
+   synopses).
 6. Settings → Library servers → *Komga*:
    - URL `http://komga:25600`, an **admin** API key (Komga → Account →
      API keys).
@@ -89,6 +90,30 @@ links to both.
 - **Sites behind a browser check** need FlareSolverr; set its address on the
   module (Settings → Source modules → *mangarr sources*). Sites that don't
   need it never pay for it.
+- **Throttling**: Settings → Search & throttling sets how gently sites are
+  read (*Fast*, *Normal*, *Gentle*, overridable per catalog). Sites that
+  answer with 429 or Cloudflare errors are paused on their own, from 5 minutes
+  doubling up to 2 hours.
+
+### Priorities per language and library
+
+The catalog order is the global default. Sources → **Priorities** can
+override it for one language or one root folder (the library order wins over
+the language order); catalogs not listed keep their global place. Series
+added afterwards inherit it. Series that already have their own order keep
+it until you **Preview migration** and apply it, which changes only the order:
+it links no source and starts no download.
+
+Settings → Search & throttling → **Language defaults** sets, per language,
+which catalogs an added series gets, and its root folder, profile and reading
+direction.
+
+### One title, several languages
+
+A series in English and the same series in Russian are two series in mangarr,
+each with its own files, sources and progress. **Language editions** on a
+series page groups them under one title, so the library shows the work once
+with its editions; *Separate edition* undoes it.
 
 ### A backup source for a whole library
 
@@ -128,7 +153,8 @@ download. Progress syncs both ways.
    listens on its own port, `25600` like Komga (`MANGARR_KOMGA_LISTEN`).
    Publish it, e.g. `"25601:25600"` when Komga already uses 25600 on the
    host, and set *Address apps should use* to the address the apps reach.
-2. **Add device** for each app. Each one gets its own API key, so you can see
+2. **Add device** for each app (here, or by each person under **My account →
+   Reading apps**). Each one gets its own API key, so you can see
    what every device synced and revoke one without the others. Apps that only
    ask for a username and password (Paperback) take any username with the
    key as the password.
@@ -139,6 +165,10 @@ download. Progress syncs both ways.
 | Mihon (Android) | Komga extension (Keiyoushi repo): address + API key | Enable **Komga** under Settings → Tracking → enhanced services. Syncs finished chapters. |
 | KMReader (iPhone, iPad) | Add server: address + API key, or username and password | Page by page, live updates. Downloaded chapters can be saved offline. |
 | Paperback (iPhone, iPad) | Komga extension: address, any username and a device key as the password (or your mangarr login) | Finished chapters, through its Komga tracker |
+
+For Mihon there is a shortcut: **My account → Reading apps → Set up Mihon
+from a backup** downloads a backup that restores your library with the
+extension already configured. See [Reading in Mihon](mihon.md).
 
 Each device key belongs to the account that made it, so everyone's progress
 stays their own; keys made before accounts existed (and keys of the API key)
@@ -172,7 +202,7 @@ devices and their own notifications. The library itself is shared.
 
 1. **Settings → Users & groups → Invites → Create an invite**: pick the
    group, how many people may use it and when it expires. Send the link; they
-   choose a username and password (or single sign-on, see §8) and are in. The
+   choose a username and password (or single sign-on, see §9) and are in. The
    invite is spent when it runs out of uses.
 2. **Groups** carry the permissions and what part of the library their
    members see:
@@ -194,7 +224,7 @@ devices and their own notifications. The library itself is shared.
    search.
 4. **Their own progress**: each account gets a reader of its own (Settings →
    Readers). Progress from their apps, the web reader and their own
-   Komga/Kavita account (§9) all land there. On a series page an
+   Komga/Kavita account (§10) all land there. On a series page an
    administrator sees how far everyone got; others see only themselves.
 5. **Sessions**: My account lists where you're signed in, and signs other
    sessions out. Changing a password, disabling an account or *Sign out
@@ -202,6 +232,11 @@ devices and their own notifications. The library itself is shared.
 6. **Login protection**: 10 failed attempts for the same name or address
    (30 from one address) lock signing in there for 15 minutes; it covers the
    web login, invite links and the Komga API.
+7. **Language and mode**: My account → *Interface* picks the UI language
+   (English, Russian or Ukrainian; *Automatic* follows the browser). People who
+   may change the library start in **reading mode**, which hides the editing
+   controls; the switch at the bottom of the sidebar turns on **editing
+   mode**.
 
 ## 7. Requests, following series and personal notifications
 
@@ -256,6 +291,15 @@ the source and queued, as in the apps.
   comes next.
 - Settings are kept **per series** (like Mihon), and *Use for all series*
   makes them your default. Everything is per account.
+
+### Discover and Updates
+
+- **Discover** puts recommendations from your unread library (based on what
+  you read and follow), recently updated series and popular titles from your
+  catalogs on one page. Titles that aren't in the library can be added or
+  requested from there.
+- **Updates** lists new chapters and newly added series over the last 7, 30 or
+  90 days, filterable by read state and whether a chapter is downloaded.
 
 ### What the reader asks the server for
 
@@ -324,8 +368,9 @@ to open it in Komga).
 Processing is configured per profile (Settings → Profiles). By default it runs
 **in the background**: chapters are imported as downloaded (readable right
 away) and processed later, rewritten at the same path so Komga keeps read
-progress. Background work runs one chapter at a time behind downloads; use
-Settings → Schedule to pause it outside the night. When you turn processing on
+progress. Background work runs behind downloads (System → Workers → *Chapter
+files processed at once*, one by default); use Settings → Schedule to pause it
+outside the night. When you turn processing on
 for a profile, mangarr asks whether to process chapters you already have.
 
 ### Upscaling
@@ -335,14 +380,17 @@ threshold (default 1400 px) with waifu2x / Real-CUGAN / Real-ESRGAN.
 
 1. Give it a GPU. The full image (`:latest`, amd64) contains the upscalers:
    - **On the server itself** (e.g. the N100's iGPU): pass `/dev/dri` and the
-     render group (`group_add`, see the compose example). mangarr then adds a
-     *Built-in (this server)* upscaler automatically (enabled when a real GPU
-     is visible).
+     render group (`group_add`, see the compose example). mangarr then adds
+     the *Built into this server* engine automatically (enabled when a real
+     GPU is visible).
    - **On another machine** (a desktop GPU): run it as a worker with the
-     upscale role (§12). The *Workers* upscaler appears by itself the first
-     time such a worker dials in; it is preferred over the built-in one while
-     one is online, and chapters wait while none is. NVIDIA needs the
-     container toolkit.
+     upscale role (§12). The *Remote worker pool* engine appears by itself the
+     first time such a worker dials in. NVIDIA needs the container toolkit.
+
+   System → Workers → **Processing engines** lists both. Profiles use the
+   first one available in that order (lower priority first), so you choose
+   whether the server's GPU or the workers go first; chapters wait while
+   none is available.
 2. Pick a model: `realesr-animevideov3` is fastest (good for colour
    webtoons), `waifu2x-cunet` cleans black & white manga well, `realcugan`
    is sharper and slower. Profile → *Preview on a chapter* shows what each
@@ -422,6 +470,12 @@ Notes:
   minutes) and another worker — or this server — picks it up. After three
   tries the chapter is failed as an infrastructure error and retried later,
   never blocklisted.
+- **Priority and limits.** Each worker has a priority (lower first): a
+  lower-priority worker gets a kind of task only when every better-placed
+  online worker that can take it is full, so a GPU box can go first and a
+  spare machine only catches the overflow. System → Workers → *Worker
+  concurrency* caps tasks per worker (overridable per worker) and across all
+  of them.
 - **Switching one off** in System → Workers stops it being given work at
   once; removing it invalidates its key.
 - `MANGARR_MODE=upscaler` still starts a worker (it says so), but the old
@@ -443,7 +497,7 @@ Notes:
 - **Read progress**: moving files to another Komga/Kavita library (or renaming
   them) can reset progress there. mangarr keeps each reader's progress and
   writes it back once the server has scanned the new files (readers need linked
-  accounts, see section 9). It never lowers progress on the server.
+  accounts, see section 10). It never lowers progress on the server.
 
 ## 14. Importing from Mihon, Tachiyomi, Suwayomi or Aidoku
 

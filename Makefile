@@ -4,13 +4,13 @@ COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 LDFLAGS := -s -w -X github.com/Asion001/mangarr/internal/version.Version=$(VERSION) -X github.com/Asion001/mangarr/internal/version.Build=$(BUILD) -X github.com/Asion001/mangarr/internal/version.Commit=$(COMMIT)
 NODE_IMAGE ?= node:24-alpine
 
-.PHONY: build build-upscaler run test test-pg test-integration vet web web-types lint docker docker-slim clean
+.PHONY: build build-worker run test test-pg test-integration vet web web-types lint docker docker-slim clean
 
 build:
 	CGO_ENABLED=0 go build -tags nodynamic -ldflags "$(LDFLAGS)" -o bin/mangarr ./cmd/mangarr
 
-build-upscaler:
-	CGO_ENABLED=0 go build -tags nodynamic -ldflags "$(LDFLAGS)" -o bin/mangarr-upscaler ./cmd/mangarr-upscaler
+build-worker:
+	CGO_ENABLED=0 go build -tags nodynamic -ldflags "$(LDFLAGS)" -o bin/mangarr-worker ./cmd/mangarr-worker
 
 run: build
 	MANGARR_DATA_DIR=./config ./bin/mangarr
