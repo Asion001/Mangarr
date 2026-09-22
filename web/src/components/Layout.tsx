@@ -32,13 +32,45 @@ import { useAccount, type Perm } from "../lib/account";
 import { useUIMode } from "../lib/uiPreferences";
 import { useToast } from "../lib/toast";
 
-type NavItem = { to: string; label: string; icon: ReactNode; need?: Perm | Perm[]; children?: { to: string; label: string }[] };
+type Section = "library" | "manage" | "admin";
+type NavItem = { to: string; label: string; icon: ReactNode; section: Section; need?: Perm | Perm[]; children?: { to: string; label: string }[]; };
+
+/** Settings pages, grouped for the navigation inside Settings. */
+const settingsGroups: { title: string; items: { to: string; label: string }[] }[] = [
+  { title: "Library", items: [{ to: "/settings/media", label: "Media management" }, { to: "/settings/profiles", label: "Profiles" }, { to: "/settings/readers", label: "Readers" }] },
+  { title: "Sources & search", items: [{ to: "/settings/sources", label: "Source modules" }, { to: "/settings/search", label: "Search & throttling" }, { to: "/settings/metadata", label: "Metadata" }, { to: "/settings/downloads", label: "Downloads" }, { to: "/settings/schedule", label: "Schedule" }] },
+  { title: "Integrations", items: [{ to: "/settings/library", label: "Library servers" }, { to: "/settings/notifications", label: "Notifications" }, { to: "/settings/reading", label: "Reading apps" }] },
+  { title: "Users & access", items: [{ to: "/settings/users", label: "Users & groups" }, { to: "/settings/sso", label: "Single sign-on" }] },
+  { title: "System", items: [{ to: "/settings/general", label: "General" }] },
+];
+
+/** SettingsNav is the navigation inside Settings: grouped links, a picker on phones. */
+function SettingsNav() {
+  const loc = useLocation();
+  const navigate = useNavigate();
+  return <>
+    <nav aria-label={t("Settings")} className="hidden w-52 shrink-0 md:block">
+      <div className="sticky top-0 flex flex-col gap-4">
+        {settingsGroups.map(g=><div key={g.title}>
+          <h2 className="px-2.5 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">{label(g.title)}</h2>
+          {g.items.map(i=><NavLink key={i.to} to={i.to} className={({isActive})=>clsx("block rounded-md px-2.5 py-1.5 text-sm",isActive?"bg-panel-2 font-medium text-fg":"text-muted hover:bg-panel-2 hover:text-fg")}>{label(i.label)}</NavLink>)}
+        </div>)}
+      </div>
+    </nav>
+    <label className="mb-4 block md:hidden">
+      <span className="sr-only">{t("Settings")}</span>
+      <select value={loc.pathname} onChange={e=>navigate(e.target.value)} className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-fg">
+        {settingsGroups.map(g=><optgroup key={g.title} label={label(g.title)}>{g.items.map(i=><option key={i.to} value={i.to}>{label(i.label)}</option>)}</optgroup>)}
+      </select>
+    </label>
+  </>;
+}
 
 export function Layout() {
   const [open, setOpen] = useState(false);
   const loc = useLocation();
   const navigate = useNavigate();
-  const { editing, canEdit, save, saving } = useUIMode();
+  const { editing, canEdit, save, saving, ready } = useUIMode();
   const toast = useToast();
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem("mangarr:nav-collapsed") === "true");
   const drawer = useRef<HTMLElement>(null);
@@ -48,11 +80,11 @@ export function Layout() {
   const routeKey = loc.pathname + loc.search;
   useEffect(() => {
     if (!management) { attemptedRoute.current = ""; return; }
-    if (can(routePermission) && !editing && !saving && attemptedRoute.current !== routeKey) {
+    if (ready && can(routePermission) && !editing && !saving && attemptedRoute.current !== routeKey) {
       attemptedRoute.current = routeKey;
-      void save({mode:"editing"}).catch(e=>toast.fromError(e));
+      void save({mode:"editing"}).then(()=>toast.info(t("Switched to Manage mode"),t("This page is for managing the library."))).catch(e=>toast.fromError(e));
     }
-  }, [routeKey, management, editing, saving, save]);
+  }, [routeKey, management, editing, saving, save, ready]);
   useEffect(() => {
     if (!open) return;
     const previous = document.activeElement as HTMLElement | null;
@@ -90,14 +122,15 @@ export function Layout() {
   const pendingRequests = requestCount?.pending ?? 0;
 
   const nav: NavItem[] = [
-    { to: "/", label: "Series", icon: <BookOpen className="size-4" /> },
-    { to: "/discover", label: "Discover", icon: <Compass className="size-4" /> },
-    { to: "/updates", label: "Updates", icon: <BellRing className="size-4" /> },
-    { to: "/add", label: "Add series", icon: <PlusCircle className="size-4" />, need: "library.manage" },
-    { to: "/requests", label: "Requests", icon: <Inbox className="size-4" />, need: ["requests.create", "requests.manage", "library.manage"] },
-    { to: "/import", label: "Import library", icon: <FileUp className="size-4" />, need: "admin" },
+    { to: "/", section: "library", label: "Series", icon: <BookOpen className="size-4" /> },
+    { to: "/discover", section: "library", label: "Discover", icon: <Compass className="size-4" /> },
+    { to: "/updates", section: "library", label: "Updates", icon: <BellRing className="size-4" /> },
+    { to: "/add", section: "manage", label: "Add series", icon: <PlusCircle className="size-4" />, need: "library.manage" },
+    { to: "/requests", section: "library", label: "Requests", icon: <Inbox className="size-4" />, need: ["requests.create", "requests.manage", "library.manage"] },
+    { to: "/import", section: "manage", label: "Import library", icon: <FileUp className="size-4" />, need: "admin" },
     {
       to: "/activity",
+      section: "manage",
       label: "Activity",
       icon: <Download className="size-4" />,
       need: "library.manage",
@@ -108,33 +141,20 @@ export function Layout() {
         { to: "/activity/blocklist", label: "Blocklist" },
       ],
     },
-    { to: "/wanted", label: "Wanted", icon: <AlertCircle className="size-4" />, need: "library.manage" },
-    { to: "/sources", label: "Sources", icon: <Compass className="size-4" />, need: "library.manage" },
-    { to: "/cleanup", label: "Cleanup", icon: <Eraser className="size-4" />, need: "admin" },
+    { to: "/wanted", section: "manage", label: "Wanted", icon: <AlertCircle className="size-4" />, need: "library.manage" },
+    { to: "/sources", section: "manage", label: "Sources", icon: <Compass className="size-4" />, need: "library.manage" },
+    { to: "/cleanup", section: "manage", label: "Cleanup", icon: <Eraser className="size-4" />, need: "admin" },
     {
       to: "/settings",
+      section: "admin",
       label: "Settings",
       icon: <Settings className="size-4" />,
       need: "admin",
-      children: [
-        { to: "/settings/media", label: "Media management" },
-        { to: "/settings/profiles", label: "Profiles" },
-        { to: "/settings/sources", label: "Source modules" },
-        { to: "/settings/search", label: "Search & throttling" },
-        { to: "/settings/metadata", label: "Metadata" },
-        { to: "/settings/library", label: "Library servers" },
-        { to: "/settings/notifications", label: "Notifications" },
-        { to: "/settings/users", label: "Users & groups" },
-        { to: "/settings/sso", label: "Single sign-on" },
-        { to: "/settings/readers", label: "Readers" },
-        { to: "/settings/reading", label: "Reading apps" },
-        { to: "/settings/downloads", label: "Downloads" },
-        { to: "/settings/schedule", label: "Schedule" },
-        { to: "/settings/general", label: "General" },
-      ],
+      children: settingsGroups.flatMap((g) => g.items),
     },
     {
       to: "/system",
+      section: "admin",
       label: "System",
       icon: <Server className="size-4" />,
       need: "admin",
@@ -148,6 +168,9 @@ export function Layout() {
       ],
     },
   ];
+
+  // Activity and System pages share a row of tabs instead of nesting in the sidebar
+  const tabsFor = nav.find((item) => (item.to === "/activity" || item.to === "/system") && loc.pathname.startsWith(item.to) && (!item.need || can(item.need)));
 
   const logout = async () => {
     await api.POST("/api/v1/auth/logout");
@@ -165,25 +188,35 @@ export function Layout() {
           else {setCollapsed(!collapsed);localStorage.setItem("mangarr:nav-collapsed",String(!collapsed));}
         }}>{mobile?<X className="size-4"/>:compact?<PanelLeftOpen className="size-4"/>:<PanelLeftClose className="size-4"/>}</button>
       </div>
-      <nav aria-label={t("Navigation")} className="min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain [&_a:focus-visible]:-outline-offset-2">
-        {nav.filter(item => (!item.need || can(item.need)) && (editing || item.to === "/" || item.to === "/discover" || item.to === "/updates" || (item.to === "/requests" && can("requests.create")))).map(item=>{
+      {canEdit&&(compact
+        ? <button disabled={saving} title={editing?t("Switch to reading mode"):t("Switch to editing mode")} aria-label={editing?t("Switch to reading mode"):t("Switch to editing mode")} onClick={()=>void switchMode()} className="mb-3 flex shrink-0 justify-center rounded-md py-2 text-muted hover:bg-panel-2 hover:text-fg disabled:opacity-50">{editing?<Pencil className="size-4"/>:<BookOpen className="size-4"/>}</button>
+        : <div role="group" aria-label={t("Mode")} className="mb-3 grid shrink-0 grid-cols-2 gap-0.5 rounded-lg border border-border bg-bg p-0.5">
+            {([["reading",t("Read")],["editing",t("Manage")]] as const).map(([mode,text])=>{
+              const on = (mode==="editing")===editing;
+              return <button key={mode} type="button" aria-pressed={on} disabled={saving} onClick={()=>{if(!on)void switchMode();}} className={clsx("rounded-md py-1.5 text-sm font-medium disabled:opacity-50",on?"bg-panel-2 text-fg shadow-sm":"text-muted hover:text-fg")}>{text}</button>;
+            })}
+          </div>)}
+      <nav aria-label={t("Navigation")} className="min-h-0 flex-1 overflow-y-auto overscroll-contain [&_a:focus-visible]:-outline-offset-2">
+        {(["library","manage","admin"] as const).map(section=>{
+          const items = nav.filter(item => item.section === section && (!item.need || can(item.need)) && (editing || item.to === "/" || item.to === "/discover" || item.to === "/updates" || (item.to === "/requests" && can("requests.create"))));
+          if (!items.length) return null;
+          const title = {library:t("Library"),manage:t("Manage"),admin:t("Admin")}[section];
+          return <div key={section} role="group" aria-label={title} className="mb-2 space-y-0.5">
+            {compact ? <div aria-hidden className="mx-2 mb-1 border-t border-border first:hidden" /> : <h2 className="px-2.5 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-muted">{title}</h2>}
+            {items.map(item=>{
           const active = item.to === "/" ? loc.pathname === "/" || loc.pathname.startsWith("/series") : loc.pathname.startsWith(item.to);
           const count = item.to === "/activity" ? queued : item.to === "/requests" && editing ? pendingRequests : item.to === "/system" ? issues : 0;
           return <div key={item.to}>
-            <NavLink to={item.children?item.children[0].to:item.to} title={label(item.label)} aria-label={label(item.label)} onClick={()=>setOpen(false)} className={clsx("flex min-h-10 items-center gap-2.5 rounded-md px-2.5 py-2 font-medium",compact&&"justify-center",active?"bg-panel-2 text-fg":"text-muted hover:bg-panel-2 hover:text-fg")}>
+            <NavLink to={item.children?item.children[0].to:item.to} title={label(item.label)} aria-label={label(item.label)} onClick={()=>setOpen(false)} className={clsx("flex items-center gap-2.5 rounded-md px-2.5 font-medium",mobile?"min-h-10 py-2":"min-h-8 py-1.5",compact&&"justify-center",active?"bg-panel-2 text-fg":"text-muted hover:bg-panel-2 hover:text-fg")}>
               <span className="shrink-0">{item.icon}</span>
               {!compact&&<><span className="flex-1">{label(item.label)}</span>{item.to==="/activity"&&queuePaused&&<span title={t("Queue paused")} aria-label={t("Queue paused")} className="flex items-center rounded-full bg-warn/15 px-1.5 py-0.5 text-warn"><Pause className="size-3"/></span>}{count>0&&<span className="rounded-full bg-primary px-1.5 text-xs font-medium text-white">{count}</span>}</>}
             </NavLink>
-            {!compact&&item.children&&active&&<div className="mb-1 ml-8 mt-0.5 flex flex-col border-l border-border">
-              {item.children.map(c=><NavLink key={c.to} to={c.to} onClick={()=>setOpen(false)} className={({isActive})=>clsx("-ml-px border-l px-3 py-1.5",isActive?"border-accent text-fg":"border-transparent text-muted hover:text-fg")}>{label(c.label)}</NavLink>)}
-            </div>}
+          </div>;
+            })}
           </div>;
         })}
       </nav>
       <footer className="mt-2 shrink-0 space-y-1 border-t border-border pt-2">
-        {canEdit&&<button disabled={saving} title={editing?t("Switch to reading mode"):t("Switch to editing mode")} aria-label={editing?t("Switch to reading mode"):t("Switch to editing mode")} onClick={()=>void switchMode()} className={clsx("flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-muted hover:bg-panel-2 disabled:opacity-50",compact&&"justify-center")}>
-          {editing?<Pencil className="size-4 shrink-0"/>:<BookOpen className="size-4 shrink-0"/>}{!compact&&<span>{editing?t("Editing mode"):t("Reading mode")}</span>}
-        </button>}
         <NavLink to="/account" title={name||t("My account")} aria-label={t("My account")} onClick={()=>setOpen(false)} className={({isActive})=>clsx("flex items-center gap-2.5 rounded-md px-2.5 py-2 font-medium",compact&&"justify-center",isActive?"bg-panel-2 text-fg":"text-muted hover:bg-panel-2 hover:text-fg")}>
           <UserRound className="size-4 shrink-0"/>{!compact&&<span className="min-w-0 flex-1 truncate">{name||t("My account")}</span>}
         </NavLink>
@@ -206,7 +239,14 @@ export function Layout() {
         <button onClick={()=>setOpen(true)} aria-label={t("Open navigation")} aria-expanded={open} className="p-2 text-muted"><Menu className="size-5"/></button>
         <span className="font-semibold">mangarr</span>
       </header>
-      <main className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 md:p-6"><Outlet/></main>
+      <main className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 md:p-6">
+        {tabsFor&&<nav aria-label={label(tabsFor.label)} className="-mt-1 mb-5 flex gap-1 overflow-x-auto border-b border-border">
+          {tabsFor.children!.map(c=><NavLink key={c.to} to={c.to} className={({isActive})=>clsx("-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium",isActive?"border-accent text-fg":"border-transparent text-muted hover:text-fg")}>{label(c.label)}</NavLink>)}
+        </nav>}
+        {loc.pathname.startsWith("/settings")&&can("admin")
+          ? <div className="md:flex md:gap-8"><SettingsNav/><div className="min-w-0 flex-1"><Outlet/></div></div>
+          : <Outlet/>}
+      </main>
     </div>
   </div>;
 }

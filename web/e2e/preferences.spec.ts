@@ -42,7 +42,7 @@ test('saves signed-in editor mode and language without response-only fields',asy
     await route.fulfill({json:{}});
   });
   await page.goto('/account');
-  await page.getByRole('button',{name:'Switch to editing mode'}).click();
+  await page.getByRole('group',{name:'Mode'}).getByRole('button',{name:'Manage',exact:true}).click();
   await page.getByRole('combobox').first().selectOption('ru');
   await expect.poll(()=>saves).toEqual([
     {locale:'auto',mode:'editing'},

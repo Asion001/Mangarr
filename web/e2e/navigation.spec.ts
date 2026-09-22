@@ -16,9 +16,11 @@ async function mock(page:Page, permissions=['admin']){
 test('reading is the default; editing and collapsed navigation persist',async({page})=>{
   await mock(page);
   await page.goto('/account');
-  await expect(page.getByRole('button',{name:'Switch to editing mode'})).toBeVisible();
+  const mode=page.getByRole('group',{name:'Mode'});
+  await expect(mode.getByRole('button',{name:'Read',exact:true})).toHaveAttribute('aria-pressed','true');
   await expect(page.getByRole('link',{name:'Settings',exact:true})).toHaveCount(0);
-  await page.getByRole('button',{name:'Switch to editing mode'}).click();
+  await mode.getByRole('button',{name:'Manage',exact:true}).click();
+  await expect(mode.getByRole('button',{name:'Manage',exact:true})).toHaveAttribute('aria-pressed','true');
   await expect(page.getByRole('link',{name:'Settings',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Collapse navigation'}).click();
   await expect(page.getByTestId('desktop-navigation')).toHaveCSS('width','64px');
@@ -29,8 +31,10 @@ test('reading is the default; editing and collapsed navigation persist',async({p
 test('a permitted management link enables editing',async({page})=>{
   await mock(page);
   await page.goto('/settings/general');
-  await expect(page.getByRole('button',{name:'Switch to reading mode'})).toBeVisible();
-  await page.getByRole('button',{name:'Switch to reading mode'}).click();
+  await expect(page.getByText('Switched to Manage mode')).toBeVisible();
+  const mode=page.getByRole('group',{name:'Mode'});
+  await expect(mode.getByRole('button',{name:'Manage',exact:true})).toHaveAttribute('aria-pressed','true');
+  await mode.getByRole('button',{name:'Read',exact:true}).click();
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole('heading',{name:'Series',exact:true})).toBeVisible();
   await expect(page.getByRole('link',{name:'Settings',exact:true})).toHaveCount(0);
@@ -40,6 +44,7 @@ test('reader permissions never expose editing',async({page})=>{
   await page.goto('/settings/general');
   await expect(page.getByText('Not available for your account')).toBeVisible();
   await expect(page.getByRole('button',{name:/Switch to .* mode/})).toHaveCount(0);
+  await expect(page.getByRole('group',{name:'Mode'})).toHaveCount(0);
 });
 test('mobile expanded menu scrolls with account visible, traps focus and closes with Escape',async({page})=>{
   await page.setViewportSize({width:390,height:600});
@@ -54,7 +59,7 @@ test('mobile expanded menu scrolls with account visible, traps focus and closes 
   const account=dialog.getByRole('link',{name:'My account'});
   await expect(account).toBeInViewport();
   await nav.evaluate(el=>el.scrollTop=el.scrollHeight);
-  await expect(dialog.getByRole('link',{name:'General',exact:true})).toBeInViewport();
+  await expect(dialog.getByRole('link',{name:'System',exact:true})).toBeInViewport();
   await expect(account).toBeInViewport();
   await dialog.getByRole('button',{name:'Close navigation'}).focus();
   await page.keyboard.press('Shift+Tab');

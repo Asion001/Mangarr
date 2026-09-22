@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, unwrap } from '../api/client';
 import { useAccount } from './account';
@@ -6,7 +6,7 @@ import { getLocale, resolveLocale, setLocale, subscribeLocale, type LocalePrefer
 
 export type UIPreferences = {locale:LocalePreference; mode:'reading'|'editing'};
 const defaults: UIPreferences = {locale:'auto',mode:'reading'};
-const Ctx = createContext<{preferences:UIPreferences; save:(p:Partial<UIPreferences>)=>Promise<void>; canEdit:boolean; saving:boolean; error:unknown}>({preferences:defaults,save:async()=>{},canEdit:false,saving:false,error:null});
+const Ctx = createContext<{preferences:UIPreferences; save:(p:Partial<UIPreferences>)=>Promise<void>; canEdit:boolean; saving:boolean; error:unknown; ready:boolean}>({preferences:defaults,save:async()=>{},canEdit:false,saving:false,error:null,ready:false});
 function readLocal(key:string): UIPreferences {
   try { const v=JSON.parse(localStorage.getItem(key) || '{}'); return {locale:['auto','en','ru','uk'].includes(v.locale)?v.locale:'auto',mode:v.mode==='editing'?'editing':'reading'}; } catch {return defaults;}
 }
@@ -15,9 +15,10 @@ export function UIPreferencesProvider({children}:{children:ReactNode}) {
   const personal = account?.kind === 'user';
   const canEdit = can(['library.manage','requests.manage']);
   const key = `mangarr:ui:${account?.kind ?? 'guest'}:${account?.id ?? 0}`;
-  const [local,setLocal] = useState(() => readLocal(key));
+  // read in the same render as the key, so a new account never shows the previous one's mode
+  const [version,setVersion] = useState(0);
+  const local = useMemo(() => readLocal(key), [key, version]);
   const qc = useQueryClient();
-  useEffect(()=>{setLocal(readLocal(key));},[key]);
   const query = useQuery({queryKey:['ui-preferences',account?.id],enabled:personal,queryFn:()=>unwrap(api.GET('/api/v1/me/ui-preferences'))});
   const preferences:UIPreferences = {...(personal ? query.data ?? defaults : local),mode:canEdit ? (personal ? query.data?.mode ?? 'reading' : local.mode) : 'reading'};
   const requested = useRef<UIPreferences|null>(null);
@@ -31,9 +32,11 @@ export function UIPreferencesProvider({children}:{children:ReactNode}) {
     if(!canEdit)next.mode='reading';
     requested.current=next;
     if(personal){const result=await unwrap(api.PUT('/api/v1/me/ui-preferences',{body:next}));qc.setQueryData(['ui-preferences',account?.id],result);}
-    else {localStorage.setItem(key,JSON.stringify(next));setLocal(next);}
+    else {localStorage.setItem(key,JSON.stringify(next));setVersion(v=>v+1);}
   }});
-  return <Ctx.Provider value={{preferences,save:async(p)=>{await mutation.mutateAsync(p)},canEdit,saving:mutation.isPending,error:query.error ?? mutation.error}}>{children}</Ctx.Provider>;
+  // ready: the stored mode is known (the account is loaded, and a user's preferences fetched)
+  const ready = !!account && (!personal || !query.isPending);
+  return <Ctx.Provider value={{preferences,save:async(p)=>{await mutation.mutateAsync(p)},canEdit,saving:mutation.isPending,error:query.error ?? mutation.error,ready}}>{children}</Ctx.Provider>;
 }
 export const useUIPreferences = () => useContext(Ctx);
 export function useUIMode(){const v=useUIPreferences();return {...v,editing:v.canEdit&&v.preferences.mode==='editing'};}
