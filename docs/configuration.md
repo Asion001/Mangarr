@@ -89,7 +89,9 @@ Read wherever the engine runs: in the server, or on a worker with the upscale ro
 | `MANGARR_DOWNLOADS_MAX_ATTEMPTS` | int | `3` | Attempts per release before it is blocklisted. |
 | `MANGARR_DOWNLOADS_DEFAULT_CHECK_INTERVAL_MINUTES` | int | `360` | Minutes between checks of ongoing series. |
 | `MANGARR_DOWNLOADS_WORKER_PLACEMENT` | string | `auto` | Where chapters are downloaded: auto, workers or local. |
-| `MANGARR_DOWNLOADS_MAX_CONCURRENT_PER_WORKER` | int | `2` | Chapters one worker downloads at a time. |
+| `MANGARR_DOWNLOADS_MAX_CONCURRENT_PER_WORKER` | int | `2` | Default tasks one worker runs at a time. |
+| `MANGARR_DOWNLOADS_MAX_WORKER_TASKS` | int | `8` | Tasks all remote workers run at once. |
+| `MANGARR_DOWNLOADS_MAX_CONCURRENT_PROCESSING` | int | `4` | Chapter files processed at once. |
 | `MANGARR_DOWNLOADS_WORKER_PREFETCH` | int | `50` | Pages a worker fetches ahead of what it has uploaded. |
 
 ### cleanup

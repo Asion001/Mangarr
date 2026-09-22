@@ -14,6 +14,7 @@ import (
 	"github.com/Asion001/mangarr/internal/model"
 	"github.com/Asion001/mangarr/internal/modules/source"
 	"github.com/Asion001/mangarr/internal/series"
+	"github.com/Asion001/mangarr/internal/settings"
 	"github.com/Asion001/mangarr/internal/testutil/fakesource"
 	"github.com/Asion001/mangarr/internal/testutil/fakeupscaler"
 	"github.com/Asion001/mangarr/internal/upscaler"
@@ -30,9 +31,17 @@ func TestWorkerUpscalesAChapter(t *testing.T) {
 	sc.PageWidth = 64
 	sc.Sources = []source.SourceInfo{{ID: "A", Name: "Source A", Lang: "en"}}
 	sc.AddManga(&fakesource.Manga{SourceID: "A", URL: "/m", Title: "Small Pages", Status: source.StatusOngoing,
-		Chapters: []fakesource.Chapter{{URL: "/c1", Name: "Chapter 1", Number: 1, Pages: 6, Uploaded: time.Now()}}})
+		Chapters: []fakesource.Chapter{
+			{URL: "/c1", Name: "Chapter 1", Number: 1, Pages: 6, Uploaded: time.Now()},
+			{URL: "/c2", Name: "Chapter 2", Number: 2, Pages: 6, Uploaded: time.Now()},
+		}})
 
 	e := newTestApp(t, dbtest.DSNs(t)["sqlite"])
+	dl, _ := e.App.Settings.Downloads(e.Ctx)
+	dl.MaxConcurrentProcessing = 2
+	if err := e.App.Settings.Set(e.Ctx, settings.KeyDownloads, dl); err != nil {
+		t.Fatal(err)
+	}
 	srv := httptest.NewServer(api.New(e.App))
 	defer srv.Close()
 
@@ -74,7 +83,7 @@ func TestWorkerUpscalesAChapter(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.runCommand(t, "RefreshSeries", map[string]any{"seriesId": ser.ID})
-	waitFor(t, 30*time.Second, "download", func() bool { return len(e.chapterFiles(t, ser.ID)) == 1 })
+	waitFor(t, 30*time.Second, "downloads", func() bool { return len(e.chapterFiles(t, ser.ID)) == 2 })
 	first := e.chapterFiles(t, ser.ID)["1"]
 	if w := pageWidths(t, filepath.Join(e.Root, "Small Pages", first.RelativePath)); w[0] != 64 || first.Upscaled {
 		t.Fatalf("the pages should arrive as they are: %v upscaled=%v", w, first.Upscaled)
@@ -86,9 +95,17 @@ func TestWorkerUpscalesAChapter(t *testing.T) {
 	if _, err := e.App.DB.NewUpdate().Model(&prof).WherePK().Exec(e.Ctx); err != nil {
 		t.Fatal(err)
 	}
+	fakeupscaler.Delay.Store(int64(500 * time.Millisecond))
+	defer fakeupscaler.Delay.Store(0)
 	e.runCommand(t, "UpscaleExisting", map[string]any{"seriesId": ser.ID})
-	waitFor(t, 60*time.Second, "the worker to upscale the chapter", func() bool {
-		return e.chapterFiles(t, ser.ID)["1"].Upscaled
+	waitFor(t, 20*time.Second, "two processing tasks leased", func() bool {
+		n, _ := e.App.DB.NewSelect().Model((*model.WorkerTask)(nil)).
+			Where("kind = ? AND state = ?", model.TaskUpscale, model.TaskLeased).Count(e.Ctx)
+		return n >= 2
+	})
+	waitFor(t, 60*time.Second, "the worker to upscale both chapters", func() bool {
+		files := e.chapterFiles(t, ser.ID)
+		return files["1"].Upscaled && files["2"].Upscaled
 	})
 
 	after := e.chapterFiles(t, ser.ID)["1"]

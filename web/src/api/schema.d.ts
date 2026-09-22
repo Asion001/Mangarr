@@ -3554,6 +3554,8 @@ export interface components {
             /** Format: int64 */
             maxConcurrentPerWorker: number;
             /** Format: int64 */
+            maxConcurrentProcessing: number;
+            /** Format: int64 */
             maxPerSource: number;
             /** Format: int64 */
             maxWorkerTasks: number;

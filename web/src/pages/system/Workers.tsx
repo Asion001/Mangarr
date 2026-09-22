@@ -102,7 +102,10 @@ export function WorkersPage() {
         {limits.isLoading && <Loading />}
         {limits.error && <ErrorBox error={limits.error} />}
         {limits.value && (
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-3">
+            <Field label={t("Chapter files processed at once")} help={t("Shared by integrated and remote processing engines.")}>
+              <Input type="number" min={1} value={limits.value.maxConcurrentProcessing} onChange={(e) => limits.patch({ maxConcurrentProcessing: Number(e.target.value) })} />
+            </Field>
             <Field label={t("Tasks across all remote workers")}>
               <Input type="number" min={1} value={limits.value.maxWorkerTasks} onChange={(e) => limits.patch({ maxWorkerTasks: Number(e.target.value) })} />
             </Field>

@@ -246,6 +246,9 @@ func (m *Manager) dispatch(ctx context.Context) {
 	if dl.MaxPerSource <= 0 {
 		dl.MaxPerSource = 1
 	}
+	if dl.MaxConcurrentProcessing <= 0 {
+		dl.MaxConcurrentProcessing = 1
+	}
 	now := time.Now()
 	if qs, _ := m.settings.QueueState(ctx); qs.Active(now) {
 		return // the whole queue is paused
@@ -276,9 +279,6 @@ func (m *Manager) dispatch(ctx context.Context) {
 	}
 	busy := len(m.running) > 0
 	for _, j := range jobs {
-		if len(m.running) >= dl.MaxConcurrent {
-			break
-		}
 		if _, ok := m.running[j.ID]; ok {
 			continue
 		}
@@ -288,8 +288,11 @@ func (m *Manager) dispatch(ctx context.Context) {
 		if (j.Kind == model.JobKindDownload && quietNow.PauseDownloads) || (j.Kind == model.JobKindReprocess && quietNow.PauseProcessing) {
 			continue // quiet hours
 		}
-		if j.Kind == model.JobKindReprocess && m.runningOfKind(model.JobKindReprocess) >= MaxReprocess {
-			continue // processing is GPU/CPU heavy: one at a time
+		if j.Kind == model.JobKindDownload && m.runningOfKind(model.JobKindDownload) >= dl.MaxConcurrent {
+			continue
+		}
+		if j.Kind == model.JobKindReprocess && m.runningOfKind(model.JobKindReprocess) >= dl.MaxConcurrentProcessing {
+			continue
 		}
 		src := srcKey(j.ModuleID, j.SourceID)
 		if j.Kind == model.JobKindReprocess {
@@ -620,9 +623,6 @@ func (m *Manager) markProcessFailed(ctx context.Context, f *model.ChapterFile, e
 
 // MaxProcessAttempts is how often the backlog retries a failing file.
 const MaxProcessAttempts = 5
-
-// MaxReprocess is the number of reprocess (upscale/re-encode) jobs run at once.
-const MaxReprocess = 1
 
 func (m *Manager) runningOfKind(kind string) int {
 	n := 0

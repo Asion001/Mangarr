@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"golang.org/x/image/draw"
 
@@ -25,6 +26,10 @@ func (Runner) Available(e upscaler.Engine) bool { return e.Name == "waifu2x-cune
 // MaxBatch is the most pages seen in one run.
 var MaxBatch atomic.Int64
 
+// Delay keeps a fake run open long enough for concurrency tests to observe
+// the next task being leased. Zero keeps ordinary tests fast.
+var Delay atomic.Int64
+
 func (Runner) Run(ctx context.Context, e upscaler.Engine, in, out string, scale, noise int) error {
 	entries, err := os.ReadDir(in)
 	if err != nil {
@@ -34,6 +39,13 @@ func (Runner) Run(ctx context.Context, e upscaler.Engine, in, out string, scale,
 		cur := MaxBatch.Load()
 		if n <= cur || MaxBatch.CompareAndSwap(cur, n) {
 			break
+		}
+	}
+	if delay := time.Duration(Delay.Load()); delay > 0 {
+		select {
+		case <-time.After(delay):
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 	}
 	for _, ent := range entries {
