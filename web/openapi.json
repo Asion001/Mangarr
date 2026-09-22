@@ -6788,6 +6788,23 @@
         },
         "type": "object"
       },
+      "Series-source-orderRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "linkIds": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "linkIds"
+        ],
+        "type": "object"
+      },
       "Series-sources-bulkRequest": {
         "additionalProperties": false,
         "properties": {
@@ -7169,6 +7186,10 @@
             "format": "date-time",
             "type": "string"
           },
+          "chapters": {
+            "format": "int64",
+            "type": "integer"
+          },
           "checkIntervalMinutes": {
             "format": "int64",
             "type": "integer"
@@ -7187,6 +7208,10 @@
           },
           "enabled": {
             "type": "boolean"
+          },
+          "files": {
+            "format": "int64",
+            "type": "integer"
           },
           "id": {
             "format": "int64",
@@ -16079,6 +16104,51 @@
         ]
       }
     },
+    "/api/v1/series/{id}/sources/order": {
+      "put": {
+        "operationId": "series-source-order",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Series-source-orderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Set the series' own source order in one step (switches it to a custom order)",
+        "tags": [
+          "Series"
+        ]
+      }
+    },
     "/api/v1/series/{id}/sources/{linkId}": {
       "delete": {
         "operationId": "series-source-unlink",
@@ -16175,6 +16245,67 @@
             "description": "Error"
           }
         },
+        "tags": [
+          "Series"
+        ]
+      }
+    },
+    "/api/v1/series/{id}/sources/{linkId}/replace": {
+      "post": {
+        "operationId": "series-source-replace",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "linkId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceLink"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesSource"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Swap a source link for another manga at the same priority (change a wrong match)",
         "tags": [
           "Series"
         ]

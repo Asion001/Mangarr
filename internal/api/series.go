@@ -297,6 +297,39 @@ func progressReaderLabel(ctx context.Context, labels map[int64]string, readerID 
 	return fallback
 }
 
+// sourceCounts fills each link's chapter count and how many chapter files
+// came from it.
+func (s *Server) sourceCounts(ctx context.Context, links []model.SeriesSource) {
+	if len(links) == 0 {
+		return
+	}
+	ids := make([]int64, len(links))
+	for i, l := range links {
+		ids[i] = l.ID
+	}
+	type row struct {
+		SeriesSourceID int64 `bun:"series_source_id"`
+		N              int   `bun:"n"`
+	}
+	var chapters, files []row
+	_ = s.app.DB.NewSelect().Model((*model.ChapterRelease)(nil)).ColumnExpr("series_source_id, COUNT(DISTINCT chapter_id) AS n").
+		Where("series_source_id IN (?)", bun.In(ids)).Where("chapter_id IS NOT NULL").Where("removed = ?", false).Group("series_source_id").Scan(ctx, &chapters)
+	_ = s.app.DB.NewSelect().TableExpr("chapter_files AS f").Join("JOIN chapter_releases AS r ON r.id = f.release_id").
+		ColumnExpr("r.series_source_id, COUNT(*) AS n").Where("r.series_source_id IN (?)", bun.In(ids)).Group("r.series_source_id").Scan(ctx, &files)
+	byID := func(rows []row) map[int64]int {
+		m := map[int64]int{}
+		for _, r := range rows {
+			m[r.SeriesSourceID] = r.N
+		}
+		return m
+	}
+	c, f := byID(chapters), byID(files)
+	for i := range links {
+		nc, nf := c[links[i].ID], f[links[i].ID]
+		links[i].Chapters, links[i].Files = &nc, &nf
+	}
+}
+
 func (s *Server) seriesResource(ctx context.Context, ser model.Series, stats map[int64]SeriesStats, detail bool) SeriesResource {
 	r := SeriesResource{Series: ser, Stats: stats[ser.ID],
 		CoverURL: seriesCoverURL(ser)}
@@ -308,6 +341,7 @@ func (s *Server) seriesResource(ctx context.Context, ser model.Series, stats map
 				r.Sources[i].EffectivePriority = &rank
 			}
 		}
+		s.sourceCounts(ctx, r.Sources)
 		r.FullPath, _ = s.app.Library.SeriesDir(ctx, &ser)
 		r.Reading = s.readingInfo(ctx, &ser, r.FullPath)
 	}
@@ -936,6 +970,32 @@ func (s *Server) registerSeries() {
 		}) (*struct{ Body *model.SeriesSource }, error) {
 			ss, err := s.app.Series.UpdateSource(ctx, in.ID, in.LinkID, in.Body)
 			return &struct{ Body *model.SeriesSource }{ss}, seriesError(err)
+		})
+	huma.Register(s.api, huma.Operation{OperationID: "series-source-replace", Method: http.MethodPost, Path: "/api/v1/series/{id}/sources/{linkId}/replace", Tags: tags,
+		Summary: "Swap a source link for another manga at the same priority (change a wrong match)"},
+		func(ctx context.Context, in *struct {
+			ID     int64 `path:"id"`
+			LinkID int64 `path:"linkId"`
+			Body   series.SourceLink
+		}) (*struct{ Body *model.SeriesSource }, error) {
+			ss, err := s.app.Series.ReplaceSource(ctx, in.ID, in.LinkID, in.Body)
+			if err != nil {
+				if strings.Contains(err.Error(), "UNIQUE") || strings.Contains(err.Error(), "duplicate") {
+					return nil, huma.Error409Conflict("source already linked")
+				}
+				return nil, seriesError(err)
+			}
+			return &struct{ Body *model.SeriesSource }{ss}, nil
+		})
+	huma.Register(s.api, huma.Operation{OperationID: "series-source-order", Method: http.MethodPut, Path: "/api/v1/series/{id}/sources/order", Tags: tags,
+		Summary: "Set the series' own source order in one step (switches it to a custom order)"},
+		func(ctx context.Context, in *struct {
+			ID   int64 `path:"id"`
+			Body struct {
+				LinkIDs []int64 `json:"linkIds" minItems:"1"`
+			}
+		}) (*struct{}, error) {
+			return nil, seriesError(s.app.Series.ReorderSources(ctx, in.ID, in.Body.LinkIDs))
 		})
 	huma.Register(s.api, huma.Operation{OperationID: "series-source-unlink", Method: http.MethodDelete, Path: "/api/v1/series/{id}/sources/{linkId}", Tags: tags},
 		func(ctx context.Context, in *struct {

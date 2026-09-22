@@ -588,6 +588,75 @@ func (s *Service) UpdateSource(ctx context.Context, seriesID, linkID int64, u So
 	return &ss, nil
 }
 
+// ReplaceSource swaps a link for another manga (a different entry at the
+// same catalog, or another catalog) at the same priority, in one
+// transaction, so there is never a moment with both or neither.
+// Downloaded files stay; their releases go with the old link.
+func (s *Service) ReplaceSource(ctx context.Context, seriesID, linkID int64, l SourceLink) (*model.SeriesSource, error) {
+	ser, err := s.Get(ctx, seriesID)
+	if err != nil {
+		return nil, err
+	}
+	var ss *model.SeriesSource
+	err = s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		var old model.SeriesSource
+		if err := tx.NewSelect().Model(&old).Where("id = ? AND series_id = ?", linkID, seriesID).Scan(ctx); err != nil {
+			return ErrNotFound
+		}
+		if _, err := tx.NewDelete().Model((*model.SeriesSource)(nil)).Where("id = ?", old.ID).Exec(ctx); err != nil {
+			return err
+		}
+		var err error
+		ss, err = s.insertLink(ctx, tx, ser, l, old.Priority)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	_, _ = s.queue.Push(ctx, "RefreshSeries", map[string]any{"seriesId": seriesID}, "source-linked")
+	s.bus.Changed("series", "updated", seriesID)
+	return ss, nil
+}
+
+// ReorderSources sets a series' own source order from linkIDs (first =
+// preferred) in one step, switching the series to a custom order.
+func (s *Service) ReorderSources(ctx context.Context, seriesID int64, linkIDs []int64) error {
+	var links []model.SeriesSource
+	if err := s.db.NewSelect().Model(&links).Column("id").Where("series_id = ?", seriesID).Scan(ctx); err != nil {
+		return err
+	}
+	have := map[int64]bool{}
+	for _, l := range links {
+		have[l.ID] = true
+	}
+	seen := map[int64]bool{}
+	for _, id := range linkIDs {
+		if !have[id] || seen[id] {
+			return ValidationError{"the order must list each of the series' sources once"}
+		}
+		seen[id] = true
+	}
+	if len(seen) != len(have) {
+		return ValidationError{"the order must list each of the series' sources once"}
+	}
+	err := s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		if _, err := tx.NewUpdate().Model((*model.Series)(nil)).Set("source_priority_mode = ?", "custom").Where("id = ?", seriesID).Exec(ctx); err != nil {
+			return err
+		}
+		for i, id := range linkIDs {
+			if _, err := tx.NewUpdate().Model((*model.SeriesSource)(nil)).Set("priority = ?", i).Where("id = ?", id).Exec(ctx); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	s.bus.Changed("series", "updated", seriesID)
+	return nil
+}
+
 func (s *Service) UnlinkSource(ctx context.Context, seriesID, linkID int64) error {
 	res, err := s.db.NewDelete().Model((*model.SeriesSource)(nil)).Where("id = ? AND series_id = ?", linkID, seriesID).Exec(ctx)
 	if err != nil {

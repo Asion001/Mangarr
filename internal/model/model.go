@@ -400,6 +400,10 @@ type SeriesSource struct {
 	LastError            string     `bun:"last_error,notnull" json:"lastError"`
 	CreatedAt            time.Time  `bun:"created_at,notnull" json:"createdAt"`
 	EffectivePriority    *int       `bun:"-" json:"effectivePriority,omitempty"`
+	// Chapters and Files are filled in series details: the chapters this
+	// link offers, and the chapter files that were downloaded from it.
+	Chapters *int `bun:"-" json:"chapters,omitempty"`
+	Files    *int `bun:"-" json:"files,omitempty"`
 }
 
 // ---- Chapters ---------------------------------------------------------------

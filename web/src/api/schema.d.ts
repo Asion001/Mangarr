@@ -1991,6 +1991,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/series/{id}/sources/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set the series' own source order in one step (switches it to a custom order) */
+        put: operations["series-source-order"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/series/{id}/sources/{linkId}": {
         parameters: {
             query?: never;
@@ -2002,6 +2019,23 @@ export interface paths {
         put: operations["series-source-update"];
         post?: never;
         delete: operations["series-source-unlink"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/{id}/sources/{linkId}/replace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Swap a source link for another manga at the same priority (change a wrong match) */
+        post: operations["series-source-replace"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -5040,6 +5074,9 @@ export interface components {
         "Series-searchRequest": {
             chapterIds?: number[];
         };
+        "Series-source-orderRequest": {
+            linkIds: number[];
+        };
         "Series-sources-bulkRequest": {
             /** @enum {string} */
             action: "add" | "remove" | "enable" | "disable";
@@ -5153,6 +5190,8 @@ export interface components {
             /** Format: date-time */
             backoffUntil?: string;
             /** Format: int64 */
+            chapters?: number;
+            /** Format: int64 */
             checkIntervalMinutes: number;
             /** Format: int64 */
             consecutiveFailures: number;
@@ -5161,6 +5200,8 @@ export interface components {
             /** Format: int64 */
             effectivePriority?: number;
             enabled: boolean;
+            /** Format: int64 */
+            files?: number;
             /** Format: int64 */
             id: number;
             lang: string;
@@ -10642,6 +10683,39 @@ export interface operations {
             };
         };
     };
+    "series-source-order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Series-source-orderRequest"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "series-source-update": {
         parameters: {
             query?: never;
@@ -10696,6 +10770,42 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "series-source-replace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                linkId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SourceLink"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesSource"];
+                };
             };
             /** @description Error */
             default: {

@@ -265,7 +265,7 @@ export function CatalogResults({
 type QuickCandidate = S["QuickCandidate"];
 
 /** HeroMatch shows the confident match of a quick search. */
-export function HeroMatch({ c, selected, onUse }: { c: QuickCandidate; selected: boolean; onUse: () => void }) {
+export function HeroMatch({ c, selected, linked, onUse }: { c: QuickCandidate; selected: boolean; linked?: boolean; onUse: () => void }) {
   const g: PickGroup = { moduleId: c.moduleId, sourceId: c.sourceId, sourceName: c.sourceName, lang: c.lang };
   const ch = c.chapters;
   return (
@@ -290,8 +290,8 @@ export function HeroMatch({ c, selected, onUse }: { c: QuickCandidate; selected:
         </div>
         {ch?.description && <p className="line-clamp-3 text-sm text-fg/80">{ch.description}</p>}
         <div className="mt-auto flex flex-wrap gap-2 pt-2">
-          <Button variant="primary" icon={<Check className="size-4" />} onClick={onUse} disabled={selected}>
-            {selected ? tr("Selected") : tr("Use this")}
+          <Button variant="primary" icon={<Check className="size-4" />} onClick={onUse} disabled={selected || linked}>
+            {linked ? tr("Already linked to this series") : selected ? tr("Selected") : tr("Use this")}
           </Button>
         </div>
       </div>
@@ -338,6 +338,7 @@ export function SourceSearch({
   setMore,
   selected,
   linked,
+  excludeLinked = true,
   rootFolderId,
   onPick,
 }: {
@@ -353,14 +354,16 @@ export function SourceSearch({
   more: boolean;
   setMore: (v: boolean) => void;
   selected: Picked[];
-  /** linked are the series' current links: the quick match skips their catalogs. */
+  /** linked are the series' current links: marked in the results, and the quick match skips their catalogs. */
   linked?: Linked[];
+  /** excludeLinked false still searches the linked catalogs (changing a match at the same site). */
+  excludeLinked?: boolean;
   rootFolderId?: number;
   onPick: (m: SourceManga, g: PickGroup, only?: boolean) => void;
 }) {
   const { targets, gen, settings } = useCatalogTargets(scope, lang, keys);
   const quickEnabled = (settings?.quickSearch.enabled ?? true) && !more;
-  const exclude = [...new Set((linked ?? []).map((l) => catKey({ moduleId: l.moduleId, id: l.sourceId })))];
+  const exclude = excludeLinked ? [...new Set((linked ?? []).map((l) => catKey({ moduleId: l.moduleId, id: l.sourceId })))] : [];
   const linkedKeys = new Set((linked ?? []).map((l) => `${l.moduleId}:${l.sourceId}:${l.url}`));
   const quick = useQuickSearch({ query, titles, scope, keys, lang, rootFolderId, exclude, enabled: quickEnabled, gen });
   const sel = new Set(selected.map(pickKey));
@@ -380,6 +383,7 @@ export function SourceSearch({
           <HeroMatch
             c={match}
             selected={sel.has(pickKey({ group: { ...match }, manga: match.manga }))}
+            linked={linkedKeys.has(pickKey({ group: { ...match }, manga: match.manga }))}
             onUse={() => onPick(match.manga, { moduleId: match.moduleId, sourceId: match.sourceId, sourceName: match.sourceName, lang: match.lang }, true)}
           />
           <button type="button" className="mb-2 inline-flex items-center gap-1 text-sm text-accent-2 hover:underline" onClick={() => setMore(true)}>
@@ -405,6 +409,8 @@ export function SourceSearchModal({
   title,
   titles,
   linked,
+  initialKeys,
+  excludeLinked,
   onPick,
   onClose,
 }: {
@@ -414,13 +420,16 @@ export function SourceSearchModal({
   title: string;
   titles?: string[];
   linked?: Linked[];
+  /** initialKeys limits the search to these catalogs (moduleId:sourceId). */
+  initialKeys?: string[];
+  excludeLinked?: boolean;
   onPick: (m: SourceManga, g: PickGroup) => void;
   onClose: () => void;
 }) {
   const [query, setQuery] = useState(initialQuery);
-  const [scope, setScope] = useState<Scope>("active");
+  const [scope, setScope] = useState<Scope>(initialKeys?.length ? "custom" : "active");
   const [lang, setLang] = useState(initialLang);
-  const [keys, setKeys] = useState<string[]>([]);
+  const [keys, setKeys] = useState<string[]>(initialKeys ?? []);
   const [more, setMore] = useState(false);
   return (
     <Modal open onClose={onClose} title={title} size="xl">
@@ -438,6 +447,7 @@ export function SourceSearchModal({
         setMore={setMore}
         selected={[]}
         linked={linked}
+        excludeLinked={excludeLinked}
         rootFolderId={rootFolderId}
         onPick={(m, g) => onPick(m, g)}
       />

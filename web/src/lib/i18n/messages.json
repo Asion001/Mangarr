@@ -5342,5 +5342,101 @@
   "Select all {count} matching": {
     "ru": "Выбрать все подходящие ({count})",
     "uk": "Вибрати всі відповідні ({count})"
+  },
+  "This series now keeps its own source order": {
+    "ru": "Теперь у серии свой порядок источников",
+    "uk": "Тепер у серії власний порядок джерел"
+  },
+  "Switch back to Library default any time.": {
+    "ru": "Вернуть порядок библиотеки можно в любой момент.",
+    "uk": "Повернути порядок бібліотеки можна будь-коли."
+  },
+  "Linked {source}": {
+    "ru": "{source} подключён",
+    "uk": "{source} підключено"
+  },
+  "{source} now points to “{title}”": {
+    "ru": "{source} теперь ведёт на «{title}»",
+    "uk": "{source} тепер веде на «{title}»"
+  },
+  "Checking it for chapters…": {
+    "ru": "Проверяем главы…",
+    "uk": "Перевіряємо розділи…"
+  },
+  "{count} failures": {
+    "ru": "ошибок: {count}",
+    "uk": "помилок: {count}"
+  },
+  "Source order": {
+    "ru": "Порядок источников",
+    "uk": "Порядок джерел"
+  },
+  "Library default": {
+    "ru": "Как в библиотеке",
+    "uk": "Як у бібліотеці"
+  },
+  "Custom": {
+    "ru": "Свой",
+    "uk": "Власний"
+  },
+  "Add source": {
+    "ru": "Добавить источник",
+    "uk": "Додати джерело"
+  },
+  "Order follows this library, then the series language, then global catalog priority. Moving a source gives this series its own order.": {
+    "ru": "Порядок берётся из библиотеки, затем языка серии, затем общего приоритета каталогов. Если переместить источник, у серии появится свой порядок.",
+    "uk": "Порядок береться з бібліотеки, потім мови серії, потім загального пріоритету каталогів. Якщо перемістити джерело, серія матиме власний порядок."
+  },
+  "No source is linked. Add one to receive chapters.": {
+    "ru": "Источник не подключён. Добавьте его, чтобы получать главы.",
+    "uk": "Джерело не підключено. Додайте його, щоб отримувати розділи."
+  },
+  "Primary": {
+    "ru": "Основной",
+    "uk": "Основне"
+  },
+  "{count} chapters": {
+    "ru": "глав: {count}",
+    "uk": "розділів: {count}"
+  },
+  "{count} of your files": {
+    "ru": "ваших файлов: {count}",
+    "uk": "ваших файлів: {count}"
+  },
+  "checked {when}": {
+    "ru": "проверено {when}",
+    "uk": "перевірено {when}"
+  },
+  "next {when}": {
+    "ru": "следующая {when}",
+    "uk": "наступна {when}"
+  },
+  "More for {source}": {
+    "ru": "Ещё для {source}",
+    "uk": "Ще для {source}"
+  },
+  "Change match…": {
+    "ru": "Сменить совпадение…",
+    "uk": "Змінити збіг…"
+  },
+  "Replace with another source…": {
+    "ru": "Заменить другим источником…",
+    "uk": "Замінити іншим джерелом…"
+  },
+  "Open on site": {
+    "ru": "Открыть на сайте",
+    "uk": "Відкрити на сайті"
+  },
+  "Unlink…": {
+    "ru": "Отключить…",
+    "uk": "Відключити…"
+  },
+  "Change the {source} match": {
+    "ru": "Сменить совпадение на {source}",
+    "uk": "Змінити збіг на {source}"
+  },
+  "Replace {source}": {
+    "ru": "Заменить {source}",
+    "uk": "Замінити {source}"
   }
 }
