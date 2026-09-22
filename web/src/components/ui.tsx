@@ -236,7 +236,7 @@ export type MenuItem = { label: string; onSelect: () => void; icon?: ReactNode; 
  * Menu is a button that opens a list of actions (role="menu"): arrow keys
  * move between items, Escape or a click outside closes it.
  */
-export function Menu({ label, icon, items, align = "left" }: { label: ReactNode; icon?: ReactNode; items: MenuItem[]; align?: "left" | "right" }) {
+export function Menu({ label, icon, items, align = "left", up = false }: { label: ReactNode; icon?: ReactNode; items: MenuItem[]; align?: "left" | "right"; /** up opens above the button (for bars at the bottom) */ up?: boolean }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -273,7 +273,7 @@ export function Menu({ label, icon, items, align = "left" }: { label: ReactNode;
         <ChevronDown className="size-3.5" />
       </Button>
       {open && (
-        <div role="menu" className={clsx("absolute z-30 mt-1 w-max min-w-60 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-panel-2 p-1 shadow-xl", align === "right" ? "right-0" : "left-0")}>
+        <div role="menu" className={clsx("absolute z-30 w-max max-h-[60vh] overflow-y-auto", up ? "bottom-full mb-1" : "mt-1", "min-w-60 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-panel-2 p-1 shadow-xl", align === "right" ? "right-0" : "left-0")}>
           {shown.map((it, i) =>
             "section" in it && !it.section ? (
               <div key={i} role="separator" className="my-1 border-t border-border" />

@@ -2,8 +2,8 @@ import { useUIMode } from "../../lib/uiPreferences";
 import { t } from "../../lib/i18n/core";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
-import { CheckSquare, LayoutGrid, List, PlusCircle, RefreshCw, Search } from "lucide-react";
-import { apiUrl, type Series } from "../../api/client";
+import { Check, CheckSquare, LayoutGrid, List, PlusCircle, RefreshCw, Search } from "lucide-react";
+import { api, apiUrl, unwrap, type Series } from "../../api/client";
 import { usePushCommand, useRootFolders, useSeriesSearch } from "../../api/queries";
 import { Cover } from "../../components/Cover";
 import { Badge, Button, EmptyState, ErrorBox, Input, Loading, PageHeader, Progress, Select, Table, Td, Th } from "../../components/ui";
@@ -13,6 +13,7 @@ import { MassEditBar } from "./Organize";
 import { ContinueReading } from "./ContinueReading";
 import { SetupChecklist } from "./SetupChecklist";
 import { useAccount } from "../../lib/account";
+import { useToast } from "../../lib/toast";
 
 type Filter = "all" | "monitored" | "missing" | "ongoing" | "completed" | "unread" | "reading" | "following";
 type Sort = "title" | "added" | "latest" | "missing" | "size" | "read";
@@ -42,6 +43,7 @@ export function SeriesIndex() {
   const { data: roots } = useRootFolders();
   const { editing } = useUIMode();
   const account = useAccount();
+  const toast = useToast();
   const manage = account.can("library.manage") && editing;
   const push = usePushCommand();
   const [q, setQ] = useQueryParam("q");
@@ -73,15 +75,39 @@ export function SeriesIndex() {
     if (page > last) setPage(String(last));
   }, [data?.total, page, pageSize, setPage]);
   const [selecting, setSelecting] = useState(false);
-  const [selected, setSelected] = useState<Set<number>>(new Set());
-  useEffect(()=>{if(!manage){setSelecting(false);setSelected(new Set());}},[manage]);
-  const toggle = (id: number) =>
+  // selected maps id to title, so the bar can list series from other pages
+  const [selected, setSelected] = useState<Map<number, string>>(new Map());
+  const [lastClicked, setLastClicked] = useState<number | null>(null);
+  const [selectingAll, setSelectingAll] = useState(false);
+  useEffect(()=>{if(!manage){setSelecting(false);setSelected(new Map());}},[manage]);
+  /** toggle flips one series; shift+click sets the whole range from the last click the same way. */
+  const toggle = (idx: number, shift = false) => {
+    const s = list[idx];
     setSelected((cur) => {
-      const n = new Set(cur);
-      if (n.has(id)) n.delete(id);
-      else n.add(id);
+      const n = new Map(cur);
+      const on = !cur.has(s.id);
+      const [a, b] = shift && lastClicked !== null ? [Math.min(lastClicked, idx), Math.max(lastClicked, idx)] : [idx, idx];
+      for (let i = a; i <= b; i++) on ? n.set(list[i].id, list[i].title) : n.delete(list[i].id);
       return n;
     });
+    setLastClicked(idx);
+  };
+  const selectAllMatching = async () => {
+    setSelectingAll(true);
+    try {
+      const all = new Map<number, string>();
+      for (let p = 1; ; p++) {
+        const r = await unwrap(api.GET("/api/v1/series/search", { params: { query: { q: q || undefined, filter, sort, rootFolderId, language: language || undefined, page: p, pageSize: 100 } } }));
+        r.items.forEach((s) => all.set(s.id, s.title));
+        if (r.items.length < 100 || all.size >= r.total) break;
+      }
+      setSelected(all);
+    } catch (e) {
+      toast.fromError(e);
+    } finally {
+      setSelectingAll(false);
+    }
+  };
   const [view, setView] = useState<"posters" | "table">(() => (localStorage.getItem("seriesView") as "posters" | "table") || "posters");
 
   const list = data?.items ?? [];
@@ -151,11 +177,11 @@ export function SeriesIndex() {
               size="sm"
               variant={selecting ? "primary" : "secondary"}
               icon={<CheckSquare className="size-3.5" />}
-              onClick={() => (setSelecting(!selecting), setSelected(new Set()))}
+              onClick={() => (setSelecting(!selecting), setSelected(new Map()))}
             >{t("Select")}</Button>
           )}
           {selecting && (
-            <Button size="sm" onClick={() => setSelected(new Set(list.map((s) => s.id)))}>{t("All shown")}</Button>
+            <Button size="sm" onClick={() => setSelected((cur) => new Map([...cur, ...list.map((s) => [s.id, s.title] as [number, string])]))}>{t("All shown")}</Button>
           )}
           <Button variant={view === "posters" ? "primary" : "secondary"} size="sm" onClick={() => setViewPersist("posters")} icon={<LayoutGrid className="size-3.5" />} />
           <Button variant={view === "table" ? "primary" : "secondary"} size="sm" onClick={() => setViewPersist("table")} icon={<List className="size-3.5" />} />
@@ -164,6 +190,12 @@ export function SeriesIndex() {
       {isFetching && data && <div className="mb-2 h-0.5 overflow-hidden rounded bg-panel-2"><div className="h-full w-1/3 animate-pulse rounded bg-accent" /></div>}
       {isLoading && <Loading />}
       {error && <ErrorBox error={error} />}
+      {selecting && data && list.length > 0 && list.every((s) => selected.has(s.id)) && data.total > selected.size && (
+        <div role="status" className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-panel px-4 py-2 text-sm">
+          <span>{t("All {count} on this page are selected.", { count: list.length })}</span>
+          <Button size="sm" variant="ghost" loading={selectingAll} onClick={() => void selectAllMatching()}>{t("Select all {count} matching", { count: data.total })}</Button>
+        </div>
+      )}
       {data && data.total === 0 && !q && filter === "all" && !rootFolderId && !language && (
         account.isAdmin ? (
           <SetupChecklist />
@@ -182,23 +214,31 @@ export function SeriesIndex() {
       )}
       {view === "posters" ? (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-4">
-          {list.map((s) => {
+          {list.map((s, idx) => {
             const p = progressOf(s);
+            const on = selecting && selected.has(s.id);
             return (
               <Link
                 key={s.id}
                 to={`/series/${s.id}`}
+                role={selecting ? "checkbox" : undefined}
+                aria-checked={selecting ? on : undefined}
                 onClick={(e) => {
                   if (selecting) {
                     e.preventDefault();
-                    toggle(s.id);
+                    toggle(idx, e.shiftKey);
                   }
                 }}
-                className={`group flex flex-col gap-2 ${selecting && selected.has(s.id) ? "rounded-md ring-2 ring-accent ring-offset-2 ring-offset-bg" : ""}`}
+                className={`group flex flex-col gap-2 ${on ? "rounded-md ring-2 ring-accent ring-offset-2 ring-offset-bg" : ""}`}
               >
                 <div className="relative">
+                  {selecting && (
+                    <span aria-hidden className={`absolute left-1.5 top-1.5 z-10 flex size-6 items-center justify-center rounded-md border-2 ${on ? "border-primary bg-primary text-white" : "border-white/80 bg-black/50"}`}>
+                      {on && <Check className="size-4" />}
+                    </span>
+                  )}
                   <Cover src={apiUrl(s.coverUrl)} alt={s.title} className="aspect-[2/3] w-full ring-accent/60 transition group-hover:ring-2" />
-                  {manage && !s.monitored && <div className="absolute left-1.5 top-1.5"><Badge>{t("unmonitored")}</Badge></div>}
+                  {manage && !s.monitored && <div className={`absolute top-1.5 ${selecting ? "left-9" : "left-1.5"}`}><Badge>{t("unmonitored")}</Badge></div>}
                   {manage && s.stats.missingCount > 0 && (
                     <div className="absolute right-1.5 top-1.5">
                       <Badge tone="warn">{s.stats.missingCount}{" " + t("missing")}</Badge>
@@ -234,11 +274,11 @@ export function SeriesIndex() {
             </tr>
           </thead>
           <tbody>
-            {list.map((s) => (
+            {list.map((s, idx) => (
               <tr key={s.id} className="hover:bg-panel-2/60">
                 {selecting && (
                   <Td className="w-8">
-                    <input type="checkbox" aria-label={`Select ${s.title}`} checked={selected.has(s.id)} onChange={() => toggle(s.id)} />
+                    <input type="checkbox" aria-label={`Select ${s.title}`} checked={selected.has(s.id)} onChange={() => undefined} onClick={(e) => toggle(idx, e.shiftKey)} />
                   </Td>
                 )}
                 <Td>
@@ -285,7 +325,11 @@ export function SeriesIndex() {
       {selecting && selected.size > 0 && (
         <>
           <div className="h-20" />
-          <MassEditBar ids={[...selected]} onClear={() => setSelected(new Set())} />
+          <MassEditBar
+            selected={selected}
+            onRemove={(id) => setSelected((cur) => { const n = new Map(cur); n.delete(id); return n; })}
+            onClear={() => setSelected(new Map())}
+          />
         </>
       )}
     </>

@@ -93,22 +93,41 @@ func (a *App) wire(ctx context.Context) error {
 			r.Progress("%d links moved", moved)
 			return nil
 		}})
-	a.Queue.Register(jobs.Definition{Name: "RefreshSeries", Description: "Refresh all sources of one series",
+	a.Queue.Register(jobs.Definition{Name: "RefreshSeries", Description: "Refresh all sources of one series (seriesId) or several (seriesIds)",
 		Handler: func(ctx context.Context, r *jobs.Run) error {
 			var body struct {
-				SeriesID int64 `json:"seriesId"`
+				SeriesID  int64   `json:"seriesId"`
+				SeriesIDs []int64 `json:"seriesIds"`
 			}
-			if err := r.Body(&body); err != nil || body.SeriesID == 0 {
+			if err := r.Body(&body); err != nil {
+				return err
+			}
+			ids := body.SeriesIDs
+			if body.SeriesID != 0 {
+				ids = append([]int64{body.SeriesID}, ids...)
+			}
+			if len(ids) == 0 {
 				return fmt.Errorf("seriesId required")
 			}
-			res, err := a.Refresher.SyncSeries(ctx, body.SeriesID, false)
-			r.Progress("%d new chapters, %d grabbed", res.NewChapters, res.Grabbed)
-			return err
+			newChapters, grabbed := 0, 0
+			for i, id := range ids {
+				res, err := a.Refresher.SyncSeries(ctx, id, false)
+				if err != nil {
+					return err
+				}
+				newChapters, grabbed = newChapters+res.NewChapters, grabbed+res.Grabbed
+				if len(ids) > 1 {
+					r.Progress("%d of %d series", i+1, len(ids))
+				}
+			}
+			r.Progress("%d new chapters, %d grabbed", newChapters, grabbed)
+			return nil
 		}})
-	a.Queue.Register(jobs.Definition{Name: "SearchMissing", Description: "Grab missing monitored chapters (optionally for one series or chapters)",
+	a.Queue.Register(jobs.Definition{Name: "SearchMissing", Description: "Grab missing monitored chapters (optionally for one series, several series or chapters)",
 		Handler: func(ctx context.Context, r *jobs.Run) error {
 			var body struct {
 				SeriesID   int64   `json:"seriesId"`
+				SeriesIDs  []int64 `json:"seriesIds"`
 				ChapterIDs []int64 `json:"chapterIds"`
 				Explicit   bool    `json:"explicit"`
 			}
@@ -116,7 +135,9 @@ func (a *App) wire(ctx context.Context) error {
 				return err
 			}
 			ids := []int64{body.SeriesID}
-			if body.SeriesID == 0 {
+			if len(body.SeriesIDs) > 0 {
+				ids = body.SeriesIDs
+			} else if body.SeriesID == 0 {
 				if err := a.DB.NewSelect().Model((*model.Series)(nil)).Column("id").Where("monitored = ?", true).Scan(ctx, &ids); err != nil {
 					return err
 				}

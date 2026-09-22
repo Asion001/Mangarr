@@ -5238,5 +5238,109 @@
   "Users & access": {
     "ru": "Пользователи и доступ",
     "uk": "Користувачі та доступ"
+  },
+  "{count} series updated": {
+    "ru": "Обновлено серий: {count}",
+    "uk": "Оновлено серій: {count}"
+  },
+  "{count} moving in the background": {
+    "ru": "Перемещается в фоне: {count}",
+    "uk": "Переміщується у фоні: {count}"
+  },
+  "{count} series deleted": {
+    "ru": "Удалено серий: {count}",
+    "uk": "Видалено серій: {count}"
+  },
+  "Stopped after {count} series": {
+    "ru": "Остановлено после {count} серий",
+    "uk": "Зупинено після {count} серій"
+  },
+  "Selection": {
+    "ru": "Выбор",
+    "uk": "Вибір"
+  },
+  "{count} selected": {
+    "ru": "Выбрано: {count}",
+    "uk": "Вибрано: {count}"
+  },
+  "Selected series": {
+    "ru": "Выбранные серии",
+    "uk": "Вибрані серії"
+  },
+  "Remove {title} from the selection": {
+    "ru": "Убрать {title} из выбора",
+    "uk": "Прибрати {title} з вибору"
+  },
+  "Monitor {count} series?": {
+    "ru": "Отслеживать серии ({count})?",
+    "uk": "Відстежувати серії ({count})?"
+  },
+  "Stop monitoring {count} series?": {
+    "ru": "Перестать отслеживать серии ({count})?",
+    "uk": "Припинити відстежувати серії ({count})?"
+  },
+  "Download new chapters": {
+    "ru": "Скачивать новые главы",
+    "uk": "Завантажувати нові розділи"
+  },
+  "Don’t monitor new chapters": {
+    "ru": "Не отслеживать новые главы",
+    "uk": "Не відстежувати нові розділи"
+  },
+  "Download new chapters of {count} series?": {
+    "ru": "Скачивать новые главы серий ({count})?",
+    "uk": "Завантажувати нові розділи серій ({count})?"
+  },
+  "Stop monitoring new chapters of {count} series?": {
+    "ru": "Перестать отслеживать новые главы серий ({count})?",
+    "uk": "Припинити відстежувати нові розділи серій ({count})?"
+  },
+  "Set profile {name} on {count} series?": {
+    "ru": "Назначить профиль {name} сериям ({count})?",
+    "uk": "Призначити профіль {name} серіям ({count})?"
+  },
+  "Add tag {tag} to {count} series?": {
+    "ru": "Добавить тег {tag} сериям ({count})?",
+    "uk": "Додати тег {tag} серіям ({count})?"
+  },
+  "Remove tag {tag} from {count} series?": {
+    "ru": "Убрать тег {tag} у серий ({count})?",
+    "uk": "Прибрати тег {tag} у серій ({count})?"
+  },
+  "No tags yet — add them in Edit": {
+    "ru": "Тегов пока нет — добавьте их в редактировании",
+    "uk": "Тегів ще немає — додайте їх у редагуванні"
+  },
+  "More": {
+    "ru": "Ещё",
+    "uk": "Ще"
+  },
+  "Searching missing chapters of {count} series": {
+    "ru": "Поиск недостающих глав в сериях ({count})",
+    "uk": "Пошук відсутніх розділів у серіях ({count})"
+  },
+  "Refreshing {count} series": {
+    "ru": "Обновление серий ({count})",
+    "uk": "Оновлення серій ({count})"
+  },
+  "Delete {count} series": {
+    "ru": "Удалить серии ({count})",
+    "uk": "Видалити серії ({count})"
+  },
+  "They leave the library and stop downloading. Read progress in Komga/Kavita is not touched.": {
+    "ru": "Они уйдут из библиотеки и перестанут скачиваться. Прогресс в Komga/Kavita не затрагивается.",
+    "uk": "Вони зникнуть з бібліотеки й перестануть завантажуватися. Прогрес у Komga/Kavita не зачіпається."
+  },
+  "Also delete their files from disk": {
+    "ru": "Также удалить их файлы с диска",
+    "uk": "Також видалити їхні файли з диска"
+  },
+  "All {count} on this page are selected.": {
+    "ru": "Выбраны все {count} на этой странице.",
+    "uk": "Вибрано всі {count} на цій сторінці."
+  },
+  "Select all {count} matching": {
+    "ru": "Выбрать все подходящие ({count})",
+    "uk": "Вибрати всі відповідні ({count})"
   }
 }

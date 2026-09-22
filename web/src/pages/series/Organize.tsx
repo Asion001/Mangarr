@@ -1,5 +1,6 @@
 import { t as tr, t } from "../../lib/i18n/core";
 import { useState } from "react";
+import { ChevronUp, X } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap } from "../../api/client";
 import { useProfiles, useRootFolders, useTags } from "../../api/queries";
@@ -8,6 +9,7 @@ import {
   ErrorBox,
   Field,
   Loading,
+  Menu,
   Modal,
   Select,
   Switch,
@@ -109,6 +111,7 @@ export function RenameModal({
 
 type Editor = {
   monitored?: boolean;
+  monitorNew?: "all" | "none";
   profileId?: number;
   rootFolderId?: number;
   moveFiles?: boolean;
@@ -116,12 +119,18 @@ type Editor = {
   tagMode?: "add" | "remove" | "replace";
 };
 
-/** MassEditBar edits the selected series. */
+/**
+ * MassEditBar edits the selected series. Picking a value from a menu only
+ * stages the change; it runs when you press Apply.
+ */
 export function MassEditBar({
-  ids,
+  selected,
+  onRemove,
   onClear,
 }: {
-  ids: number[];
+  /** selected maps series id to title. */
+  selected: Map<number, string>;
+  onRemove: (id: number) => void;
   onClear: () => void;
 }) {
   const qc = useQueryClient();
@@ -129,82 +138,155 @@ export function MassEditBar({
   const { data: profiles } = useProfiles();
   const { data: roots } = useRootFolders();
   const { data: tags } = useTags();
+  const ids = [...selected.keys()];
+  const count = ids.length;
   const [moving, setMoving] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [sourcing, setSourcing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteFiles, setDeleteFiles] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [listOpen, setListOpen] = useState(false);
+  const [pending, setPending] = useState<{ text: string; body: Editor } | null>(null);
   const [rootId, setRootId] = useState(0);
   const [moveFiles, setMoveFiles] = useState(true);
   const edit = async (body: Editor, done?: string) => {
+    setBusy(true);
     try {
-      const r = await unwrap(
-        api.POST("/api/v1/series/editor", {
-          body: { seriesIds: ids, ...body },
-        }),
-      );
+      const r = await unwrap(api.POST("/api/v1/series/editor", { body: { seriesIds: ids, ...body } }));
       qc.invalidateQueries({ queryKey: ["series"] });
-      toast.success(
-        done ?? `${r.updated} series updated`,
-        r.moves ? `${r.moves} moving in the background` : undefined,
-      );
+      toast.success(done ?? t("{count} series updated", { count: r.updated }), r.moves ? t("{count} moving in the background", { count: r.moves }) : undefined);
+      setPending(null);
+    } catch (e) {
+      toast.fromError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const command = async (name: "SearchMissing" | "RefreshSeries", label: string) => {
+    try {
+      await unwrap(api.POST("/api/v1/commands", { body: { name, body: { seriesIds: ids } } }));
+      toast.info(label);
     } catch (e) {
       toast.fromError(e);
     }
   };
+  const removeAll = async () => {
+    setBusy(true);
+    let done = 0;
+    try {
+      for (const id of ids) {
+        await unwrap(api.DELETE("/api/v1/series/{id}", { params: { path: { id }, query: { deleteFiles } } }));
+        done++;
+      }
+      toast.success(t("{count} series deleted", { count: done }));
+      onClear();
+      setDeleting(false);
+    } catch (e) {
+      toast.fromError(e, t("Stopped after {count} series", { count: done }));
+    } finally {
+      qc.invalidateQueries({ queryKey: ["series"] });
+      setBusy(false);
+    }
+  };
+  const stage = (text: string, body: Editor) => setPending({ text, body });
   // dialogs render outside the bar: its backdrop-blur would clip fixed children
   return (
     <>
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-panel/95 px-4 py-3 shadow-lg backdrop-blur md:left-(--nav-width)">
+      <div role="toolbar" aria-label={t("Selection")} className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-panel/95 px-4 py-3 shadow-lg backdrop-blur md:left-(--nav-width)">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-medium">{ids.length}{" " + t("selected")}</span>
-          <Button size="sm" onClick={() => edit({ monitored: true })}>{t("Monitor")}</Button>
-          <Button size="sm" onClick={() => edit({ monitored: false })}>{t("Unmonitor")}</Button>
-          <Select
-            className="w-40"
-            value=""
-            onChange={(e) =>
-              e.target.value && edit({ profileId: Number(e.target.value) })
-            }
-          >
-            <option value="">{t("Set profile…")}</option>
-            {profiles?.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </Select>
-          <Select
-            className="w-40"
-            value=""
-            onChange={(e) => {
-              const [mode, id] = e.target.value.split(":");
-              if (id)
-                edit({ tags: [Number(id)], tagMode: mode as "add" | "remove" });
-            }}
-          >
-            <option value="">{t("Tags…")}</option>
-            {tags?.map((t) => (
-              <option key={"a" + t.id} value={`add:${t.id}`}>
-                + {t.label}
-              </option>
-            ))}
-            {tags?.map((t) => (
-              <option key={"r" + t.id} value={`remove:${t.id}`}>
-                − {t.label}
-              </option>
-            ))}
-          </Select>
-          <Button size="sm" onClick={() => setMoving(true)}>{t("Move…")}</Button>
-          <Button size="sm" onClick={() => setRenaming(true)}>{t("Rename files…")}</Button>
-          <Button size="sm" onClick={() => setSourcing(true)}>{t("Sources…")}</Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="ml-auto"
-            onClick={onClear}
-          >{t("Clear selection")}</Button>
+          <div className="relative">
+            <Button variant="primary" aria-expanded={listOpen} onClick={() => setListOpen(!listOpen)}>
+              {t("{count} selected", { count })}
+              <ChevronUp className="size-3.5" />
+            </Button>
+            {listOpen && (
+              <ul aria-label={t("Selected series")} className="absolute bottom-full left-0 mb-2 max-h-80 w-72 overflow-y-auto rounded-lg border border-border bg-panel-2 p-1 shadow-xl">
+                {[...selected].map(([id, title]) => (
+                  <li key={id} className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm hover:bg-border">
+                    <span className="min-w-0 flex-1 truncate">{title || `#${id}`}</span>
+                    <button type="button" aria-label={t("Remove {title} from the selection", { title })} className="text-muted hover:text-fg" onClick={() => onRemove(id)}>
+                      <X className="size-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <Button variant="ghost" onClick={onClear}>{t("Clear")}</Button>
+          <span aria-hidden className="mx-1 h-6 w-px bg-border" />
+          {pending ? (
+            <div role="status" className="flex min-w-0 flex-1 flex-wrap items-center gap-2 rounded-md border border-warn/40 bg-warn/10 px-3 py-1.5 text-sm">
+              <span className="min-w-0 flex-1">{pending.text}</span>
+              <Button size="sm" variant="ghost" disabled={busy} onClick={() => setPending(null)}>{t("Cancel")}</Button>
+              <Button size="sm" variant="primary" loading={busy} onClick={() => void edit(pending.body)}>{t("Apply")}</Button>
+            </div>
+          ) : (
+            <>
+              <Menu
+                up
+                label={t("Monitor")}
+                items={[
+                  { label: t("Monitor"), onSelect: () => stage(t("Monitor {count} series?", { count }), { monitored: true }) },
+                  { label: t("Unmonitor"), onSelect: () => stage(t("Stop monitoring {count} series?", { count }), { monitored: false }) },
+                  { section: t("New chapters") },
+                  { label: t("Download new chapters"), onSelect: () => stage(t("Download new chapters of {count} series?", { count }), { monitorNew: "all" }) },
+                  { label: t("Don’t monitor new chapters"), onSelect: () => stage(t("Stop monitoring new chapters of {count} series?", { count }), { monitorNew: "none" }) },
+                ]}
+              />
+              <Menu
+                up
+                label={t("Profile")}
+                items={(profiles ?? []).map((p) => ({ label: p.name, onSelect: () => stage(t("Set profile {name} on {count} series?", { name: p.name, count }), { profileId: p.id }) }))}
+              />
+              <Menu
+                up
+                label={t("Tags")}
+                items={
+                  tags?.length
+                    ? [
+                        { section: t("Add") },
+                        ...tags.map((tag) => ({ label: tag.label, onSelect: () => stage(t("Add tag {tag} to {count} series?", { tag: tag.label, count }), { tags: [tag.id], tagMode: "add" }) })),
+                        { section: t("Remove") },
+                        ...tags.map((tag) => ({ label: tag.label, onSelect: () => stage(t("Remove tag {tag} from {count} series?", { tag: tag.label, count }), { tags: [tag.id], tagMode: "remove" }) })),
+                      ]
+                    : [{ label: t("No tags yet — add them in Edit"), onSelect: () => undefined }]
+                }
+              />
+              <Button onClick={() => setMoving(true)}>{t("Move…")}</Button>
+              <Button onClick={() => setSourcing(true)}>{t("Sources…")}</Button>
+              <Menu
+                up
+                label={t("More")}
+                items={[
+                  { label: t("Search missing chapters"), onSelect: () => void command("SearchMissing", t("Searching missing chapters of {count} series", { count })) },
+                  { label: t("Refresh sources"), onSelect: () => void command("RefreshSeries", t("Refreshing {count} series", { count })) },
+                  { label: t("Rename files…"), onSelect: () => setRenaming(true) },
+                  { section: "" },
+                  { label: t("Delete series…"), danger: true, onSelect: () => setDeleting(true) },
+                ]}
+              />
+            </>
+          )}
         </div>
       </div>
       {sourcing && <BulkSourcesModal ids={ids} onClose={() => setSourcing(false)} />}
+      {deleting && (
+        <Modal
+          open
+          onClose={() => setDeleting(false)}
+          title={t("Delete {count} series", { count })}
+          footer={
+            <>
+              <Button disabled={busy} onClick={() => setDeleting(false)}>{t("Cancel")}</Button>
+              <Button variant="danger" loading={busy} onClick={() => void removeAll()}>{t("Delete")}</Button>
+            </>
+          }
+        >
+          <p className="mb-3 text-sm">{t("They leave the library and stop downloading. Read progress in Komga/Kavita is not touched.")}</p>
+          <Switch checked={deleteFiles} onChange={setDeleteFiles} label={t("Also delete their files from disk")} />
+        </Modal>
+      )}
       {moving && (
         <Modal
           open
@@ -250,9 +332,7 @@ export function MassEditBar({
           <p className="mt-3 text-xs text-muted">{t("Moving to a root folder in another Komga/Kavita library resets read progress there; mangarr writes readers' progress back once the server has scanned the new location (readers need linked accounts).")}</p>
         </Modal>
       )}
-      {renaming && (
-        <RenameModal seriesIds={ids} onClose={() => setRenaming(false)} />
-      )}
+      {renaming && <RenameModal seriesIds={ids} onClose={() => setRenaming(false)} />}
     </>
   );
 }
