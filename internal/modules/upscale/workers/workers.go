@@ -135,6 +135,11 @@ func (m *Module) Upscale(ctx context.Context, images []upscale.Image, p upscale.
 	defer func() {
 		_ = os.Remove(inPath)
 		_ = os.Remove(outPath)
+		_ = os.Remove(outPath + ".part")
+		parts, _ := filepath.Glob(outPath + ".part.*")
+		for _, part := range parts {
+			_ = os.Remove(part)
+		}
 	}()
 	if err := writeZip(in, images); err != nil {
 		in.Close()

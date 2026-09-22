@@ -9266,6 +9266,10 @@
           "name": {
             "type": "string"
           },
+          "outputChunkBytes": {
+            "format": "int64",
+            "type": "integer"
+          },
           "pollSeconds": {
             "format": "int64",
             "type": "integer"
@@ -9296,6 +9300,7 @@
           "pollSeconds",
           "prefetch",
           "concurrent",
+          "outputChunkBytes",
           "serverTime"
         ],
         "type": "object"
@@ -18923,6 +18928,22 @@
             "in": "path",
             "name": "id",
             "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Mangarr-Chunk",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Mangarr-Chunks",
             "schema": {
               "format": "int64",
               "type": "integer"

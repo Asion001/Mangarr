@@ -47,8 +47,10 @@ type WorkerWelcome struct {
 	// Prefetch is how many pages to fetch ahead of what has been uploaded.
 	Prefetch int `json:"prefetch"`
 	// Concurrent is how many tasks it may hold at once.
-	Concurrent int    `json:"concurrent"`
-	ServerTime string `json:"serverTime"`
+	Concurrent int `json:"concurrent"`
+	// OutputChunkBytes keeps processing-result uploads below proxy limits.
+	OutputChunkBytes int    `json:"outputChunkBytes"`
+	ServerTime       string `json:"serverTime"`
 }
 
 // WorkerTaskOutput is one task, as handed to a worker.
@@ -91,7 +93,8 @@ func (s *Server) registerWorkerProtocol() {
 			dl, _ := s.app.Settings.Downloads(ctx)
 			welcome := WorkerWelcome{WorkerID: w.ID, Name: w.Name, Roles: allowedRoles(w, in.Body.Roles),
 				LeaseSeconds: int(worktasks.Lease / time.Second), PollSeconds: int(workerPoll / time.Second),
-				Prefetch: dl.WorkerPrefetch, Concurrent: max(dl.MaxConcurrentPerWorker, 1), ServerTime: now.Format(time.RFC3339)}
+				Prefetch: dl.WorkerPrefetch, Concurrent: max(dl.MaxConcurrentPerWorker, 1), OutputChunkBytes: workerOutputChunkBytes,
+				ServerTime: now.Format(time.RFC3339)}
 			return &struct{ Body WorkerWelcome }{welcome}, nil
 		})
 
@@ -184,6 +187,8 @@ func (s *Server) registerWorkerProtocol() {
 		Summary: "Upload what a processing task produced", DefaultStatus: http.StatusNoContent, MaxBodyBytes: 1 << 30},
 		func(ctx context.Context, in *struct {
 			ID      int64  `path:"id"`
+			Chunk   int    `header:"X-Mangarr-Chunk"`
+			Chunks  int    `header:"X-Mangarr-Chunks"`
 			RawBody []byte `contentType:"application/zip"`
 		}) (*struct{}, error) {
 			w, err := s.worker(ctx)
@@ -198,11 +203,10 @@ func (s *Server) registerWorkerProtocol() {
 			if path == "" {
 				return nil, huma.Error422UnprocessableEntity("this task takes no output")
 			}
-			tmp := path + ".part"
-			if err := os.WriteFile(tmp, in.RawBody, 0o664); err != nil {
-				return nil, toHTTPError(err)
+			if !validWorkerOutputChunk(in.Chunk, in.Chunks) {
+				return nil, huma.Error422UnprocessableEntity("invalid output chunk headers")
 			}
-			if err := os.Rename(tmp, path); err != nil {
+			if err := storeWorkerOutput(path, in.Chunk, in.Chunks, in.RawBody); err != nil {
 				return nil, toHTTPError(err)
 			}
 			return &struct{}{}, nil
@@ -333,6 +337,70 @@ func (s *Server) registerWorkerProtocol() {
 			}
 			return &struct{}{}, nil
 		})
+}
+
+const workerOutputChunkBytes = 16 << 20
+
+func validWorkerOutputChunk(chunk, chunks int) bool {
+	if chunk == 0 && chunks == 0 { // workers before chunked uploads
+		return true
+	}
+	return chunks > 0 && chunks <= 10_000 && chunk > 0 && chunk <= chunks
+}
+
+func storeWorkerOutput(path string, chunk, chunks int, data []byte) error {
+	if chunks <= 1 {
+		tmp := path + ".part"
+		if err := os.WriteFile(tmp, data, 0o664); err != nil {
+			return err
+		}
+		return os.Rename(tmp, path)
+	}
+	part := fmt.Sprintf("%s.part.%06d", path, chunk)
+	if err := os.WriteFile(part, data, 0o664); err != nil {
+		return err
+	}
+	if chunk != chunks {
+		return nil
+	}
+	tmp := path + ".part"
+	out, err := os.Create(tmp)
+	if err != nil {
+		return err
+	}
+	complete := false
+	defer func() {
+		_ = out.Close()
+		if !complete {
+			_ = os.Remove(tmp)
+		}
+	}()
+	for i := 1; i <= chunks; i++ {
+		name := fmt.Sprintf("%s.part.%06d", path, i)
+		in, err := os.Open(name)
+		if err != nil {
+			return err
+		}
+		_, copyErr := io.Copy(out, in)
+		closeErr := in.Close()
+		if copyErr != nil {
+			return copyErr
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+	}
+	if err := out.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		return err
+	}
+	complete = true
+	for i := 1; i <= chunks; i++ {
+		_ = os.Remove(fmt.Sprintf("%s.part.%06d", path, i))
+	}
+	return nil
 }
 
 // worker is the worker a request is from.

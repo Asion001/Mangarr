@@ -5797,6 +5797,8 @@ export interface components {
             leaseSeconds: number;
             name: string;
             /** Format: int64 */
+            outputChunkBytes: number;
+            /** Format: int64 */
             pollSeconds: number;
             /** Format: int64 */
             prefetch: number;
@@ -12850,7 +12852,10 @@ export interface operations {
     "worker-output": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Mangarr-Chunk"?: number;
+                "X-Mangarr-Chunks"?: number;
+            };
             path: {
                 id: number;
             };

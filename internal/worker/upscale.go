@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/Asion001/mangarr/internal/upscaler"
@@ -110,12 +111,30 @@ func (w *Worker) input(ctx context.Context, taskID int64) ([]byte, error) {
 
 // output sends back what it produced.
 func (w *Worker) output(ctx context.Context, taskID int64, data []byte) error {
+	chunkBytes := w.welcome.OutputChunkBytes
+	if chunkBytes <= 0 { // a server from before chunked uploads
+		chunkBytes = max(len(data), 1)
+	}
+	chunks := max((len(data)+chunkBytes-1)/chunkBytes, 1)
+	for i := 0; i < chunks; i++ {
+		start := i * chunkBytes
+		end := min(start+chunkBytes, len(data))
+		if err := w.outputChunk(ctx, taskID, i+1, chunks, data[start:end]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (w *Worker) outputChunk(ctx context.Context, taskID int64, chunk, chunks int, data []byte) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("%s/api/v1/worker/tasks/%d/output", w.cfg.ServerURL, taskID), bytes.NewReader(data))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("X-Api-Key", w.cfg.Key)
 	req.Header.Set("Content-Type", "application/zip")
+	req.Header.Set("X-Mangarr-Chunk", strconv.Itoa(chunk))
+	req.Header.Set("X-Mangarr-Chunks", strconv.Itoa(chunks))
 	resp, err := w.cfg.HTTP.Do(req)
 	if err != nil {
 		return err

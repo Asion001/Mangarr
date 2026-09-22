@@ -63,14 +63,15 @@ type Worker struct {
 
 // Welcome is what the server tells a worker at hello.
 type Welcome struct {
-	WorkerID     int64    `json:"workerId"`
-	Name         string   `json:"name"`
-	Roles        []string `json:"roles"`
-	LeaseSeconds int      `json:"leaseSeconds"`
-	PollSeconds  int      `json:"pollSeconds"`
-	Prefetch     int      `json:"prefetch"`
-	Concurrent   int      `json:"concurrent"`
-	ServerTime   string   `json:"serverTime"`
+	WorkerID         int64    `json:"workerId"`
+	Name             string   `json:"name"`
+	Roles            []string `json:"roles"`
+	LeaseSeconds     int      `json:"leaseSeconds"`
+	PollSeconds      int      `json:"pollSeconds"`
+	Prefetch         int      `json:"prefetch"`
+	Concurrent       int      `json:"concurrent"`
+	OutputChunkBytes int      `json:"outputChunkBytes"`
+	ServerTime       string   `json:"serverTime"`
 }
 
 // Task is one piece of work, as the server hands it over.
