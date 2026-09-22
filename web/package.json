@@ -10,7 +10,8 @@
     "gen": "openapi-typescript openapi.json -o src/api/schema.d.ts",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "check:i18n": "node scripts/check-i18n.mjs"
+    "check:i18n": "node scripts/check-i18n.mjs",
+    "lint": "node scripts/check-colors.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.102.8",

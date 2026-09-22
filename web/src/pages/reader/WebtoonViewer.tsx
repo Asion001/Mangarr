@@ -163,8 +163,8 @@ export function WebtoonViewer({
     <div ref={scroller} className="h-full w-full overflow-y-auto overflow-x-hidden" onClick={onClick} style={{ touchAction: "pan-y pinch-zoom" }}>
       <div className="mx-auto flex flex-col items-center" style={{ width }}>
         {chapter.prev && (
-          <div className="w-full py-6 text-center text-sm text-neutral-400">
-            <button type="button" className="rounded-md border border-neutral-600 px-3 py-1.5" onClick={(e) => (e.stopPropagation(), onChapter("prev"))}>{t("Previous chapter: ch.") + " "}{chapter.prev.number}
+          <div className="w-full py-6 text-center text-sm text-muted">
+            <button type="button" className="rounded-md border border-muted/40 px-3 py-1.5" onClick={(e) => (e.stopPropagation(), onChapter("prev"))}>{t("Previous chapter: ch.") + " "}{chapter.prev.number}
             </button>
           </div>
         )}

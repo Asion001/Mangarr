@@ -164,8 +164,8 @@ export function PageImage({
   };
   if (failed) {
     return (
-      <div style={{ width, height }} className="flex items-center justify-center text-sm text-neutral-400">
-        <button type="button" className="rounded border border-neutral-600 px-3 py-1.5" onClick={() => setFailed(false)}>{t("Couldn't load this page — retry")}</button>
+      <div style={{ width, height }} className="flex items-center justify-center text-sm text-muted">
+        <button type="button" className="rounded border border-muted/40 px-3 py-1.5" onClick={() => setFailed(false)}>{t("Couldn't load this page — retry")}</button>
       </div>
     );
   }

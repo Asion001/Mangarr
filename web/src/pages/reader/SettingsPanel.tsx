@@ -14,7 +14,7 @@ function Choice<T extends string>({ value, options, onChange }: { value: T; opti
           onClick={() => onChange(o.value)}
           className={clsx(
             "rounded-md border px-2.5 py-1 text-xs",
-            value === o.value ? "border-orange-500 bg-orange-500/20 text-orange-200" : "border-neutral-700 text-neutral-300 hover:border-neutral-500",
+            value === o.value ? "border-accent bg-accent/20 text-accent-2" : "border-border text-fg/80 hover:border-muted/60",
           )}
         >
           {o.label}
@@ -27,7 +27,7 @@ function Choice<T extends string>({ value, options, onChange }: { value: T; opti
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="text-xs font-medium uppercase tracking-wide text-neutral-400">{label}</div>
+      <div className="text-xs font-medium uppercase tracking-wide text-muted">{label}</div>
       {children}
     </div>
   );
@@ -35,9 +35,9 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 
 function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
-    <label className="flex cursor-pointer items-center justify-between gap-3 text-sm text-neutral-200">
+    <label className="flex cursor-pointer items-center justify-between gap-3 text-sm text-fg">
       {label}
-      <input type="checkbox" className="size-4 accent-orange-500" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <input type="checkbox" className="size-4 accent-accent" checked={checked} onChange={(e) => onChange(e.target.checked)} />
     </label>
   );
 }
@@ -61,14 +61,14 @@ export function SettingsPanel({
   const paged = s.mode === "paged";
   return (
     <div
-      className="absolute inset-y-0 right-0 z-30 flex w-full max-w-sm flex-col overflow-y-auto border-l border-neutral-800 bg-neutral-950/95 p-4 text-neutral-100 backdrop-blur"
+      className="absolute inset-y-0 right-0 z-30 flex w-full max-w-sm flex-col overflow-y-auto border-l border-border bg-bg/95 p-4 text-fg backdrop-blur"
       style={{ paddingTop: "max(1rem, env(safe-area-inset-top))", paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
       onClick={(e) => e.stopPropagation()}
       onPointerUp={(e) => e.stopPropagation()}
     >
       <div className="mb-4 flex items-center justify-between">
         <h2 className="font-semibold">{t("Reader settings")}</h2>
-        <button type="button" className="rounded p-1 hover:bg-neutral-800" onClick={onClose} aria-label={t("Close")}>
+        <button type="button" className="rounded p-1 hover:bg-panel-2" onClick={onClose} aria-label={t("Close")}>
           <X className="size-5" />
         </button>
       </div>
@@ -118,8 +118,8 @@ export function SettingsPanel({
         )}
         {!paged && (
           <Row label={t("Webtoon")}>
-            <div className="flex items-center gap-3 text-sm text-neutral-200">{t("Side padding")}<input type="range" min={0} max={30} step={5} value={s.padding} onChange={(e) => set({ padding: Number(e.target.value) })} className="flex-1 accent-orange-500" />
-              <span className="w-10 text-right text-xs text-neutral-400">{s.padding}%</span>
+            <div className="flex items-center gap-3 text-sm text-fg">{t("Side padding")}<input type="range" min={0} max={30} step={5} value={s.padding} onChange={(e) => set({ padding: Number(e.target.value) })} className="flex-1 accent-accent" />
+              <span className="w-10 text-right text-xs text-muted">{s.padding}%</span>
             </div>
             <Toggle checked={s.gap} onChange={(gap) => set({ gap })} label={t("Gap between pages")} />
           </Row>
@@ -156,11 +156,11 @@ export function SettingsPanel({
           <Toggle checked={s.keepAwake} onChange={(keepAwake) => set({ keepAwake })} label={t("Keep the screen on")} />
           <Toggle checked={s.showPageNumber} onChange={(showPageNumber) => set({ showPageNumber })} label={t("Show the page number")} />
         </div>
-        <p className="text-xs text-neutral-500">{t("Changes are kept for this series.")}</p>
+        <p className="text-xs text-muted">{t("Changes are kept for this series.")}</p>
         <div className="flex flex-wrap gap-2">
-          <button type="button" className="rounded-md border border-neutral-700 px-3 py-1.5 text-xs hover:border-neutral-500" onClick={saveAsDefault}>{t("Use for all series")}</button>
+          <button type="button" className="rounded-md border border-border px-3 py-1.5 text-xs hover:border-muted/60" onClick={saveAsDefault}>{t("Use for all series")}</button>
           {hasOwn && (
-            <button type="button" className="rounded-md border border-neutral-700 px-3 py-1.5 text-xs hover:border-neutral-500" onClick={reset}>{t("Back to my defaults")}</button>
+            <button type="button" className="rounded-md border border-border px-3 py-1.5 text-xs hover:border-muted/60" onClick={reset}>{t("Back to my defaults")}</button>
           )}
         </div>
       </div>

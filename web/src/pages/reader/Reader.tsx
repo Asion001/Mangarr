@@ -221,18 +221,18 @@ function Reader({ chapterId }: { chapterId: number }) {
     return () => window.removeEventListener("keydown", on);
   }, [panel, ch, navigate, goChapter]);
 
-  const bg = s.background === "white" ? "bg-white" : s.background === "gray" ? "bg-zinc-700" : "bg-black";
+  const bg = s.background === "white" ? "bg-white" : s.background === "gray" ? "bg-reader-gray" : "bg-black";
   if (error) {
     return (
-      <div className="flex h-dvh flex-col items-center justify-center gap-4 bg-black p-6 text-neutral-200">
+      <div className="flex h-dvh flex-col items-center justify-center gap-4 bg-black p-6 text-fg">
         <ErrorBox error={error} />
-        <button type="button" className="text-sm text-orange-400 hover:underline" onClick={() => navigate(-1)}>{t("Go back")}</button>
+        <button type="button" className="text-sm text-accent-2 hover:underline" onClick={() => navigate(-1)}>{t("Go back")}</button>
       </div>
     );
   }
   if (!ch || !pos || settingsLoading) {
     return (
-      <div className="flex h-dvh items-center justify-center bg-black text-neutral-400">
+      <div className="flex h-dvh items-center justify-center bg-black text-muted">
         <Spinner />
       </div>
     );
@@ -271,17 +271,17 @@ function Reader({ chapterId }: { chapterId: number }) {
       {/* top bar */}
       <div
         className={clsx(
-          "absolute inset-x-0 top-0 z-20 flex items-center gap-2 bg-neutral-950/90 px-2 py-2 text-neutral-100 backdrop-blur transition-transform",
+          "absolute inset-x-0 top-0 z-20 flex items-center gap-2 bg-bg/90 px-2 py-2 text-fg backdrop-blur transition-transform",
           bars ? "translate-y-0" : "-translate-y-full",
         )}
         style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top))" }}
       >
-        <Link to={`/series/${ch.seriesId}`} className="rounded p-2 hover:bg-neutral-800" aria-label={t("Back to the series")}>
+        <Link to={`/series/${ch.seriesId}`} className="rounded p-2 hover:bg-panel-2" aria-label={t("Back to the series")}>
           <ArrowLeft className="size-5" />
         </Link>
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-medium">{ch.seriesTitle}</div>
-          <div className="truncate text-xs text-neutral-400">{t("Ch.") + " "}{ch.number}
+          <div className="truncate text-xs text-muted">{t("Ch.") + " "}{ch.number}
             {ch.title && ch.title !== ch.number && !ch.title.endsWith(ch.number) ? ` · ${ch.title}` : ""}
             {!ch.downloaded && tr(" · streamed")}
           </div>
@@ -289,7 +289,7 @@ function Reader({ chapterId }: { chapterId: number }) {
         <button
           type="button"
           disabled={!!marking}
-          className="flex items-center gap-1 rounded px-2 py-2 text-xs hover:bg-neutral-800 disabled:opacity-40"
+          className="flex items-center gap-1 rounded px-2 py-2 text-xs hover:bg-panel-2 disabled:opacity-40"
           onClick={() => void mark(!ch.progress.completed, "chapter")}
           title={ch.progress.completed ? tr("Mark chapter unread") : tr("Mark chapter read")}
         >
@@ -301,7 +301,7 @@ function Reader({ chapterId }: { chapterId: number }) {
             <button
               type="button"
               disabled={!!marking}
-              className="rounded p-2 text-neutral-300 hover:bg-neutral-800 disabled:opacity-40"
+              className="rounded p-2 text-fg/80 hover:bg-panel-2 disabled:opacity-40"
               onClick={() => void mark(true, "previous")}
               title={t("Mark previous chapters read")}
               aria-label={t("Mark previous chapters read")}
@@ -311,7 +311,7 @@ function Reader({ chapterId }: { chapterId: number }) {
             <button
               type="button"
               disabled={!!marking}
-              className="rounded p-2 text-neutral-300 hover:bg-neutral-800 disabled:opacity-40"
+              className="rounded p-2 text-fg/80 hover:bg-panel-2 disabled:opacity-40"
               onClick={() => void mark(false, "previous")}
               title={t("Mark previous chapters unread")}
               aria-label={t("Mark previous chapters unread")}
@@ -321,17 +321,17 @@ function Reader({ chapterId }: { chapterId: number }) {
           </>
         )}
         {ch.canDownload && (
-          <a href={apiUrl(`api/v1/read/chapters/${ch.id}/file`)} download className="rounded p-2 hover:bg-neutral-800" aria-label={t("Download the chapter")}>
+          <a href={apiUrl(`api/v1/read/chapters/${ch.id}/file`)} download className="rounded p-2 hover:bg-panel-2" aria-label={t("Download the chapter")}>
             <Download className="size-5" />
           </a>
         )}
-        <button type="button" className="rounded p-2 hover:bg-neutral-800" onClick={() => setPickingChapter(true)} aria-label={t("Choose chapter")}>
+        <button type="button" className="rounded p-2 hover:bg-panel-2" onClick={() => setPickingChapter(true)} aria-label={t("Choose chapter")}>
           <List className="size-5" />
         </button>
-        <button type="button" className="rounded p-2 hover:bg-neutral-800" onClick={toggleFull} aria-label={t("Full screen")}>
+        <button type="button" className="rounded p-2 hover:bg-panel-2" onClick={toggleFull} aria-label={t("Full screen")}>
           {full ? <Minimize className="size-5" /> : <Maximize className="size-5" />}
         </button>
-        <button type="button" className="rounded p-2 hover:bg-neutral-800" onClick={() => setPanel((p) => !p)} aria-label={t("Reader settings")}>
+        <button type="button" className="rounded p-2 hover:bg-panel-2" onClick={() => setPanel((p) => !p)} aria-label={t("Reader settings")}>
           <Settings2 className="size-5" />
         </button>
       </div>
@@ -339,14 +339,14 @@ function Reader({ chapterId }: { chapterId: number }) {
       {/* bottom bar */}
       <div
         className={clsx(
-          "absolute inset-x-0 bottom-0 z-20 flex items-center gap-2 bg-neutral-950/90 px-2 py-2 text-neutral-100 backdrop-blur transition-transform",
+          "absolute inset-x-0 bottom-0 z-20 flex items-center gap-2 bg-bg/90 px-2 py-2 text-fg backdrop-blur transition-transform",
           bars ? "translate-y-0" : "translate-y-full",
         )}
         style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
       >
         <button
           type="button"
-          className="rounded p-2 hover:bg-neutral-800 disabled:opacity-30"
+          className="rounded p-2 hover:bg-panel-2 disabled:opacity-30"
           disabled={!ch.prev}
           onClick={() => goChapter("prev")}
           aria-label={t("Previous chapter")}
@@ -360,19 +360,19 @@ function Reader({ chapterId }: { chapterId: number }) {
             max={Math.max(pageViews, 1)}
             value={sliderIndex}
             onChange={(e) => setIndex(Number(e.target.value))}
-            className="flex-1 accent-orange-500"
+            className="flex-1 accent-accent"
             style={{ direction: s.direction === "rtl" ? "rtl" : "ltr" }}
             aria-label={t("Page")}
           />
         ) : (
           <div className="flex-1" />
         )}
-        <span className="w-16 text-center text-xs tabular-nums text-neutral-300">
+        <span className="w-16 text-center text-xs tabular-nums text-fg/80">
           {page} / {count}
         </span>
         <button
           type="button"
-          className="rounded p-2 hover:bg-neutral-800 disabled:opacity-30"
+          className="rounded p-2 hover:bg-panel-2 disabled:opacity-30"
           disabled={!ch.next}
           onClick={() => goChapter("next")}
           aria-label={t("Next chapter")}
@@ -382,7 +382,7 @@ function Reader({ chapterId }: { chapterId: number }) {
       </div>
 
       {!bars && s.showPageNumber && (
-        <div className="pointer-events-none absolute bottom-2 left-1/2 z-10 -translate-x-1/2 rounded-full bg-black/60 px-2.5 py-0.5 text-xs tabular-nums text-neutral-200" style={{ marginBottom: "env(safe-area-inset-bottom)" }}>
+        <div className="pointer-events-none absolute bottom-2 left-1/2 z-10 -translate-x-1/2 rounded-full bg-black/60 px-2.5 py-0.5 text-xs tabular-nums text-fg" style={{ marginBottom: "env(safe-area-inset-bottom)" }}>
           {page} / {count}
         </div>
       )}
