@@ -1,7 +1,7 @@
 import { t, label as translateLabel } from "../lib/i18n/core";
-import { useEffect, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { useEffect, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import clsx from "clsx";
-import { Loader2, Lock, X, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, Loader2, Lock, X, Plus, Trash2 } from "lucide-react";
 
 type Variant = "primary" | "secondary" | "danger" | "ghost";
 
@@ -226,6 +226,79 @@ export function Progress({ value, tone = "accent" }: { value: number; tone?: "ac
         )}
         style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
       />
+    </div>
+  );
+}
+
+export type MenuItem = { label: string; onSelect: () => void; icon?: ReactNode; danger?: boolean; hidden?: boolean } | { section: string };
+
+/**
+ * Menu is a button that opens a list of actions (role="menu"): arrow keys
+ * move between items, Escape or a click outside closes it.
+ */
+export function Menu({ label, icon, items, align = "left" }: { label: ReactNode; icon?: ReactNode; items: MenuItem[]; align?: "left" | "right" }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const root = ref.current;
+    const entries = () => Array.from(root?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []);
+    entries()[0]?.focus();
+    const outside = (e: MouseEvent) => {
+      if (!root?.contains(e.target as Node)) setOpen(false);
+    };
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        root?.querySelector<HTMLButtonElement>("button")?.focus();
+      } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const list = entries();
+        const i = list.indexOf(document.activeElement as HTMLButtonElement);
+        list[(i + (e.key === "ArrowDown" ? 1 : -1) + list.length) % list.length]?.focus();
+      }
+    };
+    document.addEventListener("mousedown", outside);
+    document.addEventListener("keydown", key);
+    return () => {
+      document.removeEventListener("mousedown", outside);
+      document.removeEventListener("keydown", key);
+    };
+  }, [open]);
+  const shown = items.filter((it) => !("hidden" in it && it.hidden));
+  return (
+    <div ref={ref} className="relative inline-block">
+      <Button icon={icon} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
+        {label}
+        <ChevronDown className="size-3.5" />
+      </Button>
+      {open && (
+        <div role="menu" className={clsx("absolute z-30 mt-1 w-max min-w-60 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-panel-2 p-1 shadow-xl", align === "right" ? "right-0" : "left-0")}>
+          {shown.map((it, i) =>
+            "section" in it && !it.section ? (
+              <div key={i} role="separator" className="my-1 border-t border-border" />
+            ) : "section" in it ? (
+              <div key={i} role="presentation" className={clsx("px-2.5 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-muted", i > 0 && "mt-1 border-t border-border")}>
+                {it.section}
+              </div>
+            ) : (
+              <button
+                key={i}
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false);
+                  it.onSelect();
+                }}
+                className={clsx("flex w-full items-center gap-2 whitespace-nowrap rounded-md px-2.5 py-1.5 text-left text-sm hover:bg-border focus:bg-border focus:outline-none", it.danger ? "text-err" : "text-fg")}
+              >
+                {it.icon}
+                {it.label}
+              </button>
+            ),
+          )}
+        </div>
+      )}
     </div>
   );
 }

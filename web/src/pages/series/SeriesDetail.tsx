@@ -7,7 +7,7 @@ import { Bell, BellOff, BookOpen, ExternalLink, Eye, FilePen, HardDrive, Pencil,
 import { api, apiUrl, unwrap, type Chapter, type S } from "../../api/client";
 import { useChapters, usePushCommand, useSeries, useSeriesList } from "../../api/queries";
 import { Cover } from "../../components/Cover";
-import { Badge, Button, Confirm, ErrorBox, Loading, Modal, Select, Switch } from "../../components/ui";
+import { Badge, Button, Confirm, ErrorBox, Loading, Menu, Modal, Select, Switch } from "../../components/ui";
 import { bytes, relative } from "../../lib/format";
 import { useToast } from "../../lib/toast";
 import { statusTone } from "./SeriesIndex";
@@ -85,9 +85,9 @@ export function SeriesDetail() {
   const links = Object.entries(md.links ?? {});
   return (
     <>
-      <div className="mb-6 flex flex-col gap-5 md:flex-row">
-        <Cover src={apiUrl(s.coverUrl)} alt={s.title} className="aspect-[2/3] w-40 shrink-0 self-start md:w-48" />
-        <div className="min-w-0 flex-1">
+      <div className="mb-6 grid grid-cols-[6rem_minmax(0,1fr)] gap-x-4 gap-y-3 md:grid-cols-[12rem_minmax(0,1fr)] md:gap-x-6">
+        <Cover src={apiUrl(s.coverUrl)} alt={s.title} className="aspect-[2/3] w-full self-start md:row-span-2" />
+        <div className="min-w-0">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <h1 className="text-2xl font-semibold leading-tight">{s.title}</h1>
@@ -99,6 +99,21 @@ export function SeriesDetail() {
               {manage && <Switch checked={s.monitored} onChange={setMonitored} label={s.monitored ? tr("Monitored") : tr("Unmonitored")} />}
             </div>
           </div>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            <Badge tone={statusTone(s.status)}>{s.status}</Badge>
+            {md.format && <Badge>{md.format}</Badge>}
+            {md.year ? <Badge>{md.year}</Badge> : null}
+            <Badge>{s.readingDirection}</Badge>
+            {s.language && <Badge>{s.language}</Badge>}
+            {md.ageRating && <Badge tone="warn">{md.ageRating}</Badge>}
+            {(md.genres ?? []).slice(0, 8).map((g) => (
+              <Badge key={g} tone="info">
+                {g}
+              </Badge>
+            ))}
+          </div>
+        </div>
+        <div className="col-span-2 min-w-0 md:col-span-1 md:col-start-2">
           {(s.editions?.length ?? 0) > 1 && (
             <nav className="mt-3 flex flex-wrap gap-2" aria-label={t("Language editions")}>
               {(s.editions ?? []).map((edition) => (
@@ -114,30 +129,41 @@ export function SeriesDetail() {
               ))}
             </nav>
           )}
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            <Badge tone={statusTone(s.status)}>{s.status}</Badge>
-            {md.format && <Badge>{md.format}</Badge>}
-            {md.year ? <Badge>{md.year}</Badge> : null}
-            <Badge>{s.readingDirection}</Badge>
-            {s.language && <Badge>{s.language}</Badge>}
-            {md.ageRating && <Badge tone="warn">{md.ageRating}</Badge>}
-            {(md.genres ?? []).slice(0, 8).map((g) => (
-              <Badge key={g} tone="info">
-                {g}
-              </Badge>
-            ))}
-          </div>
           <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-4">
             <Stat label={t("Chapters")} value={`${s.stats.fileCount} / ${s.stats.chapterCount}`} />
             <Stat label={t("Missing")} value={String(s.stats.missingCount)} />
             <Stat label={t("Cleaned")} value={String(s.stats.cleanedCount)} />
             <Stat label={t("On disk")} value={s.stats.spaceSaved > 0 ? `${bytes(s.stats.sizeOnDisk)} (saved ${bytes(s.stats.spaceSaved)})` : bytes(s.stats.sizeOnDisk)} />
           </div>
-          {readTarget && (
-            <Link to={`/read/${readTarget.id}`} className="mt-3 inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-hover">
-              <BookOpen className="size-4" /> {readTarget.label}
-            </Link>
-          )}
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            {readTarget && (
+              <Link to={`/read/${readTarget.id}`} className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-hover">
+                <BookOpen className="size-4" /> {readTarget.label}
+              </Link>
+            )}
+            {manage && <Button icon={<Pencil className="size-4" />} onClick={() => setEdit(true)}>{t("Edit")}</Button>}
+            {manage && (
+              <Menu
+                label={t("Manage")}
+                items={[
+                  { section: t("Find") },
+                  { label: t("Refresh sources"), icon: <RefreshCw className="size-4" />, onSelect: () => push.mutate({ name: "RefreshSeries", body: { seriesId: id }, label: "Refreshing sources" }) },
+                  { label: t("Search missing chapters"), icon: <Search className="size-4" />, onSelect: () => push.mutate({ name: "SearchMissing", body: { seriesId: id }, label: "Searching missing chapters" }) },
+                  { label: t("Refresh metadata"), icon: <BookText className="size-4" />, onSelect: () => push.mutate({ name: "RefreshMetadata", body: { seriesId: id }, label: "Refreshing metadata" }) },
+                  { section: t("Files") },
+                  { label: t("Rescan disk"), icon: <FileSearch className="size-4" />, onSelect: () => push.mutate({ name: "DiskScan", body: { seriesId: id }, label: "Scanning files" }) },
+                  { label: t("Rename files…"), icon: <FilePen className="size-4" />, onSelect: () => setRenaming(true) },
+                  { label: t("Process downloaded chapters"), icon: <Sparkles className="size-4" />, onSelect: () => push.mutate({ name: "ProcessExisting", body: { seriesId: id }, label: "Downloaded chapters will be processed in the background" }) },
+                  { label: t("Copy folder path"), icon: <HardDrive className="size-4" />, onSelect: () => void navigator.clipboard.writeText(s.fullPath ?? "").then(() => toast.success(t("Folder path copied"), s.fullPath), () => toast.info(s.fullPath ?? "")), hidden: !s.fullPath },
+                  { section: t("Editions") },
+                  { label: t("Group with another language…"), icon: <Link2 className="size-4" />, onSelect: () => setGrouping(true) },
+                  { label: t("Separate edition"), icon: <Unlink className="size-4" />, onSelect: () => void setWork(0), hidden: (s.editions?.length ?? 0) <= 1 },
+                  { section: "" },
+                  { label: t("Delete series…"), icon: <Trash2 className="size-4" />, onSelect: () => setDel(true), danger: true },
+                ]}
+              />
+            )}
+          </div>
           {s.reading && (s.reading.readers.length > 0 || s.reading.webUrl) && (
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
               {s.reading.nextUnread && !readTarget && (
@@ -173,28 +199,15 @@ export function SeriesDetail() {
               {md.description}
             </p>
           )}
+          {links.length > 0 && (
           <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted">
-            <span className="flex items-center gap-1">
-              <HardDrive className="size-3.5" /> {s.fullPath}
-            </span>
             {links.map(([k, v]) => (
               <a key={k} href={v} target="_blank" rel="noreferrer" className="flex items-center gap-1 hover:text-accent-2">
                 <ExternalLink className="size-3.5" /> {k}
               </a>
             ))}
           </div>
-          {manage && <div className="mt-4 flex flex-wrap gap-2">
-            <Button icon={<RefreshCw className="size-4" />} onClick={() => push.mutate({ name: "RefreshSeries", body: { seriesId: id }, label: "Refreshing sources" })}>{t("Refresh")}</Button>
-            <Button icon={<Search className="size-4" />} onClick={() => push.mutate({ name: "SearchMissing", body: { seriesId: id }, label: "Searching missing chapters" })}>{t("Search missing")}</Button>
-            <Button icon={<BookText className="size-4" />} onClick={() => push.mutate({ name: "RefreshMetadata", body: { seriesId: id }, label: "Refreshing metadata" })}>{t("Metadata")}</Button>
-            <Button icon={<Sparkles className="size-4" />} onClick={() => push.mutate({ name: "ProcessExisting", body: { seriesId: id }, label: "Downloaded chapters will be processed in the background" })}>{t("Process existing")}</Button>
-            <Button icon={<FilePen className="size-4" />} onClick={() => setRenaming(true)}>{t("Rename files")}</Button>
-            <Button icon={<FileSearch className="size-4" />} onClick={() => push.mutate({ name: "DiskScan", body: { seriesId: id }, label: "Scanning files" })}>{t("Rescan disk")}</Button>
-            <Button icon={<Link2 className="size-4" />} onClick={() => setGrouping(true)}>{t("Group language edition")}</Button>
-            {(s.editions?.length ?? 0) > 1 && <Button icon={<Unlink className="size-4" />} onClick={() => setWork(0)}>{t("Separate edition")}</Button>}
-            <Button icon={<Pencil className="size-4" />} onClick={() => setEdit(true)}>{t("Edit")}</Button>
-            <Button variant="ghost" icon={<Trash2 className="size-4" />} onClick={() => setDel(true)}>{t("Delete")}</Button>
-          </div>}
+          )}
         </div>
       </div>
 
@@ -259,10 +272,14 @@ function readTargetOf(chapters: Chapter[] | undefined, next?: S["NextChapter"]) 
   if (!chapters) return null;
   if (next) {
     const c = chapters.find((c) => c.id === next.chapterId);
-    return c && readable(c) ? { id: c.id, label: `Continue ch. ${c.number}` } : null;
+    return c && readable(c) ? { id: c.id, label: t("Continue ch. {number}", { number: c.number }) } : null;
   }
-  const first = chapters.filter(readable).sort((a, b) => a.numberSort - b.numberSort)[0];
-  return first ? { id: first.id, label: `Start reading ch. ${first.number}` } : null;
+  const byNumber = chapters.filter(readable).sort((a, b) => a.numberSort - b.numberSort);
+  // opened but not finished (nothing finished yet, so there's no "next unread")
+  const started = byNumber.find((c) => c.readBy.some((r) => !r.completed && r.page > 0));
+  if (started) return { id: started.id, label: t("Continue ch. {number}", { number: started.number }) };
+  const first = byNumber[0];
+  return first ? { id: first.id, label: t("Start reading ch. {number}", { number: first.number }) } : null;
 }
 
 /** FollowButton: follow a series to get its new chapters on your notification targets. */
