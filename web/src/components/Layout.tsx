@@ -122,7 +122,6 @@ export function Layout() {
         { to: "/settings/metadata", label: "Metadata" },
         { to: "/settings/library", label: "Library servers" },
         { to: "/settings/notifications", label: "Notifications" },
-        { to: "/settings/upscalers", label: "Upscalers" },
         { to: "/settings/users", label: "Users & groups" },
         { to: "/settings/sso", label: "Single sign-on" },
         { to: "/settings/readers", label: "Readers" },

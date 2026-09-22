@@ -1,9 +1,10 @@
 import { t as tr, t } from "../../lib/i18n/core";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Plus, Trash2 } from "lucide-react";
-import { api, unwrap, type S } from "../../api/client";
-import { Button, EmptyState, ErrorBox, IconButton, Input, Loading, Modal, PageHeader, Switch, Table, Td, Th } from "../../components/ui";
+import { api, unwrap, type ModuleResource, type S } from "../../api/client";
+import { useModules } from "../../api/queries";
+import { Badge, Button, Card, EmptyState, ErrorBox, IconButton, Input, Loading, Modal, PageHeader, Switch, Table, Td, Th } from "../../components/ui";
 import { bytes, relative } from "../../lib/format";
 import { useToast } from "../../lib/toast";
 
@@ -19,6 +20,7 @@ const roles = [
 export function WorkersPage() {
   const qc = useQueryClient();
   const toast = useToast();
+  const { data: engines, isLoading: enginesLoading, error: enginesError } = useModules("upscale");
   const { data, isLoading, error } = useQuery({
     queryKey: ["workers"],
     queryFn: () => unwrap(api.GET("/api/v1/workers")),
@@ -29,6 +31,26 @@ export function WorkersPage() {
   const [removing, setRemoving] = useState<Worker | null>(null);
 
   const reload = () => qc.invalidateQueries({ queryKey: ["workers"] });
+  const updateEngine = async (engine: ModuleResource, patch: { enabled?: boolean; priority?: number }) => {
+    try {
+      await unwrap(api.PUT("/api/v1/modules/{id}", {
+        params: { path: { id: engine.id } },
+        body: {
+          kind: "upscale",
+          implementation: engine.implementation,
+          name: engine.name,
+          enabled: patch.enabled ?? engine.enabled,
+          priority: patch.priority ?? engine.priority,
+          tags: engine.tags,
+          events: engine.events,
+          settings: engine.settings,
+        },
+      }));
+      qc.invalidateQueries({ queryKey: ["modules", "upscale"] });
+    } catch (e) {
+      toast.fromError(e, tr("Could not update the processing engine"));
+    }
+  };
   const update = async (w: Worker, body: { enabled?: boolean; roles?: string[] }) => {
     try {
       await unwrap(api.PUT("/api/v1/workers/{id}", { params: { path: { id: w.id } }, body }));
@@ -47,6 +69,28 @@ export function WorkersPage() {
           <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setAdding(true)}>{t("Add worker")}</Button>
         }
       />
+      <Card title={t("Processing engines")} className="mb-6">
+        <p className="mb-3 text-sm text-muted">{t("Profiles use the first available engine in this priority order.")}</p>
+        {enginesLoading && <Loading />}
+        {enginesError && <ErrorBox error={enginesError} />}
+        {engines?.length === 0 && (
+          <EmptyState title={t("No processing engines available")}>{t("Install the full image or connect an upscale worker to add one.")}</EmptyState>
+        )}
+        {engines && engines.length > 0 && (
+          <Table>
+            <thead>
+              <tr>
+                <Th>{t("Engine")}</Th>
+                <Th>{t("Priority")}</Th>
+                <Th>{t("Enabled")}</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {engines.map((engine) => <EngineRow key={engine.id} engine={engine} onUpdate={updateEngine} />)}
+            </tbody>
+          </Table>
+        )}
+      </Card>
       {isLoading && <Loading />}
       {error && <ErrorBox error={error} />}
       {data && data.length === 0 && (
@@ -186,6 +230,40 @@ export function WorkersPage() {
         </Modal>
       )}
     </>
+  );
+}
+
+function EngineRow({ engine, onUpdate }: { engine: ModuleResource; onUpdate: (engine: ModuleResource, patch: { enabled?: boolean; priority?: number }) => Promise<void> }) {
+  const [priority, setPriority] = useState(engine.priority);
+  useEffect(() => setPriority(engine.priority), [engine.priority]);
+  const savePriority = () => {
+    if (priority !== engine.priority) void onUpdate(engine, { priority });
+  };
+  return (
+    <tr className={engine.enabled ? undefined : "opacity-60"}>
+      <Td>
+        <div className="flex items-center gap-2">
+          <span className="font-medium">{engine.name}</span>
+          <Badge tone={engine.implementation === "local" ? "accent" : "info"}>
+            {engine.implementation === "local" ? t("Built into this server") : t("Remote worker pool")}
+          </Badge>
+        </div>
+        {engine.error && <div className="mt-1 text-xs text-err">{engine.error}</div>}
+      </Td>
+      <Td>
+        <Input
+          className="w-24"
+          type="number"
+          value={priority}
+          onChange={(e) => setPriority(Number(e.target.value))}
+          onBlur={savePriority}
+          onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+          aria-label={t("Priority")}
+          title={t("Lower first")}
+        />
+      </Td>
+      <Td><Switch checked={engine.enabled} onChange={(enabled) => onUpdate(engine, { enabled })} /></Td>
+    </tr>
   );
 }
 
