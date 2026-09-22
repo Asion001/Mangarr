@@ -9,6 +9,7 @@ import { Cover } from "../../components/Cover";
 import { Badge, Button, Card, ErrorBox, Field, IconButton, Input, Loading, PageHeader, Select, Switch } from "../../components/ui";
 import { sessionState, useQueryParam } from "../../lib/urlState";
 import { useToast } from "../../lib/toast";
+import { useAccount } from "../../lib/account";
 import { useSettingsDoc } from "../settings/useSettingsDoc";
 import { SourceSearch, pickKey, type Picked, type Scope } from "./SourceSearch";
 
@@ -31,6 +32,7 @@ export function MetadataSearch({
   placeholder?: string;
   language?: string;
 }) {
+  const { isAdmin } = useAccount();
   const [local, setLocal] = useState(initialQuery);
   const query = controlled ?? local;
   const setQuery = setControlled ?? setLocal;
@@ -92,7 +94,13 @@ export function MetadataSearch({
             </div>
           </div>
         ))}
-        {data && data.results.length === 0 && <p className="text-sm text-muted">{t("No metadata found.")}</p>}
+        {data && data.results.length === 0 && data.providers > 0 && <p className="text-sm text-muted">{t("No metadata found.")}</p>}
+        {data && data.providers === 0 && (
+          <p className="text-sm text-warn">
+            {t("No metadata provider is set up, so nothing was searched.")}{" "}
+            {isAdmin ? <Link to="/settings/metadata" className="text-accent-2 hover:underline">{t("Add one in Settings → Metadata")}</Link> : t("Ask an admin to add one.")}
+          </p>
+        )}
       </div>
     </div>
   );

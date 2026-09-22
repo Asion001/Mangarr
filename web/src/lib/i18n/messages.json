@@ -5030,5 +5030,113 @@
   "Save changes": {
     "ru": "Сохранить изменения",
     "uk": "Зберегти зміни"
+  },
+  "Add a source": {
+    "ru": "Добавьте источник",
+    "uk": "Додайте джерело"
+  },
+  "Where chapters come from. mangarr sources covers MangaDex, Weeb Central, Atsumaru, MangaLib and Senkuro with nothing else to run.": {
+    "ru": "Откуда берутся главы. Источники mangarr покрывают MangaDex, Weeb Central, Atsumaru, MangaLib и Senkuro — больше ничего запускать не нужно.",
+    "uk": "Звідки беруться розділи. Джерела mangarr покривають MangaDex, Weeb Central, Atsumaru, MangaLib і Senkuro — більше нічого запускати не треба."
+  },
+  "Add mangarr sources": {
+    "ru": "Добавить источники mangarr",
+    "uk": "Додати джерела mangarr"
+  },
+  "Other engines": {
+    "ru": "Другие движки",
+    "uk": "Інші рушії"
+  },
+  "Choose a root folder": {
+    "ru": "Выберите корневую папку",
+    "uk": "Виберіть кореневу теку"
+  },
+  "Downloaded chapters are saved here as CBZ. Mount the same folder read-only into Komga or Kavita.": {
+    "ru": "Скачанные главы сохраняются сюда в CBZ. Подключите эту же папку к Komga или Kavita только для чтения.",
+    "uk": "Завантажені розділи зберігаються сюди у CBZ. Підключіть цю ж теку до Komga або Kavita лише для читання."
+  },
+  "Folder path": {
+    "ru": "Путь к папке",
+    "uk": "Шлях до теки"
+  },
+  "Add folder": {
+    "ru": "Добавить папку",
+    "uk": "Додати теку"
+  },
+  "Add a metadata provider": {
+    "ru": "Добавьте источник метаданных",
+    "uk": "Додайте джерело метаданих"
+  },
+  "Titles, synopsis, covers and genres from AniList. Without one, Add series can only add by title.": {
+    "ru": "Названия, описание, обложки и жанры из AniList. Без него серию можно добавить только по названию.",
+    "uk": "Назви, опис, обкладинки й жанри з AniList. Без нього серію можна додати лише за назвою."
+  },
+  "Add AniList": {
+    "ru": "Добавить AniList",
+    "uk": "Додати AniList"
+  },
+  "Connect Komga or Kavita": {
+    "ru": "Подключите Komga или Kavita",
+    "uk": "Підключіть Komga або Kavita"
+  },
+  "Rescans after every import, and read progress for cleanup.": {
+    "ru": "Пересканирование после каждого импорта и прогресс чтения для очистки.",
+    "uk": "Повторне сканування після кожного імпорту та прогрес читання для очищення."
+  },
+  "Set up": {
+    "ru": "Настроить",
+    "uk": "Налаштувати"
+  },
+  "Recommended": {
+    "ru": "Рекомендуется",
+    "uk": "Рекомендовано"
+  },
+  "Optional": {
+    "ru": "Необязательно",
+    "uk": "Необовʼязково"
+  },
+  "Set up mangarr": {
+    "ru": "Настройка mangarr",
+    "uk": "Налаштування mangarr"
+  },
+  "{done} of {total} required steps done": {
+    "ru": "Готово {done} из {total} обязательных шагов",
+    "uk": "Виконано {done} з {total} обовʼязкових кроків"
+  },
+  "Skipped": {
+    "ru": "Пропущено",
+    "uk": "Пропущено"
+  },
+  "Add your first series": {
+    "ru": "Добавьте первую серию",
+    "uk": "Додайте першу серію"
+  },
+  "All set.": {
+    "ru": "Всё готово.",
+    "uk": "Усе готово."
+  },
+  "Available once the required steps are done.": {
+    "ru": "Доступно после обязательных шагов.",
+    "uk": "Доступно після обовʼязкових кроків."
+  },
+  "Or import a Mihon, Tachiyomi or Aidoku backup": {
+    "ru": "Или импортируйте резервную копию Mihon, Tachiyomi или Aidoku",
+    "uk": "Або імпортуйте резервну копію Mihon, Tachiyomi чи Aidoku"
+  },
+  "The library is empty. Ask an admin to add series.": {
+    "ru": "Библиотека пуста. Попросите администратора добавить серии.",
+    "uk": "Бібліотека порожня. Попросіть адміністратора додати серії."
+  },
+  "No metadata provider is set up, so nothing was searched.": {
+    "ru": "Источник метаданных не настроен, поэтому поиск не выполнялся.",
+    "uk": "Джерело метаданих не налаштовано, тому пошук не виконувався."
+  },
+  "Add one in Settings → Metadata": {
+    "ru": "Добавьте его в Настройки → Метаданные",
+    "uk": "Додайте його в Налаштування → Метадані"
+  },
+  "Ask an admin to add one.": {
+    "ru": "Попросите администратора добавить его.",
+    "uk": "Попросіть адміністратора додати його."
   }
 }

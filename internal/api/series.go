@@ -710,16 +710,21 @@ func (s *Server) registerSeries() {
 			Body struct {
 				Results []LookupResult `json:"results"`
 				Errors  []string       `json:"errors"`
+				// Providers is how many metadata modules were searched; 0 means
+				// none is set up, so an empty result says nothing about the title.
+				Providers int `json:"providers"`
 			}
 		}, error) {
 			cands, errs := s.app.Metadata.SearchLanguage(ctx, in.Query, in.Lang, 10)
 			out := &struct {
 				Body struct {
-					Results []LookupResult `json:"results"`
-					Errors  []string       `json:"errors"`
+					Results   []LookupResult `json:"results"`
+					Errors    []string       `json:"errors"`
+					Providers int            `json:"providers"`
 				}
 			}{}
 			out.Body.Results, out.Body.Errors = []LookupResult{}, []string{}
+			out.Body.Providers = len(s.app.Modules.Active(modules.KindMetadata))
 			existing := s.existingByExternalID(ctx)
 			requested := s.requestedByExternalID(ctx)
 			for _, c := range cands {

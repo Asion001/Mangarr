@@ -5025,6 +5025,8 @@ export interface components {
         };
         "Series-lookupResponse": {
             errors: string[];
+            /** Format: int64 */
+            providers: number;
             results: components["schemas"]["LookupResult"][];
         };
         "Series-rename-previewRequest": {

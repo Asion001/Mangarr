@@ -11,6 +11,7 @@ import { bytes, date } from "../../lib/format";
 import { useListParam, useQueryParam } from "../../lib/urlState";
 import { MassEditBar } from "./Organize";
 import { ContinueReading } from "./ContinueReading";
+import { SetupChecklist } from "./SetupChecklist";
 import { useAccount } from "../../lib/account";
 
 type Filter = "all" | "monitored" | "missing" | "ongoing" | "completed" | "unread" | "reading" | "following";
@@ -40,7 +41,8 @@ function ReadBar({ s }: { s: Series }) {
 export function SeriesIndex() {
   const { data: roots } = useRootFolders();
   const { editing } = useUIMode();
-  const manage = useAccount().can("library.manage") && editing;
+  const account = useAccount();
+  const manage = account.can("library.manage") && editing;
   const push = usePushCommand();
   const [q, setQ] = useQueryParam("q");
   const [filterParam, setFilter] = useListParam("filter", "all");
@@ -163,7 +165,17 @@ export function SeriesIndex() {
       {isLoading && <Loading />}
       {error && <ErrorBox error={error} />}
       {data && data.total === 0 && !q && filter === "all" && !rootFolderId && !language && (
-        <EmptyState title={t("No series yet")}>{manage?t("Add a source module (Settings → Source modules), a root folder (Settings → Media management), then add your first series."):t("No series available yet.")}</EmptyState>
+        account.isAdmin ? (
+          <SetupChecklist />
+        ) : (
+          <EmptyState title={t("No series yet")}>
+            {account.can(["library.manage", "requests.manage"]) ? (
+              <Link to="/add"><Button variant="primary">{t("Add series")}</Button></Link>
+            ) : (
+              t("The library is empty. Ask an admin to add series.")
+            )}
+          </EmptyState>
+        )
       )}
       {data && data.total === 0 && (q || filter !== "all" || rootFolderId || language) && (
         <EmptyState title={t("No series match these filters")}>{t("Try a shorter title or clear one of the filters.")}</EmptyState>

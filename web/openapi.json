@@ -6715,6 +6715,10 @@
             },
             "type": "array"
           },
+          "providers": {
+            "format": "int64",
+            "type": "integer"
+          },
           "results": {
             "items": {
               "$ref": "#/components/schemas/LookupResult"
@@ -6724,7 +6728,8 @@
         },
         "required": [
           "results",
-          "errors"
+          "errors",
+          "providers"
         ],
         "type": "object"
       },
