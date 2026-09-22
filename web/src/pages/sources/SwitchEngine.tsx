@@ -2,6 +2,7 @@ import { t as tr, t } from "../../lib/i18n/core";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, unwrap, type ModuleResource, type S } from "../../api/client";
+import { followCommand } from "../../api/queries";
 import { Badge, Button, ErrorBox, Loading, Modal, Select, Table, Td, Th } from "../../components/ui";
 import { useToast } from "../../lib/toast";
 
@@ -32,7 +33,8 @@ export function SwitchEngine({ modules, from, onClose }: { modules: ModuleResour
       setRows(r.rows);
       if (!dryRun) {
         qc.invalidateQueries({ queryKey: ["series"] });
-        toast.success(tr("Switching in the background"), tr("Watch it in Activity → Commands"));
+        toast.info(tr("Switching in the background"), tr("You'll get the result here when it's done."));
+        if (r.command) void followCommand(r.command.id, tr("Switch engine"), toast, () => qc.invalidateQueries({ queryKey: ["series"] }));
         onClose();
       }
     } catch (e) {

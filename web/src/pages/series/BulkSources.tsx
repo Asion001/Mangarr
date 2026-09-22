@@ -2,7 +2,7 @@ import { t as tr, t } from "../../lib/i18n/core";
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, unwrap, type S } from "../../api/client";
-import { useCatalogs } from "../../api/queries";
+import { followCommand, useCatalogs } from "../../api/queries";
 import { Badge, Button, ErrorBox, Loading, Modal, Select, Table, Td, Th } from "../../components/ui";
 import { useToast } from "../../lib/toast";
 
@@ -52,7 +52,8 @@ export function BulkSourcesModal({ ids, onClose }: { ids: number[]; onClose: () 
         return;
       }
       qc.invalidateQueries({ queryKey: ["series"] });
-      toast.success(`${chosen.displayName} queued for ${r.total} series`, tr("Watch it in Activity → Commands"));
+      toast.info(`${chosen.displayName} queued for ${r.total} series`, tr("You'll get the result here when it's done."));
+      if (r.command) void followCommand(r.command.id, `${chosen.displayName} · ${r.total} series`, toast, () => qc.invalidateQueries({ queryKey: ["series"] }));
       onClose();
     } catch (e) {
       setError(e);

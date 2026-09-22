@@ -76,6 +76,25 @@ export function usePushCommand() {
   });
 }
 
+const commandEnded = new Set(["completed", "failed", "orphaned"]);
+
+/**
+ * followCommand waits for a queued command to end and toasts how it went. It
+ * outlives the component that queued it, since dialogs close right away.
+ */
+export async function followCommand(id: number, title: string, toast: ReturnType<typeof useToast>, onDone?: () => void) {
+  const deadline = Date.now() + 30 * 60_000;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 2000));
+    const c = await unwrap(api.GET("/api/v1/commands/{id}", { params: { path: { id } } })).catch(() => null);
+    if (!c || !commandEnded.has(c.status)) continue;
+    onDone?.();
+    if (c.status === "completed") toast.success(title, c.message || undefined);
+    else toast.error(title, c.error || c.message || c.status);
+    return;
+  }
+}
+
 /** usePendingRequests counts requests waiting for a manager. */
 export const usePendingRequests = (enabled: boolean) =>
   useQuery({ queryKey: ["requests", "count"], queryFn: () => unwrap(api.GET("/api/v1/requests/count")), enabled, staleTime: 60_000 });
