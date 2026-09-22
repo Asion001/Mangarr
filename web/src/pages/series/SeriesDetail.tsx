@@ -134,7 +134,7 @@ export function SeriesDetail() {
             <Stat label={t("On disk")} value={s.stats.spaceSaved > 0 ? `${bytes(s.stats.sizeOnDisk)} (saved ${bytes(s.stats.spaceSaved)})` : bytes(s.stats.sizeOnDisk)} />
           </div>
           {readTarget && (
-            <Link to={`/read/${readTarget.id}`} className="mt-3 inline-flex items-center gap-2 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-2">
+            <Link to={`/read/${readTarget.id}`} className="mt-3 inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-hover">
               <BookOpen className="size-4" /> {readTarget.label}
             </Link>
           )}

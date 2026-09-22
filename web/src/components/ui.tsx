@@ -21,9 +21,9 @@ export function Button({
       className={clsx(
         "inline-flex items-center justify-center gap-1.5 rounded-md font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
         size === "sm" ? "h-7 px-2.5 text-xs" : "h-9 px-3.5 text-sm",
-        variant === "primary" && "bg-accent text-white hover:bg-accent-2",
+        variant === "primary" && "bg-primary text-white hover:bg-primary-hover",
         variant === "secondary" && "border border-border bg-panel-2 text-fg hover:bg-border",
-        variant === "danger" && "bg-err/90 text-white hover:bg-err",
+        variant === "danger" && "bg-danger text-white hover:bg-danger-hover",
         variant === "ghost" && "text-muted hover:bg-panel-2 hover:text-fg",
         className,
       )}
@@ -92,7 +92,7 @@ export function Switch({
         aria-checked={checked}
         disabled={disabled}
         onClick={() => onChange(!checked)}
-        className={clsx("relative h-5 w-9 shrink-0 rounded-full transition-colors", checked ? "bg-accent" : "bg-border")}
+        className={clsx("relative h-5 w-9 shrink-0 rounded-full transition-colors", checked ? "bg-ok" : "bg-border")}
       >
         <span className={clsx("absolute top-0.5 size-4 rounded-full bg-white transition-all", checked ? "left-4.5" : "left-0.5")} />
       </button>

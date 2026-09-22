@@ -13,6 +13,11 @@
   --color-warn: #d29922;
   --color-err: #f85149;
   --color-info: #58a6ff;
+  /* fills under white text: darker than accent/err so labels pass 4.5:1 */
+  --color-primary: #c2481f;
+  --color-primary-hover: #ad3e19;
+  --color-danger: #c93c37;
+  --color-danger-hover: #b62324;
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
@@ -21,6 +26,10 @@ body { font-family: var(--font-sans); }
 ::selection { background: color-mix(in oklab, var(--color-accent) 40%, transparent); }
 * { scrollbar-color: var(--color-border) transparent; }
 input, select, textarea { color-scheme: dark; }
+/* one visible keyboard focus ring everywhere (inputs keep their border) */
+@layer base {
+  :focus-visible { outline: 2px solid var(--color-accent-2); outline-offset: 2px; }
+}
 
 /* controls pinned by environment variables */
 fieldset:disabled :is(input, select, textarea, button) {

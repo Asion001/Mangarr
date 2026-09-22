@@ -167,7 +167,7 @@ function ResultTile({ m, g, selected, linked, onPick }: { m: SourceManga; g: Pic
     >
       <Cover src={apiUrl(`api/v1/sources/${g.moduleId}/${g.sourceId}/thumbnail`, { url: m.url, engineRef: m.engineRef })} alt={m.title} className="aspect-[2/3] w-full" />
       {selected && (
-        <span className="absolute right-2 top-2 rounded-full bg-accent p-0.5 text-white">
+        <span className="absolute right-2 top-2 rounded-full bg-primary p-0.5 text-white">
           <Check className="size-3.5" />
         </span>
       )}

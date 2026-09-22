@@ -163,14 +163,14 @@ export function Layout() {
           else {setCollapsed(!collapsed);localStorage.setItem("mangarr:nav-collapsed",String(!collapsed));}
         }}>{mobile?<X className="size-4"/>:compact?<PanelLeftOpen className="size-4"/>:<PanelLeftClose className="size-4"/>}</button>
       </div>
-      <nav aria-label={t("Navigation")} className="min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain">
+      <nav aria-label={t("Navigation")} className="min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain [&_a:focus-visible]:-outline-offset-2">
         {nav.filter(item => (!item.need || can(item.need)) && (editing || item.to === "/" || item.to === "/discover" || item.to === "/updates" || (item.to === "/requests" && can("requests.create")))).map(item=>{
           const active = item.to === "/" ? loc.pathname === "/" || loc.pathname.startsWith("/series") : loc.pathname.startsWith(item.to);
           const count = item.to === "/activity" ? queued : item.to === "/requests" && editing ? pendingRequests : item.to === "/system" ? issues : 0;
           return <div key={item.to}>
             <NavLink to={item.children?item.children[0].to:item.to} title={label(item.label)} aria-label={label(item.label)} onClick={()=>setOpen(false)} className={clsx("flex min-h-10 items-center gap-2.5 rounded-md px-2.5 py-2 font-medium",compact&&"justify-center",active?"bg-panel-2 text-fg":"text-muted hover:bg-panel-2 hover:text-fg")}>
               <span className="shrink-0">{item.icon}</span>
-              {!compact&&<><span className="flex-1">{label(item.label)}</span>{count>0&&<span className="rounded-full bg-accent px-1.5 text-xs text-white">{count}</span>}</>}
+              {!compact&&<><span className="flex-1">{label(item.label)}</span>{count>0&&<span className="rounded-full bg-primary px-1.5 text-xs font-medium text-white">{count}</span>}</>}
             </NavLink>
             {!compact&&item.children&&active&&<div className="mb-1 ml-8 mt-0.5 flex flex-col border-l border-border">
               {item.children.map(c=><NavLink key={c.to} to={c.to} onClick={()=>setOpen(false)} className={({isActive})=>clsx("-ml-px border-l px-3 py-1.5",isActive?"border-accent text-fg":"border-transparent text-muted hover:text-fg")}>{label(c.label)}</NavLink>)}
