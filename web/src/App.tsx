@@ -17,7 +17,7 @@ import { SingleSignOnPage } from "./pages/settings/SingleSignOn";
 import { Need } from "./components/Need";
 import { SeriesIndex } from "./pages/series/SeriesIndex";
 import { SeriesDetail } from "./pages/series/SeriesDetail";
-import { AddOptionsStep, AddSearchStep, AddSourcesStep } from "./pages/series/AddSeries";
+import { AddOptionsRedirect, AddReviewStep, AddSearchStep } from "./pages/series/AddSeries";
 import { QueuePage } from "./pages/activity/Queue";
 import { HistoryPage } from "./pages/activity/History";
 import { BlocklistPage } from "./pages/activity/Blocklist";
@@ -86,8 +86,8 @@ export function App() {
         <Route path="updates" element={<UpdatesPage />} />
         <Route path="account" element={<AccountPage />} />
         <Route path="add" element={<Need perm={["library.manage", "requests.manage"]}><AddSearchStep /></Need>} />
-        <Route path="add/:moduleId/:metaId/sources" element={<Need perm={["library.manage", "requests.manage"]}><AddSourcesStep /></Need>} />
-        <Route path="add/:moduleId/:metaId/options" element={<Need perm={["library.manage", "requests.manage"]}><AddOptionsStep /></Need>} />
+        <Route path="add/:moduleId/:metaId/sources" element={<Need perm={["library.manage", "requests.manage"]}><AddReviewStep /></Need>} />
+        <Route path="add/:moduleId/:metaId/options" element={<Need perm={["library.manage", "requests.manage"]}><AddOptionsRedirect /></Need>} />
         <Route path="requests" element={<Need perm={["requests.create", "requests.manage", "library.manage"]}><RequestsPage /></Need>} />
         <Route path="import" element={<Need perm="admin"><ImportsPage /></Need>} />
         <Route path="import/:id" element={<Need perm="admin"><ImportDetailPage /></Need>} />
