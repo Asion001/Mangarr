@@ -9440,7 +9440,7 @@
   "info": {
     "description": "Sonarr-style PVR for manga. All endpoints accept an X-Api-Key header.",
     "title": "mangarr",
-    "version": "test-version"
+    "version": "dev"
   },
   "openapi": "3.1.0",
   "paths": {

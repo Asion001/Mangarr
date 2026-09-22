@@ -156,6 +156,9 @@ func run() error {
 
 // dumpOpenAPI prints the OpenAPI document (used to generate web client types).
 func dumpOpenAPI() error {
+	// the schema is committed and CI regenerates it with a plain build, so it
+	// must not carry whatever version this binary was stamped with
+	version.Version = "dev"
 	dir, err := os.MkdirTemp("", "mangarr-openapi-*")
 	if err != nil {
 		return err

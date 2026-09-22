@@ -73,7 +73,9 @@ func TestSwitchSourceModule(t *testing.T) {
 	if len(links) != 2 {
 		t.Fatalf("links %+v", links)
 	}
-	if links[0].ModuleID != to || links[0].EngineRef != "" {
+	// the old ref is dropped; a scheduled refresh may already have given it
+	// one of the new module's own
+	if links[0].ModuleID != to || links[0].EngineRef == "77" {
 		t.Fatalf("the moved link kept an engine ref from the old module: %+v", links[0])
 	}
 	if links[1].ModuleID != from {
