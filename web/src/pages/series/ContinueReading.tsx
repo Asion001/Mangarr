@@ -7,13 +7,18 @@ import { Cover } from "../../components/Cover";
 import { Badge, Progress } from "../../components/ui";
 import { relative } from "../../lib/format";
 
-/** ContinueReading is the shelf of series in progress, with the chapter to read next. */
-export function ContinueReading() {
-  const { data } = useQuery({
+/** useReadingShelf lists the series in progress, with the chapter to read next. */
+export function useReadingShelf() {
+  return useQuery({
     queryKey: ["readers", "shelf"],
     queryFn: () => unwrap(api.GET("/api/v1/reading/shelf", { params: { query: { limit: 20 } } })),
     staleTime: 30_000,
   });
+}
+
+/** ContinueReading is the shelf of series in progress, with the chapter to read next. */
+export function ContinueReading() {
+  const { data } = useReadingShelf();
   if (!data || data.items.length === 0) return null;
   return (
     <section className="mb-6">

@@ -8,7 +8,7 @@ import { useAccount } from "../../lib/account";
 import { relative } from "../../lib/format";
 import { t } from "../../lib/i18n/core";
 import { useUIMode } from "../../lib/uiPreferences";
-import { ContinueReading } from "../series/ContinueReading";
+import { ContinueReading, useReadingShelf } from "../series/ContinueReading";
 
 type LibraryItem = S["DiscoverLibraryItem"];
 type SourceItem = S["DiscoverSourceItem"];
@@ -103,11 +103,11 @@ function Spotlight({ item }: { item: LibraryItem }) {
         <Cover src={apiUrl(item.coverUrl)} alt={item.title} className="hidden aspect-[2/3] w-36 shrink-0 shadow-2xl sm:block" />
         <div className="max-w-2xl">
           <div className="mb-3 flex flex-wrap gap-2">
-            <Badge tone="accent">{t("Recommended for you")}</Badge>
+            <Badge tone="accent">{item.reason === "recent-update" ? t("Recently updated") : t("Recommended for you")}</Badge>
             {item.genres.slice(0, 3).map((genre) => <Badge key={genre}>{genre}</Badge>)}
           </div>
           <h2 className="text-2xl font-semibold sm:text-3xl">{item.title}</h2>
-          <p className="mt-2 text-sm text-accent-2">{recommendationReason(item)}</p>
+          {recommendationReason(item) && <p className="mt-2 text-sm text-accent-2">{recommendationReason(item)}</p>}
           {item.description && <p className="mt-3 line-clamp-3 max-w-xl text-sm leading-6 text-fg/80">{item.description}</p>}
           <div className="mt-5 flex flex-wrap items-center gap-3">
             <Link to={`/series/${item.seriesId}`}><Button variant="primary" icon={<BookOpen className="size-4" />}>{t("Open series")}</Button></Link>
@@ -135,7 +135,10 @@ export function DiscoverPage() {
   const manage = editing && can(["library.manage", "requests.manage"]);
   const request = can("requests.create") && !can(["library.manage", "requests.manage"]);
   const data = query.data;
-  const spotlight = data?.recommendations[0] ?? data?.updates[0];
+  // the spotlight is for something new: never a series already on the Continue reading shelf
+  const shelf = useReadingShelf();
+  const reading = new Set((shelf.data?.items ?? []).map((i) => i.seriesId));
+  const spotlight = shelf.isPending ? undefined : (data?.recommendations.find((i) => !reading.has(i.seriesId)) ?? data?.updates.find((i) => !reading.has(i.seriesId)));
   const empty = data && data.recommendations.length === 0 && data.updates.length === 0 && data.popular.length === 0;
   return (
     <>
