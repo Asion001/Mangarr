@@ -274,9 +274,12 @@ func langMatch(catalogLang string, langs []string) bool {
 func (s *Service) Select(ctx context.Context, f Filter) ([]Catalog, []string) {
 	all, errs := s.List(ctx, false)
 	st := s.sourceSettings()
+	// A language default orders the catalogs for that language; unlike keys
+	// asked for by name, it does not bring back ones switched off.
+	preset := false
 	if f.Scope != ScopeAll && len(f.Keys) == 0 && f.Lang != "" {
-		if preset, ok := st.ForLanguage(f.Lang); ok && len(preset.Sources) > 0 {
-			f.Keys = preset.Sources
+		if p, ok := st.ForLanguage(f.Lang); ok && len(p.Sources) > 0 {
+			f.Keys, preset = p.Sources, true
 		}
 	}
 	var langs []string
@@ -303,7 +306,7 @@ func (s *Service) Select(ctx context.Context, f Filter) ([]Catalog, []string) {
 	}
 	if len(f.Keys) > 0 {
 		for _, key := range f.Keys {
-			if c, ok := byKey[key]; ok {
+			if c, ok := byKey[key]; ok && (!preset || c.Enabled) {
 				out = append(out, c)
 			}
 		}

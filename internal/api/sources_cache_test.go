@@ -160,6 +160,14 @@ func TestLanguageDefaultsSelectSourcesInConfiguredOrder(t *testing.T) {
 	if len(selected) != 2 || selected[0].ID != "J" || selected[1].ID != "A" {
 		t.Fatalf("language source order was not preserved: %+v", selected)
 	}
+	// switching a catalog off takes it out of its language's default too
+	if code := doJSON(t, http.MethodPut, e.url+"/api/v1/catalogs", fmt.Sprintf(`{%q:{"enabled":false}}`, e.key("J")), nil); code != 200 {
+		t.Fatalf("disable catalog: %d", code)
+	}
+	selected, _ = e.app.Catalogs.Select(context.Background(), catalogs.Filter{Scope: catalogs.ScopeActive, Lang: "ru"})
+	if len(selected) != 1 || selected[0].ID != "A" {
+		t.Fatalf("a disabled catalog stayed in the language default: %+v", selected)
+	}
 }
 
 func TestCatalogListRefreshesOnModuleReload(t *testing.T) {
