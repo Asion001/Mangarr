@@ -5,7 +5,7 @@ import { ArrowDownToLine, ArrowUpToLine, BookOpen, ChevronDown, ChevronRight, Ex
 import { Link } from "react-router";
 import { api, unwrap, type Chapter } from "../../api/client";
 import { useChapters } from "../../api/queries";
-import { Badge, Button, Card, ErrorBox, IconButton, Loading, Modal, Progress, Switch, Table, Td, Th } from "../../components/ui";
+import { Badge, Button, Card, Confirm, ErrorBox, IconButton, Loading, Modal, Progress, Switch, Table, Td, Th } from "../../components/ui";
 import { bytes, date, relative } from "../../lib/format";
 import { useToast } from "../../lib/toast";
 import { eta } from "../../lib/liveProgress";
@@ -27,6 +27,8 @@ const chaptersPerPage = 100;
 /** readable: downloaded, or a source to stream it from. */
 export const readable = (c: Chapter) => !!c.file || c.releases.length > 0;
 
+const deletableFile = (c: Chapter) => !!c.file && (!c.job || ["completed", "failed"].includes(c.job.status));
+
 const toggle = (set: Set<number>, id: number) => {
   const next = new Set(set);
   if (next.has(id)) next.delete(id);
@@ -43,6 +45,8 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [explain, setExplain] = useState<Chapter | null>(null);
+  const [deleteIds, setDeleteIds] = useState<number[]>([]);
+  const [deleting, setDeleting] = useState(false);
   const [page, setPage] = useState(1);
   const [filterParam, setFilter] = useListParam("chapters", "all");
   const filter = filterParam as "all" | "missing" | "downloaded";
@@ -124,6 +128,24 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
       toast.fromError(e);
     }
   };
+  const deleteFiles = useCallback(async () => {
+    setDeleting(true);
+    try {
+      const result = await unwrap(api.POST("/api/v1/chapters/delete", { body: { chapterIds: deleteIds } }));
+      toast.success(t("Deleted chapter files: {count}", { count: result.removed }));
+      setSelected((current) => {
+        const next = new Set(current);
+        deleteIds.forEach((id) => next.delete(id));
+        return next;
+      });
+      setDeleteIds([]);
+      refresh();
+    } catch (e) {
+      toast.fromError(e);
+    } finally {
+      setDeleting(false);
+    }
+  }, [deleteIds, refresh, toast]);
   const toggleSelected = useCallback((id: number) => setSelected((current) => toggle(current, id)), []);
   const toggleExpanded = useCallback((id: number) => setExpanded((current) => toggle(current, id)), []);
   const monitorOne = useCallback((id: number, monitored: boolean) => monitor([id], monitored), [monitor]);
@@ -135,6 +157,7 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
 
   const sel = [...selected];
   const selectedJobs = list.filter((chapter) => selected.has(chapter.id) && chapter.job).length;
+  const selectedFileIDs = list.filter((chapter) => selected.has(chapter.id) && deletableFile(chapter)).map((chapter) => chapter.id);
   return (
     <Card
       title={`Chapters (${data?.length ?? 0})`}
@@ -147,6 +170,9 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
               <Button size="sm" onClick={() => monitor(sel, false)}>{t("Unmonitor")}</Button>
               <Button size="sm" icon={<Search className="size-3.5" />} onClick={() => search(sel)}>{t("Search")}</Button>
               <Button size="sm" icon={<Sparkles className="size-3.5" />} onClick={processSelected}>{t("Process")}</Button>
+              {selectedFileIDs.length > 0 && (
+                <Button size="sm" variant="danger" icon={<Trash2 className="size-3.5" />} onClick={() => setDeleteIds(selectedFileIDs)}>{t("Delete files")}</Button>
+              )}
               {selectedJobs > 0 && (
                 <>
                   <Button size="sm" icon={<ArrowUpToLine className="size-3.5" />} onClick={() => queueBulk("top")}>{t("Top")}</Button>
@@ -213,6 +239,7 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
                   onMonitor={monitorOne}
                   onSearch={searchOne}
                   onRestore={restore}
+                  onDelete={(id) => setDeleteIds([id])}
                   onMark={mark}
                   onQueueAction={queueAction}
                   onExplain={setExplain}
@@ -232,6 +259,16 @@ export function ChaptersTable({ seriesId, manage = true }: { seriesId: number; m
         </div>
       )}
       {explain && <DecisionModal seriesId={seriesId} chapter={explain} onClose={() => setExplain(null)} />}
+      <Confirm
+        open={deleteIds.length > 0}
+        title={t("Delete chapter files")}
+        message={t("Delete {count} chapter files? They will stay in the chapter list and will not download again until restored.", { count: deleteIds.length })}
+        confirmLabel={t("Delete")}
+        danger
+        loading={deleting}
+        onConfirm={deleteFiles}
+        onClose={() => setDeleteIds([])}
+      />
     </Card>
   );
 }
@@ -247,6 +284,7 @@ type ChapterRowProps = {
   onMonitor: (id: number, monitored: boolean) => void;
   onSearch: (id: number) => void;
   onRestore: (chapter: Chapter) => void;
+  onDelete: (id: number) => void;
   onMark: (chapter: Chapter, read: boolean) => void;
   onQueueAction: (jobID: number, action: "top" | "bottom" | "pause" | "resume") => void;
   onExplain: (chapter: Chapter) => void;
@@ -264,6 +302,7 @@ const ChapterRow = memo(function ChapterRow({
   onMonitor,
   onSearch,
   onRestore,
+  onDelete,
   onMark,
   onQueueAction,
   onExplain,
@@ -370,6 +409,11 @@ const ChapterRow = memo(function ChapterRow({
                 <Search className="size-4" />
               </IconButton>
             ))}
+            {manage && deletableFile(c) && (
+              <IconButton title={t("Delete chapter file")} onClick={() => onDelete(c.id)}>
+                <Trash2 className="size-4" />
+              </IconButton>
+            )}
             {manage && (
               <IconButton title={t("Why (not) downloaded?")} onClick={() => onExplain(c)}>
                 <HelpCircle className="size-4" />

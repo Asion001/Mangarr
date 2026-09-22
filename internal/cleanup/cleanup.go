@@ -347,7 +347,7 @@ func (c *Cleaner) Run(ctx context.Context, force bool) (*Plan, int, error) {
 	perSeries := map[string][]string{}
 	var errs []error
 	for _, cd := range plan.Candidates {
-		if err := c.remove(ctx, cd, cs.UseRecycleBin); err != nil {
+		if err := c.remove(ctx, cd, cs.UseRecycleBin, model.HistoryCleaned); err != nil {
 			errs = append(errs, fmt.Errorf("%s ch. %s: %w", cd.SeriesTitle, cd.Chapter, err))
 			continue
 		}
@@ -367,7 +367,7 @@ func (c *Cleaner) Run(ctx context.Context, force bool) (*Plan, int, error) {
 	return plan, deleted, errors.Join(errs...)
 }
 
-func (c *Cleaner) remove(ctx context.Context, cd Candidate, recycle bool) error {
+func (c *Cleaner) remove(ctx context.Context, cd Candidate, recycle bool, event string) error {
 	defer library.RLockSeries(cd.SeriesID)()
 	var s model.Series
 	if err := c.db.NewSelect().Model(&s).Where("id = ?", cd.SeriesID).Scan(ctx); err != nil {
@@ -392,8 +392,12 @@ func (c *Cleaner) remove(ctx context.Context, cd Candidate, recycle bool) error 
 			return err
 		}
 		chID := cd.ChapterID
-		return history.Record(ctx, tx, cd.SeriesID, &chID, model.HistoryCleaned, filepath.Base(cd.Path),
-			map[string]string{"size": fmt.Sprint(cd.Size), "recycled": fmt.Sprint(recycle)})
+		data := map[string]string{"size": fmt.Sprint(cd.Size), "recycled": fmt.Sprint(recycle)}
+		if event == model.HistoryDeleted {
+			data["reason"] = "manual"
+		}
+		return history.Record(ctx, tx, cd.SeriesID, &chID, event, filepath.Base(cd.Path),
+			data)
 	})
 	if err != nil {
 		return err
@@ -401,6 +405,80 @@ func (c *Cleaner) remove(ctx context.Context, cd Candidate, recycle bool) error 
 	c.bus.Publish(events.Event{Type: downloads.EventFileWritten, SeriesID: cd.SeriesID, Payload: cd.Path})
 	c.bus.Changed("chapter", "updated", cd.ChapterID)
 	return nil
+}
+
+type RemoveResult struct {
+	Requested int   `json:"requested"`
+	Removed   int   `json:"removed"`
+	Skipped   int   `json:"skipped"`
+	Freed     int64 `json:"freed"`
+}
+
+// RemoveChapters explicitly removes downloaded chapter files and marks the
+// chapters cleaned, so a refresh cannot immediately download them again.
+func (c *Cleaner) RemoveChapters(ctx context.Context, chapterIDs []int64) (*RemoveResult, error) {
+	unique := map[int64]bool{}
+	ids := make([]int64, 0, len(chapterIDs))
+	for _, id := range chapterIDs {
+		if id > 0 && !unique[id] {
+			unique[id] = true
+			ids = append(ids, id)
+		}
+	}
+	result := &RemoveResult{Requested: len(ids)}
+	if len(ids) == 0 {
+		return result, nil
+	}
+	if len(ids) > 1000 {
+		return result, errors.New("at most 1000 chapters can be deleted at once")
+	}
+	type row struct {
+		ChapterID   int64  `bun:"chapter_id"`
+		Chapter     string `bun:"chapter"`
+		SeriesID    int64  `bun:"series_id"`
+		SeriesTitle string `bun:"series_title"`
+		SeriesPath  string `bun:"series_path"`
+		RootID      int64  `bun:"root_id"`
+		FileID      int64  `bun:"file_id"`
+		Relative    string `bun:"relative_path"`
+		Size        int64  `bun:"size"`
+	}
+	var rows []row
+	err := c.db.NewSelect().TableExpr("chapters AS ch").
+		ColumnExpr("ch.id AS chapter_id, ch.number_key AS chapter, ch.series_id AS series_id").
+		ColumnExpr("s.title AS series_title, s.path AS series_path, s.root_folder_id AS root_id").
+		ColumnExpr("f.id AS file_id, f.relative_path AS relative_path, f.size AS size").
+		Join("JOIN series AS s ON s.id = ch.series_id").Join("JOIN chapter_files AS f ON f.id = ch.file_id").
+		Where("ch.id IN (?)", bun.In(ids)).
+		Where("NOT EXISTS (SELECT 1 FROM download_jobs AS j WHERE j.chapter_id = ch.id AND j.status NOT IN (?, ?))", model.JobCompleted, model.JobFailed).
+		Scan(ctx, &rows)
+	if err != nil {
+		return result, err
+	}
+	result.Skipped = len(ids) - len(rows)
+	cs, err := c.settings.Cleanup(ctx)
+	if err != nil {
+		return result, err
+	}
+	var errs []error
+	for _, r := range rows {
+		s := model.Series{ID: r.SeriesID, Title: r.SeriesTitle, Path: r.SeriesPath, RootFolderID: r.RootID}
+		dir, err := c.lib.SeriesDir(ctx, &s)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s ch. %s: %w", r.SeriesTitle, r.Chapter, err))
+			continue
+		}
+		cd := Candidate{SeriesID: r.SeriesID, SeriesTitle: r.SeriesTitle, ChapterID: r.ChapterID, Chapter: r.Chapter,
+			FileID: r.FileID, Path: filepath.Join(dir, r.Relative), Size: r.Size}
+		if err := c.remove(ctx, cd, cs.UseRecycleBin, model.HistoryDeleted); err != nil {
+			errs = append(errs, fmt.Errorf("%s ch. %s: %w", r.SeriesTitle, r.Chapter, err))
+			continue
+		}
+		result.Removed++
+		result.Freed += r.Size
+	}
+	result.Skipped += len(errs)
+	return result, errors.Join(errs...)
 }
 
 // Restore makes a cleaned chapter wanted again.

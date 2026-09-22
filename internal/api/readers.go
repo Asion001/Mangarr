@@ -218,6 +218,19 @@ func (s *Server) registerReaders() {
 			_, _ = s.app.Queue.Push(ctx, "SearchMissing", map[string]any{"seriesId": ch.SeriesID, "chapterIds": []int64{ch.ID}, "explicit": true}, "restore")
 			return &struct{ Body *model.Chapter }{ch}, nil
 		})
+	huma.Register(s.api, huma.Operation{OperationID: "chapters-delete", Method: http.MethodPost, Path: "/api/v1/chapters/delete", Tags: ctags,
+		Summary: "Delete downloaded chapter files and mark them cleaned"},
+		func(ctx context.Context, in *struct {
+			Body struct {
+				ChapterIDs []int64 `json:"chapterIds" minItems:"1" maxItems:"1000"`
+			}
+		}) (*struct{ Body *cleanup.RemoveResult }, error) {
+			if len(in.Body.ChapterIDs) == 0 {
+				return nil, huma.Error422UnprocessableEntity("choose at least one chapter")
+			}
+			result, err := s.app.Cleaner.RemoveChapters(ctx, in.Body.ChapterIDs)
+			return &struct{ Body *cleanup.RemoveResult }{result}, toHTTPError(err)
+		})
 }
 
 // saveReaderAccount tests credentials on a library server and links them to

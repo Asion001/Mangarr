@@ -187,6 +187,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chapters/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Delete downloaded chapter files and mark them cleaned */
+        post: operations["chapters-delete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chapters/monitor": {
         parameters: {
             query?: never;
@@ -3306,6 +3323,9 @@ export interface components {
             scanlators?: string[];
             status?: string;
         };
+        "Chapters-deleteRequest": {
+            chapterIds: number[];
+        };
         "Chapters-monitorRequest": {
             chapterIds: number[];
             monitored: boolean;
@@ -3354,6 +3374,16 @@ export interface components {
             skipped: components["schemas"]["CleanupSkip"][];
             /** Format: int64 */
             totalSize: number;
+        };
+        CleanupRemoveResult: {
+            /** Format: int64 */
+            freed: number;
+            /** Format: int64 */
+            removed: number;
+            /** Format: int64 */
+            requested: number;
+            /** Format: int64 */
+            skipped: number;
         };
         CleanupSkip: {
             reason: string;
@@ -6196,6 +6226,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CatalogList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "chapters-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Chapters-deleteRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CleanupRemoveResult"];
                 };
             };
             /** @description Error */

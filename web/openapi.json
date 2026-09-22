@@ -1039,6 +1039,24 @@
         ],
         "type": "object"
       },
+      "Chapters-deleteRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "chapterIds": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "chapterIds"
+        ],
+        "type": "object"
+      },
       "Chapters-monitorRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1215,6 +1233,34 @@
           "candidates",
           "skipped",
           "totalSize"
+        ],
+        "type": "object"
+      },
+      "CleanupRemoveResult": {
+        "additionalProperties": false,
+        "properties": {
+          "freed": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "removed": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "requested": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "skipped": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "requested",
+          "removed",
+          "skipped",
+          "freed"
         ],
         "type": "object"
       },
@@ -9900,6 +9946,47 @@
         "summary": "Change preferences of several catalogs, keyed by moduleId:sourceId",
         "tags": [
           "Catalogs"
+        ]
+      }
+    },
+    "/api/v1/chapters/delete": {
+      "post": {
+        "operationId": "chapters-delete",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Chapters-deleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleanupRemoveResult"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Delete downloaded chapter files and mark them cleaned",
+        "tags": [
+          "Cleanup"
         ]
       }
     },

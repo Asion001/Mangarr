@@ -18,6 +18,7 @@ catalogs-list GET /api/v1/catalogs -> library.manage | requests.manage
 catalogs-update PUT /api/v1/catalogs -> admin
 chapter-decision GET /api/v1/series/{id}/chapters/{chapterId}/decision -> library.manage
 chapter-restore POST /api/v1/chapters/{id}/restore -> library.manage
+chapters-delete POST /api/v1/chapters/delete -> library.manage
 chapters-monitor PUT /api/v1/chapters/monitor -> library.manage
 cleanup-preview GET /api/v1/cleanup/preview -> admin
 cleanup-run POST /api/v1/cleanup/run -> admin

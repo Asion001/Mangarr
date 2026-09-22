@@ -124,6 +124,44 @@ func TestReadSyncAndCleanup(t *testing.T) {
 			}
 			e.runCommand(t, "SearchMissing", map[string]any{"seriesId": ser.ID, "chapterIds": []int64{ch1.ID}, "explicit": true})
 			waitFor(t, 20*time.Second, "restored chapter", func() bool { _, ok := e.chapterFiles(t, ser.ID)["1"]; return ok })
+
+			// Manual deletion deduplicates the request, preserves the chapter and
+			// records a distinct history event. Repeating it is a harmless skip.
+			var ch4 model.Chapter
+			if err := e.App.DB.NewSelect().Model(&ch4).Where("series_id = ? AND number_key = ?", ser.ID, "4").Scan(e.Ctx); err != nil {
+				t.Fatal(err)
+			}
+			result, err := e.App.Cleaner.RemoveChapters(e.Ctx, []int64{ch4.ID, ch4.ID})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result.Requested != 1 || result.Removed != 1 || result.Skipped != 0 || result.Freed <= 0 {
+				t.Fatalf("manual removal result: %+v", result)
+			}
+			if _, err := os.Stat(path("4")); !os.IsNotExist(err) {
+				t.Fatal("manually deleted chapter file should be gone")
+			}
+			var deleted model.Chapter
+			if err := e.App.DB.NewSelect().Model(&deleted).Where("id = ?", ch4.ID).Scan(e.Ctx); err != nil {
+				t.Fatal(err)
+			}
+			if deleted.State != model.ChapterCleaned || deleted.CleanedAt == nil || deleted.FileID != nil {
+				t.Fatalf("manually deleted chapter should be cleaned: %+v", deleted)
+			}
+			var h model.History
+			if err := e.App.DB.NewSelect().Model(&h).Where("chapter_id = ? AND event_type = ?", ch4.ID, model.HistoryDeleted).Scan(e.Ctx); err != nil {
+				t.Fatal(err)
+			}
+			if h.Data["reason"] != "manual" {
+				t.Fatalf("manual removal history: %+v", h)
+			}
+			repeat, err := e.App.Cleaner.RemoveChapters(e.Ctx, []int64{ch4.ID})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if repeat.Requested != 1 || repeat.Removed != 0 || repeat.Skipped != 1 {
+				t.Fatalf("repeat manual removal result: %+v", repeat)
+			}
 		})
 	}
 }
