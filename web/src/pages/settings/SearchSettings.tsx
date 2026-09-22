@@ -1,7 +1,7 @@
 import { t } from "../../lib/i18n/core";
 import { type S } from "../../api/client";
 import { useCatalogs, useProfiles, useRootFolders } from "../../api/queries";
-import { Badge, Button, Card, ErrorBox, Field, Input, Loading, PageHeader, Select, Switch } from "../../components/ui";
+import { Badge, Button, Card, ErrorBox, Field, Input, Loading, PageHeader, SaveBar, Select, Switch } from "../../components/ui";
 import { useSettingsDoc } from "./useSettingsDoc";
 
 type Sources = S["Sources"];
@@ -46,9 +46,6 @@ export function SearchSettingsPage() {
       <PageHeader
         title={t("Search & throttling")}
         subtitle={t("How catalogs are searched when adding series, and how gently mangarr talks to sites.")}
-        actions={
-          <Button variant="primary" loading={doc.saving} onClick={() => doc.save()}>{t("Save")}</Button>
-        }
       />
       {doc.isLoading && <Loading />}
       {doc.error && <ErrorBox error={doc.error} />}
@@ -178,6 +175,7 @@ export function SearchSettingsPage() {
           </Card>
         </>
       )}
+      <SaveBar dirty={doc.dirty} saving={doc.saving} onSave={() => void doc.save()} onDiscard={doc.reset} />
     </>
   );
 }

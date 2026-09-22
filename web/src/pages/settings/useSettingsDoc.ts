@@ -40,10 +40,14 @@ export function useSettingsDoc<T extends object>(name: Doc) {
     }
   };
   const patch = (p: Partial<T>) => setValue((v) => (v ? { ...v, ...p } : v));
+  /** dirty: the form differs from what the server has. */
+  const dirty = !!data && !!value && JSON.stringify(data) !== JSON.stringify(value);
+  /** reset discards unsaved edits. */
+  const reset = () => data && setValue(data);
   const locks = useSettingsLocks();
   /** lock returns the environment variable pinning a field (JSON path), if any. */
   const lock = (path: string) => locks.data?.[name]?.find((l) => l.path === path)?.env;
-  return { value, setValue, patch, save, saving, isLoading, error, lock };
+  return { value, setValue, patch, save, saving, isLoading, error, lock, dirty, reset };
 }
 
 type Lock = { path: string; env: string };

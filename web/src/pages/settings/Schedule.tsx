@@ -1,7 +1,7 @@
 import { t as tr, t } from "../../lib/i18n/core";
 import { Plus, Trash2 } from "lucide-react";
 import { type S } from "../../api/client";
-import { Button, Card, EmptyState, EnvLock, ErrorBox, Field, IconButton, Input, Loading, Locked, PageHeader, Select, Switch } from "../../components/ui";
+import { Button, Card, EmptyState, EnvLock, ErrorBox, Field, IconButton, Input, Loading, Locked, PageHeader, SaveBar, Select, Switch } from "../../components/ui";
 import { useSettingsDoc } from "./useSettingsDoc";
 
 type Schedule = S["Schedule"];
@@ -19,9 +19,6 @@ export function SchedulePage() {
       <PageHeader
         title={t("Schedule")}
         subtitle={t("Quiet hours: pause downloads or processing, or throttle more gently, at certain times.")}
-        actions={
-          <Button variant="primary" loading={doc.saving} onClick={() => doc.save()}>{t("Save")}</Button>
-        }
       />
       {doc.isLoading && <Loading />}
       {doc.error && <ErrorBox error={doc.error} />}
@@ -102,6 +99,7 @@ export function SchedulePage() {
           </Card>
         </>
       )}
+      <SaveBar dirty={doc.dirty} saving={doc.saving} onSave={() => void doc.save()} onDiscard={doc.reset} />
     </>
   );
 }

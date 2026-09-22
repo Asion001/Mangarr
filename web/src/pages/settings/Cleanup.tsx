@@ -4,14 +4,14 @@ import { useQuery } from "@tanstack/react-query";
 import { Eraser, RefreshCw } from "lucide-react";
 import { api, unwrap, type S } from "../../api/client";
 import { usePushCommand, useReaders, useTags } from "../../api/queries";
-import { Badge, Button, Card, ErrorBox, Field, Input, Loading, PageHeader, Switch, Table, Td, Th } from "../../components/ui";
+import { Badge, Button, Card, ErrorBox, Field, Input, Loading, PageHeader, SaveBar, Switch, Table, Td, Th } from "../../components/ui";
 import { bytes, relative } from "../../lib/format";
 import { useSettingsDoc } from "./useSettingsDoc";
 
 type CleanupSettings = S["Cleanup"];
 
 export function CleanupPage() {
-  const { value: c, patch, save, saving, isLoading, error, lock } = useSettingsDoc<CleanupSettings>("cleanup");
+  const { value: c, patch, save, saving, isLoading, error, lock, dirty, reset } = useSettingsDoc<CleanupSettings>("cleanup");
   const { data: readers } = useReaders();
   const { data: tags } = useTags();
   const push = usePushCommand();
@@ -31,11 +31,6 @@ export function CleanupPage() {
       <PageHeader
         title={t("Read-based cleanup")}
         subtitle={t("Delete chapters every reader has finished to save space. Cleaned chapters are never downloaded again unless you restore them.")}
-        actions={
-          <>
-            <Button variant="primary" loading={saving} onClick={async () => (await save(), preview.refetch())}>{t("Save")}</Button>
-          </>
-        }
       />
       {isLoading && <Loading />}
       {error && <ErrorBox error={error} />}
@@ -162,6 +157,7 @@ export function CleanupPage() {
           </>
         )}
       </Card>
+      <SaveBar dirty={dirty} saving={saving} onSave={async () => (await save(), preview.refetch())} onDiscard={reset} />
     </>
   );
 }

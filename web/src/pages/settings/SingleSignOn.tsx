@@ -2,14 +2,14 @@ import { t } from "../../lib/i18n/core";
 import { Plus, Trash2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { api, unwrap, type S } from "../../api/client";
-import { Badge, Button, Card, ErrorBox, Field, IconButton, Input, Loading, PageHeader, Select, Switch, TagInput } from "../../components/ui";
+import { Badge, Button, Card, ErrorBox, Field, IconButton, Input, Loading, PageHeader, SaveBar, Select, Switch, TagInput } from "../../components/ui";
 import { useSettingsDoc } from "./useSettingsDoc";
 
 type SSO = S["SSOSettings"];
 
 /** SingleSignOnPage configures signing in with an OpenID Connect provider. */
 export function SingleSignOnPage() {
-  const { value: c, patch, save, saving, isLoading, error } = useSettingsDoc<SSO>("sso");
+  const { value: c, patch, save, saving, isLoading, error, dirty, reset } = useSettingsDoc<SSO>("sso");
   const { data: groups } = useQuery({ queryKey: ["groups"], queryFn: () => unwrap(api.GET("/api/v1/groups")) });
   const mappings = c?.groups ?? [];
   const setMapping = (i: number, p: Partial<{ claim: string; groupId: number }>) =>
@@ -19,9 +19,6 @@ export function SingleSignOnPage() {
       <PageHeader
         title={t("Single sign-on")}
         subtitle={t("Let people sign in with your identity provider (Authentik, Authelia, Keycloak, Pocket ID, Google, ...).")}
-        actions={
-          <Button variant="primary" loading={saving} onClick={() => save()}>{t("Save")}</Button>
-        }
       />
       {isLoading && <Loading />}
       {error && <ErrorBox error={error} />}
@@ -111,6 +108,7 @@ export function SingleSignOnPage() {
           </Card>
         </div>
       )}
+      <SaveBar dirty={dirty} saving={saving} onSave={() => void save()} onDiscard={reset} />
     </>
   );
 }

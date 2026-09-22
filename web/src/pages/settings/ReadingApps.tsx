@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, KeyRound, Plus, Trash2 } from "lucide-react";
 import { Link } from "react-router";
 import { api, unwrap, type S } from "../../api/client";
-import { Badge, Button, Card, Confirm, ErrorBox, Field, IconButton, Input, Loading, Modal, PageHeader, Switch, Table, Tabs, Td, Th } from "../../components/ui";
+import { Badge, Button, Card, Confirm, ErrorBox, Field, IconButton, Input, Loading, Modal, PageHeader, SaveBar, Switch, Table, Tabs, Td, Th } from "../../components/ui";
 import { relative } from "../../lib/format";
 import { useToast } from "../../lib/toast";
 import { useSettingsDoc } from "./useSettingsDoc";
@@ -21,7 +21,7 @@ export function appAddress(publicUrl: string, listen?: string) {
 }
 
 export function ReadingAppsPage() {
-  const { value: r, patch, save, saving, isLoading, error, lock } = useSettingsDoc<ReadingSettings>("reading");
+  const { value: r, patch, save, saving, isLoading, error, lock, dirty, reset } = useSettingsDoc<ReadingSettings>("reading");
   const status = useQuery({ queryKey: ["reading", "status"], queryFn: () => unwrap(api.GET("/api/v1/reading/status")), refetchInterval: 10_000 });
   const [app, setApp] = useState<App>("mihon");
   const st = status.data;
@@ -35,9 +35,6 @@ export function ReadingAppsPage() {
       <PageHeader
         title={t("Reading apps")}
         subtitle={t("Read your whole mangarr library in Mihon, KMReader or Paperback through a Komga-compatible API, with progress synced both ways.")}
-        actions={
-          <Button variant="primary" loading={saving} onClick={saveAndRefresh}>{t("Save")}</Button>
-        }
       />
       {isLoading && <Loading />}
       {error && <ErrorBox error={error} />}
@@ -110,6 +107,7 @@ export function ReadingAppsPage() {
           </Card>
         </div>
       )}
+      <SaveBar dirty={dirty} saving={saving} onSave={() => void saveAndRefresh()} onDiscard={reset} />
     </>
   );
 }

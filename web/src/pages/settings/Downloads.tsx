@@ -1,6 +1,6 @@
 import { t } from "../../lib/i18n/core";
 import { type S } from "../../api/client";
-import { Button, Card, ErrorBox, Field, Input, Loading, PageHeader } from "../../components/ui";
+import { Card, ErrorBox, Field, Input, Loading, PageHeader, SaveBar } from "../../components/ui";
 import { useSettingsDoc } from "./useSettingsDoc";
 
 type Downloads = S["Downloads"];
@@ -14,16 +14,6 @@ export function DownloadsPage() {
     <>
       <PageHeader
         title={t("Downloads")}
-        actions={
-          <Button
-            variant="primary"
-            loading={dl.saving || rs.saving}
-            onClick={async () => {
-              await dl.save();
-              if (rs.value) await rs.save();
-            }}
-          >{t("Save")}</Button>
-        }
       />
       {dl.isLoading && <Loading />}
       {dl.error && <ErrorBox error={dl.error} />}
@@ -58,6 +48,15 @@ export function DownloadsPage() {
           </Field>
         </Card>
       )}
+      <SaveBar
+        dirty={dl.dirty || rs.dirty}
+        saving={dl.saving || rs.saving}
+        onSave={async () => {
+          if (dl.dirty) await dl.save();
+          if (rs.dirty) await rs.save();
+        }}
+        onDiscard={() => (dl.reset(), rs.reset())}
+      />
     </>
   );
 }

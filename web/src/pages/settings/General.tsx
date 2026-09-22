@@ -4,14 +4,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Copy, KeyRound, Plus, Trash2 } from "lucide-react";
 import { api, unwrap, type S } from "../../api/client";
 import { useTags } from "../../api/queries";
-import { Badge, Button, Card, EnvLock, ErrorBox, Field, IconButton, Input, Loading, PageHeader } from "../../components/ui";
+import { Badge, Button, Card, EnvLock, ErrorBox, Field, IconButton, Input, Loading, PageHeader, SaveBar } from "../../components/ui";
 import { useToast } from "../../lib/toast";
 import { useSettingsDoc } from "./useSettingsDoc";
 
 type General = S["GeneralSettingsResource"];
 
 export function GeneralPage() {
-  const { value: g, patch, save, saving, isLoading, error, setValue, lock } = useSettingsDoc<General>("general");
+  const { value: g, patch, save, saving, isLoading, error, setValue, lock, dirty, reset } = useSettingsDoc<General>("general");
   const toast = useToast();
   const regen = async () => {
     try {
@@ -26,9 +26,6 @@ export function GeneralPage() {
     <>
       <PageHeader
         title={t("General")}
-        actions={
-          <Button variant="primary" loading={saving} onClick={() => save()}>{t("Save")}</Button>
-        }
       />
       {isLoading && <Loading />}
       {error && <ErrorBox error={error} />}
@@ -67,6 +64,7 @@ export function GeneralPage() {
       )}
       <Tags />
       <Password />
+      <SaveBar dirty={dirty} saving={saving} onSave={() => void save()} onDiscard={reset} />
     </>
   );
 }

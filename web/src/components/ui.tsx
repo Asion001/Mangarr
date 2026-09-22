@@ -230,6 +230,41 @@ export function Progress({ value, tone = "accent" }: { value: number; tone?: "ac
   );
 }
 
+/**
+ * SaveBar sticks to the bottom of a settings page while it has unsaved
+ * changes, and asks before a link or closing the tab throws them away.
+ */
+export function SaveBar({ dirty, saving, onSave, onDiscard }: { dirty: boolean; saving?: boolean; onSave: () => void; onDiscard: () => void }) {
+  useEffect(() => {
+    if (!dirty) return;
+    const beforeUnload = (e: BeforeUnloadEvent) => e.preventDefault();
+    // BrowserRouter can't block navigation, so catch in-app links before they route
+    const click = (e: MouseEvent) => {
+      const a = (e.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
+      if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || a.target === "_blank") return;
+      if (!window.confirm(t("Leave without saving your changes?"))) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    window.addEventListener("beforeunload", beforeUnload);
+    document.addEventListener("click", click, true);
+    return () => {
+      window.removeEventListener("beforeunload", beforeUnload);
+      document.removeEventListener("click", click, true);
+    };
+  }, [dirty]);
+  if (!dirty) return null;
+  return (
+    <div role="region" aria-label={t("Unsaved changes")} className="sticky bottom-4 z-10 mt-6 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-panel-2/95 py-3 pl-4 pr-3 shadow-xl backdrop-blur">
+      <span aria-hidden className="size-2 rounded-full bg-warn" />
+      <span className="flex-1 text-sm font-medium">{t("Unsaved changes")}</span>
+      <Button disabled={saving} onClick={onDiscard}>{t("Discard")}</Button>
+      <Button variant="primary" loading={saving} onClick={onSave}>{t("Save changes")}</Button>
+    </div>
+  );
+}
+
 export function PageHeader({ title, subtitle, actions }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode }) {
   return (
     <div className="mb-5 flex flex-wrap items-end justify-between gap-3">

@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FolderInput, FolderPlus, Trash2 } from "lucide-react";
 import { api, unwrap, type S } from "../../api/client";
 import { useRootFolders } from "../../api/queries";
-import { Badge, Button, Card, EnvLock, ErrorBox, Field, IconButton, Input, Loading, Modal, PageHeader, Switch, Table, Td, Th } from "../../components/ui";
+import { Badge, Button, Card, EnvLock, ErrorBox, Field, IconButton, Input, Loading, Modal, PageHeader, SaveBar, Switch, Table, Td, Th } from "../../components/ui";
 import { bytes } from "../../lib/format";
 import { useToast } from "../../lib/toast";
 import { useSettingsDoc } from "./useSettingsDoc";
@@ -12,7 +12,7 @@ import { useSettingsDoc } from "./useSettingsDoc";
 type Media = S["MediaManagement"];
 
 export function MediaPage() {
-  const { value: m, patch, save, saving, isLoading, error, lock } = useSettingsDoc<Media>("media");
+  const { value: m, patch, save, saving, isLoading, error, lock, dirty, reset } = useSettingsDoc<Media>("media");
   const { data: preview } = useQuery({
     queryKey: ["naming-preview", m?.chapterFormat, m?.seriesFolderFormat],
     queryFn: () => unwrap(api.GET("/api/v1/settings/media/preview", { params: { query: { chapterFormat: m!.chapterFormat, folderFormat: m!.seriesFolderFormat } } })),
@@ -22,9 +22,6 @@ export function MediaPage() {
     <>
       <PageHeader
         title={t("Media management")}
-        actions={
-          <Button variant="primary" loading={saving} onClick={() => save()}>{t("Save")}</Button>
-        }
       />
       <RootFolders />
       {isLoading && <Loading />}
@@ -84,6 +81,7 @@ export function MediaPage() {
           </Card>
         </>
       )}
+      <SaveBar dirty={dirty} saving={saving} onSave={() => void save()} onDiscard={reset} />
     </>
   );
 }
