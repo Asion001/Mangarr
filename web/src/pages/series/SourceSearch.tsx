@@ -13,6 +13,8 @@ export type PickGroup = Pick<SearchGroup, "moduleId" | "sourceId" | "sourceName"
 export type Picked = { manga: SourceManga; group: PickGroup };
 export type Scope = "active" | "all" | "custom";
 
+/** Linked is a link a series already has (catalog and manga address). */
+export type Linked = { moduleId: number; sourceId: string; url: string };
 export const pickKey = (p: { group: PickGroup; manga: SourceManga }) => `${p.group.moduleId}:${p.group.sourceId}:${p.manga.url}`;
 const catKey = (c: { moduleId: number; id: string }) => `${c.moduleId}:${c.id}`;
 
@@ -154,12 +156,14 @@ export function SearchInput({ query, setQuery, placeholder }: { query: string; s
   );
 }
 
-function ResultTile({ m, g, selected, onPick }: { m: SourceManga; g: PickGroup; selected: boolean; onPick: () => void }) {
+function ResultTile({ m, g, selected, linked, onPick }: { m: SourceManga; g: PickGroup; selected: boolean; linked?: boolean; onPick: () => void }) {
   return (
     <button
       type="button"
       onClick={onPick}
-      className={`group relative flex flex-col gap-1 rounded-md p-1 text-left ${selected ? "bg-accent/15 ring-2 ring-accent" : "hover:bg-panel-2"}`}
+      disabled={linked}
+      title={linked ? tr("Already linked to this series") : undefined}
+      className={`group relative flex flex-col gap-1 rounded-md p-1 text-left disabled:cursor-not-allowed disabled:opacity-50 ${selected ? "bg-accent/15 ring-2 ring-accent" : "hover:bg-panel-2"}`}
     >
       <Cover src={apiUrl(`api/v1/sources/${g.moduleId}/${g.sourceId}/thumbnail`, { url: m.url, engineRef: m.engineRef })} alt={m.title} className="aspect-[2/3] w-full" />
       {selected && (
@@ -167,6 +171,7 @@ function ResultTile({ m, g, selected, onPick }: { m: SourceManga; g: PickGroup; 
           <Check className="size-3.5" />
         </span>
       )}
+      {linked && <span className="absolute right-2 top-2 rounded bg-black/70 px-1.5 text-[10px] text-white">{t("Linked")}</span>}
       {m.chapterCount != null && <span className="absolute left-2 top-2 rounded bg-black/70 px-1.5 text-[10px] text-white">{m.chapterCount}{" " + t("ch")}</span>}
       <span className="line-clamp-2 text-xs">{m.title}</span>
     </button>
@@ -183,6 +188,7 @@ export function CatalogResults({
   targets,
   gen,
   selected,
+  linked,
   onPick,
   parallel = 4,
 }: {
@@ -190,6 +196,8 @@ export function CatalogResults({
   targets: Catalog[];
   gen?: number;
   selected?: Picked[];
+  /** linked are pickKeys of links the series already has: shown, not pickable. */
+  linked?: Set<string>;
   onPick: (m: SourceManga, g: PickGroup) => void;
   parallel?: number;
 }) {
@@ -243,7 +251,7 @@ export function CatalogResults({
             </div>
             <div className="grid grid-cols-[repeat(auto-fill,minmax(110px,1fr))] gap-3">
               {mangas.slice(0, 18).map((m) => (
-                <ResultTile key={m.url} m={m} g={g} selected={sel.has(pickKey({ group: g, manga: m }))} onPick={() => onPick(m, g)} />
+                <ResultTile key={m.url} m={m} g={g} selected={sel.has(pickKey({ group: g, manga: m }))} linked={linked?.has(pickKey({ group: g, manga: m }))} onPick={() => onPick(m, g)} />
               ))}
             </div>
           </div>
@@ -292,9 +300,9 @@ export function HeroMatch({ c, selected, onUse }: { c: QuickCandidate; selected:
 }
 
 /** useQuickSearch runs the one-by-one search on the server. */
-export function useQuickSearch(opts: { query: string; titles: string[]; scope: Scope; keys: string[]; lang: string; rootFolderId?: number; enabled: boolean; gen?: number }) {
+export function useQuickSearch(opts: { query: string; titles: string[]; scope: Scope; keys: string[]; lang: string; rootFolderId?: number; exclude?: string[]; enabled: boolean; gen?: number }) {
   return useQuery({
-    queryKey: ["quick-search", opts.gen, opts.query, opts.titles, opts.scope, opts.keys, opts.lang, opts.rootFolderId],
+    queryKey: ["quick-search", opts.gen, opts.query, opts.titles, opts.scope, opts.keys, opts.lang, opts.rootFolderId, opts.exclude],
     queryFn: () =>
       unwrap(
         api.POST("/api/v1/sources/quick-search", {
@@ -305,6 +313,7 @@ export function useQuickSearch(opts: { query: string; titles: string[]; scope: S
             sources: opts.scope === "custom" ? opts.keys : undefined,
             lang: opts.lang || undefined,
             rootFolderId: opts.rootFolderId || undefined,
+            exclude: opts.exclude?.length ? opts.exclude : undefined,
           },
         }),
       ),
@@ -328,6 +337,7 @@ export function SourceSearch({
   more,
   setMore,
   selected,
+  linked,
   rootFolderId,
   onPick,
 }: {
@@ -343,12 +353,16 @@ export function SourceSearch({
   more: boolean;
   setMore: (v: boolean) => void;
   selected: Picked[];
+  /** linked are the series' current links: the quick match skips their catalogs. */
+  linked?: Linked[];
   rootFolderId?: number;
   onPick: (m: SourceManga, g: PickGroup, only?: boolean) => void;
 }) {
   const { targets, gen, settings } = useCatalogTargets(scope, lang, keys);
   const quickEnabled = (settings?.quickSearch.enabled ?? true) && !more;
-  const quick = useQuickSearch({ query, titles, scope, keys, lang, rootFolderId, enabled: quickEnabled, gen });
+  const exclude = [...new Set((linked ?? []).map((l) => catKey({ moduleId: l.moduleId, id: l.sourceId })))];
+  const linkedKeys = new Set((linked ?? []).map((l) => `${l.moduleId}:${l.sourceId}:${l.url}`));
+  const quick = useQuickSearch({ query, titles, scope, keys, lang, rootFolderId, exclude, enabled: quickEnabled, gen });
   const sel = new Set(selected.map(pickKey));
   const match = quick.data?.match;
   const showGrid = more || !quickEnabled || (quick.isSuccess && !match);
@@ -378,7 +392,7 @@ export function SourceSearch({
       {!more && quick.isSuccess && !match && quickEnabled && (
         <p className="mb-3 text-sm text-muted">{t("No confident match; showing every catalog.")}</p>
       )}
-      {showGrid && <CatalogResults query={query} targets={targets} gen={gen} selected={selected} onPick={(m, g) => onPick(m, g)} />}
+      {showGrid && <CatalogResults query={query} targets={targets} gen={gen} selected={selected} linked={linkedKeys} onPick={(m, g) => onPick(m, g)} />}
     </>
   );
 }
@@ -390,6 +404,7 @@ export function SourceSearchModal({
   rootFolderId,
   title,
   titles,
+  linked,
   onPick,
   onClose,
 }: {
@@ -398,6 +413,7 @@ export function SourceSearchModal({
   rootFolderId?: number;
   title: string;
   titles?: string[];
+  linked?: Linked[];
   onPick: (m: SourceManga, g: PickGroup) => void;
   onClose: () => void;
 }) {
@@ -421,6 +437,7 @@ export function SourceSearchModal({
         more={more}
         setMore={setMore}
         selected={[]}
+        linked={linked}
         rootFolderId={rootFolderId}
         onPick={(m, g) => onPick(m, g)}
       />

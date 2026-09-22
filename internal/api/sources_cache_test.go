@@ -312,3 +312,26 @@ func TestQuickSearchStopsAtFirstConfidentMatch(t *testing.T) {
 		t.Fatalf("want the match with chapters at A, got %+v", res.Match)
 	}
 }
+
+func TestQuickSearchSkipsExcludedCatalogs(t *testing.T) {
+	e := newCacheEnv(t, "quick-exclude")
+	e.sc.Update(func() {
+		e.sc.Mangas["J|/tower"].Chapters = []fakesource.Chapter{{URL: "/c1", Name: "Ch. 1", Number: 1}}
+		e.sc.Mangas["A|/tower"].Chapters = []fakesource.Chapter{{URL: "/a1", Name: "Ch. 1", Number: 1}}
+	})
+	doJSON(t, http.MethodPut, e.url+"/api/v1/catalogs", fmt.Sprintf(`{%q:{"priority":10},%q:{"priority":20},%q:{"priority":30}}`, e.key("J"), e.key("A"), e.key("N")), nil)
+	// J would match first; a series already linked to J asks for another source
+	var res api.QuickSearchResult
+	body := fmt.Sprintf(`{"query":"tower","titles":["Tower of God"],"exclude":[%q]}`, e.key("J"))
+	if code := doJSON(t, http.MethodPost, e.url+"/api/v1/sources/quick-search", body, &res); code != 200 {
+		t.Fatalf("quick search: %d", code)
+	}
+	if res.Match == nil || res.Match.SourceID != "A" {
+		t.Fatalf("want the match at A, got %+v", res.Match)
+	}
+	for _, s := range res.Searched {
+		if s.Key == e.key("J") {
+			t.Fatal("an excluded catalog must not be searched")
+		}
+	}
+}

@@ -4447,6 +4447,10 @@
     "ru": "Привязано",
     "uk": "Прив’язано"
   },
+  "Already linked to this series": {
+    "ru": "Уже привязано к этой серии",
+    "uk": "Вже прив’язано до цієї серії"
+  },
   "Log files are off (MANGARR_LOG_DIR=off): downloads contain the recent entries only.": {
     "ru": "Файлы журналов отключены (MANGARR_LOG_DIR=off): скачиваются только недавние записи.",
     "uk": "Файли журналів вимкнено (MANGARR_LOG_DIR=off): завантажуються лише нещодавні записи."

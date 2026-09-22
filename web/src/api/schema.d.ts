@@ -4560,6 +4560,7 @@ export interface components {
             topN: number;
         };
         QuickSearchInput: {
+            exclude?: string[];
             lang?: string;
             query: string;
             /** Format: int64 */

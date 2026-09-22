@@ -5112,6 +5112,12 @@
       "QuickSearchInput": {
         "additionalProperties": false,
         "properties": {
+          "exclude": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "lang": {
             "type": "string"
           },

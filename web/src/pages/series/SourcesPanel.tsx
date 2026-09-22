@@ -155,6 +155,7 @@ export function SourcesPanel({ series }: { series: Series }) {
           initialLang={series.language}
           rootFolderId={series.rootFolderId}
           titles={[series.title, ...(series.metadata?.altTitles ?? [])]}
+          linked={sources.map((s) => ({ moduleId: s.moduleId, sourceId: s.sourceId, url: s.mangaUrl }))}
           title={t("Link a source")}
           onClose={() => setAdding(false)}
           onPick={async (m, g) => {

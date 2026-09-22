@@ -6,6 +6,7 @@ package sourcesearch
 
 import (
 	"context"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -116,6 +117,9 @@ type QuickSearchInput struct {
 	// Sources picks exact catalogs (moduleId:sourceId) instead of a scope.
 	Sources []string `json:"sources,omitempty"`
 	Lang    string   `json:"lang,omitempty"`
+	// Exclude skips these catalogs (moduleId:sourceId), e.g. the ones a
+	// series is already linked to when looking for another source.
+	Exclude []string `json:"exclude,omitempty"`
 }
 
 // ChapterSummary describes a manga's chapter list.
@@ -224,6 +228,9 @@ func (s *Service) Quick(ctx context.Context, in QuickSearchInput, opt QuickOptio
 		scope = catalogs.ScopeActive
 	}
 	targets, _ := s.Catalogs.Select(ctx, catalogs.Filter{Scope: scope, Lang: in.Lang, Keys: in.Sources, RootFolderID: in.RootFolderID})
+	if len(in.Exclude) > 0 {
+		targets = slices.DeleteFunc(targets, func(c catalogs.Catalog) bool { return slices.Contains(in.Exclude, c.Key()) })
+	}
 	titles := append([]string{in.Query}, in.Titles...)
 	res := &QuickSearchResult{Top: []QuickCandidate{}, Searched: []QuickSearched{}, Remaining: []string{}, Groups: []SearchResultGroup{},
 		Threshold: threshold, Generation: s.Catalogs.Generation()}
