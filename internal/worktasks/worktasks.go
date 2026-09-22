@@ -112,8 +112,9 @@ func (l *Ledger) Claim(ctx context.Context, workerID int64, kinds []string, limi
 		if len(limits) > 1 {
 			perWorker = max(limits[1], 1)
 		}
-		ok, err := l.workerHasCapacity(ctx, workerID, kinds, global, perWorker)
-		if err != nil || !ok {
+		var err error
+		kinds, err = l.claimableKinds(ctx, workerID, kinds, global, perWorker)
+		if err != nil || len(kinds) == 0 {
 			return nil, err
 		}
 	}
@@ -149,13 +150,15 @@ func (l *Ledger) Claim(ctx context.Context, workerID int64, kinds []string, limi
 	return nil, nil
 }
 
-// workerHasCapacity enforces the installation and per-worker limits, then
-// gives lower-priority workers a chance only when every compatible worker
-// above them is offline or full. Priority is ascending, like module priority.
-func (l *Ledger) workerHasCapacity(ctx context.Context, workerID int64, kinds []string, global, defaultPerWorker int) (bool, error) {
+// claimableKinds enforces the installation and per-worker limits, then
+// narrows kinds to those no compatible worker above this one could take right
+// now: a lower-priority worker gets a kind only when every online worker with
+// a better priority that does that kind is full. Priority is ascending, like
+// module priority.
+func (l *Ledger) claimableKinds(ctx context.Context, workerID int64, kinds []string, global, defaultPerWorker int) ([]string, error) {
 	var workers []model.Worker
 	if err := l.db.NewSelect().Model(&workers).Where("enabled = ?", true).Scan(ctx); err != nil {
-		return false, err
+		return nil, err
 	}
 	var current *model.Worker
 	for i := range workers {
@@ -165,7 +168,7 @@ func (l *Ledger) workerHasCapacity(ctx context.Context, workerID int64, kinds []
 		}
 	}
 	if current == nil {
-		return false, nil
+		return nil, nil
 	}
 	var counts []struct {
 		WorkerID int64 `bun:"worker_id"`
@@ -174,7 +177,7 @@ func (l *Ledger) workerHasCapacity(ctx context.Context, workerID int64, kinds []
 	if err := l.db.NewSelect().Model((*model.WorkerTask)(nil)).
 		ColumnExpr("worker_id, COUNT(*) AS count").Where("state = ?", model.TaskLeased).
 		GroupExpr("worker_id").Scan(ctx, &counts); err != nil {
-		return false, err
+		return nil, err
 	}
 	held := map[int64]int{}
 	total := 0
@@ -183,39 +186,51 @@ func (l *Ledger) workerHasCapacity(ctx context.Context, workerID int64, kinds []
 		total += row.Count
 	}
 	if global > 0 && total >= global {
-		return false, nil
+		return nil, nil
 	}
-	limit := current.Concurrent
-	if limit <= 0 {
-		limit = defaultPerWorker
-	}
-	if held[current.ID] >= max(limit, 1) {
-		return false, nil
-	}
-	now := time.Now()
-	for i := range workers {
-		w := &workers[i]
-		if w.ID == current.ID || w.Priority >= current.Priority || w.LastSeenAt == nil || now.Sub(*w.LastSeenAt) >= OnlineWithin || !workerHasAnyRole(w, kinds) {
-			continue
-		}
+	spare := func(w *model.Worker) bool {
 		limit := w.Concurrent
 		if limit <= 0 {
 			limit = defaultPerWorker
 		}
-		if held[w.ID] < max(limit, 1) {
-			return false, nil
+		return held[w.ID] < max(limit, 1)
+	}
+	if !spare(current) {
+		return nil, nil
+	}
+	now := time.Now()
+	out := make([]string, 0, len(kinds))
+	for _, kind := range kinds {
+		yield := false
+		for i := range workers {
+			w := &workers[i]
+			if w.ID == current.ID || w.Priority >= current.Priority || w.LastSeenAt == nil || now.Sub(*w.LastSeenAt) >= OnlineWithin {
+				continue
+			}
+			if takes(w, kind) && spare(w) {
+				yield = true
+				break
+			}
+		}
+		if !yield {
+			out = append(out, kind)
 		}
 	}
-	return true, nil
+	return out, nil
 }
 
-func workerHasAnyRole(w *model.Worker, kinds []string) bool {
-	for _, kind := range kinds {
-		if w.HasRole(kind) {
-			return true
-		}
+// takes reports whether a worker can actually do a kind of task. A worker
+// without an upscaling model drops the upscale role when it says hello, even
+// though its key still carries it, so it never asks for that work.
+func takes(w *model.Worker, kind string) bool {
+	if !w.HasRole(kind) {
+		return false
 	}
-	return false
+	if kind == model.TaskUpscale {
+		models, _ := w.Info["models"].([]any)
+		return len(models) > 0
+	}
+	return true
 }
 
 // Progress is what a worker reports while it works.

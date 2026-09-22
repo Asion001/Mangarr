@@ -156,6 +156,45 @@ func TestClaimHonorsCapacityAndPriority(t *testing.T) {
 	})
 }
 
+// TestPriorityOnlyHoldsBackWorkItCanTake: a better-placed worker with room
+// keeps back only the kinds it can do itself. One without an upscaling model
+// never asks for upscale work, so it must not starve the GPU box below it.
+func TestPriorityOnlyHoldsBackWorkItCanTake(t *testing.T) {
+	each(t, func(t *testing.T, d *db.DB) {
+		ctx := context.Background()
+		l := ledger(d)
+		job := seedJob(t, d)
+		roles := []string{model.RoleDownload, model.RoleUpscale}
+		now := time.Now().UTC()
+		seed := func(name string, priority int, info map[string]any) int64 {
+			w := &model.Worker{Name: name, KeyHash: "hash-" + name, Prefix: "mgw_" + name, Roles: roles, Enabled: true,
+				Priority: priority, Info: info, CreatedAt: now, LastSeenAt: &now}
+			if _, err := d.NewInsert().Model(w).Exec(ctx); err != nil {
+				t.Fatal(err)
+			}
+			return w.ID
+		}
+		seed("cpu", 10, map[string]any{"cpus": 8})
+		gpu := seed("gpu", 20, map[string]any{"models": []any{map[string]any{"name": "m"}}})
+		if err := l.Add(ctx, &model.WorkerTask{JobID: job, Kind: model.TaskUpscale}); err != nil {
+			t.Fatal(err)
+		}
+		task, err := l.Claim(ctx, gpu, roles, 4, 1)
+		if err != nil || task == nil || task.Kind != model.TaskUpscale {
+			t.Fatalf("upscale work waited on a worker that cannot upscale: %v %+v", err, task)
+		}
+		if err := l.Add(ctx, &model.WorkerTask{JobID: job, Kind: model.TaskDownload, Seq: 1}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := d.NewUpdate().Model((*model.Worker)(nil)).Set("concurrent = 2").Where("id = ?", gpu).Exec(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if task, err := l.Claim(ctx, gpu, roles, 4, 1); err != nil || task != nil {
+			t.Fatalf("download work skipped the idle higher-priority worker: %v %+v", err, task)
+		}
+	})
+}
+
 // TestLeaseComesBack: a worker that goes quiet loses its task, and a task
 // nobody finishes is given up on rather than handed out forever.
 func TestLeaseComesBack(t *testing.T) {
