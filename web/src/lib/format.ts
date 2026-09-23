@@ -49,3 +49,34 @@ export function duration(ms?: number | null): string {
 export function titleCase(s: string): string {
   return s.replace(/[-_.]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
+
+/** readingTime formats active reading seconds as hours and minutes ("3 hr 5 min"). */
+export function readingTime(seconds?: number | null): string {
+  const s = Math.max(0, Math.round(seconds ?? 0));
+  const unit = (value: number, unit: "hour" | "minute") => new Intl.NumberFormat(getLocale(), { style: "unit", unit, unitDisplay: "short" }).format(value);
+  if (s > 0 && s < 60) return `< ${unit(1, "minute")}`;
+  const minutes = Math.round(s / 60);
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (!h) return unit(m, "minute");
+  return m ? `${unit(h, "hour")} ${unit(m, "minute")}` : unit(h, "hour");
+}
+
+/** calendarMonth names a UTC "YYYY-MM" month ("September 2026"). */
+export function calendarMonth(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  if (!y || !m) return month;
+  return new Intl.DateTimeFormat(getLocale(), { month: "long", year: "numeric", timeZone: "UTC" }).format(Date.UTC(y, m - 1, 1));
+}
+
+/** languageName names a language code in the interface language ("en" → "English"). */
+export function languageName(code: string): string {
+  if (!code || code === "und") return t("Unknown language");
+  try {
+    const name = new Intl.DisplayNames(getLocale(), { type: "language" }).of(code);
+    if (name && name !== code) return name.charAt(0).toLocaleUpperCase(getLocale()) + name.slice(1);
+  } catch {
+    // not a valid BCP 47 tag: show it as the source wrote it
+  }
+  return code;
+}

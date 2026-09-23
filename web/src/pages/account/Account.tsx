@@ -11,6 +11,7 @@ import { appAddress, DevicesCard, Guide, type App } from "../settings/ReadingApp
 import { useAccount } from "../../lib/account";
 import { relative } from "../../lib/format";
 import { useToast } from "../../lib/toast";
+import { ReadingStatsCard } from "./ReadingStats";
 
 const permLabel: Record<string, string> = {
   admin: "Administrator",
@@ -48,6 +49,7 @@ export function AccountPage() {
             </div>
           </div>
         </Card>
+        <ReadingStatsCard />
         {account?.kind === "user" && <NotificationsCard />}
         {account?.kind === "user" && <LibraryAccountsCard />}
         {can("apps") && <ReadingAppsCard />}
