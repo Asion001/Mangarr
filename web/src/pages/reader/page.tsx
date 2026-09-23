@@ -140,6 +140,7 @@ export function PageImage({
   width,
   height,
   onNatural,
+  onPlaceholderNatural,
   eager = false,
   placeholder,
 }: {
@@ -151,6 +152,7 @@ export function PageImage({
   width: number;
   height: number;
   onNatural?: (w: number, h: number) => void;
+  onPlaceholderNatural?: (w: number, h: number) => void;
   eager?: boolean;
   /** placeholder is a small copy shown until the page itself is decoded. */
   placeholder?: string;
@@ -170,14 +172,23 @@ export function PageImage({
     );
   }
   const common = { src, alt: "", draggable: false, decoding: "async" as const, loading: eager ? ("eager" as const) : ("lazy" as const), onLoad: load, onError: () => setFailed(true) };
+  const transformed = box && dims && (crop || half) ? {
+    position: "absolute" as const,
+    maxWidth: "none",
+    width: `${(dims.width / box.w) * 100}%`,
+    height: `${(dims.height / box.h) * 100}%`,
+    left: `${(-box.x / box.w) * 100}%`,
+    top: `${(-box.y / box.h) * 100}%`,
+  } : undefined;
   const blur = placeholder && !loaded && (
     <img
       src={placeholder}
       alt=""
       aria-hidden
       draggable={false}
-      className="pointer-events-none absolute inset-0 size-full select-none blur-sm"
-      style={{ objectFit: "contain" }}
+      className="pointer-events-none absolute select-none blur-sm"
+      style={transformed ?? { inset: 0, width: "100%", height: "100%", objectFit: "contain" }}
+      onLoad={(e) => onPlaceholderNatural?.(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight)}
     />
   );
   if (!box || !dims || (!crop && !half)) {
@@ -195,14 +206,7 @@ export function PageImage({
       <img
         {...common}
         className="select-none"
-        style={{
-          position: "absolute",
-          maxWidth: "none",
-          width: `${(dims.width / box.w) * 100}%`,
-          height: `${(dims.height / box.h) * 100}%`,
-          left: `${(-box.x / box.w) * 100}%`,
-          top: `${(-box.y / box.h) * 100}%`,
-        }}
+        style={transformed}
       />
     </div>
   );

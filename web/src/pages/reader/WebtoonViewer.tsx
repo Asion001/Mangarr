@@ -1,5 +1,5 @@
 import { t } from "../../lib/i18n/core";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { S } from "../../api/client";
 import type { ReaderSettings } from "./settings";
 import { tapAction } from "./zones";
@@ -38,6 +38,7 @@ export function WebtoonViewer({
   const scroller = useRef<HTMLDivElement>(null);
   const items = useRef<(HTMLDivElement | null)[]>([]);
   const [near, setNear] = useState<Set<number>>(() => new Set([startPage, startPage + 1, startPage + 2]));
+  const [previewAspects, setPreviewAspects] = useState<Record<number, number>>({});
   const current = useRef(startPage);
   const count = chapter.pages.length;
   // a readable column on wide screens; side padding narrows it further
@@ -48,6 +49,11 @@ export function WebtoonViewer({
     const d = Object.values(dims)[0];
     return d ? (s.crop ? d.w : d.width) / d.height : 0.7;
   }, [dims, s.crop]);
+  const previewNatural = useCallback((page: number, w: number, h: number) => {
+    if (!w || !h) return;
+    const aspect = w / h;
+    setPreviewAspects((current) => current[page] === aspect ? current : { ...current, [page]: aspect });
+  }, []);
 
   // load pages within a couple of screens
   useEffect(() => {
@@ -171,7 +177,7 @@ export function WebtoonViewer({
         {chapter.pages.map((p, i) => {
           const d = dims[p.number];
           const w = d ? (s.crop ? d.w : d.width) : 0;
-          const aspect = d ? w / d.height : guess;
+          const aspect = d ? w / d.height : previewAspects[p.number] ?? guess;
           const h = width / aspect;
           return (
             <div
@@ -192,6 +198,7 @@ export function WebtoonViewer({
                   width={width}
                   height={h}
                   onNatural={(nw, nh) => natural(p.number, nw, nh)}
+                  onPlaceholderNatural={(nw, nh) => previewNatural(p.number, nw, nh)}
                 />
               ) : (
                 <div style={{ width, height: h }} />
