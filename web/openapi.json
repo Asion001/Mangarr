@@ -6014,6 +6014,133 @@
         ],
         "type": "object"
       },
+      "ReadingStats": {
+        "additionalProperties": false,
+        "properties": {
+          "activeMonth": {
+            "$ref": "#/components/schemas/ReadingStatsMonth"
+          },
+          "completedChapters": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "genres": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingStatsGenre"
+            },
+            "type": "array"
+          },
+          "languages": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingStatsLanguage"
+            },
+            "type": "array"
+          },
+          "topSeries": {
+            "$ref": "#/components/schemas/ReadingStatsSeries"
+          },
+          "totalActiveSeconds": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "totalActiveSeconds",
+          "completedChapters",
+          "languages",
+          "genres"
+        ],
+        "type": "object"
+      },
+      "ReadingStatsGenre": {
+        "additionalProperties": false,
+        "properties": {
+          "activeSeconds": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "completedChapters": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "genre": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "genre",
+          "activeSeconds",
+          "completedChapters"
+        ],
+        "type": "object"
+      },
+      "ReadingStatsLanguage": {
+        "additionalProperties": false,
+        "properties": {
+          "activeSeconds": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "completedChapters": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "language": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "language",
+          "activeSeconds",
+          "completedChapters"
+        ],
+        "type": "object"
+      },
+      "ReadingStatsMonth": {
+        "additionalProperties": false,
+        "properties": {
+          "activeSeconds": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "month": {
+            "description": "UTC calendar month in YYYY-MM format",
+            "type": "string"
+          }
+        },
+        "required": [
+          "month",
+          "activeSeconds"
+        ],
+        "type": "object"
+      },
+      "ReadingStatsSeries": {
+        "additionalProperties": false,
+        "properties": {
+          "activeSeconds": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "completedChapters": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "seriesId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "seriesId",
+          "title",
+          "activeSeconds",
+          "completedChapters"
+        ],
+        "type": "object"
+      },
       "ReadingStatus": {
         "additionalProperties": false,
         "properties": {
@@ -11962,6 +12089,37 @@
             "description": "Error"
           }
         },
+        "tags": [
+          "Account"
+        ]
+      }
+    },
+    "/api/v1/me/reading-stats": {
+      "get": {
+        "operationId": "me-reading-stats",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingStats"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Active reading time and completed chapter statistics for the current account",
         "tags": [
           "Account"
         ]

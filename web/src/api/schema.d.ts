@@ -706,6 +706,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/reading-stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Active reading time and completed chapter statistics for the current account */
+        get: operations["me-reading-stats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/sessions": {
         parameters: {
             query?: never;
@@ -4895,6 +4912,45 @@ export interface components {
             /** Format: int64 */
             userId?: number;
         };
+        ReadingStats: {
+            activeMonth?: components["schemas"]["ReadingStatsMonth"];
+            /** Format: int64 */
+            completedChapters: number;
+            genres: components["schemas"]["ReadingStatsGenre"][];
+            languages: components["schemas"]["ReadingStatsLanguage"][];
+            topSeries?: components["schemas"]["ReadingStatsSeries"];
+            /** Format: int64 */
+            totalActiveSeconds: number;
+        };
+        ReadingStatsGenre: {
+            /** Format: int64 */
+            activeSeconds: number;
+            /** Format: int64 */
+            completedChapters: number;
+            genre: string;
+        };
+        ReadingStatsLanguage: {
+            /** Format: int64 */
+            activeSeconds: number;
+            /** Format: int64 */
+            completedChapters: number;
+            language: string;
+        };
+        ReadingStatsMonth: {
+            /** Format: int64 */
+            activeSeconds: number;
+            /** @description UTC calendar month in YYYY-MM format */
+            month: string;
+        };
+        ReadingStatsSeries: {
+            /** Format: int64 */
+            activeSeconds: number;
+            /** Format: int64 */
+            completedChapters: number;
+            /** Format: int64 */
+            seriesId: number;
+            title: string;
+        };
         ReadingStatus: {
             address: string;
             enabled: boolean;
@@ -7684,6 +7740,35 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "me-reading-stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingStats"];
+                };
             };
             /** @description Error */
             default: {

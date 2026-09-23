@@ -65,6 +65,7 @@ me-notifications-delete DELETE /api/v1/me/notifications/{id} -> signedin
 me-notifications-schema GET /api/v1/me/notifications/schema -> signedin
 me-notifications-test POST /api/v1/me/notifications/test -> signedin
 me-notifications-update PUT /api/v1/me/notifications/{id} -> signedin
+me-reading-stats GET /api/v1/me/reading-stats -> signedin
 me-sessions GET /api/v1/me/sessions -> signedin
 me-sessions-revoke DELETE /api/v1/me/sessions/{id} -> signedin
 me-sessions-revoke-others POST /api/v1/me/sessions/revoke-others -> signedin

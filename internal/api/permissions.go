@@ -73,6 +73,7 @@ var operationPermissions = map[string][]string{
 	"read-mark":           {permSignedIn},
 	"read-settings":       {permSignedIn},
 	"read-settings-save":  {permSignedIn},
+	"me-reading-stats":    {permSignedIn},
 	"updates-list":        {permSignedIn},
 	"read-file":           {access.Download},
 
