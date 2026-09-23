@@ -162,6 +162,8 @@ export function WebtoonViewer({
     const a = tapAction(e.clientX / vp.w, e.clientY / vp.h, s);
     const root = scroller.current;
     if (a === "menu" || !root) onMenu();
+    // at the very end, a page turn moves on like the paged reader does
+    else if (a === "next" && root.scrollTop + root.clientHeight >= root.scrollHeight - 2) onChapter("next");
     else root.scrollBy({ top: (a === "next" ? 1 : -1) * root.clientHeight * 0.85, behavior: "smooth" });
   };
 

@@ -201,13 +201,17 @@ function Reader({ chapterId, preloader }: { chapterId: number; preloader: ImageP
       const target = dir === "next" ? ch?.next : ch?.prev;
       if (!ch) return;
       if (!target) {
-        if (dir === "next") setPos({ page: count, edge: "end" });
+        // past the last chapter's end: back to the series
+        if (dir === "next") {
+          flush();
+          navigate(`/series/${ch.seriesId}`);
+        }
         return;
       }
       flush();
       navigate(`/read/${target.id}${dir === "prev" ? "?page=last" : ""}`, { replace: true });
     },
-    [ch, count, flush, navigate],
+    [ch, flush, navigate],
   );
 
   // global keys
