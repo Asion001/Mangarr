@@ -14,12 +14,18 @@ type Update = S["UpdateItem"];
 export function UpdatesPage() {
   const [days, setDays] = useState(30);
   const [kind, setKind] = useState<"all" | "chapter" | "series">("all");
-  const [page, setPage] = useState(1);
+  const [cursor, setCursor] = useState("");
+  const [cursorHistory, setCursorHistory] = useState<string[]>([]);
+  const page = cursorHistory.length + 1;
   const pageSize = 50;
   const liveStatus = useLiveUpdateStatus();
+  const resetPage = () => {
+    setCursor("");
+    setCursorHistory([]);
+  };
   const { data, isLoading, error } = useQuery({
-    queryKey: ["updates", days, kind, page],
-    queryFn: () => unwrap(api.GET("/api/v1/updates", { params: { query: { days, kind, page, pageSize } } })),
+    queryKey: ["updates", days, kind, cursor],
+    queryFn: () => unwrap(api.GET("/api/v1/updates", { params: { query: { days, kind, pageSize, cursor: cursor || undefined } } })),
     staleTime: 60_000,
   });
   const groups = groupByDay(data?.items ?? []);
@@ -35,7 +41,7 @@ export function UpdatesPage() {
                 <span role="status" className="capitalize">{t(liveStatus)}</span>
               </Badge>
             )}
-            <Select className="w-40" value={days} onChange={(event) => (setDays(Number(event.target.value)), setPage(1))}>
+            <Select className="w-40" value={days} onChange={(event) => (setDays(Number(event.target.value)), resetPage())}>
               <option value={7}>{t("Last 7 days")}</option>
               <option value={30}>{t("Last 30 days")}</option>
               <option value={90}>{t("Last 90 days")}</option>
@@ -45,7 +51,7 @@ export function UpdatesPage() {
       />
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {(["all", "chapter", "series"] as const).map((value) => (
-          <Button key={value} size="sm" variant={kind === value ? "primary" : "secondary"} onClick={() => (setKind(value), setPage(1))}>
+          <Button key={value} size="sm" variant={kind === value ? "primary" : "secondary"} onClick={() => (setKind(value), resetPage())}>
             {value === "all" ? t("All") : value === "chapter" ? t("Chapters") : t("Titles")}
           </Button>
         ))}
@@ -68,9 +74,24 @@ export function UpdatesPage() {
       </div>
       {data && data.total > pageSize && (
         <div className="mt-5 flex items-center justify-center gap-3 text-sm">
-          <Button size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>{t("Previous")}</Button>
+          <Button
+            size="sm"
+            disabled={cursorHistory.length === 0}
+            onClick={() => {
+              setCursor(cursorHistory[cursorHistory.length - 1] ?? "");
+              setCursorHistory(cursorHistory.slice(0, -1));
+            }}
+          >{t("Previous")}</Button>
           <span className="text-muted">{t("Page") + " "}{page}{" " + t("of") + " "}{Math.ceil(data.total / pageSize)}</span>
-          <Button size="sm" disabled={page * pageSize >= data.total} onClick={() => setPage(page + 1)}>{t("Next")}</Button>
+          <Button
+            size="sm"
+            disabled={!data.nextCursor}
+            onClick={() => {
+              if (!data.nextCursor) return;
+              setCursorHistory([...cursorHistory, cursor]);
+              setCursor(data.nextCursor);
+            }}
+          >{t("Next")}</Button>
         </div>
       )}
     </>

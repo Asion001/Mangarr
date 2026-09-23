@@ -5555,6 +5555,7 @@ export interface components {
         };
         UpdatePage: {
             items: components["schemas"]["UpdateItem"][];
+            nextCursor?: string;
             /** Format: int64 */
             page: number;
             /** Format: int64 */
@@ -12644,6 +12645,7 @@ export interface operations {
                 kind?: "" | "all" | "chapter" | "series";
                 page?: number;
                 pageSize?: number;
+                cursor?: string;
             };
             header?: never;
             path?: never;

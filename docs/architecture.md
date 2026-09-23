@@ -99,6 +99,13 @@ extension updates) are listed with their intervals under System → Tasks.
 A typed event bus feeds the SSE stream (`/api/v1/events`) the UI uses for live
 updates, and the notification digests.
 
+The Updates feed applies account visibility and time bounds in SQL, merges
+indexed chapter/title streams, and uses a timestamp, event-kind and row-id
+cursor. Only the returned page gets release availability and reader-state
+lookups. The performance target is a 50-row first page in under 250 ms at the
+95th percentile with 100,000 recent chapters on local PostgreSQL; the dialect
+regression walks a tied 600-row feed while inserts happen between pages.
+
 ## Workers
 
 A worker is the same binary with `MANGARR_MODE=worker` (or

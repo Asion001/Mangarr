@@ -8353,6 +8353,9 @@
             },
             "type": "array"
           },
+          "nextCursor": {
+            "type": "string"
+          },
           "page": {
             "format": "int64",
             "type": "integer"
@@ -18715,6 +18718,14 @@
               "maximum": 500,
               "minimum": 1,
               "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
             }
           }
         ],

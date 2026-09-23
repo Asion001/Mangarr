@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"testing"
 	"time"
@@ -42,11 +43,15 @@ func TestUpdatesListsNewWorksAndChapters(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status=%d body=%s", resp.StatusCode, body)
+	}
 	var page api.UpdatePage
 	if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
 		t.Fatal(err)
 	}
-	if resp.StatusCode != http.StatusOK || len(page.Items) != 2 || page.Total != 2 {
+	if len(page.Items) != 2 || page.Total != 2 {
 		t.Fatalf("status=%d updates=%+v", resp.StatusCode, page)
 	}
 	if page.Items[0].Kind != "chapter" || page.Items[0].ChapterID != chapter.ID || page.Items[0].Language != "ru" {
@@ -83,5 +88,13 @@ func TestUpdatesSuppressesInitialCatalogAndPaginates(t *testing.T) {
 	}
 	if page.Total != 1 || len(page.Items) != 1 || page.Items[0].ChapterID != newer.ID {
 		t.Fatalf("initial catalog was not suppressed: %+v", page)
+	}
+	bad, err := http.Get(server.URL + "/api/v1/updates?cursor=not-a-cursor")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer bad.Body.Close()
+	if bad.StatusCode != http.StatusBadRequest {
+		t.Fatalf("invalid cursor status=%d want 400", bad.StatusCode)
 	}
 }

@@ -1,6 +1,6 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
-test("updates refresh on chapter events and after an SSE reconnect", async ({ page }) => {
+async function mockEvents(page: Page) {
   await page.addInitScript(() => {
     class MockEventSource extends EventTarget {
       static sources: MockEventSource[] = [];
@@ -36,6 +36,10 @@ test("updates refresh on chapter events and after an SSE reconnect", async ({ pa
       },
     });
   });
+}
+
+test("updates refresh on chapter events and after an SSE reconnect", async ({ page }) => {
+  await mockEvents(page);
 
   let version = 1;
   let requests = 0;
@@ -77,4 +81,36 @@ test("updates refresh on chapter events and after an SSE reconnect", async ({ pa
   await expect(page.getByText("Reconnect title")).toBeVisible();
   await expect(page.getByText("First title")).toHaveCount(1);
   expect(requests).toBeGreaterThanOrEqual(3);
+});
+
+test("updates pages forward with an opaque cursor and back from local history", async ({ page }) => {
+  await mockEvents(page);
+  const cursors: (string | null)[] = [];
+  await page.route("**/api/v1/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith("/auth/status")) {
+      await route.fulfill({ json: { authenticated: true, authDisabled: true, account: { kind: "anonymous", id: 0, permissions: [] } } });
+      return;
+    }
+    if (url.pathname.endsWith("/updates")) {
+      const cursor = url.searchParams.get("cursor");
+      cursors.push(cursor);
+      if (cursor) {
+        await route.fulfill({ json: { items: [{ kind: "series", at: "2026-09-22T08:00:00Z", seriesId: 99, seriesTitle: "Cursor title", coverUrl: "", languages: [] }], total: 51, page: 1, pageSize: 50 } });
+      } else {
+        const items = Array.from({ length: 50 }, (_, index) => ({ kind: "series", at: "2026-09-23T08:00:00Z", seriesId: index + 1, seriesTitle: `First page ${index + 1}`, coverUrl: "", languages: [] }));
+        await route.fulfill({ json: { items, total: 51, page: 1, pageSize: 50, nextCursor: "next-cursor" } });
+      }
+      return;
+    }
+    await route.fulfill({ json: {} });
+  });
+
+  await page.goto("/updates");
+  await expect(page.getByText("First page 1", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Next" }).click();
+  await expect(page.getByText("Cursor title")).toBeVisible();
+  expect(cursors).toContain("next-cursor");
+  await page.getByRole("button", { name: "Previous" }).click();
+  await expect(page.getByText("First page 1", { exact: true })).toBeVisible();
 });
