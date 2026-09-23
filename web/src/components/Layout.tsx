@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import clsx from "clsx";
 import { useQueryClient } from "@tanstack/react-query";
+import { confirmLeave } from "./ui";
 import {
   BookOpen,
   PanelLeftClose,
@@ -59,7 +60,7 @@ function SettingsNav() {
     </nav>
     <label className="mb-4 block md:hidden">
       <span className="sr-only">{t("Settings")}</span>
-      <select value={loc.pathname} onChange={e=>navigate(e.target.value)} className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-fg">
+      <select value={loc.pathname} onChange={e=>{if(confirmLeave())navigate(e.target.value);}} className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-fg">
         {settingsGroups.map(g=><optgroup key={g.title} label={label(g.title)}>{g.items.map(i=><option key={i.to} value={i.to}>{label(i.label)}</option>)}</optgroup>)}
       </select>
     </label>

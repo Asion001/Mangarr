@@ -225,7 +225,15 @@ export function useViewport() {
     // visualViewport resizes on every pinch-zoom frame. Re-fitting the page to
     // that shrinking viewport cancels the visible zoom and makes the gesture
     // rerender the reader continuously; only layout-viewport changes belong here.
-    return () => window.removeEventListener("resize", on);
+    // Its resize still matters once the zoom is back to 1: a rotation made
+    // while zoomed in fired no window resize that got through, and the
+    // window size hasn't changed on a plain zoom, so nothing rerenders.
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", on);
+    return () => {
+      window.removeEventListener("resize", on);
+      vv?.removeEventListener("resize", on);
+    };
   }, []);
   return size;
 }

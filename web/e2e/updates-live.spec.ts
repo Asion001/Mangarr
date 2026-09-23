@@ -7,6 +7,7 @@ async function mockEvents(page: Page) {
       onopen: ((event: Event) => void) | null = null;
       onerror: ((event: Event) => void) | null = null;
       closed = false;
+      readyState = 0;
 
       constructor(_url: string | URL) {
         super();
@@ -14,9 +15,9 @@ async function mockEvents(page: Page) {
         setTimeout(() => { if (!this.closed) this.open(); }, 0);
       }
 
-      open() { this.onopen?.(new Event("open")); }
-      fail() { this.onerror?.(new Event("error")); }
-      close() { this.closed = true; }
+      open() { this.readyState = 1; this.onopen?.(new Event("open")); }
+      fail(gaveUp = false) { this.readyState = gaveUp ? 2 : 0; this.onerror?.(new Event("error")); }
+      close() { this.closed = true; this.readyState = 2; }
     }
 
     Object.defineProperty(window, "EventSource", { value: MockEventSource });
@@ -27,8 +28,11 @@ async function mockEvents(page: Page) {
             source.dispatchEvent(new MessageEvent(type, { data: JSON.stringify(data) }));
           }
         },
-        fail() {
-          for (const source of MockEventSource.sources.filter((item) => !item.closed)) source.fail();
+        fail(gaveUp = false) {
+          for (const source of MockEventSource.sources.filter((item) => !item.closed)) source.fail(gaveUp);
+        },
+        count() {
+          return MockEventSource.sources.length;
         },
         open() {
           for (const source of MockEventSource.sources.filter((item) => !item.closed)) source.open();
@@ -81,6 +85,27 @@ test("updates refresh on chapter events and after an SSE reconnect", async ({ pa
   await expect(page.getByText("Reconnect title")).toBeVisible();
   await expect(page.getByText("First title")).toHaveCount(1);
   expect(requests).toBeGreaterThanOrEqual(3);
+});
+
+test("the live stream starts again after the browser gives up on it", async ({ page }) => {
+  await mockEvents(page);
+  await page.route("**/api/v1/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith("/auth/status")) {
+      await route.fulfill({ json: { authenticated: true, authDisabled: true, account: { kind: "anonymous", id: 0, permissions: [] } } });
+      return;
+    }
+    await route.fulfill({ json: path.endsWith("/updates") ? { items: [], total: 0, page: 1, pageSize: 50 } : {} });
+  });
+  type Live = { __liveTest: { fail: (gaveUp?: boolean) => void; count: () => number } };
+  await page.goto("/updates");
+  await expect(page.getByRole("status")).toHaveCount(0);
+  const before = await page.evaluate(() => (window as unknown as Live).__liveTest.count());
+  // an error response (a proxy's 502 during a restart) closes an EventSource for good
+  await page.evaluate(() => (window as unknown as Live).__liveTest.fail(true));
+  await expect(page.getByRole("status")).toHaveText("reconnecting");
+  await expect.poll(() => page.evaluate(() => (window as unknown as Live).__liveTest.count())).toBe(before + 1);
+  await expect(page.getByRole("status")).toHaveCount(0);
 });
 
 test("updates pages forward with an opaque cursor and back from local history", async ({ page }) => {

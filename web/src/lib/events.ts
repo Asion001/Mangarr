@@ -75,47 +75,66 @@ export function useLiveUpdates(enabled: boolean) {
     };
     let opened = false;
     let interrupted = false;
+    let closed = false;
+    let es: EventSource;
+    let retry: number | undefined;
+    let delay = 1000;
     setLiveStatus(navigator.onLine === false ? "offline" : "connecting");
-    const es = new EventSource(basePath + "/api/v1/events");
-    es.onopen = () => {
-      const reconnected = opened || interrupted;
-      opened = true;
-      interrupted = false;
-      setLiveStatus("connected");
-      // Queries replace their cached result, so a reconnect catches missed
-      // events without appending or duplicating feed rows.
-      if (reconnected) void qc.invalidateQueries();
-    };
-    es.addEventListener("resource.changed", (ev) => {
-      try {
-        const e = JSON.parse((ev as MessageEvent).data);
-        for (const key of map[e.payload?.name] ?? []) pending.set(key.join("/"), key);
-        if (!timer) timer = window.setTimeout(flush, 400);
-      } catch {
-        /* ignore */
-      }
-    });
-    for (const t of ["chapter.imported", "download.failed", "health.issue", "health.restored", "cleanup.done", "series.added", "processing.progress"]) {
-      es.addEventListener(t, (ev) => {
+    const connect = () => {
+      retry = undefined;
+      es = new EventSource(basePath + "/api/v1/events");
+      es.onopen = () => {
+        const reconnected = opened || interrupted;
+        opened = true;
+        interrupted = false;
+        delay = 1000;
+        setLiveStatus("connected");
+        // Queries replace their cached result, so a reconnect catches missed
+        // events without appending or duplicating feed rows.
+        if (reconnected) void qc.invalidateQueries();
+      };
+      es.addEventListener("resource.changed", (ev) => {
         try {
           const e = JSON.parse((ev as MessageEvent).data);
-          listeners.forEach((l) => l(t, e.payload));
+          for (const key of map[e.payload?.name] ?? []) pending.set(key.join("/"), key);
+          if (!timer) timer = window.setTimeout(flush, 400);
         } catch {
           /* ignore */
         }
       });
-    }
-    es.onerror = () => {
-      interrupted = true;
-      setLiveStatus(navigator.onLine === false ? "offline" : "reconnecting");
+      for (const t of ["chapter.imported", "download.failed", "health.issue", "health.restored", "cleanup.done", "series.added", "processing.progress"]) {
+        es.addEventListener(t, (ev) => {
+          try {
+            const e = JSON.parse((ev as MessageEvent).data);
+            listeners.forEach((l) => l(t, e.payload));
+          } catch {
+            /* ignore */
+          }
+        });
+      }
+      es.onerror = () => {
+        interrupted = true;
+        setLiveStatus(navigator.onLine === false ? "offline" : "reconnecting");
+        // The browser retries a dropped stream itself, but gives up for good
+        // after an error response (a proxy's 502 while mangarr restarts):
+        // start a new one, backing off.
+        if (es.readyState === 2 /* CLOSED */ && !closed && retry === undefined) {
+          retry = window.setTimeout(connect, delay);
+          delay = Math.min(delay * 2, 30000);
+        }
+      };
     };
+    connect();
     const offline = () => setLiveStatus("offline");
-    const online = () => setLiveStatus("reconnecting");
+    // coming back online doesn't always drop the stream (a LAN server)
+    const online = () => setLiveStatus(interrupted ? "reconnecting" : "connected");
     window.addEventListener("offline", offline);
     window.addEventListener("online", online);
     return () => {
+      closed = true;
       es.close();
       if (timer) clearTimeout(timer);
+      if (retry) clearTimeout(retry);
       window.removeEventListener("offline", offline);
       window.removeEventListener("online", online);
     };

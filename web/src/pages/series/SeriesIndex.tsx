@@ -84,13 +84,16 @@ export function SeriesIndex() {
   const [lastClicked, setLastClicked] = useState<number | null>(null);
   const [selectingAll, setSelectingAll] = useState(false);
   useEffect(()=>{if(!manage){setSelecting(false);setSelected(new Map());}},[manage]);
+  // a shift-click range starts on this page, not where the last one was clicked
+  useEffect(() => setLastClicked(null), [q, filter, sort, rootFolderId, language, page, pageSize]);
   /** toggle flips one series; shift+click sets the whole range from the last click the same way. */
   const toggle = (idx: number, shift = false) => {
     const s = list[idx];
     setSelected((cur) => {
       const n = new Map(cur);
       const on = !cur.has(s.id);
-      const [a, b] = shift && lastClicked !== null ? [Math.min(lastClicked, idx), Math.max(lastClicked, idx)] : [idx, idx];
+      const from = lastClicked !== null && lastClicked < list.length ? lastClicked : null;
+      const [a, b] = shift && from !== null ? [Math.min(from, idx), Math.max(from, idx)] : [idx, idx];
       for (let i = a; i <= b; i++) on ? n.set(list[i].id, list[i].title) : n.delete(list[i].id);
       return n;
     });
@@ -163,15 +166,18 @@ export function SeriesIndex() {
           <option value="size">{t("Sort: size")}</option>
           <option value="read">{t("Sort: recently read")}</option>
         </Select>
-        {(roots?.length ?? 0) > 1 && (
+        {/* a remembered filter stays visible, so it can be cleared even when it no longer applies */}
+        {((roots?.length ?? 0) > 1 || rootParam !== "") && (
           <Select className="w-auto max-w-xs" value={rootParam} onChange={(e) => { setRoot(e.target.value); setPage("1"); }}>
             <option value="">{t("All libraries")}</option>
+            {rootParam !== "" && !roots?.some((root) => String(root.id) === rootParam) && <option value={rootParam}>{t("Removed library")}</option>}
             {roots?.map((root) => <option key={root.id} value={root.id}>{root.path}</option>)}
           </Select>
         )}
-        {(data?.languages?.length ?? 0) > 1 && (
+        {((data?.languages?.length ?? 0) > 1 || language !== "") && (
           <Select className="w-auto" value={language} onChange={(e) => { setLanguage(e.target.value); setPage("1"); }}>
             <option value="">{t("All languages")}</option>
+            {language !== "" && !data?.languages?.includes(language) && <option value={language}>{language}</option>}
             {data?.languages?.map((item) => <option key={item} value={item}>{item}</option>)}
           </Select>
         )}

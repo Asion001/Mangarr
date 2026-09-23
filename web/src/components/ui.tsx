@@ -303,13 +303,23 @@ export function Menu({ label, icon, items, align = "left", up = false }: { label
   );
 }
 
+// unsavedChanges is set while a SaveBar has something to save.
+let unsavedChanges = false;
+
+/** confirmLeave asks before navigating away from unsaved changes; true means go ahead. */
+export function confirmLeave() {
+  return !unsavedChanges || window.confirm(t("Leave without saving your changes?"));
+}
+
 /**
  * SaveBar sticks to the bottom of a settings page while it has unsaved
  * changes, and asks before a link or closing the tab throws them away.
+ * Navigation that isn't a link (a select, a button) asks with confirmLeave.
  */
 export function SaveBar({ dirty, saving, onSave, onDiscard }: { dirty: boolean; saving?: boolean; onSave: () => void; onDiscard: () => void }) {
   useEffect(() => {
     if (!dirty) return;
+    unsavedChanges = true;
     const beforeUnload = (e: BeforeUnloadEvent) => e.preventDefault();
     // BrowserRouter can't block navigation, so catch in-app links before they route
     const click = (e: MouseEvent) => {
@@ -323,6 +333,7 @@ export function SaveBar({ dirty, saving, onSave, onDiscard }: { dirty: boolean; 
     window.addEventListener("beforeunload", beforeUnload);
     document.addEventListener("click", click, true);
     return () => {
+      unsavedChanges = false;
       window.removeEventListener("beforeunload", beforeUnload);
       document.removeEventListener("click", click, true);
     };

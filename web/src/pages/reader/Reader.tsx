@@ -113,8 +113,13 @@ function Reader({ chapterId, preloader }: { chapterId: number; preloader: ImageP
       }
     }
     if (ch.next && page >= count - 2) {
-      const width = displayWidth(vp.w);
-      for (const p of [1, 2]) load.push(pageUrl(ch.next.id, p, width));
+      // the next chapter's first screens as its viewer will lay them out
+      // before it knows the page sizes, so it asks for these same images
+      const nextViews = buildViews(3, {}, s, vp.w > vp.h);
+      for (const v of nextViews) {
+        if (!("pages" in v)) continue;
+        for (const p of v.pages) if (p <= 2) load.push(pageUrl(ch.next.id, p, displayWidth(pageLayout(p, v, {}, s, vp).w)));
+      }
     }
     return { load, retain };
   }, [ch, s, view, index, views, dims, vp, page, count]);

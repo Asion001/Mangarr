@@ -147,13 +147,15 @@ export function MassEditBar({
   const [deleteFiles, setDeleteFiles] = useState(false);
   const [busy, setBusy] = useState(false);
   const [listOpen, setListOpen] = useState(false);
-  const [pending, setPending] = useState<{ text: string; body: Editor } | null>(null);
+  // pending keeps the series it was confirmed for: Apply changes those, even
+  // if the selection changed after the question was asked
+  const [pending, setPending] = useState<{ text: string; body: Editor; ids: number[] } | null>(null);
   const [rootId, setRootId] = useState(0);
   const [moveFiles, setMoveFiles] = useState(true);
-  const edit = async (body: Editor, done?: string) => {
+  const edit = async (body: Editor, done?: string, seriesIds = ids) => {
     setBusy(true);
     try {
-      const r = await unwrap(api.POST("/api/v1/series/editor", { body: { seriesIds: ids, ...body } }));
+      const r = await unwrap(api.POST("/api/v1/series/editor", { body: { seriesIds, ...body } }));
       qc.invalidateQueries({ queryKey: ["series"] });
       toast.success(done ?? t("{count} series updated", { count: r.updated }), r.moves ? t("{count} moving in the background", { count: r.moves }) : undefined);
       setPending(null);
@@ -177,6 +179,8 @@ export function MassEditBar({
     try {
       for (const id of ids) {
         await unwrap(api.DELETE("/api/v1/series/{id}", { params: { path: { id }, query: { deleteFiles } } }));
+        // a retry after a failure starts with the series that are left
+        onRemove(id);
         done++;
       }
       toast.success(t("{count} series deleted", { count: done }));
@@ -189,7 +193,7 @@ export function MassEditBar({
       setBusy(false);
     }
   };
-  const stage = (text: string, body: Editor) => setPending({ text, body });
+  const stage = (text: string, body: Editor) => setPending({ text, body, ids });
   // dialogs render outside the bar: its backdrop-blur would clip fixed children
   return (
     <>
@@ -219,7 +223,7 @@ export function MassEditBar({
             <div role="status" className="flex min-w-0 flex-1 flex-wrap items-center gap-2 rounded-md border border-warn/40 bg-warn/10 px-3 py-1.5 text-sm">
               <span className="min-w-0 flex-1">{pending.text}</span>
               <Button size="sm" variant="ghost" disabled={busy} onClick={() => setPending(null)}>{t("Cancel")}</Button>
-              <Button size="sm" variant="primary" loading={busy} onClick={() => void edit(pending.body)}>{t("Apply")}</Button>
+              <Button size="sm" variant="primary" loading={busy} onClick={() => void edit(pending.body, undefined, pending.ids)}>{t("Apply")}</Button>
             </div>
           ) : (
             <>

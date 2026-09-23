@@ -109,11 +109,18 @@ func (a *App) wire(ctx context.Context) error {
 			if len(ids) == 0 {
 				return fmt.Errorf("seriesId required")
 			}
-			newChapters, grabbed := 0, 0
+			// one series failing (its sources are down, it was deleted since)
+			// doesn't stop the rest of a bulk refresh
+			newChapters, grabbed, failed := 0, 0, 0
+			var lastErr error
 			for i, id := range ids {
 				res, err := a.Refresher.SyncSeries(ctx, id, false)
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
 				if err != nil {
-					return err
+					failed, lastErr = failed+1, err
+					a.Log.Warn("series refresh", "series", id, "err", err)
 				}
 				newChapters, grabbed = newChapters+res.NewChapters, grabbed+res.Grabbed
 				if len(ids) > 1 {
@@ -121,7 +128,7 @@ func (a *App) wire(ctx context.Context) error {
 				}
 			}
 			r.Progress("%d new chapters, %d grabbed", newChapters, grabbed)
-			return nil
+			return bulkError(failed, len(ids), "refresh", lastErr)
 		}})
 	a.Queue.Register(jobs.Definition{Name: "SearchMissing", Description: "Grab missing monitored chapters (optionally for one series, several series or chapters)",
 		Handler: func(ctx context.Context, r *jobs.Run) error {
@@ -142,16 +149,21 @@ func (a *App) wire(ctx context.Context) error {
 					return err
 				}
 			}
-			total := 0
+			total, failed := 0, 0
+			var lastErr error
 			for _, id := range ids {
 				n, err := a.Searcher.Evaluate(ctx, id, body.ChapterIDs, body.Explicit)
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
 				if err != nil {
-					return err
+					failed, lastErr = failed+1, err
+					a.Log.Warn("search missing", "series", id, "err", err)
 				}
 				total += n
 			}
 			r.Progress("%d chapters queued", total)
-			return nil
+			return bulkError(failed, len(ids), "search", lastErr)
 		}})
 	a.Queue.Register(jobs.Definition{Name: "RefreshMetadata", Description: "Refresh series metadata from metadata modules",
 		Handler: func(ctx context.Context, r *jobs.Run) error {
@@ -190,4 +202,17 @@ func (a *App) wire(ctx context.Context) error {
 		return err
 	}
 	return a.wireMore(ctx)
+}
+
+// bulkError is a job's result after it worked through several series: the
+// error itself for one series, else how many of them failed.
+func bulkError(failed, total int, what string, last error) error {
+	switch {
+	case failed == 0:
+		return nil
+	case total == 1:
+		return last
+	default:
+		return fmt.Errorf("%d of %d series failed to %s, the last: %w", failed, total, what, last)
+	}
 }

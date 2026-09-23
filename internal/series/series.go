@@ -597,6 +597,14 @@ func (s *Service) ReplaceSource(ctx context.Context, seriesID, linkID int64, l S
 	if err != nil {
 		return nil, err
 	}
+	// ask the module for the catalog's name before the transaction, not
+	// while it holds the database (a bulk replace passes neither)
+	if l.SourceName == "" || l.Lang == "" {
+		if info := s.lookupSource(ctx, l.ModuleID, l.SourceID); info != nil {
+			l.SourceName = firstNonEmpty(l.SourceName, info.DisplayName, info.Name)
+			l.Lang = firstNonEmpty(l.Lang, info.Lang)
+		}
+	}
 	var ss *model.SeriesSource
 	err = s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		var old model.SeriesSource

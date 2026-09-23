@@ -290,12 +290,17 @@ func (s *Server) finish(ctx context.Context, src string, p Params) ([]byte, stri
 	if err != nil {
 		return nil, "", err
 	}
-	if p.Format == "png" && (p.MaxWidth <= 0 || cfg.Width <= p.MaxWidth) {
+	if p.MaxWidth <= 0 || cfg.Width <= p.MaxWidth {
 		// the engine already wrote this PNG: decoding an upscaled webtoon
 		// strip (100+ megapixels) only to encode it again costs more memory
 		// than a small server has
-		data, err := os.ReadFile(src)
-		return data, ".png", err
+		switch {
+		case p.Format == "png":
+			data, err := os.ReadFile(src)
+			return data, ".png", err
+		case p.Format == "webp" && s.cfg.CWebP != "":
+			return s.cwebp(ctx, src, src+".webp", p.Quality)
+		}
 	}
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return nil, "", err
@@ -335,7 +340,12 @@ func (s *Server) finish(ctx context.Context, src string, p Params) ([]byte, stri
 		return nil, "", err
 	}
 	pf.Close()
-	cmd := exec.CommandContext(ctx, s.cfg.CWebP, "-quiet", "-mt", "-q", strconv.Itoa(p.Quality), tmpPNG, "-o", out)
+	return s.cwebp(ctx, tmpPNG, out, p.Quality)
+}
+
+// cwebp encodes the PNG src to lossy WebP at quality q.
+func (s *Server) cwebp(ctx context.Context, src, out string, q int) ([]byte, string, error) {
+	cmd := exec.CommandContext(ctx, s.cfg.CWebP, "-quiet", "-mt", "-q", strconv.Itoa(q), src, "-o", out)
 	if b, err := cmd.CombinedOutput(); err != nil {
 		return nil, "", fmt.Errorf("cwebp: %w: %s", err, b)
 	}

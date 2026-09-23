@@ -184,7 +184,7 @@ export function BulkSourcesModal({ ids, onClose }: { ids: number[]; onClose: () 
         </div>
         <div className="flex flex-col gap-3 sm:flex-row">
           {action !== "add" && <CatalogChooser label={action === "replace" ? t("From") : t("Catalog")} catalogs={used} usage={usage} value={from} onChange={setFrom} />}
-          {needsTo && <CatalogChooser label={action === "replace" ? t("To") : t("Catalog")} catalogs={all.filter((c) => key(c) !== from)} usage={usage} value={to} onChange={setTo} />}
+          {needsTo && <CatalogChooser label={action === "replace" ? t("To") : t("Catalog")} catalogs={action === "replace" ? all.filter((c) => key(c) !== from) : all} usage={usage} value={to} onChange={setTo} />}
         </div>
         <p className="text-xs text-muted">
           {action === "add" && t("Each series is found at the catalog by title and linked last, so downloads keep preferring the sources it already has.")}
@@ -255,7 +255,13 @@ export function BulkSourcesModal({ ids, onClose }: { ids: number[]; onClose: () 
           initialKeys={[key(toCatalog)]}
           excludeLinked={false}
           onClose={() => setSearchFor(null)}
-          onPick={(m) => {
+          onPick={(m, g) => {
+            // the pick is linked under the catalog being applied, so a match
+            // from another catalog (scope widened in the search) can't be used
+            if (key(g) !== key(toCatalog)) {
+              toast.error(t("Pick a match from {catalog}", { catalog: toCatalog.displayName }));
+              return;
+            }
             const id = searchFor.seriesId;
             setPicks((cur) => new Map(cur).set(id, { url: m.url, title: m.title, engineRef: m.engineRef }));
             setChecked((cur) => new Set(cur).add(id));
