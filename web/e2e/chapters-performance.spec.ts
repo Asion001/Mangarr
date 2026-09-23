@@ -48,10 +48,15 @@ test("large chapter tables render a small remembered page while bulk selection s
 test("desktop reading actions stay aligned and queue controls expand below the row", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("mangarr:ui:anonymous:0", JSON.stringify({ locale: "en", mode: "editing" })));
   const release = { id: 1, sourceName: "Reader source", name: "Release", uploadDate: "2026-09-01T00:00:00Z", removed: false, blocklisted: false };
+  let markBody: unknown;
   await mockSeriesPage(page, [
     { id: 1, seriesId: 1, number: "1", numberSort: 1, title: "Queued chapter", monitored: true, releaseDate: "2026-09-01T00:00:00Z", state: "queued", releases: [release], readBy: [], job: { id: 9, status: "queued", priority: 3, progress: 0 } },
     { id: 2, seriesId: 1, number: "2", numberSort: 2, title: "Regular chapter", monitored: true, releaseDate: "2026-09-02T00:00:00Z", state: "missing", releases: [{ ...release, id: 2 }], readBy: [] },
   ]);
+  await page.route("**/api/v1/read/chapters/1/mark", async (route) => {
+    markBody = route.request().postDataJSON();
+    await route.fulfill({ json: {} });
+  });
 
   await page.goto("/series/1");
   const queuedRow = page.getByRole("row").filter({ hasText: "Queued chapter" });
@@ -65,6 +70,8 @@ test("desktop reading actions stay aligned and queue controls expand below the r
   await expect(page.getByRole("button", { name: "Top", exact: true })).toHaveCount(0);
   await queuedRow.getByRole("button", { expanded: false }).click();
   await expect(page.getByRole("button", { name: "Top", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Mark previous chapters read", exact: true }).click();
+  await expect.poll(() => markBody).toEqual({ read: true, scope: "previous" });
 });
 
 for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 }]) {

@@ -2,11 +2,10 @@ import { t as tr, t } from "../../lib/i18n/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, Download, List, Maximize, Minimize, Settings2, X } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Download, List, Maximize, Minimize, Settings2 } from "lucide-react";
 import clsx from "clsx";
 import { api, apiUrl, basePath, unwrap } from "../../api/client";
 import { ErrorBox, Spinner } from "../../components/ui";
-import { useToast } from "../../lib/toast";
 import { useReaderSettings } from "./settings";
 import { displayWidth, pageUrl, useDims, useViewport, type Half } from "./page";
 import { buildViews, indexOf, pageLayout, PagedViewer } from "./PagedViewer";
@@ -34,7 +33,6 @@ type Pos = { page: number; half?: Half; edge?: "start" | "end" };
 function Reader({ chapterId, preloader }: { chapterId: number; preloader: ImagePreloader }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const toast = useToast();
   const [search] = useSearchParams();
   const { data: ch, error } = useQuery(chapterQuery(chapterId));
   const { settings: s, set, saveAsDefault, reset, hasOwn, loading: settingsLoading } = useReaderSettings(ch?.seriesId ?? 0, ch?.readingDirection ?? "");
@@ -46,7 +44,6 @@ function Reader({ chapterId, preloader }: { chapterId: number; preloader: ImageP
   const [panel, setPanel] = useState(false);
   const [pickingChapter, setPickingChapter] = useState(false);
   const [full, setFull] = useState(!!document.fullscreenElement);
-  const [marking, setMarking] = useState("");
 
   // where to start: ?page=, else where you left off
   useEffect(() => {
@@ -187,25 +184,6 @@ function Reader({ chapterId, preloader }: { chapterId: number; preloader: ImageP
     };
   }, [ch]);
 
-  const mark = async (read: boolean, scope: "chapter" | "previous") => {
-    if (!ch) return;
-    const key = `${scope}:${read}`;
-    setMarking(key);
-    try {
-      await unwrap(api.PUT("/api/v1/read/chapters/{id}/mark", { params: { path: { id: ch.id } }, body: { read, scope } }));
-      if (scope === "chapter") {
-        saved.current = pending.current;
-        qc.setQueryData(chapterQuery(ch.id).queryKey, { ...ch, progress: { page: read ? count : 0, completed: read } });
-      }
-      qc.invalidateQueries({ queryKey: ["series"] });
-      qc.invalidateQueries({ queryKey: ["readers"] });
-    } catch (e) {
-      toast.fromError(e, tr("Could not update read status"));
-    } finally {
-      setMarking("");
-    }
-  };
-
   const toggleFull = () => {
     if (document.fullscreenElement) void document.exitFullscreen();
     else void document.documentElement.requestFullscreen?.();
@@ -311,40 +289,6 @@ function Reader({ chapterId, preloader }: { chapterId: number; preloader: ImageP
             {!ch.downloaded && tr(" · streamed")}
           </div>
         </div>
-        <button
-          type="button"
-          disabled={!!marking}
-          className="flex items-center gap-1 rounded px-2 py-2 text-xs hover:bg-panel-2 disabled:opacity-40"
-          onClick={() => void mark(!ch.progress.completed, "chapter")}
-          title={ch.progress.completed ? tr("Mark chapter unread") : tr("Mark chapter read")}
-        >
-          {ch.progress.completed ? <X className="size-5" /> : <Check className="size-5" />}
-          <span className="hidden xl:inline">{ch.progress.completed ? t("Mark unread") : t("Mark read")}</span>
-        </button>
-        {ch.prev && (
-          <>
-            <button
-              type="button"
-              disabled={!!marking}
-              className="rounded p-2 text-fg/80 hover:bg-panel-2 disabled:opacity-40"
-              onClick={() => void mark(true, "previous")}
-              title={t("Mark previous chapters read")}
-              aria-label={t("Mark previous chapters read")}
-            >
-              <span className="flex items-center text-xs"><Check className="size-5" /><ChevronLeft className="-ml-1 size-3" /></span>
-            </button>
-            <button
-              type="button"
-              disabled={!!marking}
-              className="rounded p-2 text-fg/80 hover:bg-panel-2 disabled:opacity-40"
-              onClick={() => void mark(false, "previous")}
-              title={t("Mark previous chapters unread")}
-              aria-label={t("Mark previous chapters unread")}
-            >
-              <span className="flex items-center text-xs"><X className="size-5" /><ChevronLeft className="-ml-1 size-3" /></span>
-            </button>
-          </>
-        )}
         {ch.canDownload && (
           <a href={apiUrl(`api/v1/read/chapters/${ch.id}/file`)} download className="rounded p-2 hover:bg-panel-2" aria-label={t("Download the chapter")}>
             <Download className="size-5" />

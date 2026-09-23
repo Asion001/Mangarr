@@ -95,9 +95,9 @@ export function ChaptersTable({ seriesId, manage = true, nextChapterId }: { seri
       toast.fromError(e);
     }
   }, [refresh, toast]);
-  const mark = useCallback(async (c: Chapter, read: boolean) => {
+  const mark = useCallback(async (c: Chapter, read: boolean, scope: "chapter" | "previous" = "chapter") => {
     try {
-      await unwrap(api.PUT("/api/v1/read/chapters/{id}/mark", { params: { path: { id: c.id } }, body: { read, scope: "chapter" } }));
+      await unwrap(api.PUT("/api/v1/read/chapters/{id}/mark", { params: { path: { id: c.id } }, body: { read, scope } }));
       refresh();
     } catch (e) {
       toast.fromError(e);
@@ -327,7 +327,7 @@ type ChapterRowProps = {
   onSearch: (id: number) => void;
   onRestore: (chapter: Chapter) => void;
   onDelete: (id: number) => void;
-  onMark: (chapter: Chapter, read: boolean) => void;
+  onMark: (chapter: Chapter, read: boolean, scope?: "chapter" | "previous") => void;
   onQueueAction: (jobID: number, action: "top" | "bottom" | "pause" | "resume") => void;
   onExplain: (chapter: Chapter) => void;
   /** queuePaused: the whole download queue is paused, so queued chapters wait. */
@@ -597,7 +597,7 @@ function ChapterManagementActions({
   );
 }
 
-function ChapterExpandedInfo({ chapter: c, accountKind, onMark }: { chapter: Chapter; accountKind?: string; onMark: (chapter: Chapter, read: boolean) => void }) {
+function ChapterExpandedInfo({ chapter: c, accountKind, onMark }: { chapter: Chapter; accountKind?: string; onMark: (chapter: Chapter, read: boolean, scope?: "chapter" | "previous") => void }) {
   return <>
     {c.releases.length === 0 ? (
       <p className="text-xs text-muted">{t("No releases.")}</p>
@@ -628,9 +628,11 @@ function ChapterExpandedInfo({ chapter: c, accountKind, onMark }: { chapter: Cha
         </Badge>
       ))}
       {c.readBy.length === 0 && <span className="text-xs text-muted">{t("Nobody yet")}</span>}
-      <span className="ml-auto flex gap-1">
+      <span className="ml-auto flex flex-wrap gap-1">
         <Button size="sm" onClick={() => onMark(c, true)}>{t("Mark read")}</Button>
         <Button size="sm" onClick={() => onMark(c, false)}>{t("Mark unread")}</Button>
+        <Button size="sm" onClick={() => onMark(c, true, "previous")}>{t("Mark previous chapters read")}</Button>
+        <Button size="sm" onClick={() => onMark(c, false, "previous")}>{t("Mark previous chapters unread")}</Button>
       </span>
     </div>
     {c.job?.error && <p className="mt-2 text-xs text-err">{t("Last error:") + " "}{c.job.error}</p>}

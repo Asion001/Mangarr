@@ -43,6 +43,8 @@ test("preloads upcoming reader pages and cancels pages skipped by a fast jump", 
 
   await page.goto("/read/1");
   await expect(page.getByText("1 / 20")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Mark chapter read" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Mark previous chapters read" })).toHaveCount(0);
   await expect.poll(() => [2, 3, 4, 5].every((number) => requested.has(number))).toBe(true);
 
   await page.getByRole("slider", { name: "Page" }).fill("10");
