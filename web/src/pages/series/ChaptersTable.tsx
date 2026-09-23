@@ -6,7 +6,7 @@ import { Link } from "react-router";
 import clsx from "clsx";
 import { api, unwrap, type Chapter } from "../../api/client";
 import { useChapters, useQueue } from "../../api/queries";
-import { Badge, Button, Card, Confirm, ErrorBox, IconButton, Loading, Modal, Progress, Switch, Table, Td, Th } from "../../components/ui";
+import { Badge, Button, Card, Confirm, ErrorBox, Loading, Modal, Progress, Switch, Table, Td, Th } from "../../components/ui";
 import { bytes, date, relative } from "../../lib/format";
 import { useToast } from "../../lib/toast";
 import { eta } from "../../lib/liveProgress";
@@ -372,7 +372,7 @@ const ChapterRow = memo(function ChapterRow({
         </Td>
         <Td>
           <div className="flex items-center gap-1">
-            <button className="flex items-center gap-1 text-left hover:text-accent-2" onClick={() => onExpand(c.id)}>
+            <button className="flex items-center gap-1 text-left hover:text-accent-2" onClick={() => onExpand(c.id)} aria-expanded={open}>
               {open ? <ChevronDown className="size-3.5 shrink-0" /> : <ChevronRight className="size-3.5 shrink-0" />}
               <span className={clsx("line-clamp-1", c.title && "min-w-40", read && "text-muted")}>{c.title || <span className="text-muted">—</span>}</span>
             </button>
@@ -448,46 +448,23 @@ const ChapterRow = memo(function ChapterRow({
                 </Button>
               </Link>
             )}
-            {manage && c.job && !["completed", "failed"].includes(c.job.status) && (
-              <>
-                <IconButton title={t("Move to top")} onClick={() => onQueueAction(c.job!.id, "top")}>
-                  <ArrowUpToLine className="size-4" />
-                </IconButton>
-                <IconButton title={t("Move to bottom")} onClick={() => onQueueAction(c.job!.id, "bottom")}>
-                  <ArrowDownToLine className="size-4" />
-                </IconButton>
-                {c.job.status === "paused" ? (
-                  <IconButton title={t("Resume")} onClick={() => onQueueAction(c.job!.id, "resume")}><Play className="size-4" /></IconButton>
-                ) : (
-                  <IconButton title={t("Pause")} onClick={() => onQueueAction(c.job!.id, "pause")}><Pause className="size-4" /></IconButton>
-                )}
-              </>
-            )}
-            {manage && (c.state === "cleaned" ? (
-              <IconButton title={t("Restore (download again)")} onClick={() => onRestore(c)}>
-                <RotateCcw className="size-4" />
-              </IconButton>
-            ) : (
-              <IconButton title={t("Search this chapter")} onClick={() => onSearch(c.id)}>
-                <Search className="size-4" />
-              </IconButton>
-            ))}
-            {manage && deletableFile(c) && (
-              <IconButton title={t("Delete chapter file")} onClick={() => onDelete(c.id)}>
-                <Trash2 className="size-4" />
-              </IconButton>
-            )}
-            {manage && (
-              <IconButton title={t("Why (not) downloaded?")} onClick={() => onExplain(c)}>
-                <HelpCircle className="size-4" />
-              </IconButton>
-            )}
           </div>
         </Td>
       </tr>
       {open && (
         <tr>
           <Td colSpan={8} className="bg-bg/60">
+            {manage && (
+              <ChapterManagementActions
+                chapter={c}
+                onMonitor={onMonitor}
+                onQueueAction={onQueueAction}
+                onRestore={onRestore}
+                onSearch={onSearch}
+                onDelete={onDelete}
+                onExplain={onExplain}
+              />
+            )}
             <ChapterExpandedInfo chapter={c} accountKind={accountKind} onMark={onMark} />
           </Td>
         </tr>
@@ -550,27 +527,16 @@ const ChapterMobileRow = memo(function ChapterMobileRow({
       {open && (
         <div className="mt-3 border-t border-border bg-bg/50 px-1 pt-3">
           {manage && (
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              <span className="flex items-center gap-2 text-xs text-muted"><Switch checked={c.monitored} onChange={(monitored) => onMonitor(c.id, monitored)} /> {t("Monitored")}</span>
-              {c.job && !["completed", "failed"].includes(c.job.status) && (
-                <>
-                  <Button size="sm" icon={<ArrowUpToLine className="size-3.5" />} onClick={() => onQueueAction(c.job!.id, "top")}>{t("Top")}</Button>
-                  <Button size="sm" icon={<ArrowDownToLine className="size-3.5" />} onClick={() => onQueueAction(c.job!.id, "bottom")}>{t("Bottom")}</Button>
-                  {c.job.status === "paused" ? (
-                    <Button size="sm" icon={<Play className="size-3.5" />} onClick={() => onQueueAction(c.job!.id, "resume")}>{t("Resume")}</Button>
-                  ) : (
-                    <Button size="sm" icon={<Pause className="size-3.5" />} onClick={() => onQueueAction(c.job!.id, "pause")}>{t("Pause")}</Button>
-                  )}
-                </>
-              )}
-              {c.state === "cleaned" ? (
-                <Button size="sm" icon={<RotateCcw className="size-3.5" />} onClick={() => onRestore(c)}>{t("Restore")}</Button>
-              ) : (
-                <Button size="sm" icon={<Search className="size-3.5" />} onClick={() => onSearch(c.id)}>{t("Search")}</Button>
-              )}
-              {deletableFile(c) && <Button size="sm" variant="danger" icon={<Trash2 className="size-3.5" />} onClick={() => onDelete(c.id)}>{t("Delete chapter file")}</Button>}
-              <Button size="sm" icon={<HelpCircle className="size-3.5" />} onClick={() => onExplain(c)}>{t("Why (not) downloaded?")}</Button>
-            </div>
+            <ChapterManagementActions
+              chapter={c}
+              showMonitor
+              onMonitor={onMonitor}
+              onQueueAction={onQueueAction}
+              onRestore={onRestore}
+              onSearch={onSearch}
+              onDelete={onDelete}
+              onExplain={onExplain}
+            />
           )}
           {c.file && (
             <div className="mb-3 text-xs text-muted">
@@ -586,6 +552,50 @@ const ChapterMobileRow = memo(function ChapterMobileRow({
     </article>
   );
 });
+
+function ChapterManagementActions({
+  chapter: c,
+  showMonitor = false,
+  onMonitor,
+  onQueueAction,
+  onRestore,
+  onSearch,
+  onDelete,
+  onExplain,
+}: {
+  chapter: Chapter;
+  showMonitor?: boolean;
+  onMonitor: (id: number, monitored: boolean) => void;
+  onQueueAction: (jobID: number, action: "top" | "bottom" | "pause" | "resume") => void;
+  onRestore: (chapter: Chapter) => void;
+  onSearch: (id: number) => void;
+  onDelete: (id: number) => void;
+  onExplain: (chapter: Chapter) => void;
+}) {
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2">
+      {showMonitor && <span className="flex items-center gap-2 text-xs text-muted"><Switch checked={c.monitored} onChange={(monitored) => onMonitor(c.id, monitored)} /> {t("Monitored")}</span>}
+      {c.job && !["completed", "failed"].includes(c.job.status) && (
+        <>
+          <Button size="sm" icon={<ArrowUpToLine className="size-3.5" />} onClick={() => onQueueAction(c.job!.id, "top")}>{t("Top")}</Button>
+          <Button size="sm" icon={<ArrowDownToLine className="size-3.5" />} onClick={() => onQueueAction(c.job!.id, "bottom")}>{t("Bottom")}</Button>
+          {c.job.status === "paused" ? (
+            <Button size="sm" icon={<Play className="size-3.5" />} onClick={() => onQueueAction(c.job!.id, "resume")}>{t("Resume")}</Button>
+          ) : (
+            <Button size="sm" icon={<Pause className="size-3.5" />} onClick={() => onQueueAction(c.job!.id, "pause")}>{t("Pause")}</Button>
+          )}
+        </>
+      )}
+      {c.state === "cleaned" ? (
+        <Button size="sm" icon={<RotateCcw className="size-3.5" />} onClick={() => onRestore(c)}>{t("Restore")}</Button>
+      ) : (
+        <Button size="sm" icon={<Search className="size-3.5" />} onClick={() => onSearch(c.id)}>{t("Search")}</Button>
+      )}
+      {deletableFile(c) && <Button size="sm" variant="danger" icon={<Trash2 className="size-3.5" />} onClick={() => onDelete(c.id)}>{t("Delete chapter file")}</Button>}
+      <Button size="sm" icon={<HelpCircle className="size-3.5" />} onClick={() => onExplain(c)}>{t("Why (not) downloaded?")}</Button>
+    </div>
+  );
+}
 
 function ChapterExpandedInfo({ chapter: c, accountKind, onMark }: { chapter: Chapter; accountKind?: string; onMark: (chapter: Chapter, read: boolean) => void }) {
   return <>
