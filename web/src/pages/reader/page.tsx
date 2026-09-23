@@ -216,13 +216,16 @@ export function PageImage({
 export function useViewport() {
   const [size, setSize] = useState({ w: window.innerWidth, h: window.innerHeight });
   useEffect(() => {
-    const on = () => setSize({ w: window.innerWidth, h: window.innerHeight });
-    window.addEventListener("resize", on);
-    window.visualViewport?.addEventListener("resize", on);
-    return () => {
-      window.removeEventListener("resize", on);
-      window.visualViewport?.removeEventListener("resize", on);
+    const on = () => {
+      if ((window.visualViewport?.scale ?? 1) > 1.05) return;
+      const next = { w: window.innerWidth, h: window.innerHeight };
+      setSize((current) => current.w === next.w && current.h === next.h ? current : next);
     };
+    window.addEventListener("resize", on);
+    // visualViewport resizes on every pinch-zoom frame. Re-fitting the page to
+    // that shrinking viewport cancels the visible zoom and makes the gesture
+    // rerender the reader continuously; only layout-viewport changes belong here.
+    return () => window.removeEventListener("resize", on);
   }, []);
   return size;
 }

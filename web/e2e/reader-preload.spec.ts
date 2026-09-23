@@ -5,6 +5,24 @@ const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="700" height="1000"><
 test("preloads upcoming reader pages and cancels pages skipped by a fast jump", async ({ page }) => {
   const requested = new Set<number>();
   const cancelled = new Set<number>();
+  await page.addInitScript(() => {
+    let layoutWidth = window.innerWidth;
+    let scale = 1;
+    const visual = new EventTarget();
+    Object.defineProperties(visual, {
+      scale: { get: () => scale },
+      width: { get: () => layoutWidth / scale },
+      height: { get: () => window.innerHeight / scale },
+    });
+    Object.defineProperty(window, "visualViewport", { configurable: true, value: visual });
+    Object.defineProperty(window, "innerWidth", { configurable: true, get: () => layoutWidth });
+    (window as Window & { simulateVisualZoom?: () => void }).simulateVisualZoom = () => {
+      layoutWidth = 320;
+      scale = 2;
+      visual.dispatchEvent(new Event("resize"));
+      window.dispatchEvent(new Event("resize"));
+    };
+  });
   page.on("requestfailed", (request) => {
     const match = new URL(request.url()).pathname.match(/\/read\/chapters\/1\/pages\/(\d+)$/);
     if (match) cancelled.add(Number(match[1]));
@@ -45,6 +63,12 @@ test("preloads upcoming reader pages and cancels pages skipped by a fast jump", 
   await expect(page.getByText("1 / 20")).toBeVisible();
   await expect(page.getByRole("button", { name: "Mark chapter read" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Mark previous chapters read" })).toHaveCount(0);
+  const firstPage = page.locator('img[src*="/pages/1"]').last();
+  await expect(firstPage).toBeVisible();
+  const widthBeforeZoom = await firstPage.evaluate((image) => image.getBoundingClientRect().width);
+  await page.evaluate(() => (window as Window & { simulateVisualZoom?: () => void }).simulateVisualZoom?.());
+  await page.waitForTimeout(50);
+  expect(await firstPage.evaluate((image) => image.getBoundingClientRect().width)).toBe(widthBeforeZoom);
   await expect.poll(() => [2, 3, 4, 5].every((number) => requested.has(number))).toBe(true);
 
   await page.getByRole("slider", { name: "Page" }).fill("10");
