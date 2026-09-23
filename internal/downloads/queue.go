@@ -92,6 +92,33 @@ func (q *Queue) EnqueuePriority(ctx context.Context, seriesID, chapterID int64, 
 	return job, true, nil
 }
 
+// EnqueueReprocessFiles materializes planned processing in bounded bulk
+// inserts. Existing active chapter jobs win through the partial unique index.
+func (q *Queue) EnqueueReprocessFiles(ctx context.Context, files []model.ChapterFile, priority int) (int, error) {
+	const batchSize = 250
+	created := 0
+	now := time.Now().UTC()
+	for start := 0; start < len(files); start += batchSize {
+		end := min(start+batchSize, len(files))
+		jobs := make([]model.DownloadJob, 0, end-start)
+		for _, file := range files[start:end] {
+			jobs = append(jobs, model.DownloadJob{Kind: model.JobKindReprocess, SeriesID: file.SeriesID, ChapterID: file.ChapterID,
+				ReleaseID: file.ReleaseID, Status: model.JobQueued, IsUpgrade: true, Priority: priority, NotBefore: now, CreatedAt: now, UpdatedAt: now})
+		}
+		res, err := q.db.NewInsert().Model(&jobs).On("CONFLICT DO NOTHING").Exec(ctx)
+		if err != nil {
+			return created, err
+		}
+		n, _ := res.RowsAffected()
+		created += int(n)
+	}
+	if created > 0 {
+		q.bus.Changed("queue", "sync", 0)
+		q.signal()
+	}
+	return created, nil
+}
+
 type JobView struct {
 	model.DownloadJob
 	SeriesTitle string  `json:"seriesTitle"`

@@ -12,10 +12,12 @@ import (
 
 	"github.com/Asion001/mangarr/internal/cbz"
 	"github.com/Asion001/mangarr/internal/dbtest"
+	"github.com/Asion001/mangarr/internal/downloads"
 	"github.com/Asion001/mangarr/internal/model"
 	_ "github.com/Asion001/mangarr/internal/modules/all"
 	"github.com/Asion001/mangarr/internal/modules/source"
 	"github.com/Asion001/mangarr/internal/series"
+	"github.com/Asion001/mangarr/internal/settings"
 	"github.com/Asion001/mangarr/internal/testutil/fakesource"
 )
 
@@ -152,6 +154,60 @@ func TestBackgroundAVIF(t *testing.T) {
 	e.runCommand(t, "ProcessBacklog", nil)
 	if n, _ := e.App.DB.NewSelect().Model((*model.DownloadJob)(nil)).Where("kind = ? AND status = ?", model.JobKindReprocess, model.JobQueued).Count(e.Ctx); n != 0 {
 		t.Fatalf("%d jobs queued again", n)
+	}
+}
+
+// TestProcessingBacklogMaterializesEveryPlannedChapter keeps planned work
+// visible and manageable even when execution is paused. The old 50-job window
+// hid the rest until earlier jobs completed.
+func TestProcessingBacklogMaterializesEveryPlannedChapter(t *testing.T) {
+	for dialect, dsn := range dbtest.DSNs(t) {
+		t.Run(dialect, func(t *testing.T) {
+			e := newTestApp(t, dsn)
+			if err := e.App.Settings.Set(e.Ctx, settings.KeyQueueState, settings.QueueState{Paused: true}); err != nil {
+				t.Fatal(err)
+			}
+			var profile model.Profile
+			if err := e.App.DB.NewSelect().Model(&profile).Where("is_default = ?", true).Scan(e.Ctx); err != nil {
+				t.Fatal(err)
+			}
+			profile.Config.Encode = model.EncodeConfig{Format: "avif", Preset: "fast"}
+			profile.Config.ProcessExisting = true
+			if _, err := e.App.DB.NewUpdate().Model(&profile).WherePK().Exec(e.Ctx); err != nil {
+				t.Fatal(err)
+			}
+			now := time.Now().UTC()
+			ser := &model.Series{Title: "Planned Processing", SortTitle: "planned processing", Status: model.StatusOngoing,
+				RootFolderID: e.RFID, Path: "Planned Processing", ProfileID: profile.ID, Tags: []int64{}, AddedAt: now, UpdatedAt: now}
+			if _, err := e.App.DB.NewInsert().Model(ser).Exec(e.Ctx); err != nil {
+				t.Fatal(err)
+			}
+			for i := 1; i <= 75; i++ {
+				chapter := &model.Chapter{SeriesID: ser.ID, NumberKey: fmt.Sprint(i), NumberSort: float64(i), State: model.ChapterImported,
+					FirstSeenAt: now, UpdatedAt: now}
+				if _, err := e.App.DB.NewInsert().Model(chapter).Exec(e.Ctx); err != nil {
+					t.Fatal(err)
+				}
+				file := &model.ChapterFile{ChapterID: chapter.ID, SeriesID: ser.ID, RelativePath: fmt.Sprintf("%d.cbz", i),
+					Size: 1000, PageCount: 10, Format: "png", ImportedAt: now.Add(time.Duration(i) * time.Second)}
+				if _, err := e.App.DB.NewInsert().Model(file).Exec(e.Ctx); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			e.runCommand(t, "ProcessBacklog", nil)
+			first, err := e.App.DLQueue.ListPage(e.Ctx, downloads.ListFilter{Kind: model.JobKindReprocess}, 1, 50)
+			if err != nil {
+				t.Fatal(err)
+			}
+			second, err := e.App.DLQueue.ListPage(e.Ctx, downloads.ListFilter{Kind: model.JobKindReprocess}, 2, 50)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if first.Total != 75 || len(first.Items) != 50 || len(second.Items) != 25 {
+				t.Fatalf("processing queue pages: total=%d first=%d second=%d", first.Total, len(first.Items), len(second.Items))
+			}
+		})
 	}
 }
 

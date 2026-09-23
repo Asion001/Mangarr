@@ -43,7 +43,7 @@ export function QueuePage({ mode }: { mode: "downloads" | "processing" }) {
     setGroupParam(v);
   };
   const page = Number(pageStr) || 1;
-  const pageSize = mode === "processing" ? 500 : 100;
+  const pageSize = 100;
   const filter = { status: status ? status.split(",") : undefined, kind: mode === "processing" ? "reprocess" as const : "download" as const, q: q || undefined, includeDone: true };
   const { data, isLoading, error } = useQueue({ ...filter, page, pageSize });
   const liveMap = useLiveProgress();

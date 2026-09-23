@@ -14,12 +14,8 @@ import (
 	"github.com/Asion001/mangarr/internal/jobs"
 	"github.com/Asion001/mangarr/internal/model"
 	"github.com/Asion001/mangarr/internal/processing"
-	"github.com/Asion001/mangarr/internal/quiet"
 	"github.com/Asion001/mangarr/internal/upscaling"
 )
-
-// BacklogBatch is how many processing jobs the backlog keeps queued.
-const BacklogBatch = 50
 
 // BacklogPriority queues background processing behind downloads.
 const BacklogPriority = -100
@@ -138,22 +134,6 @@ func (a *App) PushProcessBacklog(trigger string) {
 // processBacklog queues processing jobs for files whose profile settings
 // changed since they were processed (or that were never processed).
 func (a *App) processBacklog(ctx context.Context) (int, error) {
-	if qs, _ := a.Settings.QueueState(ctx); qs.Active(time.Now()) {
-		return 0, nil
-	}
-	sched, _ := a.Settings.Schedule(ctx)
-	if quiet.Evaluate(sched, time.Now()).PauseProcessing {
-		return 0, nil
-	}
-	active, err := a.DB.NewSelect().Model((*model.DownloadJob)(nil)).
-		Where("kind = ? AND status IN (?)", model.JobKindReprocess, bun.In(downloads.ActiveStatuses())).Count(ctx)
-	if err != nil {
-		return 0, err
-	}
-	room := BacklogBatch - active
-	if room <= 0 {
-		return 0, nil
-	}
 	var profiles []model.Profile
 	if err := a.DB.NewSelect().Model(&profiles).Scan(ctx); err != nil {
 		return 0, err
@@ -162,7 +142,7 @@ func (a *App) processBacklog(ctx context.Context) (int, error) {
 	now := time.Now().UTC()
 	for _, p := range profiles {
 		params := p.Config.ProcessParams()
-		if params == "" || room <= 0 {
+		if params == "" {
 			continue
 		}
 		var files []model.ChapterFile
@@ -176,16 +156,13 @@ func (a *App) processBacklog(ctx context.Context) (int, error) {
 			// only chapters imported since processing was set up, unless asked
 			q = q.Where("(imported_at >= ? OR process_params = ?)", p.Config.ProcessChangedAt.UTC(), model.ProcessForce)
 		}
-		if err := q.OrderExpr("imported_at DESC").Limit(room).Scan(ctx); err != nil {
+		if err := q.OrderExpr("imported_at DESC").Scan(ctx); err != nil {
 			return queued, err
 		}
-		for _, f := range files {
-			if _, created, err := a.DLQueue.EnqueuePriority(ctx, f.SeriesID, f.ChapterID, f.ReleaseID, model.JobKindReprocess, true, BacklogPriority); err != nil {
-				return queued, err
-			} else if created {
-				queued++
-				room--
-			}
+		created, err := a.DLQueue.EnqueueReprocessFiles(ctx, files, BacklogPriority)
+		queued += created
+		if err != nil {
+			return queued, err
 		}
 	}
 	return queued, nil
