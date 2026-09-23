@@ -10,7 +10,7 @@ import { Badge, Button, Card, Confirm, ErrorBox, IconButton, Loading, Modal, Pro
 import { bytes, date, relative } from "../../lib/format";
 import { useToast } from "../../lib/toast";
 import { eta } from "../../lib/liveProgress";
-import { useListParam } from "../../lib/urlState";
+import { useListParam, useStoredListParam } from "../../lib/urlState";
 import { useAccount } from "../../lib/account";
 
 const stateTone: Record<string, "ok" | "warn" | "err" | "info" | "default" | "accent"> = {
@@ -23,7 +23,7 @@ const stateTone: Record<string, "ok" | "warn" | "err" | "info" | "default" | "ac
   cleaned: "default",
 };
 
-const chaptersPerPage = 100;
+const chapterPageSizes = ["25", "50", "100"] as const;
 
 /** readable: downloaded, or a source to stream it from. */
 export const readable = (c: Chapter) => !!c.file || c.releases.length > 0;
@@ -53,7 +53,9 @@ export function ChaptersTable({ seriesId, manage = true, nextChapterId }: { seri
   const [deleting, setDeleting] = useState(false);
   const [page, setPage] = useState(1);
   const [filterParam, setFilter] = useListParam("chapters", "all");
+  const [pageSizeParam, setPageSize] = useStoredListParam("chapterPageSize", "25", "mangarr:chapters:page-size", chapterPageSizes);
   const filter = filterParam as "all" | "missing" | "downloaded";
+  const chaptersPerPage = Number(pageSizeParam);
 
   const list = useMemo(() => {
     const l = data ?? [];
@@ -64,7 +66,7 @@ export function ChaptersTable({ seriesId, manage = true, nextChapterId }: { seri
   const pages = Math.max(1, Math.ceil(list.length / chaptersPerPage));
   const currentPage = Math.min(page, pages);
   const pageStart = (currentPage - 1) * chaptersPerPage;
-  const visible = useMemo(() => list.slice(pageStart, pageStart + chaptersPerPage), [list, pageStart]);
+  const visible = useMemo(() => list.slice(pageStart, pageStart + chaptersPerPage), [list, pageStart, chaptersPerPage]);
 
   const refresh = useCallback(() => qc.invalidateQueries({ queryKey: ["series", seriesId] }), [qc, seriesId]);
 
@@ -255,13 +257,24 @@ export function ChaptersTable({ seriesId, manage = true, nextChapterId }: { seri
           </Table>
         </div>
       )}
-      {list.length > chaptersPerPage && (
-        <div className="mt-3 flex items-center justify-end gap-3 text-sm">
+      {list.length > Number(chapterPageSizes[0]) && (
+        <div className="mt-3 flex flex-wrap items-center justify-end gap-3 text-sm">
           <span className="text-muted">
             {pageStart + 1}–{Math.min(pageStart + chaptersPerPage, list.length)} / {list.length} · {t("Page") + " "}{currentPage}{" " + t("of") + " "}{pages}
           </span>
           <Button size="sm" disabled={currentPage <= 1} onClick={() => goToPage(currentPage - 1)}>{t("Previous")}</Button>
           <Button size="sm" disabled={currentPage >= pages} onClick={() => goToPage(currentPage + 1)}>{t("Next")}</Button>
+          <select
+            className="rounded-md border border-border bg-bg px-2 py-1 text-xs"
+            aria-label={t("per page")}
+            value={pageSizeParam}
+            onChange={(event) => {
+              setPageSize(event.target.value);
+              setPage(1);
+            }}
+          >
+            {chapterPageSizes.map((size) => <option key={size} value={size}>{size} {t("per page")}</option>)}
+          </select>
         </div>
       )}
       {explain && <DecisionModal seriesId={seriesId} chapter={explain} onClose={() => setExplain(null)} />}
