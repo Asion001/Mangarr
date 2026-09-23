@@ -98,3 +98,21 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 
     await expect(row.getByRole("button", { name: "Mark read", exact: true })).toBeVisible();
   });
 }
+
+test("compact reading mode keeps processing labels inside chapter details", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => localStorage.setItem("mangarr:ui:anonymous:0", JSON.stringify({ locale: "en", mode: "reading" })));
+  await mockSeriesPage(page, [{
+    id: 1, seriesId: 1, number: "7", numberSort: 7, title: "Reader chapter", monitored: true,
+    releaseDate: "2026-09-01T00:00:00Z", state: "processing", readBy: [],
+    releases: [{ id: 1, sourceName: "Reader source", name: "Chapter 7", uploadDate: "2026-09-01T00:00:00Z", removed: false, blocklisted: false }],
+    job: { id: 9, status: "processing", priority: 0, progress: 45 },
+  }]);
+
+  await page.goto("/series/1");
+  const row = page.locator("article").filter({ hasText: "Reader chapter" });
+  await expect(row.getByRole("button", { name: "Continue", exact: true })).toBeVisible();
+  await expect(row.getByText("processing", { exact: true })).toHaveCount(0);
+  await row.getByRole("button", { expanded: false }).click();
+  await expect(row.getByText("processing", { exact: true })).toBeVisible();
+});

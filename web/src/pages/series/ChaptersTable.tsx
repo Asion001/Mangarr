@@ -510,18 +510,18 @@ const ChapterMobileRow = memo(function ChapterMobileRow({
           </Link>
         )}
       </div>
-      <div className={clsx("mt-2 flex flex-wrap items-center gap-1.5 text-xs", manage && "pl-6")}>
+      {(manage || next || read) && <div className={clsx("mt-2 flex flex-wrap items-center gap-1.5 text-xs", manage && "pl-6")}>
         {next && <Badge tone="accent">{t("Up next")}</Badge>}
         {read && <Badge tone="ok"><Check className="size-3" /> {t("read")}</Badge>}
-        {queuePaused && c.job?.status === "queued" ? (
+        {manage && (queuePaused && c.job?.status === "queued" ? (
           <Badge tone="warn" title={t("Queue paused")}>{c.state} · {t("paused")}</Badge>
         ) : (
           <Badge tone={stateTone[c.state] ?? "default"}>{c.state}</Badge>
-        )}
-        {c.file && <span className="text-muted">{c.file.pageCount}{t("p ·") + " "}{bytes(c.file.size)}</span>}
-        {c.releases.length > 1 && <Badge>{t("{count} releases", { count: c.releases.length })}</Badge>}
-      </div>
-      {c.job && ["downloading", "processing", "importing"].includes(c.job.status) && (
+        ))}
+        {manage && c.file && <span className="text-muted">{c.file.pageCount}{t("p ·") + " "}{bytes(c.file.size)}</span>}
+        {manage && c.releases.length > 1 && <Badge>{t("{count} releases", { count: c.releases.length })}</Badge>}
+      </div>}
+      {manage && c.job && ["downloading", "processing", "importing"].includes(c.job.status) && (
         <div className={clsx("mt-2 max-w-48", manage && "ml-6")}><Progress value={c.job.progress} /></div>
       )}
       {open && (
@@ -537,6 +537,14 @@ const ChapterMobileRow = memo(function ChapterMobileRow({
               onDelete={onDelete}
               onExplain={onExplain}
             />
+          )}
+          {!manage && (
+            <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
+              <Badge tone={stateTone[c.state] ?? "default"}>{c.state}</Badge>
+              {c.file && <span className="text-muted">{c.file.pageCount}{t("p ·") + " "}{bytes(c.file.size)}</span>}
+              {c.releases.length > 1 && <Badge>{t("{count} releases", { count: c.releases.length })}</Badge>}
+              {c.job && ["downloading", "processing", "importing"].includes(c.job.status) && <div className="w-full max-w-48"><Progress value={c.job.progress} /></div>}
+            </div>
           )}
           {c.file && (
             <div className="mb-3 text-xs text-muted">
