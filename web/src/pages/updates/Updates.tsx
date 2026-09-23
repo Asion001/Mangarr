@@ -6,6 +6,7 @@ import { api, apiUrl, unwrap, type S } from "../../api/client";
 import { Cover } from "../../components/Cover";
 import { Badge, Button, Card, ErrorBox, Loading, PageHeader, Select } from "../../components/ui";
 import { relative } from "../../lib/format";
+import { useLiveUpdateStatus } from "../../lib/events";
 import { t } from "../../lib/i18n/core";
 
 type Update = S["UpdateItem"];
@@ -15,6 +16,7 @@ export function UpdatesPage() {
   const [kind, setKind] = useState<"all" | "chapter" | "series">("all");
   const [page, setPage] = useState(1);
   const pageSize = 50;
+  const liveStatus = useLiveUpdateStatus();
   const { data, isLoading, error } = useQuery({
     queryKey: ["updates", days, kind, page],
     queryFn: () => unwrap(api.GET("/api/v1/updates", { params: { query: { days, kind, page, pageSize } } })),
@@ -27,11 +29,18 @@ export function UpdatesPage() {
         title={t("Updates")}
         subtitle={t("New chapters discovered and new titles added to your library.")}
         actions={
-          <Select className="w-40" value={days} onChange={(event) => (setDays(Number(event.target.value)), setPage(1))}>
-            <option value={7}>{t("Last 7 days")}</option>
-            <option value={30}>{t("Last 30 days")}</option>
-            <option value={90}>{t("Last 90 days")}</option>
-          </Select>
+          <div className="flex items-center gap-2">
+            {liveStatus !== "connected" && (
+              <Badge tone="warn">
+                <span role="status" className="capitalize">{t(liveStatus)}</span>
+              </Badge>
+            )}
+            <Select className="w-40" value={days} onChange={(event) => (setDays(Number(event.target.value)), setPage(1))}>
+              <option value={7}>{t("Last 7 days")}</option>
+              <option value={30}>{t("Last 30 days")}</option>
+              <option value={90}>{t("Last 90 days")}</option>
+            </Select>
+          </div>
         }
       />
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -52,7 +61,7 @@ export function UpdatesPage() {
           <section key={day}>
             <h2 className="mb-2 text-sm font-semibold text-muted">{day}</h2>
             <Card className="divide-y divide-border !p-0">
-              {items.map((item, index) => <UpdateRow key={`${item.kind}-${item.chapterId || item.seriesId}-${index}`} item={item} />)}
+              {items.map((item) => <UpdateRow key={`${item.kind}-${item.chapterId || item.seriesId}`} item={item} />)}
             </Card>
           </section>
         ))}

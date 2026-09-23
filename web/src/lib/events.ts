@@ -1,11 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { basePath } from "../api/client";
 
 // resource name (from the server) -> query key prefixes to invalidate
 const map: Record<string, string[][]> = {
-  series: [["series"], ["wanted"], ["calendar"], ["discover"]],
-  chapter: [["series"], ["wanted"], ["discover"]],
+  series: [["series"], ["wanted"], ["calendar"], ["discover"], ["updates"]],
+  chapter: [["series"], ["wanted"], ["discover"], ["updates"]],
   seriessource: [["series"]],
   queue: [["queue"], ["series"]],
   command: [["commands"], ["tasks"]],
@@ -18,7 +18,7 @@ const map: Record<string, string[][]> = {
   processing: [["processing"], ["health"]],
   settings: [["settings"]],
   readers: [["readers"], ["series"], ["me-library-accounts"]],
-  reading: [["reading"], ["settings"], ["discover"]],
+  reading: [["reading"], ["settings"], ["discover"], ["updates"]],
   database: [["database"]],
   users: [["users"], ["auth"]],
   request: [["requests"], ["lookup"]],
@@ -32,6 +32,28 @@ const map: Record<string, string[][]> = {
 
 type Listener = (type: string, payload: unknown) => void;
 const listeners = new Set<Listener>();
+
+export type LiveUpdateStatus = "connecting" | "connected" | "reconnecting" | "offline";
+let liveStatus: LiveUpdateStatus = "connecting";
+const statusListeners = new Set<() => void>();
+
+function setLiveStatus(status: LiveUpdateStatus) {
+  if (status === liveStatus) return;
+  liveStatus = status;
+  statusListeners.forEach((listener) => listener());
+}
+
+/** useLiveUpdateStatus exposes the SSE connection state to reader-facing pages. */
+export function useLiveUpdateStatus() {
+  return useSyncExternalStore(
+    (listener) => {
+      statusListeners.add(listener);
+      return () => statusListeners.delete(listener);
+    },
+    () => liveStatus,
+    () => "connecting" as const,
+  );
+}
 
 /** Subscribe to raw server events (e.g. to show toasts). */
 export function onServerEvent(fn: Listener) {
@@ -51,7 +73,19 @@ export function useLiveUpdates(enabled: boolean) {
       for (const key of pending.values()) qc.invalidateQueries({ queryKey: key });
       pending.clear();
     };
+    let opened = false;
+    let interrupted = false;
+    setLiveStatus(navigator.onLine === false ? "offline" : "connecting");
     const es = new EventSource(basePath + "/api/v1/events");
+    es.onopen = () => {
+      const reconnected = opened || interrupted;
+      opened = true;
+      interrupted = false;
+      setLiveStatus("connected");
+      // Queries replace their cached result, so a reconnect catches missed
+      // events without appending or duplicating feed rows.
+      if (reconnected) void qc.invalidateQueries();
+    };
     es.addEventListener("resource.changed", (ev) => {
       try {
         const e = JSON.parse((ev as MessageEvent).data);
@@ -72,12 +106,18 @@ export function useLiveUpdates(enabled: boolean) {
       });
     }
     es.onerror = () => {
-      // EventSource reconnects on its own; refetch everything once it does
-      es.onopen = () => qc.invalidateQueries();
+      interrupted = true;
+      setLiveStatus(navigator.onLine === false ? "offline" : "reconnecting");
     };
+    const offline = () => setLiveStatus("offline");
+    const online = () => setLiveStatus("reconnecting");
+    window.addEventListener("offline", offline);
+    window.addEventListener("online", online);
     return () => {
       es.close();
       if (timer) clearTimeout(timer);
+      window.removeEventListener("offline", offline);
+      window.removeEventListener("online", online);
     };
   }, [enabled, qc]);
 }
