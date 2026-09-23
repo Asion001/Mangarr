@@ -16,7 +16,7 @@ const emptyConfig: Cfg = {
   allowUpgrades: false,
   minPages: 0,
   upscale: { enabled: false, upscalerId: 0, minWidth: 1400, maxWidth: 2048, model: "waifu2x-cunet", noise: 1, format: "webp", quality: 90 },
-  encode: { format: "keep", preset: "balanced", quality: 0, speed: 0, grayscale: true, minSavingsPct: 10, recycleOriginals: true },
+  encode: { format: "keep", preset: "balanced", quality: 0, speed: 0, grayscale: true, progressive: false, minSavingsPct: 10, recycleOriginals: true },
   processTiming: "background",
   processExisting: false,
   cleanup: {},
@@ -240,7 +240,13 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
         <h3 className="font-semibold">{t("Re-encoding to save space")}</h3>
         <div className="grid gap-4 md:grid-cols-2">
           <Field label={t("Format")}>
-            <Select value={enc.format} onChange={(e) => setEnc({ format: e.target.value as Cfg["encode"]["format"] })}>
+            <Select
+              value={enc.format}
+              onChange={(e) => {
+                const format = e.target.value as Cfg["encode"]["format"];
+                setEnc({ format, progressive: format === "avif" && enc.progressive });
+              }}
+            >
               <option value="keep">{t("Keep original pages")}</option>
               <option value="avif">{t("AVIF (lossy, typically 40-70% smaller)")}</option>
               <option value="jxl">{t("JPEG XL lossless (~20% smaller JPEGs, reversible)")}</option>
@@ -279,6 +285,18 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
               <Input type="number" min={0} max={90} value={enc.minSavingsPct} onChange={(e) => setEnc({ minSavingsPct: Number(e.target.value) })} />
             </Field>
             {enc.format === "avif" && <Switch checked={enc.grayscale} onChange={(v) => setEnc({ grayscale: v })} label={t("Encode black-and-white pages without color (smaller)")} />}
+            {enc.format === "avif" && (
+              <div>
+                <Switch
+                  checked={enc.progressive}
+                  onChange={(v) => setEnc({ progressive: v })}
+                  label={t("Show a low-detail AVIF preview while the page downloads")}
+                />
+                <p className="mt-1 text-xs text-muted">
+                  {t("Requires the full image or avifenc 1.4+. Chrome renders the layers progressively; other compatible readers display the completed image normally.")}
+                </p>
+              </div>
+            )}
             <Switch checked={enc.recycleOriginals} onChange={(v) => setEnc({ recycleOriginals: v })} label={t("Keep originals in the recycle bin for a while")} />
             <div className="md:col-span-2">
               <Button size="sm" onClick={() => setPreviewing(true)}>{t("Preview on a chapter…")}</Button>

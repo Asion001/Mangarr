@@ -2783,6 +2783,10 @@
     "ru": "Обязательно, проверять сертификат",
     "uk": "Обов’язково, перевіряти сертифікат"
   },
+  "Requires the full image or avifenc 1.4+. Chrome renders the layers progressively; other compatible readers display the completed image normally.": {
+    "ru": "Требуется полный образ или avifenc 1.4+. Chrome отображает слои постепенно; другие совместимые приложения обычно показывают готовое изображение.",
+    "uk": "Потрібен повний образ або avifenc 1.4+. Chrome показує шари поступово; інші сумісні застосунки зазвичай показують готове зображення."
+  },
   "Rescan disk": {
     "ru": "Пересканировать диск",
     "uk": "Пересканувати диск"
@@ -3042,6 +3046,10 @@
   "Share the library: everyone reads the same series, with their own progress. Groups decide what members can do and see.": {
     "ru": "Общая библиотека с личным прогрессом каждого читателя. Группы определяют права и доступные серии.",
     "uk": "Спільна бібліотека з особистим прогресом кожного читача. Групи визначають права й доступні серії."
+  },
+  "Show a low-detail AVIF preview while the page downloads": {
+    "ru": "Показывать черновой AVIF во время загрузки страницы",
+    "uk": "Показувати чорновий AVIF під час завантаження сторінки"
   },
   "Show NSFW extensions": {
     "ru": "Показывать расширения 18+",

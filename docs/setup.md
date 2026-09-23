@@ -412,6 +412,10 @@ resume it (System → Status).
 
 - Encoders: the full image includes `avifenc` and `cjxl` (fast). The slim image
   uses a built-in AVIF encoder that works everywhere but is much slower.
+- Progressive AVIF writes layered pages that Chrome can refine while they
+  download. Other AVIF readers still display the completed image normally. It
+  requires the full image or a custom `avifenc` 1.4+; the slim built-in encoder
+  does not support layered output.
 - Pages are kept as they are unless re-encoding saves at least the configured
   percentage; black-and-white pages are encoded without color.
 - Try settings on your own pages: Profile → *Preview on a chapter* (shows the

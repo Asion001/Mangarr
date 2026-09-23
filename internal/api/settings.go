@@ -367,6 +367,9 @@ func validateProfile(p *model.Profile) error {
 	default:
 		return badRequest("encode format must be keep, avif or jxl")
 	}
+	if p.Config.Encode.Format != "avif" {
+		p.Config.Encode.Progressive = false
+	}
 	if p.Config.Encode.Preset == "" {
 		p.Config.Encode.Preset = "balanced"
 	}

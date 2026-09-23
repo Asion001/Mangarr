@@ -195,6 +195,8 @@ type EncodeConfig struct {
 	Speed int `json:"speed"`
 	// Grayscale encodes black-and-white pages without color (smaller AVIF).
 	Grayscale bool `json:"grayscale"`
+	// Progressive writes a layered AVIF that supported readers can display while it downloads.
+	Progressive bool `json:"progressive"`
 	// MinSavingsPct keeps a page's original unless re-encoding saves at least this much.
 	MinSavingsPct int `json:"minSavingsPct"`
 	// RecycleOriginals moves replaced files to the recycle bin (else they're deleted).

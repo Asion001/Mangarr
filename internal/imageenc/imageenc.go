@@ -27,9 +27,10 @@ import (
 
 // Options are resolved encoder parameters.
 type Options struct {
-	Format  string // avif or jxl
-	Quality int    // AVIF 1-100
-	Speed   int    // avifenc -s (0-10) / cjxl -e (1-9)
+	Format      string // avif or jxl
+	Quality     int    // AVIF 1-100
+	Speed       int    // avifenc -s (0-10) / cjxl -e (1-9)
+	Progressive bool   // layered AVIF for incremental display
 }
 
 // Resolve applies the preset of cfg and its overrides.
@@ -54,6 +55,7 @@ func Resolve(cfg model.EncodeConfig) Options {
 	if cfg.Speed > 0 {
 		o.Speed = cfg.Speed
 	}
+	o.Progressive = cfg.Format == "avif" && cfg.Progressive
 	return o
 }
 
@@ -145,6 +147,11 @@ func (e *Encoder) Engines() []Engine { return append([]Engine(nil), e.engines...
 // ErrNoEngine means no engine can produce the requested format.
 var ErrNoEngine = errors.New("no encoder for this format is installed")
 
+// ErrProgressiveUnsupported means the selected AVIF encoder cannot write
+// layered images. The built-in encoder intentionally remains the slim image's
+// portable fallback.
+var ErrProgressiveUnsupported = errors.New("progressive AVIF needs avifenc 1.4 or newer (included in the full image)")
+
 // skip reports pages that are never re-encoded.
 func skip(format, target string) bool {
 	switch format {
@@ -168,6 +175,12 @@ func (e *Encoder) EncodePages(ctx context.Context, pages []Page, cfg model.Encod
 	}
 	st.Engine = eng.Name()
 	o := Resolve(cfg)
+	if o.Progressive {
+		capable, ok := eng.(interface{ SupportsProgressive() bool })
+		if !ok || !capable.SupportsProgressive() {
+			return nil, st, ErrProgressiveUnsupported
+		}
+	}
 	outDir := filepath.Join(workDir, "encoded")
 	if err := os.MkdirAll(outDir, 0o775); err != nil {
 		return nil, st, err

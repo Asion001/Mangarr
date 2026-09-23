@@ -32,8 +32,9 @@ func niceArgs(bin string, args []string) (string, []string) {
 
 // Avifenc runs libavif's avifenc (fast, supports grayscale and tune=iq).
 type Avifenc struct {
-	Bin     string
-	Version string
+	Bin         string
+	Version     string
+	Progressive bool
 	// tuneIQ is cleared after the first failure (libaom older than 3.12).
 	noTune atomic.Bool
 }
@@ -45,13 +46,15 @@ func FindAvifenc() *Avifenc {
 		return nil
 	}
 	out, _ := run(context.Background(), bin, "--version")
-	return &Avifenc{Bin: bin, Version: firstLine(out)}
+	help, _ := run(context.Background(), bin, "--help")
+	return &Avifenc{Bin: bin, Version: firstLine(out), Progressive: bytes.Contains(help, []byte("--progressive"))}
 }
 
 func (a *Avifenc) Name() string               { return "avifenc" }
 func (a *Avifenc) Format() string             { return "avif" }
 func (a *Avifenc) Slow() bool                 { return false }
 func (a *Avifenc) Accepts(format string) bool { return format == "jpeg" || format == "png" }
+func (a *Avifenc) SupportsProgressive() bool  { return a.Progressive }
 func (a *Avifenc) args(src, dst string, o Options, gray, tune bool) []string {
 	yuv := "420"
 	if gray {
@@ -60,6 +63,9 @@ func (a *Avifenc) args(src, dst string, o Options, gray, tune bool) []string {
 	args := []string{"-j", "1", "-s", strconv.Itoa(o.Speed), "-q", strconv.Itoa(o.Quality), "-d", "8", "-y", yuv}
 	if tune {
 		args = append(args, "-c", "aom", "-a", "tune=iq")
+	}
+	if o.Progressive {
+		args = append(args, "--progressive")
 	}
 	return append(args, src, dst)
 }

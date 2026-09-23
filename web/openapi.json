@@ -2050,6 +2050,9 @@
             ],
             "type": "string"
           },
+          "progressive": {
+            "type": "boolean"
+          },
           "quality": {
             "format": "int64",
             "type": "integer"
@@ -2068,6 +2071,7 @@
           "quality",
           "speed",
           "grayscale",
+          "progressive",
           "minSavingsPct",
           "recycleOriginals"
         ],

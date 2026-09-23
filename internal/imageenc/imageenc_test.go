@@ -33,6 +33,12 @@ func TestResolve(t *testing.T) {
 	if o := Resolve(model.EncodeConfig{Format: "jxl", Preset: "balanced"}); o.Speed != 7 {
 		t.Fatalf("jxl: %+v", o)
 	}
+	if o := Resolve(model.EncodeConfig{Format: "avif", Progressive: true}); !o.Progressive {
+		t.Fatalf("progressive: %+v", o)
+	}
+	if o := Resolve(model.EncodeConfig{Format: "jxl", Progressive: true}); o.Progressive {
+		t.Fatalf("jxl cannot be progressive: %+v", o)
+	}
 }
 
 func grayImg() *image.RGBA {
@@ -175,15 +181,15 @@ func TestAvifencArgsAndTuneFallback(t *testing.T) {
 		}
 		return nil, nil
 	}
-	a := &Avifenc{Bin: "/usr/bin/avifenc"}
-	if err := a.Encode(context.Background(), "in.png", "png", "out.avif", Options{Quality: 55, Speed: 6}, true); err != nil {
+	a := &Avifenc{Bin: "/usr/bin/avifenc", Progressive: true}
+	if err := a.Encode(context.Background(), "in.png", "png", "out.avif", Options{Quality: 55, Speed: 6, Progressive: true}, true); err != nil {
 		t.Fatal(err)
 	}
 	if len(calls) != 2 {
 		t.Fatalf("want a retry without tune, got %v", calls)
 	}
 	got := strings.Join(calls[1], " ")
-	for _, want := range []string{"-j 1", "-s 6", "-q 55", "-d 8", "-y 400", "in.png out.avif"} {
+	for _, want := range []string{"-j 1", "-s 6", "-q 55", "-d 8", "-y 400", "--progressive", "in.png out.avif"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("args %q missing %q", got, want)
 		}
@@ -192,6 +198,17 @@ func TestAvifencArgsAndTuneFallback(t *testing.T) {
 	_ = a.Encode(context.Background(), "in.png", "png", "out.avif", Options{Quality: 55, Speed: 6}, false)
 	if len(calls) != 1 || !strings.Contains(strings.Join(calls[0], " "), "-y 420") {
 		t.Fatalf("tune=iq should not be retried once unsupported: %v", calls)
+	}
+}
+
+func TestProgressiveNeedsCapableEngine(t *testing.T) {
+	dir := t.TempDir()
+	p := writePage(t, dir, "0001.jpg", grayImg(), "jpeg")
+	_, _, err := New(&fakeEngine{accepts: []string{"jpeg"}, outSize: 600}).EncodePages(
+		context.Background(), []Page{p}, model.EncodeConfig{Format: "avif", Progressive: true}, dir,
+	)
+	if !errors.Is(err, ErrProgressiveUnsupported) {
+		t.Fatalf("want ErrProgressiveUnsupported, got %v", err)
 	}
 }
 

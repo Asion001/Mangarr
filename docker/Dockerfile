@@ -37,6 +37,22 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -tags nod
 # nodynamic keeps the built-in AVIF encoder from loading a system libavif
 # (which would make the binary dynamically linked and break distroless)
 
+# ---- progressive AVIF encoder ---------------------------------------------------
+# Debian trixie ships libavif 1.2, while layered encoding was added in 1.4.
+# Build the app statically into avifenc and use Debian's codec libraries at runtime.
+FROM debian:trixie-slim AS avif
+ARG LIBAVIF_VERSION=1.4.2
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential ca-certificates cmake curl git ninja-build pkg-config \
+      libaom-dev libjpeg62-turbo-dev libpng-dev libyuv-dev \
+    && curl -fsSL "https://github.com/AOMediaCodec/libavif/archive/refs/tags/v${LIBAVIF_VERSION}.tar.gz" -o /tmp/libavif.tar.gz \
+    && tar -xzf /tmp/libavif.tar.gz -C /tmp \
+    && cmake -S "/tmp/libavif-${LIBAVIF_VERSION}" -B /tmp/libavif-build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DAVIF_BUILD_APPS=ON \
+      -DAVIF_CODEC_AOM=SYSTEM -DAVIF_LIBYUV=SYSTEM -DAVIF_JPEG=SYSTEM -DAVIF_ZLIBPNG=SYSTEM \
+    && cmake --build /tmp/libavif-build --target avifenc \
+    && install -Dm755 /tmp/libavif-build/avifenc /out/avifenc
+
 # ---- ncnn upscalers (x86_64 binaries) -------------------------------------------
 FROM debian:trixie-slim AS tools
 ARG TARGETARCH
@@ -79,6 +95,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && mkdir -p /config && chown 65532:0 /config
 COPY --from=tools /opt/upscalers /opt/upscalers
 COPY --from=build /out/mangarr /usr/local/bin/mangarr
+COPY --from=avif /out/avifenc /usr/local/bin/avifenc
 RUN ln -s mangarr /usr/local/bin/mangarr-worker
 ENV MANGARR_DATA_DIR=/config \
     MANGARR_LISTEN=:8787 \

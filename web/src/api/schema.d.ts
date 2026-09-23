@@ -3673,6 +3673,7 @@ export interface components {
             minSavingsPct: number;
             /** @enum {string} */
             preset: "max" | "balanced" | "fast";
+            progressive: boolean;
             /** Format: int64 */
             quality: number;
             recycleOriginals: boolean;
