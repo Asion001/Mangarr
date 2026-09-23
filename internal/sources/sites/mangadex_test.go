@@ -55,7 +55,7 @@ func fakeMangaDex(t *testing.T) *httptest.Server {
 func newMangaDex(t *testing.T) (*mangadex, *httptest.Server) {
 	srv := fakeMangaDex(t)
 	return &mangadex{c: sourcekit.NewClient(srv.Client()), api: srv.URL, site: "https://mangadex.org",
-		cdn: "https://uploads.mangadex.org", lang: "en", ratings: []string{"safe"}}, srv
+		cdn: "https://uploads.mangadex.org", code: "en", lang: "en", ratings: []string{"safe"}}, srv
 }
 
 // TestMangaDex walks a whole library flow: find a series, read its details,
@@ -119,13 +119,34 @@ func TestMangaDexNotFound(t *testing.T) {
 // TestMangaDexOptions: the site's own settings are applied.
 func TestMangaDexOptions(t *testing.T) {
 	m, _ := newMangaDex(t)
-	if err := m.SetOption("lang", "de"); err != nil || m.Info().Lang != "de" {
-		t.Fatalf("language: %v %s", err, m.Info().Lang)
-	}
 	if err := m.SetOption("adult", true); err != nil || !m.hasRating("pornographic") {
 		t.Fatalf("ratings: %v %v", err, m.ratings)
 	}
 	if err := m.SetOption("nope", 1); err == nil {
 		t.Fatal("an unknown option should be refused")
+	}
+}
+
+// TestMangaDexLanguages: every language is its own catalog, with the id
+// Mihon gives that language's MangaDex source and the API's language code.
+func TestMangaDexLanguages(t *testing.T) {
+	ids := map[string]sourcekit.Info{}
+	for _, s := range sourcekit.Build(sourcekit.Deps{Client: sourcekit.NewClient(nil)}) {
+		if i := s.Info(); i.Name == "MangaDex" {
+			ids[i.ID] = i
+		}
+	}
+	if len(ids) != len(mangadexLangs) {
+		t.Fatalf("%d MangaDex catalogs for %d languages", len(ids), len(mangadexLangs))
+	}
+	// the English one keeps the id libraries already link to
+	if en, ok := ids[mangadexID]; !ok || en.Lang != "en" {
+		t.Fatalf("English catalog: %+v", en)
+	}
+	if i := ids[sourcekit.KeiyoushiID("MangaDex", "pt-BR", 1)]; i.Lang != "pt-BR" {
+		t.Fatalf("Brazilian Portuguese catalog: %+v", i)
+	}
+	if got := dexLang("es-419"); got != "es-la" {
+		t.Fatalf("es-419 asks the API for %q", got)
 	}
 }

@@ -15,8 +15,18 @@ import (
 // MangaDex speaks the site's official API, so there is nothing to scrape and
 // pages come from its image servers directly.
 //
-// The id is the one Mihon's MangaDex (English) extension has, so a library
-// imported from a Mihon backup links to this site instead of an unknown one.
+// It is one catalog per chapter language, with the ids Mihon's MangaDex
+// extension gives its sources, so a library imported from a Mihon backup
+// links to the same language here instead of an unknown catalog.
+var mangadexLangs = []string{
+	"af", "sq", "ar", "az", "eu", "be", "bn", "bg", "my", "ca", "zh-Hans", "zh-Hant",
+	"cv", "hr", "cs", "da", "nl", "en", "eo", "et", "fil", "fi", "fr", "ka", "de", "el",
+	"he", "hi", "hu", "ga", "id", "it", "ja", "jv", "kk", "ko", "la", "lt", "ms", "mn",
+	"ne", "no", "fa", "pl", "pt-BR", "pt", "ro", "ru", "sr", "sk", "es-419", "es", "sv",
+	"ta", "te", "th", "tr", "uk", "ur", "uz", "vi",
+}
+
+// mangadexID is the English catalog's id.
 var mangadexID = sourcekit.KeiyoushiID("MangaDex", "en", 1)
 
 const (
@@ -26,10 +36,27 @@ const (
 )
 
 func init() {
-	sourcekit.Register(mangadexID, func(d sourcekit.Deps) sourcekit.Site {
+	sourcekit.RegisterLangs("MangaDex", 1, mangadexLangs, func(d sourcekit.Deps, lang string) sourcekit.Site {
 		return &mangadex{c: d.Client, api: mangadexAPI, site: mangadexSite, cdn: mangadexCDN,
-			lang: "en", ratings: []string{"safe", "suggestive", "erotica"}}
+			code: lang, lang: dexLang(lang), ratings: []string{"safe", "suggestive", "erotica"}}
 	})
+}
+
+// dexLang is the API's code for one of Keiyoushi's language codes.
+func dexLang(code string) string {
+	switch code {
+	case "zh-Hans":
+		return "zh"
+	case "zh-Hant":
+		return "zh-hk"
+	case "fil":
+		return "tl"
+	case "pt-BR":
+		return "pt-br"
+	case "es-419":
+		return "es-la"
+	}
+	return code
 }
 
 type mangadex struct {
@@ -37,15 +64,16 @@ type mangadex struct {
 	// api, site and cdn are the addresses to talk to (tests point them at a
 	// recorded copy).
 	api, site, cdn string
-	// lang is the chapter translation language.
-	lang string
+	// code is the catalog's language as Keiyoushi writes it ("pt-BR"), lang
+	// the API's code for it ("pt-br"): chapters and titles in that language.
+	code, lang string
 	// ratings are the content ratings to show.
 	ratings []string
 }
 
 func (m *mangadex) Info() sourcekit.Info {
-	return sourcekit.Info{ID: mangadexID, Name: "MangaDex", Lang: m.lang, BaseURL: m.site, SupportsBrowse: true,
-		IconURL: m.site + "/favicon.ico"}
+	return sourcekit.Info{ID: sourcekit.KeiyoushiID("MangaDex", m.code, 1), Name: "MangaDex", Lang: m.code, BaseURL: m.site,
+		SupportsBrowse: true, IconURL: m.site + "/favicon.ico"}
 }
 
 // Politeness: MangaDex asks for at most 5 requests a second across its API.
@@ -55,23 +83,12 @@ func (m *mangadex) Politeness() sourcekit.Politeness {
 
 func (m *mangadex) Options() []sourcekit.Option {
 	return []sourcekit.Option{
-		{Key: "lang", Title: "Chapter language", Type: "select", Value: m.lang, Choices: []sourcekit.Choice{
-			{Value: "en", Label: "English"}, {Value: "es", Label: "Spanish"}, {Value: "es-la", Label: "Spanish (Latin America)"},
-			{Value: "fr", Label: "French"}, {Value: "de", Label: "German"}, {Value: "pt-br", Label: "Portuguese (Brazil)"},
-			{Value: "pl", Label: "Polish"}, {Value: "ru", Label: "Russian"}, {Value: "ja", Label: "Japanese"},
-		}},
 		{Key: "adult", Title: "Show pornographic titles", Type: "switch", Value: m.hasRating("pornographic")},
 	}
 }
 
 func (m *mangadex) SetOption(key string, value any) error {
 	switch key {
-	case "lang":
-		s, _ := value.(string)
-		if s == "" {
-			return fmt.Errorf("pick a language")
-		}
-		m.lang = s
 	case "adult":
 		on, _ := value.(bool)
 		m.ratings = []string{"safe", "suggestive", "erotica"}

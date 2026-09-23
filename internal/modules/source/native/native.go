@@ -5,6 +5,7 @@
 package native
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -261,10 +262,31 @@ func (m *Module) Pages(ctx context.Context, ref source.ChapterRef) ([]source.Pag
 	}
 	out := make([]source.Page, 0, len(pages))
 	for _, p := range pages {
-		out = append(out, source.Page{Index: p.Index, URL: p.URL, SourceID: ref.Manga.SourceID})
 		m.remember(p.URL, p.Headers)
+		u := p.URL
+		if p.Decode != "" {
+			u += decodeMark + url.QueryEscape(p.Decode)
+		}
+		out = append(out, source.Page{Index: p.Index, URL: u, SourceID: ref.Manga.SourceID})
 	}
 	return out, nil
+}
+
+// decodeMark carries a page's Decode in its URL's fragment: it survives in
+// stored page lists and restarts, and a fragment is never sent to the site.
+const decodeMark = "#mangarr-decode="
+
+// splitDecode separates a page URL from the Decode it carries, if any.
+func splitDecode(raw string) (string, string) {
+	u, enc, ok := strings.Cut(raw, decodeMark)
+	if !ok {
+		return raw, ""
+	}
+	d, err := url.QueryUnescape(enc)
+	if err != nil {
+		return u, enc
+	}
+	return u, d
 }
 
 // remember keeps a page's request headers (bounded: chapters come and go).
@@ -281,8 +303,9 @@ func (m *Module) remember(url string, headers map[string]string) {
 }
 
 func (m *Module) headersFor(p source.Page) map[string]string {
+	pageURL, _ := splitDecode(p.URL)
 	m.mu.Lock()
-	h := m.headers[p.URL]
+	h := m.headers[pageURL]
 	m.mu.Unlock()
 	if h != nil {
 		return h
@@ -302,6 +325,9 @@ func (m *Module) PageRequest(ctx context.Context, p source.Page) (source.PageReq
 	if p.URL == "" {
 		return source.PageRequest{}, source.ErrNotFound
 	}
+	if _, decode := splitDecode(p.URL); decode != "" {
+		return source.PageRequest{}, source.ErrUnsupported // only the site here can decode it
+	}
 	headers := map[string]string{"User-Agent": sourcekit.UserAgent}
 	for k, v := range m.headersFor(p) {
 		headers[k] = v
@@ -314,8 +340,29 @@ func (m *Module) FetchPage(ctx context.Context, p source.Page) (io.ReadCloser, s
 	if err != nil {
 		return nil, "", err
 	}
-	return fetch(ctx, s, p.URL, m.headersFor(p))
+	pageURL, decode := splitDecode(p.URL)
+	body, ctype, err := fetch(ctx, s, pageURL, m.headersFor(p))
+	if err != nil || decode == "" {
+		return body, ctype, err
+	}
+	defer body.Close()
+	dec, ok := s.(sourcekit.Decoder)
+	if !ok {
+		return nil, "", fmt.Errorf("%s: a page needs decoding the site can't do", s.Info().Name)
+	}
+	data, err := io.ReadAll(io.LimitReader(body, maxPageBytes))
+	if err != nil {
+		return nil, "", err
+	}
+	out, err := dec.DecodePage(ctx, decode, data)
+	if err != nil {
+		return nil, "", fmt.Errorf("%s: decode page: %w", s.Info().Name, err)
+	}
+	return io.NopCloser(bytes.NewReader(out)), http.DetectContentType(out), nil
 }
+
+// maxPageBytes bounds a page read into memory for decoding.
+const maxPageBytes = 64 << 20
 
 // Thumbnail fetches a cover for the UI.
 func (m *Module) Thumbnail(ctx context.Context, ref source.MangaRef) (io.ReadCloser, string, error) {

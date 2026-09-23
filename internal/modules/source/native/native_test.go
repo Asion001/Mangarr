@@ -183,3 +183,51 @@ func TestModuleUnknownSite(t *testing.T) {
 		t.Fatal("an unknown site should be refused")
 	}
 }
+
+// reversingSite scrambles its pages by reversing their bytes.
+type reversingSite struct{ fakeSite }
+
+func (r *reversingSite) DecodePage(_ context.Context, decode string, data []byte) ([]byte, error) {
+	if decode != "seed 7/x" {
+		return nil, sourcekit.ErrUnsupported
+	}
+	out := make([]byte, len(data))
+	for i, b := range data {
+		out[len(data)-1-i] = b
+	}
+	return out, nil
+}
+
+// TestModuleDecodesScrambledPages: a page the site marks for decoding is
+// fetched without its mark, decoded by the site, and never handed to a
+// worker, which couldn't decode it.
+func TestModuleDecodesScrambledPages(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.RawQuery != "" || r.URL.Path != "/p/1.jpg" {
+			t.Errorf("the site was asked for %s", r.URL)
+		}
+		_, _ = w.Write([]byte("\n\x1a\n\rGNP\x89")) // a PNG signature, reversed
+	}))
+	defer srv.Close()
+	site := &reversingSite{fakeSite{base: srv.URL, lang: "en",
+		pages: []sourcekit.PageImage{{Index: 0, URL: srv.URL + "/p/1.jpg", Decode: "seed 7/x"}}}}
+	m := &Module{sites: []sourcekit.Site{site}, byID: map[string]sourcekit.Site{"fake": site}}
+	ctx := context.Background()
+
+	got, err := m.Pages(ctx, source.ChapterRef{Manga: source.MangaRef{SourceID: "fake", URL: "/m/1"}, URL: "/c/2"})
+	if err != nil || len(got) != 1 {
+		t.Fatalf("pages: %v %+v", err, got)
+	}
+	if _, err := m.PageRequest(ctx, got[0]); err == nil {
+		t.Fatal("a page that needs decoding must not go to a worker")
+	}
+	body, ct, err := m.FetchPage(ctx, got[0])
+	if err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+	data, _ := io.ReadAll(body)
+	body.Close()
+	if string(data) != "\x89PNG\r\n\x1a\n" || ct != "image/png" {
+		t.Fatalf("decoded %q as %q", data, ct)
+	}
+}

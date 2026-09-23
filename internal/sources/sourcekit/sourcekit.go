@@ -99,6 +99,10 @@ type PageImage struct {
 	Index   int
 	URL     string
 	Headers map[string]string
+	// Decode is what the site needs to turn the downloaded bytes into the
+	// real image (a scramble seed, a key), for sites that implement Decoder.
+	// A page with it can only be fetched through mangarr, not by a worker.
+	Decode string
 }
 
 // Results is one page of results.
@@ -135,6 +139,13 @@ type Site interface {
 	Details(ctx context.Context, ref Ref) (Details, error)
 	Chapters(ctx context.Context, ref Ref) ([]Chapter, error)
 	Pages(ctx context.Context, ch PageRef) ([]PageImage, error)
+}
+
+// Decoder is implemented by sites whose images arrive scrambled or
+// encrypted. DecodePage gets the downloaded bytes of a page whose Decode was
+// set, and returns the image to keep.
+type Decoder interface {
+	DecodePage(ctx context.Context, decode string, data []byte) ([]byte, error)
 }
 
 // Browser is implemented by sites with popular and latest listings.
@@ -210,6 +221,17 @@ func Register(id string, b Builder) {
 		panic("sourcekit: site " + id + " registered twice")
 	}
 	builders[id] = b
+}
+
+// RegisterLangs registers a site that serves several languages as one
+// catalog per language, each with the id Keiyoushi gives that language's
+// source (see KeiyoushiID), so every language links up on a backup import.
+// langs are Keiyoushi's codes ("en", "pt-BR", "es-419"); the builder gets
+// one and reports it as Info().Lang.
+func RegisterLangs(name string, version int, langs []string, b func(deps Deps, lang string) Site) {
+	for _, lang := range langs {
+		Register(KeiyoushiID(name, lang, version), func(d Deps) Site { return b(d, lang) })
+	}
 }
 
 // Build makes every registered site.
