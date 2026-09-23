@@ -195,7 +195,8 @@ type EncodeConfig struct {
 	Speed int `json:"speed"`
 	// Grayscale encodes black-and-white pages without color (smaller AVIF).
 	Grayscale bool `json:"grayscale"`
-	// Progressive writes a layered AVIF that supported readers can display while it downloads.
+	// Progressive is ignored: AVIF is written layered whenever the encoder
+	// supports it. Kept so older clients and backups still load.
 	Progressive bool `json:"progressive"`
 	// MinSavingsPct keeps a page's original unless re-encoding saves at least this much.
 	MinSavingsPct int `json:"minSavingsPct"`
@@ -216,7 +217,8 @@ type UpscaleConfig struct {
 	Model string `json:"model"`
 	// Noise reduction level (model dependent, -1..3).
 	Noise int `json:"noise"`
-	// Format of processed pages: "webp", "jpeg", "png".
+	// Format of upscaled pages: "source" (each page's own format), "webp",
+	// "jpeg" or "png". Ignored when re-encoding (pages go to the encoder as PNG).
 	Format  string `json:"format"`
 	Quality int    `json:"quality"`
 }

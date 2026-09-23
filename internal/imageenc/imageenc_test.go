@@ -33,8 +33,8 @@ func TestResolve(t *testing.T) {
 	if o := Resolve(model.EncodeConfig{Format: "jxl", Preset: "balanced"}); o.Speed != 7 {
 		t.Fatalf("jxl: %+v", o)
 	}
-	if o := Resolve(model.EncodeConfig{Format: "avif", Progressive: true}); !o.Progressive {
-		t.Fatalf("progressive: %+v", o)
+	if o := Resolve(model.EncodeConfig{Format: "avif"}); !o.Progressive {
+		t.Fatalf("AVIF is always progressive: %+v", o)
 	}
 	if o := Resolve(model.EncodeConfig{Format: "jxl", Progressive: true}); o.Progressive {
 		t.Fatalf("jxl cannot be progressive: %+v", o)
@@ -74,15 +74,17 @@ type fakeEngine struct {
 	outSize int // bytes written per page
 	calls   []string
 	gray    []bool
+	opts    []Options
 }
 
 func (f *fakeEngine) Name() string          { return "fake" }
 func (f *fakeEngine) Format() string        { return "avif" }
 func (f *fakeEngine) Slow() bool            { return false }
 func (f *fakeEngine) Accepts(s string) bool { return slices.Contains(f.accepts, s) }
-func (f *fakeEngine) Encode(_ context.Context, src, srcFormat, dst string, _ Options, gray bool) error {
+func (f *fakeEngine) Encode(_ context.Context, src, srcFormat, dst string, o Options, gray bool) error {
 	f.mu.Lock()
 	f.calls = append(f.calls, srcFormat)
+	f.opts = append(f.opts, o)
 	f.gray = append(f.gray, gray)
 	f.mu.Unlock()
 	// a valid AVIF header followed by padding
@@ -201,14 +203,26 @@ func TestAvifencArgsAndTuneFallback(t *testing.T) {
 	}
 }
 
-func TestProgressiveNeedsCapableEngine(t *testing.T) {
+type layeredEngine struct{ fakeEngine }
+
+func (*layeredEngine) SupportsProgressive() bool { return true }
+
+func TestProgressiveOnlyWhenEngineCan(t *testing.T) {
 	dir := t.TempDir()
 	p := writePage(t, dir, "0001.jpg", grayImg(), "jpeg")
-	_, _, err := New(&fakeEngine{accepts: []string{"jpeg"}, outSize: 600}).EncodePages(
-		context.Background(), []Page{p}, model.EncodeConfig{Format: "avif", Progressive: true}, dir,
-	)
-	if !errors.Is(err, ErrProgressiveUnsupported) {
-		t.Fatalf("want ErrProgressiveUnsupported, got %v", err)
+	plain := &fakeEngine{accepts: []string{"jpeg"}, outSize: 600}
+	if _, _, err := New(plain).EncodePages(context.Background(), []Page{p}, model.EncodeConfig{Format: "avif"}, dir); err != nil {
+		t.Fatal(err)
+	}
+	if len(plain.opts) != 1 || plain.opts[0].Progressive {
+		t.Fatalf("an engine without layers writes plain AVIF: %+v", plain.opts)
+	}
+	layered := &layeredEngine{fakeEngine{accepts: []string{"jpeg"}, outSize: 600}}
+	if _, _, err := New(layered).EncodePages(context.Background(), []Page{p}, model.EncodeConfig{Format: "avif"}, t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	if len(layered.opts) != 1 || !layered.opts[0].Progressive {
+		t.Fatalf("a capable engine writes layered AVIF: %+v", layered.opts)
 	}
 }
 

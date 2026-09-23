@@ -101,6 +101,25 @@ func ChooseScale(width, minWidth int, scales []int) int {
 	return 0
 }
 
+// SourceFormat keeps each upscaled page in the format it was downloaded in.
+const SourceFormat = "source"
+
+// OutputFormat is the format an upscaled page is written in: the profile's
+// format, or with SourceFormat the page's own (PNG for anything the
+// upscaler can't write).
+func OutputFormat(profile, page string) string {
+	switch profile {
+	case "":
+		return "webp"
+	case SourceFormat:
+		if page == "jpeg" || page == "webp" {
+			return page
+		}
+		return "png"
+	}
+	return profile
+}
+
 // NeedsUpscale reports whether a page should be upscaled.
 func NeedsUpscale(pg downloads.PageFile, minWidth int) bool {
 	if minWidth <= 0 || pg.Width <= 0 || pg.Width >= minWidth {
@@ -139,18 +158,20 @@ func (p *Processor) Process(ctx context.Context, cfg model.UpscaleConfig, pages 
 		}
 		mdl = &info.Models[0]
 	}
-	format := cfg.Format
-	if format == "" {
-		format = "webp"
+	// group pages by the scale and output format they need so each batch is
+	// one engine run
+	type batch struct {
+		scale  int
+		format string
 	}
-	// group pages by the scale they need so each batch is one engine run
-	groups := map[int][]int{}
+	groups := map[batch][]int{}
 	for _, i := range todo {
 		s := ChooseScale(pages[i].Width, cfg.MinWidth, mdl.Scales)
 		if s == 0 {
 			continue
 		}
-		groups[s] = append(groups[s], i)
+		b := batch{s, OutputFormat(cfg.Format, pages[i].Format)}
+		groups[b] = append(groups[b], i)
 	}
 	out := append([]downloads.PageFile(nil), pages...)
 	outDir := filepath.Join(workDir, "upscaled")
@@ -165,10 +186,10 @@ func (p *Processor) Process(ctx context.Context, cfg model.UpscaleConfig, pages 
 	// a worker may run its own model instead of the profile's: the file
 	// records what the pages were really upscaled with
 	ctx, used := upscale.WithUsed(ctx)
-	for scale, group := range groups {
+	for b, group := range groups {
 		for start := 0; start < len(group); start += ChunkPages {
 			idxs := group[start:min(start+ChunkPages, len(group))]
-			if err := p.upscaleChunk(ctx, up, mdl, cfg, format, scale, pages, idxs, out, outDir); err != nil {
+			if err := p.upscaleChunk(ctx, up, mdl, cfg, b.format, b.scale, pages, idxs, out, outDir); err != nil {
 				return nil, false, "", err
 			}
 			done += len(idxs)

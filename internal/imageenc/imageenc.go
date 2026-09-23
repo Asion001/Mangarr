@@ -55,7 +55,10 @@ func Resolve(cfg model.EncodeConfig) Options {
 	if cfg.Speed > 0 {
 		o.Speed = cfg.Speed
 	}
-	o.Progressive = cfg.Format == "avif" && cfg.Progressive
+	// layered AVIF costs ~6% in size and lets browsers show a page early;
+	// readers without progressive decoding still show the full image, so it
+	// is always on when the engine can write it (see EncodePages)
+	o.Progressive = cfg.Format == "avif"
 	return o
 }
 
@@ -147,11 +150,6 @@ func (e *Encoder) Engines() []Engine { return append([]Engine(nil), e.engines...
 // ErrNoEngine means no engine can produce the requested format.
 var ErrNoEngine = errors.New("no encoder for this format is installed")
 
-// ErrProgressiveUnsupported means the selected AVIF encoder cannot write
-// layered images. The built-in encoder intentionally remains the slim image's
-// portable fallback.
-var ErrProgressiveUnsupported = errors.New("progressive AVIF needs avifenc 1.4 or newer (included in the full image)")
-
 // skip reports pages that are never re-encoded.
 func skip(format, target string) bool {
 	switch format {
@@ -176,10 +174,9 @@ func (e *Encoder) EncodePages(ctx context.Context, pages []Page, cfg model.Encod
 	st.Engine = eng.Name()
 	o := Resolve(cfg)
 	if o.Progressive {
+		// the slim image's built-in encoder can't write layers: plain AVIF
 		capable, ok := eng.(interface{ SupportsProgressive() bool })
-		if !ok || !capable.SupportsProgressive() {
-			return nil, st, ErrProgressiveUnsupported
-		}
+		o.Progressive = ok && capable.SupportsProgressive()
 	}
 	outDir := filepath.Join(workDir, "encoded")
 	if err := os.MkdirAll(outDir, 0o775); err != nil {

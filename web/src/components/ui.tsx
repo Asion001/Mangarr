@@ -469,6 +469,43 @@ export function Tabs<T extends string>({ tabs, value, onChange }: { tabs: { valu
   );
 }
 
+/** Segmented picks one of a few values (a compact radio group). */
+export function Segmented<T extends string | number>({
+  value,
+  options,
+  onChange,
+  label,
+  disabled,
+}: {
+  value: T;
+  options: { value: T; label: ReactNode }[];
+  onChange: (v: T) => void;
+  /** accessible name of the group */
+  label: string;
+  disabled?: boolean;
+}) {
+  return (
+    <div role="radiogroup" aria-label={label} className={clsx("inline-flex w-fit rounded-md border border-border bg-bg p-0.5", disabled && "opacity-50")}>
+      {options.map((o) => {
+        const on = o.value === value;
+        return (
+          <button
+            key={String(o.value)}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            disabled={disabled}
+            onClick={() => !on && onChange(o.value)}
+            className={clsx("rounded px-3 py-1 text-xs font-medium", on ? "bg-panel-2 text-fg" : "text-muted hover:text-fg")}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /** TagInput edits a list of strings (patterns, URLs, tags). */
 export function TagInput({ value, onChange, placeholder }: { value: string[]; onChange: (v: string[]) => void; placeholder?: string }) {
   const [draft, setDraft] = useState("");

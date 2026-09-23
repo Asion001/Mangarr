@@ -40,3 +40,18 @@ func TestNeedsUpscale(t *testing.T) {
 		t.Error("unknown width must be left alone")
 	}
 }
+
+func TestOutputFormat(t *testing.T) {
+	for _, c := range []struct{ profile, page, want string }{
+		{"", "jpeg", "webp"},
+		{"jpeg", "png", "jpeg"},
+		{SourceFormat, "jpeg", "jpeg"},
+		{SourceFormat, "webp", "webp"},
+		{SourceFormat, "png", "png"},
+		{SourceFormat, "bmp", "png"},
+	} {
+		if got := OutputFormat(c.profile, c.page); got != c.want {
+			t.Errorf("OutputFormat(%q, %q) = %q, want %q", c.profile, c.page, got, c.want)
+		}
+	}
+}
