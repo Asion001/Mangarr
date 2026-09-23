@@ -4,11 +4,15 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/Asion001/mangarr/internal/app"
 	"github.com/Asion001/mangarr/internal/dbtest"
 	"github.com/Asion001/mangarr/internal/downloads"
+	"github.com/Asion001/mangarr/internal/health"
+	"github.com/Asion001/mangarr/internal/logging"
 	"github.com/Asion001/mangarr/internal/model"
 	"github.com/Asion001/mangarr/internal/modules/source"
 	"github.com/Asion001/mangarr/internal/series"
@@ -83,5 +87,69 @@ func TestCrashWhileProcessingIsCounted(t *testing.T) {
 	}
 	if n := e.countStatus(t, model.JobQueued); n != 1 {
 		t.Fatalf("the handed back download should be queued: %d queued", n)
+	}
+}
+
+// TestUncleanStopsOnHealth: a start that finds the last run never stopped
+// cleanly counts it and the Health page shows the count; a clean stop adds
+// nothing.
+func TestUncleanStopsOnHealth(t *testing.T) {
+	e := newTestApp(t, dbtest.DSNs(t)["sqlite"])
+	restart := func() *app.App {
+		t.Helper()
+		_, ring := logging.Setup("error", io.Discard)
+		a, err := app.New(e.Ctx, e.App.Cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), ring)
+		if err != nil {
+			t.Fatal(err)
+		}
+		a.Downloads.Hold(true)
+		if err := a.Start(e.Ctx); err != nil {
+			t.Fatal(err)
+		}
+		return a
+	}
+	crashCheck := func(a *app.App) *health.Check {
+		for _, c := range a.Health.Run(e.Ctx) {
+			if c.Source == "Crashes" {
+				return &c
+			}
+		}
+		return nil
+	}
+
+	// the first app never stops: the next start finds it still "running"
+	killed := restart()
+	if got := killed.Crashes(e.Ctx); got.Total != 1 || len(got.Recent) != 1 {
+		t.Fatalf("the unclean stop should be counted once: %+v", got)
+	}
+	c := crashCheck(killed)
+	if c == nil || c.Type != "warning" || !strings.Contains(c.Message, "once in the last 24 hours") || len(c.Items) != 1 {
+		t.Fatalf("health should show one crash: %+v", c)
+	}
+
+	// a clean stop is not a crash
+	if err := killed.Close(); err != nil {
+		t.Fatal(err)
+	}
+	again := restart()
+	defer again.Close()
+	if got := again.Crashes(e.Ctx); got.Total != 1 {
+		t.Fatalf("a clean stop was counted: %+v", got)
+	}
+
+	// a server that keeps dying is an error
+	l := again.Crashes(e.Ctx)
+	now := time.Now().UTC()
+	for i := 1; i <= 3; i++ {
+		l.Recent = append(l.Recent, app.Crash{At: now.Add(-time.Duration(i) * time.Hour), StartedAt: now.Add(-2 * time.Hour), FoundAt: now})
+	}
+	l.Recent = append(l.Recent, app.Crash{At: now.Add(-10 * 24 * time.Hour)}) // too old to count
+	l.Total += 4
+	if err := again.Settings.Set(e.Ctx, "crash_log", l); err != nil {
+		t.Fatal(err)
+	}
+	c = crashCheck(again)
+	if c == nil || c.Type != "error" || !strings.Contains(c.Message, "4 times in the last 24 hours and 4 times in the last 7 days (5 in total)") {
+		t.Fatalf("health should escalate: %+v", c)
 	}
 }

@@ -49,6 +49,7 @@ func (a *App) wireMore(ctx context.Context) error {
 		return out
 	})
 	a.Health.AddStatus("Library servers", a.Rescanner.Status)
+	a.Health.AddCheck(a.crashHealth)
 	a.Health.AddCheck(func(ctx context.Context) []health.Check {
 		var out []health.Check
 		list, _ := a.Catalogs.List(ctx, false)

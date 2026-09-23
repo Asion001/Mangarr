@@ -32,6 +32,9 @@ type Check struct {
 	Link    string `json:"link,omitempty"`
 	// Items are the things the check is about (e.g. series), with links.
 	Items []CheckItem `json:"items,omitempty"`
+	// Key (optional) identifies the check across runs when its message
+	// changes (e.g. carries a count), so a new count is not a new issue.
+	Key string `json:"-"`
 }
 
 // CheckItem is one thing a check is about.
@@ -42,7 +45,12 @@ type CheckItem struct {
 	Detail string `json:"detail,omitempty"`
 }
 
-func (c Check) key() string { return c.Source + "|" + c.Message }
+func (c Check) key() string {
+	if c.Key != "" {
+		return c.Source + "|" + c.Key
+	}
+	return c.Source + "|" + c.Message
+}
 
 // Text is the message with the items' labels, for notifications.
 func (c Check) Text() string {

@@ -76,6 +76,7 @@ type App struct {
 
 	services []Service
 	maint    maintenance
+	run      runTracker
 }
 
 // Service is a long-running component started with the app.
@@ -154,6 +155,9 @@ func (a *App) AddService(s Service) { a.services = append(a.services, s) }
 
 // Start launches background workers. It returns once they are running.
 func (a *App) Start(ctx context.Context) error {
+	if err := a.trackRuns(ctx); err != nil {
+		return err
+	}
 	if err := a.Queue.Start(ctx); err != nil {
 		return err
 	}
@@ -166,12 +170,13 @@ func (a *App) Start(ctx context.Context) error {
 	return nil
 }
 
-// Close hands running jobs back to the queue (a clean stop, not a crash)
-// and closes the database.
+// Close hands running jobs back to the queue and records a clean stop (not
+// a crash), then closes the database.
 func (a *App) Close() error {
 	if a.Downloads != nil {
 		a.Downloads.Release()
 	}
+	a.stopped()
 	return a.DB.Close()
 }
 
