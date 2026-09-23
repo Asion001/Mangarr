@@ -301,6 +301,7 @@ MANGARR_MODULE_KOMGA_API_KEY=...
 | Suffix | Type | Description |
 |---|---|---|
 | `_GPU` | string | GPU. auto, or the Vulkan device index (pass /dev/dri to the container for Intel/AMD) |
+| `_MODEL` | string | Upscale model. Empty uses the profile's model |
 | `_THREADS` | string | Threads. load:proc:save threads (ncnn -j) |
 | `_TILE` | int | Tile size. 0 = automatic; lower it when the GPU runs out of memory |
 | `_TOOLS_DIR` | string | Tools folder. Where the waifu2x/Real-CUGAN/Real-ESRGAN ncnn binaries are (included in the full image) |

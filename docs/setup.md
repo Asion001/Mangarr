@@ -380,17 +380,20 @@ threshold (default 1400 px) with waifu2x / Real-CUGAN / Real-ESRGAN.
 
 1. Give it a GPU. The full image (`:latest`, amd64) contains the upscalers:
    - **On the server itself** (e.g. the N100's iGPU): pass `/dev/dri` and the
-     render group (`group_add`, see the compose example). mangarr then adds
-     the *Built into this server* engine automatically (enabled when a real
-     GPU is visible).
+     render group (`group_add`, see the compose example). mangarr then turns
+     on the *Upscale* role of **This server** automatically (when a real GPU
+     is visible).
    - **On another machine** (a desktop GPU): run it as a worker with the
-     upscale role (§12). The *Remote worker pool* engine appears by itself the
-     first time such a worker dials in. NVIDIA needs the container toolkit.
+     upscale role (§12). NVIDIA needs the container toolkit.
 
-   System → Workers → **Processing engines** lists both. Profiles use the
-   first one available in that order (lower priority first), so you choose
-   whether the server's GPU or the workers go first; chapters wait while
-   none is available.
+   System → Workers lists this server and every worker in one table. Work
+   goes to the lowest priority number that is online and has room, so you
+   choose whether the server's GPU or a worker goes first (this server starts
+   after the workers); chapters wait while none is available. Each row can
+   also pick its own **Upscale model** instead of the profile's, for a
+   machine that is better at, or only fast enough for, another model. The
+   scale is adjusted to one that model has, and the chapter records the
+   model that was really used.
 2. Pick a model: `realesr-animevideov3` is fastest (good for colour
    webtoons), `waifu2x-cunet` cleans black & white manga well, `realcugan`
    is sharper and slower. Profile → *Preview on a chapter* shows what each

@@ -18,9 +18,86 @@ import (
 // (System → Workers), which brings its own module with it.
 func (a *App) wireUpscalers(ctx context.Context) error {
 	if a.Cfg.Mode == config.ModeIntegrated {
-		return a.offerLocalUpscaler(ctx)
+		if err := a.offerLocalUpscaler(ctx); err != nil {
+			return err
+		}
+		return a.ShareUpscalePriority(ctx)
 	}
 	return nil
+}
+
+// LocalUpscalePriority is where the built-in upscaler starts: after the
+// workers (which start at 100), since a worker is usually the machine with
+// the better GPU.
+const LocalUpscalePriority = 200
+
+// sharedPriorityKey remembers that the built-in upscaler was moved into the
+// workers' priority list.
+const sharedPriorityKey = "upscale_priority_shared"
+
+// ShareUpscalePriority moves the built-in upscaler into the workers' priority
+// list, once. It used to be ordered against the "Workers" module as a whole;
+// now the workers module ranks as its best online worker, so this keeps the
+// order an install already had: after every upscale worker when the workers
+// came first, before them otherwise.
+func (a *App) ShareUpscalePriority(ctx context.Context) error {
+	var done bool
+	_ = a.Settings.Get(ctx, sharedPriorityKey, &done)
+	if done {
+		return nil
+	}
+	var defs []model.ProviderDefinition
+	if err := a.DB.NewSelect().Model(&defs).Where("kind = ? AND user_id IS NULL", string(modules.KindUpscale)).Scan(ctx); err != nil {
+		return err
+	}
+	var local, pool *model.ProviderDefinition
+	for i := range defs {
+		switch defs[i].Implementation {
+		case "local":
+			local = &defs[i]
+		case "workers":
+			pool = &defs[i]
+		}
+	}
+	if local != nil {
+		var workers []model.Worker
+		if err := a.DB.NewSelect().Model(&workers).Scan(ctx); err != nil {
+			return err
+		}
+		lowest, highest, found := 0, 0, false
+		for _, w := range workers {
+			if !w.HasRole(model.RoleUpscale) {
+				continue
+			}
+			if !found || w.Priority < lowest {
+				lowest = w.Priority
+			}
+			if !found || w.Priority > highest {
+				highest = w.Priority
+			}
+			found = true
+		}
+		want := local.Priority
+		if pool == nil || pool.Priority <= local.Priority {
+			// the workers went first: keep the server behind all of them
+			// (and behind the workers still to come, which start at 100)
+			floor := 110
+			if found {
+				floor = max(floor, highest+10)
+			}
+			want = max(want, floor)
+		} else if found {
+			want = min(want, lowest-10)
+		}
+		if want != local.Priority {
+			local.Priority = want
+			if err := a.Modules.Update(ctx, local); err != nil {
+				return err
+			}
+			a.Log.Info("moved the built-in upscaler into the workers' priority list", "priority", want)
+		}
+	}
+	return a.Settings.Set(ctx, sharedPriorityKey, true)
 }
 
 // localOfferedKey remembers that the built-in upscaler was set up once (so
@@ -43,7 +120,7 @@ func (a *App) offerLocalUpscaler(ctx context.Context) error {
 		}
 	}
 	def := &model.ProviderDefinition{Kind: string(modules.KindUpscale), Implementation: "local", Name: "Built-in (this server)",
-		Enabled: gpu, Priority: 50, Settings: map[string]any{"toolsDir": dir, "gpu": "auto"}}
+		Enabled: gpu, Priority: LocalUpscalePriority, Settings: map[string]any{"toolsDir": dir, "gpu": "auto"}}
 	if err := a.Modules.Create(ctx, def); err != nil {
 		return err
 	}

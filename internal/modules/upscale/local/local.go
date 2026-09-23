@@ -20,6 +20,8 @@ type Settings struct {
 	GPU      string `json:"gpu" label:"GPU" order:"2" placeholder:"auto" help:"auto, or the Vulkan device index (pass /dev/dri to the container for Intel/AMD)."`
 	Threads  string `json:"threads" label:"Threads" advanced:"true" order:"3" placeholder:"1:2:2" help:"load:proc:save threads (ncnn -j)."`
 	Tile     int    `json:"tile" label:"Tile size" advanced:"true" order:"4" help:"0 = automatic; lower it when the GPU runs out of memory."`
+	// Model is what this server upscales with; empty uses the profile's.
+	Model string `json:"model" label:"Upscale model" order:"5" help:"Empty uses the profile's model."`
 }
 
 func init() {
@@ -37,7 +39,7 @@ func init() {
 			runner := upscaler.CLIRunner{ToolsDir: st.ToolsDir, GPU: st.GPU, Threads: st.Threads, Tile: st.Tile, Log: deps.Log}
 			log := deps.Log
 			srv := upscaler.NewServer(upscaler.Config{TmpDir: tmp, Version: version.Version}, runner, log)
-			return &Module{srv: srv, dir: st.ToolsDir}, nil
+			return &Module{srv: srv, dir: st.ToolsDir, model: st.Model}, nil
 		},
 	})
 }
@@ -45,6 +47,8 @@ func init() {
 type Module struct {
 	srv *upscaler.Server
 	dir string
+	// model replaces the profile's model when this server has it.
+	model string
 }
 
 func (m *Module) Test(ctx context.Context) error {
@@ -68,10 +72,19 @@ func (m *Module) Upscale(ctx context.Context, images []upscale.Image, p upscale.
 	for i, img := range images {
 		in[i] = upscaler.Image{Name: img.Name, Data: img.Data}
 	}
+	if m.model != "" && m.model != p.Model {
+		for _, e := range m.srv.Info().Models {
+			if e.Name == m.model {
+				p.Model, p.Scale = e.Name, upscale.FitScale(p.Scale, e.Scales)
+				break
+			}
+		}
+	}
 	out, err := m.srv.Process(ctx, upscaler.Params{Model: p.Model, Scale: p.Scale, Noise: p.Noise, Format: p.Format, Quality: p.Quality, MaxWidth: p.MaxWidth}, in)
 	if err != nil {
 		return nil, err
 	}
+	upscale.ReportUsed(ctx, p.Model)
 	res := make([]upscale.Image, len(out))
 	for i, img := range out {
 		res[i] = upscale.Image{Name: img.Name, Data: img.Data}

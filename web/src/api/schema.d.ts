@@ -3067,7 +3067,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Rename a worker, change its roles or switch it off */
+        /** Rename a worker, change its roles, model or priority, or switch it off */
         put: operations["workers-update"];
         post?: never;
         /** Remove a worker and its key */
@@ -5845,6 +5845,7 @@ export interface components {
             tasksDone: number;
             /** Format: int64 */
             tasksFailed: number;
+            upscaleModel: string;
             version: string;
         };
         "Worker-byeRequest": {
@@ -5953,6 +5954,7 @@ export interface components {
             tasksDone: number;
             /** Format: int64 */
             tasksFailed: number;
+            upscaleModel: string;
             version: string;
         };
         WorkerTask: {
@@ -6026,6 +6028,7 @@ export interface components {
             /** Format: int64 */
             priority?: number;
             roles?: string[];
+            upscaleModel?: string;
         };
     };
     responses: never;

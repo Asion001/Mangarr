@@ -104,7 +104,7 @@ func (s *Server) registerWorkers() {
 		})
 
 	huma.Register(s.api, huma.Operation{OperationID: "workers-update", Method: http.MethodPut, Path: "/api/v1/workers/{id}", Tags: tags,
-		Summary: "Rename a worker, change its roles or switch it off"},
+		Summary: "Rename a worker, change its roles, model or priority, or switch it off"},
 		func(ctx context.Context, in *struct {
 			ID   int64 `path:"id"`
 			Body struct {
@@ -113,6 +113,8 @@ func (s *Server) registerWorkers() {
 				Enabled    *bool     `json:"enabled,omitempty"`
 				Priority   *int      `json:"priority,omitempty"`
 				Concurrent *int      `json:"concurrent,omitempty" minimum:"0"`
+				// UpscaleModel replaces the profile's model on this worker ("" uses the profile's).
+				UpscaleModel *string `json:"upscaleModel,omitempty"`
 			}
 		}) (*struct{ Body model.Worker }, error) {
 			var w model.Worker
@@ -152,7 +154,10 @@ func (s *Server) registerWorkers() {
 			if in.Body.Concurrent != nil {
 				w.Concurrent = *in.Body.Concurrent
 			}
-			if _, err := s.app.DB.NewUpdate().Model(&w).Column("name", "roles", "enabled", "priority", "concurrent").WherePK().Exec(ctx); err != nil {
+			if in.Body.UpscaleModel != nil {
+				w.UpscaleModel = strings.TrimSpace(*in.Body.UpscaleModel)
+			}
+			if _, err := s.app.DB.NewUpdate().Model(&w).Column("name", "roles", "enabled", "priority", "concurrent", "upscale_model").WherePK().Exec(ctx); err != nil {
 				return nil, toHTTPError(err)
 			}
 			s.app.Auth.InvalidateWorkers()

@@ -4,13 +4,14 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Plus, Trash2 } from "lucide-react";
 import { api, unwrap, type ModuleResource, type S } from "../../api/client";
 import { useModules } from "../../api/queries";
-import { Badge, Button, Card, EmptyState, ErrorBox, Field, IconButton, Input, Loading, Modal, PageHeader, Switch, Table, Td, Th } from "../../components/ui";
+import { Badge, Button, Card, ErrorBox, Field, IconButton, Input, Loading, Modal, PageHeader, Select, Switch, Table, Td, Th } from "../../components/ui";
 import { bytes, relative } from "../../lib/format";
 import { useToast } from "../../lib/toast";
 import { useSettingsDoc } from "../settings/useSettingsDoc";
 
 type Worker = S["WorkerResource"];
 type Downloads = S["Downloads"];
+type UpscaleModel = { name: string; description?: string };
 
 const roles = [
   { key: "download", label: "Download", help: "Fetches chapters from their source and uploads the pages here" },
@@ -18,12 +19,21 @@ const roles = [
   { key: "encode", label: "Encode", help: "Re-encodes pages to AVIF or JPEG XL" },
 ];
 
-/** WorkersPage lists the machines that do work for this server. */
+/** modelsOf reads the upscaling models a worker said it has when it last dialled in. */
+function modelsOf(w: Worker): UpscaleModel[] {
+  const list = (w.info as { models?: unknown } | undefined)?.models;
+  return Array.isArray(list) ? list.filter((m): m is UpscaleModel => typeof (m as UpscaleModel)?.name === "string") : [];
+}
+
+/**
+ * WorkersPage lists every machine that does work for this server, this
+ * server included, in one priority order.
+ */
 export function WorkersPage() {
   const qc = useQueryClient();
   const toast = useToast();
   const limits = useSettingsDoc<Downloads>("downloads");
-  const { data: engines, isLoading: enginesLoading, error: enginesError } = useModules("upscale");
+  const { data: engines } = useModules("upscale");
   const { data, isLoading, error } = useQuery({
     queryKey: ["workers"],
     queryFn: () => unwrap(api.GET("/api/v1/workers")),
@@ -33,8 +43,13 @@ export function WorkersPage() {
   const [issued, setIssued] = useState<{ name: string; key: string } | null>(null);
   const [removing, setRemoving] = useState<Worker | null>(null);
 
+  // the built-in upscaler is this server's upscale role; the "workers"
+  // module only hands batches to the machines listed here
+  const local = engines?.find((e) => e.implementation === "local");
+  const pool = engines?.find((e) => e.implementation === "workers");
+
   const reload = () => qc.invalidateQueries({ queryKey: ["workers"] });
-  const updateEngine = async (engine: ModuleResource, patch: { enabled?: boolean; priority?: number }) => {
+  const updateEngine = async (engine: ModuleResource, patch: { enabled?: boolean; priority?: number; model?: string }) => {
     try {
       await unwrap(api.PUT("/api/v1/modules/{id}", {
         params: { path: { id: engine.id } },
@@ -46,15 +61,16 @@ export function WorkersPage() {
           priority: patch.priority ?? engine.priority,
           tags: engine.tags,
           events: engine.events,
-          settings: engine.settings,
+          settings: patch.model === undefined ? engine.settings : { ...engine.settings, model: patch.model },
         },
       }));
       qc.invalidateQueries({ queryKey: ["modules", "upscale"] });
+      qc.invalidateQueries({ queryKey: ["upscaler-info"] });
     } catch (e) {
-      toast.fromError(e, t("Could not update the processing engine"));
+      toast.fromError(e, t("Could not update this server"));
     }
   };
-  const update = async (w: Worker, body: { enabled?: boolean; roles?: string[]; priority?: number; concurrent?: number }) => {
+  const update = async (w: Worker, body: { enabled?: boolean; roles?: string[]; priority?: number; concurrent?: number; upscaleModel?: string }) => {
     try {
       await unwrap(api.PUT("/api/v1/workers/{id}", { params: { path: { id: w.id } }, body }));
       reload();
@@ -72,60 +88,22 @@ export function WorkersPage() {
           <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setAdding(true)}>{t("Add worker")}</Button>
         }
       />
-      <Card title={t("Processing engines")} className="mb-6">
-        <p className="mb-3 text-sm text-muted">{t("Profiles use the first available engine in this priority order.")}</p>
-        {enginesLoading && <Loading />}
-        {enginesError && <ErrorBox error={enginesError} />}
-        {engines?.length === 0 && (
-          <EmptyState title={t("No processing engines available")}>{t("Install the full image or connect an upscale worker to add one.")}</EmptyState>
-        )}
-        {engines && engines.length > 0 && (
-          <Table>
-            <thead>
-              <tr>
-                <Th>{t("Engine")}</Th>
-                <Th>{t("Priority")}</Th>
-                <Th>{t("Enabled")}</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {engines.map((engine) => <EngineRow key={engine.id} engine={engine} onUpdate={updateEngine} />)}
-            </tbody>
-          </Table>
-        )}
-      </Card>
-      <Card
-        title={t("Worker concurrency")}
-        className="mb-6"
-        actions={<Button size="sm" loading={limits.saving} disabled={!limits.value} onClick={() => limits.save()}>{t("Save")}</Button>}
-      >
-        {limits.isLoading && <Loading />}
-        {limits.error && <ErrorBox error={limits.error} />}
-        {limits.value && (
-          <div className="grid gap-4 md:grid-cols-3">
-            <Field label={t("Chapter files processed at once")} help={t("Shared by integrated and remote processing engines.")}>
-              <Input type="number" min={1} value={limits.value.maxConcurrentProcessing} onChange={(e) => limits.patch({ maxConcurrentProcessing: Number(e.target.value) })} />
-            </Field>
-            <Field label={t("Tasks across all remote workers")}>
-              <Input type="number" min={1} value={limits.value.maxWorkerTasks} onChange={(e) => limits.patch({ maxWorkerTasks: Number(e.target.value) })} />
-            </Field>
-            <Field label={t("Default tasks per worker")} help={t("Per-worker overrides can be set below. 0 uses the default.")}>
-              <Input type="number" min={1} value={limits.value.maxConcurrentPerWorker} onChange={(e) => limits.patch({ maxConcurrentPerWorker: Number(e.target.value) })} />
-            </Field>
-          </div>
-        )}
-      </Card>
+      <p className="mb-3 text-sm text-muted">{t("Work goes to the lowest priority number that is online and has room. This server does whatever no worker takes.")}</p>
+      {pool && !pool.enabled && (
+        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-sm">
+          <span className="flex-1">{t("Upscaling on remote workers is switched off, so only this server upscales.")}</span>
+          <Button size="sm" onClick={() => updateEngine(pool, { enabled: true })}>{t("Switch on")}</Button>
+        </div>
+      )}
       {isLoading && <Loading />}
       {error && <ErrorBox error={error} />}
-      {data && data.length === 0 && (
-        <EmptyState title={t("No workers yet")}>{t("A worker is the same mangarr image started with") + " "}<code>MANGARR_MODE=worker</code>{t(", a server address and a key from here. It dials in and asks for work, so it needs no port of its own.")}</EmptyState>
-      )}
-      {data && data.length > 0 && (
+      {data && (
         <Table>
           <thead>
             <tr>
               <Th>{t("Worker")}</Th>
               <Th>{t("Roles")}</Th>
+              <Th>{t("Upscale model")}</Th>
               <Th>{t("Priority")}</Th>
               <Th>{t("Concurrent tasks")}</Th>
               <Th>{t("Doing now")}</Th>
@@ -136,6 +114,7 @@ export function WorkersPage() {
             </tr>
           </thead>
           <tbody>
+            <ServerRow engine={local} onUpdate={updateEngine} />
             {data.map((w) => (
               <tr key={w.id} className={w.enabled ? undefined : "opacity-60"}>
                 <Td>
@@ -152,17 +131,23 @@ export function WorkersPage() {
                     {roles.map((r) => {
                       const on = w.roles.includes(r.key);
                       return (
-                        <button
+                        <RoleChip
                           key={r.key}
-                          title={r.help}
+                          label={r.label}
+                          help={r.help}
+                          on={on}
                           onClick={() => update(w, { roles: on ? w.roles.filter((x) => x !== r.key) : [...w.roles, r.key] })}
-                          className={`rounded border px-2 py-0.5 text-xs ${on ? "border-accent bg-accent/15 text-fg" : "border-border text-muted hover:text-fg"}`}
-                        >
-                          {r.label}
-                        </button>
+                        />
                       );
                     })}
                   </div>
+                </Td>
+                <Td>
+                  {w.roles.includes("upscale") ? (
+                    <ModelSelect value={w.upscaleModel} models={modelsOf(w)} onChange={(upscaleModel) => update(w, { upscaleModel })} />
+                  ) : (
+                    <span className="text-xs text-muted">—</span>
+                  )}
                 </Td>
                 <Td>
                   <DeferredNumber value={w.priority} onSave={(priority) => update(w, { priority })} title={t("Lower first")} />
@@ -224,6 +209,30 @@ export function WorkersPage() {
           </tbody>
         </Table>
       )}
+      {data && data.length === 0 && (
+        <p className="mt-3 text-sm text-muted">{t("A worker is the same mangarr image started with") + " "}<code>MANGARR_MODE=worker</code>{t(", a server address and a key from here. It dials in and asks for work, so it needs no port of its own.")}</p>
+      )}
+      <Card
+        title={t("Worker concurrency")}
+        className="mt-6"
+        actions={<Button size="sm" loading={limits.saving} disabled={!limits.value} onClick={() => limits.save()}>{t("Save")}</Button>}
+      >
+        {limits.isLoading && <Loading />}
+        {limits.error && <ErrorBox error={limits.error} />}
+        {limits.value && (
+          <div className="grid gap-4 md:grid-cols-3">
+            <Field label={t("Chapter files processed at once")} help={t("Shared by this server and the remote workers.")}>
+              <Input type="number" min={1} value={limits.value.maxConcurrentProcessing} onChange={(e) => limits.patch({ maxConcurrentProcessing: Number(e.target.value) })} />
+            </Field>
+            <Field label={t("Tasks across all remote workers")}>
+              <Input type="number" min={1} value={limits.value.maxWorkerTasks} onChange={(e) => limits.patch({ maxWorkerTasks: Number(e.target.value) })} />
+            </Field>
+            <Field label={t("Default tasks per worker")} help={t("Per-worker overrides can be set above. 0 uses the default.")}>
+              <Input type="number" min={1} value={limits.value.maxConcurrentPerWorker} onChange={(e) => limits.patch({ maxConcurrentPerWorker: Number(e.target.value) })} />
+            </Field>
+          </div>
+        )}
+      </Card>
       {adding && (
         <AddWorker
           onClose={() => setAdding(false)}
@@ -265,6 +274,105 @@ export function WorkersPage() {
   );
 }
 
+/**
+ * ServerRow is this server in the list of workers. It always downloads and
+ * encodes what no worker takes; it upscales when the image has the built-in
+ * upscaler, and that is what its priority and model apply to.
+ */
+function ServerRow({ engine, onUpdate }: { engine?: ModuleResource; onUpdate: (engine: ModuleResource, patch: { enabled?: boolean; priority?: number; model?: string }) => Promise<void> }) {
+  const { data: info } = useQuery({
+    queryKey: ["upscaler-info", engine?.id],
+    queryFn: () => unwrap(api.GET("/api/v1/modules/{id}/upscaler-info", { params: { path: { id: engine!.id } } })),
+    enabled: !!engine?.enabled,
+    retry: false,
+  });
+  const upscales = !!engine?.enabled;
+  const model = typeof engine?.settings?.model === "string" ? engine.settings.model : "";
+  const fallback = t("Always does the work no worker takes");
+  return (
+    <tr className="bg-panel-2/40">
+      <Td>
+        <div className="flex items-center gap-2">
+          <span className="size-2 rounded-full bg-ok" title={t("online")} />
+          <span className="whitespace-nowrap font-medium">{t("This server")}</span>
+        </div>
+        <div className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-muted">
+          <Badge tone="accent">{t("Integrated")}</Badge>
+          {info?.devices?.join(", ")}
+        </div>
+        {engine?.error && <div className="mt-1 text-xs text-err">{engine.error}</div>}
+      </Td>
+      <Td>
+        <div className="flex flex-wrap gap-1">
+          {roles.map((r) =>
+            r.key === "upscale" ? (
+              engine ? (
+                <RoleChip key={r.key} label={r.label} help={r.help} on={upscales} onClick={() => onUpdate(engine, { enabled: !upscales })} />
+              ) : (
+                <RoleChip key={r.key} label={r.label} help={t("Needs the full image, which has the upscaling tools")} on={false} />
+              )
+            ) : (
+              <RoleChip key={r.key} label={r.label} help={fallback} on />
+            ),
+          )}
+        </div>
+      </Td>
+      <Td>
+        {engine ? (
+          <ModelSelect value={model} models={info?.models ?? []} disabled={!upscales} onChange={(m) => onUpdate(engine, { model: m })} />
+        ) : (
+          <span className="text-xs text-muted">—</span>
+        )}
+      </Td>
+      <Td>
+        {engine ? (
+          <DeferredNumber value={engine.priority} onSave={(priority) => onUpdate(engine, { priority })} title={t("Lower first")} />
+        ) : (
+          <span className="text-xs text-muted">—</span>
+        )}
+      </Td>
+      <Td className="text-xs text-muted">—</Td>
+      <Td className="text-xs text-muted">{fallback}</Td>
+      <Td className="text-xs text-muted">—</Td>
+      <Td className="text-xs text-muted">—</Td>
+      <Td />
+      <Td />
+    </tr>
+  );
+}
+
+function RoleChip({ label, help, on, onClick }: { label: string; help: string; on: boolean; onClick?: () => void }) {
+  return (
+    <button
+      type="button"
+      title={help}
+      disabled={!onClick}
+      aria-pressed={on}
+      onClick={onClick}
+      className={`rounded border px-2 py-0.5 text-xs disabled:cursor-default ${on ? "border-accent bg-accent/15 text-fg" : "border-border text-muted enabled:hover:text-fg"}`}
+    >
+      {label}
+    </button>
+  );
+}
+
+/**
+ * ModelSelect picks the upscaling model a machine runs. Empty keeps the
+ * profile's model; a model the machine doesn't have falls back to it too.
+ */
+function ModelSelect({ value, models, onChange, disabled }: { value: string; models: UpscaleModel[]; onChange: (value: string) => void; disabled?: boolean }) {
+  const known = !value || models.some((m) => m.name === value);
+  return (
+    <Select className="w-44" value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} aria-label={t("Upscale model")}>
+      <option value="">{t("Profile's model")}</option>
+      {models.map((m) => (
+        <option key={m.name} value={m.name} title={m.description}>{m.name}</option>
+      ))}
+      {!known && <option value={value}>{value}</option>}
+    </Select>
+  );
+}
+
 function DeferredNumber({ value, onSave, min, title }: { value: number; onSave: (value: number) => void; min?: number; title: string }) {
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
@@ -283,40 +391,6 @@ function DeferredNumber({ value, onSave, min, title }: { value: number; onSave: 
       aria-label={title}
       title={title}
     />
-  );
-}
-
-function EngineRow({ engine, onUpdate }: { engine: ModuleResource; onUpdate: (engine: ModuleResource, patch: { enabled?: boolean; priority?: number }) => Promise<void> }) {
-  const [priority, setPriority] = useState(engine.priority);
-  useEffect(() => setPriority(engine.priority), [engine.priority]);
-  const savePriority = () => {
-    if (priority !== engine.priority) void onUpdate(engine, { priority });
-  };
-  return (
-    <tr className={engine.enabled ? undefined : "opacity-60"}>
-      <Td>
-        <div className="flex items-center gap-2">
-          <span className="font-medium">{engine.name}</span>
-          <Badge tone={engine.implementation === "local" ? "accent" : "info"}>
-            {engine.implementation === "local" ? t("Built into this server") : t("Remote worker pool")}
-          </Badge>
-        </div>
-        {engine.error && <div className="mt-1 text-xs text-err">{engine.error}</div>}
-      </Td>
-      <Td>
-        <Input
-          className="w-24"
-          type="number"
-          value={priority}
-          onChange={(e) => setPriority(Number(e.target.value))}
-          onBlur={savePriority}
-          onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
-          aria-label={t("Priority")}
-          title={t("Lower first")}
-        />
-      </Td>
-      <Td><Switch checked={engine.enabled} onChange={(enabled) => onUpdate(engine, { enabled })} /></Td>
-    </tr>
   );
 }
 

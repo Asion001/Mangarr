@@ -45,7 +45,7 @@ func (p *Processor) upscaler(ctx context.Context, cfg model.UpscaleConfig) (upsc
 		return nil, nil, errors.New("no upscaler module is configured")
 	}
 	var errs []string
-	for _, t := range list {
+	for _, t := range ranked(ctx, list) {
 		if p.Online != nil && !p.Online(t.Def) {
 			errs = append(errs, t.Def.Name+": offline")
 			continue
@@ -62,6 +62,25 @@ func (p *Processor) upscaler(ctx context.Context, cfg model.UpscaleConfig) (upsc
 		errs = append(errs, t.Def.Name+": "+err.Error())
 	}
 	return nil, nil, fmt.Errorf("no upscaler available (%s)", strings.Join(errs, "; "))
+}
+
+// ranked orders the upscalers by where they stand now: the workers module
+// takes the priority of its best online worker, so this server and each
+// worker sit in one list. One that has nobody to run the work keeps its own
+// priority and fails its Info as before.
+func ranked(ctx context.Context, list []modules.Typed[upscale.Module]) []modules.Typed[upscale.Module] {
+	rank := make(map[int64]int, len(list))
+	for _, t := range list {
+		rank[t.Def.ID] = t.Def.Priority
+		if r, ok := t.Instance.(upscale.Ranked); ok {
+			if n, ok := r.Rank(ctx); ok {
+				rank[t.Def.ID] = n
+			}
+		}
+	}
+	out := append([]modules.Typed[upscale.Module](nil), list...)
+	sort.SliceStable(out, func(i, j int) bool { return rank[out[i].Def.ID] < rank[out[j].Def.ID] })
+	return out
 }
 
 // ChooseScale picks the smallest supported scale that brings width to at
@@ -143,6 +162,9 @@ func (p *Processor) Process(ctx context.Context, cfg model.UpscaleConfig, pages 
 		total += len(idxs)
 	}
 	progress.Report(ctx, progress.Event{Stage: progress.StageUpscale, Total: total})
+	// a worker may run its own model instead of the profile's: the file
+	// records what the pages were really upscaled with
+	ctx, used := upscale.WithUsed(ctx)
 	for scale, group := range groups {
 		for start := 0; start < len(group); start += ChunkPages {
 			idxs := group[start:min(start+ChunkPages, len(group))]
@@ -153,7 +175,11 @@ func (p *Processor) Process(ctx context.Context, cfg model.UpscaleConfig, pages 
 			progress.Report(ctx, progress.Event{Stage: progress.StageUpscale, Done: done, Total: total})
 		}
 	}
-	return out, true, mdl.Name, nil
+	name := mdl.Name
+	if names := used(); len(names) > 0 {
+		name = strings.Join(names, ", ")
+	}
+	return out, true, name, nil
 }
 
 // ChunkPages is how many pages go to the upscaler at once: short runs keep

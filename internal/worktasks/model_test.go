@@ -1,0 +1,76 @@
+package worktasks_test
+
+import (
+	"context"
+	"testing"
+
+	"github.com/Asion001/mangarr/internal/db"
+	"github.com/Asion001/mangarr/internal/model"
+	"github.com/Asion001/mangarr/internal/modules/upscale"
+)
+
+// TestWorkerRunsItsOwnModel: a worker set to its own upscaling model gets
+// the batch with that model, at a scale the model has; the next worker to
+// take the same task after a failed attempt starts from the profile's model
+// again.
+func TestWorkerRunsItsOwnModel(t *testing.T) {
+	each(t, func(t *testing.T, d *db.DB) {
+		ctx := context.Background()
+		l := ledger(d)
+		job := seedJob(t, d)
+		models := []any{
+			map[string]any{"name": "waifu2x-cunet", "scales": []any{2, 4, 8}},
+			map[string]any{"name": "realesrgan-x4plus-anime", "scales": []any{4}},
+		}
+		own := &model.Worker{ID: seedWorker(t, d, "own"), UpscaleModel: "realesrgan-x4plus-anime", Info: map[string]any{"models": models}}
+		plain := &model.Worker{ID: seedWorker(t, d, "plain"), Info: map[string]any{"models": models}}
+		missing := &model.Worker{ID: seedWorker(t, d, "missing"), UpscaleModel: "realcugan", Info: map[string]any{"models": models}}
+
+		asked := upscale.Params{Model: "waifu2x-cunet", Scale: 2, Noise: 1, Format: "png"}
+		task := &model.WorkerTask{JobID: job, Kind: model.TaskUpscale, Spec: map[string]any{"params": asked, "input": "in.zip"}}
+		if err := l.Add(ctx, task); err != nil {
+			t.Fatal(err)
+		}
+		lease := func(w *model.Worker) *model.WorkerTask {
+			t.Helper()
+			got, err := l.Claim(ctx, w.ID, []string{model.TaskUpscale})
+			if err != nil || got == nil {
+				t.Fatalf("claim: %v %+v", err, got)
+			}
+			if err := l.UseWorkerModel(ctx, got, w); err != nil {
+				t.Fatal(err)
+			}
+			return got
+		}
+		handBack := func(w *model.Worker) {
+			t.Helper()
+			if _, err := l.HandBack(ctx, w.ID, nil); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		got := lease(own)
+		want := upscale.Params{Model: "realesrgan-x4plus-anime", Scale: 4, Noise: 1, Format: "png"}
+		if m := l.UsedModel(ctx, task.ID); m != want.Model {
+			t.Fatalf("stored model %q, want %q", m, want.Model)
+		}
+		if p, _ := got.Spec["params"].(upscale.Params); p != want {
+			t.Fatalf("the worker was handed %+v, want %+v", got.Spec["params"], want)
+		}
+		if got.Spec["input"] != "in.zip" {
+			t.Fatalf("the rest of the spec was lost: %+v", got.Spec)
+		}
+		handBack(own)
+
+		lease(plain)
+		if m := l.UsedModel(ctx, task.ID); m != asked.Model {
+			t.Fatalf("a worker without a model of its own ran %q, want the profile's %q", m, asked.Model)
+		}
+		handBack(plain)
+
+		lease(missing)
+		if m := l.UsedModel(ctx, task.ID); m != asked.Model {
+			t.Fatalf("a worker without its chosen model ran %q, want the profile's %q", m, asked.Model)
+		}
+	})
+}

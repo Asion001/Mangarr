@@ -9145,6 +9145,9 @@
             "format": "int64",
             "type": "integer"
           },
+          "upscaleModel": {
+            "type": "string"
+          },
           "version": {
             "type": "string"
           }
@@ -9157,6 +9160,7 @@
           "enabled",
           "priority",
           "concurrent",
+          "upscaleModel",
           "version",
           "platform",
           "info",
@@ -9469,6 +9473,9 @@
             "format": "int64",
             "type": "integer"
           },
+          "upscaleModel": {
+            "type": "string"
+          },
           "version": {
             "type": "string"
           }
@@ -9483,6 +9490,7 @@
           "enabled",
           "priority",
           "concurrent",
+          "upscaleModel",
           "version",
           "platform",
           "info",
@@ -9701,6 +9709,9 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "upscaleModel": {
+            "type": "string"
           }
         },
         "type": "object"
@@ -19829,7 +19840,7 @@
             "description": "Error"
           }
         },
-        "summary": "Rename a worker, change its roles or switch it off",
+        "summary": "Rename a worker, change its roles, model or priority, or switch it off",
         "tags": [
           "Workers"
         ]

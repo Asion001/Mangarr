@@ -177,7 +177,31 @@ func (m *Module) Upscale(ctx context.Context, images []upscale.Image, p upscale.
 	if len(out) != len(images) {
 		return nil, fmt.Errorf("the worker returned %d of %d pages", len(out), len(images))
 	}
+	if used := tasks.UsedModel(ctx, task.ID); used != "" {
+		upscale.ReportUsed(ctx, used)
+	} else {
+		upscale.ReportUsed(ctx, p.Model)
+	}
 	return out, nil
+}
+
+// Rank places this module where its best online worker stands, so the
+// workers and this server share one priority list.
+func (m *Module) Rank(ctx context.Context) (int, bool) {
+	list, err := online(ctx)
+	if err != nil {
+		return 0, false
+	}
+	best, found := 0, false
+	for _, w := range list {
+		if len(models(w.Info["models"])) == 0 {
+			continue
+		}
+		if !found || w.Priority < best {
+			best, found = w.Priority, true
+		}
+	}
+	return best, found
 }
 
 // ready is the ledger this process hands work to, once there is a worker
@@ -311,3 +335,4 @@ func models(v any) []upscale.Model {
 
 var _ upscale.Module = (*Module)(nil)
 var _ modules.HealthChecker = (*Module)(nil)
+var _ upscale.Ranked = (*Module)(nil)

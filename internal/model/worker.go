@@ -38,6 +38,9 @@ type Worker struct {
 	Priority int `bun:"priority,notnull" json:"priority"`
 	// Concurrent overrides the installation default; 0 inherits it.
 	Concurrent int `bun:"concurrent,notnull" json:"concurrent"`
+	// UpscaleModel is what this worker upscales with, in place of the
+	// profile's model; empty (or a model it does not have) uses the profile's.
+	UpscaleModel string `bun:"upscale_model,notnull" json:"upscaleModel"`
 	// Version, Platform and Info are what the worker said about itself when
 	// it last said hello (its build, its OS, its upscaling devices).
 	Version  string         `bun:"version,notnull" json:"version"`

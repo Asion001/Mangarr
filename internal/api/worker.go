@@ -124,6 +124,9 @@ func (s *Server) registerWorkerProtocol() {
 					return nil, toHTTPError(err)
 				}
 				if task != nil {
+					if err := s.app.Tasks.UseWorkerModel(ctx, task, w); err != nil {
+						s.app.Log.Warn("could not give the task this worker's model", "task", task.ID, "worker", w.Name, "err", err)
+					}
 					return &struct{ Body WorkerTaskOutput }{WorkerTaskOutput{Task: task}}, nil
 				}
 				if time.Now().After(deadline) {
