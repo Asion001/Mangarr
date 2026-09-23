@@ -55,6 +55,42 @@ export function useListParam(name: string, def = ""): [string, (v: string) => vo
   return [value, push];
 }
 
+function readLocalValue(key: string, def: string, allowed?: readonly string[]) {
+  try {
+    const value = localStorage.getItem(key);
+    return value !== null && (!allowed || allowed.includes(value)) ? value : def;
+  } catch {
+    return def;
+  }
+}
+
+/**
+ * useStoredListParam behaves like useListParam, but remembers the last choice
+ * in this browser. An explicit URL parameter still takes precedence so shared
+ * links open with the state chosen by the sender.
+ */
+export function useStoredListParam(name: string, def: string, storageKey: string, allowed?: readonly string[]): [string, (v: string) => void] {
+  const [params, setParams] = useSearchParams();
+  const fromURL = params.get(name);
+  const value = fromURL === null
+    ? readLocalValue(storageKey, def, allowed)
+    : (!allowed || allowed.includes(fromURL)) ? fromURL : def;
+  const push = useCallback(
+    (v: string) => {
+      const next = !allowed || allowed.includes(v) ? v : def;
+      try {
+        if (next === def) localStorage.removeItem(storageKey);
+        else localStorage.setItem(storageKey, next);
+      } catch {
+        /* storage full or disabled; URL state still works */
+      }
+      queueParam(setParams, name, next === def || next === "" ? null : next, false);
+    },
+    [allowed, def, name, setParams, storageKey],
+  );
+  return [value, push];
+}
+
 /** sessionState stores small JSON values per browser tab. */
 export const sessionState = {
   get<T>(key: string, fallback: T): T {

@@ -25,8 +25,19 @@ test('searches, scopes and paginates the library through the server query',async
   await expect(page.getByText('Moonlight Alternative')).toBeVisible();
   await expect.poll(()=>seen.some(value=>value.includes('q=moon'))).toBe(true);
   await page.getByRole('combobox').nth(0).selectOption('reading');
+  await page.getByRole('combobox').nth(1).selectOption('latest');
   await page.getByRole('combobox').nth(2).selectOption('2');
-  await expect.poll(()=>seen.some(value=>value.includes('filter=reading')&&value.includes('rootFolderId=2'))).toBe(true);
+  await page.getByRole('combobox').nth(3).selectOption('uk');
+  await page.getByRole('combobox').nth(4).selectOption('48');
+  await expect.poll(()=>seen.some(value=>value.includes('filter=reading')&&value.includes('sort=latest')&&value.includes('rootFolderId=2')&&value.includes('language=uk')&&value.includes('pageSize=48'))).toBe(true);
   await page.getByRole('button',{name:'Next',exact:true}).click();
   await expect.poll(()=>seen.some(value=>value.includes('page=2'))).toBe(true);
+
+  await page.goto('/');
+  await expect(page.getByRole('combobox').nth(0)).toHaveValue('reading');
+  await expect(page.getByRole('combobox').nth(1)).toHaveValue('latest');
+  await expect(page.getByRole('combobox').nth(2)).toHaveValue('2');
+  await expect(page.getByRole('combobox').nth(3)).toHaveValue('uk');
+  await expect(page.getByRole('combobox').nth(4)).toHaveValue('48');
+  await expect.poll(()=>seen.some(value=>value.includes('filter=reading')&&value.includes('sort=latest')&&value.includes('rootFolderId=2')&&value.includes('language=uk')&&value.includes('pageSize=48')&&!value.includes('page=2'))).toBe(true);
 });

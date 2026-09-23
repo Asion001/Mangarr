@@ -8,7 +8,7 @@ import { usePushCommand, useRootFolders, useSeriesSearch } from "../../api/queri
 import { Cover } from "../../components/Cover";
 import { Badge, Button, EmptyState, ErrorBox, Input, Loading, PageHeader, Progress, Select, Table, Td, Th } from "../../components/ui";
 import { bytes, date } from "../../lib/format";
-import { useListParam, useQueryParam } from "../../lib/urlState";
+import { useListParam, useQueryParam, useStoredListParam } from "../../lib/urlState";
 import { MassEditBar } from "./Organize";
 import { ContinueReading } from "./ContinueReading";
 import { SetupChecklist } from "./SetupChecklist";
@@ -17,6 +17,10 @@ import { useToast } from "../../lib/toast";
 
 type Filter = "all" | "monitored" | "missing" | "ongoing" | "completed" | "unread" | "reading" | "following";
 type Sort = "title" | "added" | "latest" | "missing" | "size" | "read";
+const filters: readonly Filter[] = ["all", "following", "monitored", "missing", "ongoing", "completed", "unread", "reading"];
+const sorts: readonly Sort[] = ["title", "added", "latest", "missing", "size", "read"];
+const pageSizes = ["24", "36", "48", "72"] as const;
+const libraryStateKey = (name: string) => `mangarr:library:${name}`;
 
 export function statusTone(s: string) {
   return s === "ongoing" ? "ok" : s === "completed" ? "info" : s === "hiatus" ? "warn" : s === "cancelled" ? "err" : "default";
@@ -47,16 +51,16 @@ export function SeriesIndex() {
   const manage = account.can("library.manage") && editing;
   const push = usePushCommand();
   const [q, setQ] = useQueryParam("q");
-  const [filterParam, setFilter] = useListParam("filter", "all");
-  const [sortParam, setSort] = useListParam("sort", "title");
-  const [rootParam, setRoot] = useListParam("root", "");
-  const [language, setLanguage] = useListParam("language", "");
+  const [filterParam, setFilter] = useStoredListParam("filter", "all", libraryStateKey("filter"), filters);
+  const [sortParam, setSort] = useStoredListParam("sort", "title", libraryStateKey("sort"), sorts);
+  const [rootParam, setRoot] = useStoredListParam("root", "", libraryStateKey("root"));
+  const [language, setLanguage] = useStoredListParam("language", "", libraryStateKey("language"));
   const [pageParam, setPage] = useListParam("page", "1");
-  const [pageSizeParam, setPageSize] = useListParam("pageSize", "36");
+  const [pageSizeParam, setPageSize] = useStoredListParam("pageSize", "36", libraryStateKey("pageSize"), pageSizes);
   const filter = filterParam as Filter;
   const sort = sortParam as Sort;
   const page = Math.max(1, Number(pageParam) || 1);
-  const pageSize = [24, 36, 48, 72].includes(Number(pageSizeParam)) ? Number(pageSizeParam) : 36;
+  const pageSize = Number(pageSizeParam);
   const rootFolderId = Number(rootParam) || undefined;
   const [searchDraft, setSearchDraft] = useState(q);
   useEffect(() => setSearchDraft(q), [q]);
