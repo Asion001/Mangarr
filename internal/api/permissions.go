@@ -69,6 +69,7 @@ var operationPermissions = map[string][]string{
 	"read-page-bounds":    {permSignedIn},
 	"read-chapter-bounds": {permSignedIn},
 	"read-progress":       {permSignedIn},
+	"read-time":           {permSignedIn},
 	"read-mark":           {permSignedIn},
 	"read-settings":       {permSignedIn},
 	"read-settings-save":  {permSignedIn},

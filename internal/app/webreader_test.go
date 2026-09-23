@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -122,6 +123,25 @@ func TestWebReader(t *testing.T) {
 	}
 	if code, _ := call("GET", "/api/v1/read/chapters/"+c2+"/pages/6", "", nil); code != 404 {
 		t.Fatalf("page out of range: %d", code)
+	}
+
+	// Reading-time heartbeats are cumulative and idempotent: retries and an
+	// older out-of-order heartbeat cannot inflate the session.
+	for _, seconds := range []int{30, 30, 20, 45} {
+		body := `{"sessionId":"reader-session-0001","activeSeconds":` + strconv.Itoa(seconds) + `}`
+		if code, _ := call("POST", "/api/v1/read/chapters/"+c1+"/time", body, nil); code != http.StatusNoContent {
+			t.Fatalf("reading time %d: %d", seconds, code)
+		}
+	}
+	var session model.ReadingSession
+	if err := e.App.DB.NewSelect().Model(&session).Where("id = ?", "reader-session-0001").Scan(e.Ctx); err != nil {
+		t.Fatal(err)
+	}
+	if session.ChapterID != chs[0].ID || session.SeriesID != ser.ID || session.ActiveSeconds != 45 {
+		t.Fatalf("reading session %+v", session)
+	}
+	if code, _ := call("POST", "/api/v1/read/chapters/"+c1+"/time", `{"sessionId":"reader-session-0002","activeSeconds":43201}`, nil); code != http.StatusUnprocessableEntity {
+		t.Fatalf("oversized reading time: %d", code)
 	}
 
 	// progress: page 2, then the last page finishes it

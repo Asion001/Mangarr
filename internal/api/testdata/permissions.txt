@@ -108,6 +108,7 @@ read-page-bounds GET /api/v1/read/chapters/{id}/pages/{n}/bounds -> signedin
 read-progress PUT /api/v1/read/chapters/{id}/progress -> signedin
 read-settings GET /api/v1/read/settings -> signedin
 read-settings-save PUT /api/v1/read/settings -> signedin
+read-time POST /api/v1/read/chapters/{id}/time -> signedin
 readers-account-delete DELETE /api/v1/readers/{id}/accounts/{accountId} -> admin
 readers-account-save POST /api/v1/readers/{id}/accounts -> admin
 readers-create POST /api/v1/readers -> admin

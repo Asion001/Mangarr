@@ -5,6 +5,7 @@ const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="700" height="1000"><
 test("preloads upcoming reader pages and cancels pages skipped by a fast jump", async ({ page }) => {
   const requested = new Set<number>();
   const cancelled = new Set<number>();
+  const timeReports: { sessionId: string; activeSeconds: number }[] = [];
   await page.addInitScript(() => {
     let layoutWidth = window.innerWidth;
     let scale = 1;
@@ -48,6 +49,11 @@ test("preloads upcoming reader pages and cancels pages skipped by a fast jump", 
       await route.fulfill({ json: { defaults: { direction: "ltr", keepAwake: false, mode: "paged", preload: 4, spread: "single" }, series: null } });
       return;
     }
+    if (path.endsWith("/read/chapters/1/time")) {
+      timeReports.push(route.request().postDataJSON());
+      await route.fulfill({ json: {} });
+      return;
+    }
     if (path.endsWith("/read/chapters/1") && route.request().method() === "GET") {
       await route.fulfill({ json: {
         id: 1, seriesId: 1, seriesTitle: "Preload Test", number: "1", readingDirection: "ltr", downloaded: true, canDownload: false,
@@ -69,6 +75,10 @@ test("preloads upcoming reader pages and cancels pages skipped by a fast jump", 
   await page.evaluate(() => (window as Window & { simulateVisualZoom?: () => void }).simulateVisualZoom?.());
   await page.waitForTimeout(50);
   expect(await firstPage.evaluate((image) => image.getBoundingClientRect().width)).toBe(widthBeforeZoom);
+  await page.waitForTimeout(1_100);
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pagehide")));
+  await expect.poll(() => timeReports.at(-1)?.activeSeconds).toBeGreaterThanOrEqual(1);
+  expect(timeReports.at(-1)?.sessionId.length).toBeGreaterThanOrEqual(16);
   await expect.poll(() => [2, 3, 4, 5].every((number) => requested.has(number))).toBe(true);
 
   await page.getByRole("slider", { name: "Page" }).fill("10");

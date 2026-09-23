@@ -62,6 +62,19 @@ type ReadEvent struct {
 	At        time.Time `bun:"at,notnull" json:"at"`
 }
 
+// ReadingSession is active time reported by one web-reader chapter visit.
+// ActiveSeconds is cumulative so a retried heartbeat is idempotent.
+type ReadingSession struct {
+	bun.BaseModel `bun:"table:reading_sessions"`
+	ID            string    `bun:"id,pk" json:"id"`
+	ReaderID      int64     `bun:"reader_id,notnull" json:"readerId"`
+	SeriesID      int64     `bun:"series_id,notnull" json:"seriesId"`
+	ChapterID     int64     `bun:"chapter_id,notnull" json:"chapterId"`
+	ActiveSeconds int       `bun:"active_seconds,notnull" json:"activeSeconds"`
+	StartedAt     time.Time `bun:"started_at,notnull" json:"startedAt"`
+	UpdatedAt     time.Time `bun:"updated_at,notnull" json:"updatedAt"`
+}
+
 // ReaderPrefs are a user's web reader settings: defaults (SeriesID 0) or
 // for one series. Data is the UI's settings object.
 type ReaderPrefs struct {

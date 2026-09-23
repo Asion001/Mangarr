@@ -291,6 +291,28 @@ func (s *Server) registerRead() {
 			return nil, nil
 		})
 
+	huma.Register(s.api, huma.Operation{OperationID: "read-time", Method: http.MethodPost, Path: "/api/v1/read/chapters/{id}/time", Tags: tags,
+		Summary: "Record cumulative active time for one web-reader session"},
+		func(ctx context.Context, in *struct {
+			ID   int64 `path:"id"`
+			Body struct {
+				SessionID     string `json:"sessionId" minLength:"16" maxLength:"64"`
+				ActiveSeconds int    `json:"activeSeconds" minimum:"1" maximum:"43200"`
+			}
+		}) (*struct{}, error) {
+			rid, err := s.readerOf(ctx)
+			if err != nil {
+				return nil, toHTTPError(err)
+			}
+			if err := s.app.Reading.RecordTime(ctx, rid, in.ID, in.Body.SessionID, in.Body.ActiveSeconds); err != nil {
+				if errors.Is(err, reading.ErrNotFound) {
+					return nil, readError(err)
+				}
+				return nil, toHTTPError(err)
+			}
+			return nil, nil
+		})
+
 	huma.Register(s.api, huma.Operation{OperationID: "read-mark", Method: http.MethodPut, Path: "/api/v1/read/chapters/{id}/mark", Tags: tags,
 		Summary: "Mark this chapter, or every previous chapter, read or unread"},
 		func(ctx context.Context, in *struct {

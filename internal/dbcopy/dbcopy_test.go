@@ -81,6 +81,10 @@ func seed(t *testing.T, d *db.DB) (*model.Series, time.Time) {
 	if _, err := d.NewInsert().Model(u).Exec(ctx); err != nil {
 		t.Fatal(err)
 	}
+	var firstChapter model.Chapter
+	if err := d.NewSelect().Model(&firstChapter).Where("series_id = ?", ser.ID).Order("number_sort").Limit(1).Scan(ctx); err != nil {
+		t.Fatal(err)
+	}
 	req := &model.Request{Title: "Blue Lock", Status: model.RequestPending, CreatedAt: now, UpdatedAt: now,
 		Metadata: model.RequestMetadata{ModuleID: 1, Provider: "anilist", ID: "42", Year: 2018, AltTitles: []string{"ブルーロック"},
 			ExternalIDs: map[string]string{"anilist": "42"}}}
@@ -91,6 +95,8 @@ func seed(t *testing.T, d *db.DB) (*model.Series, time.Time) {
 		&model.RequestUser{RequestID: req.ID, UserID: u.ID, Note: "please!", CreatedAt: now},
 		&model.Follow{UserID: u.ID, SeriesID: ser.ID, CreatedAt: now},
 		&model.ReaderPrefs{UserID: u.ID, SeriesID: ser.ID, Data: `{"mode":"webtoon","crop":true}`, UpdatedAt: now},
+		&model.ReadingSession{ID: "copy-session-0001", ReaderID: r.ID, SeriesID: ser.ID, ChapterID: firstChapter.ID,
+			ActiveSeconds: 95, StartedAt: now, UpdatedAt: now},
 	} {
 		if _, err := d.NewInsert().Model(m).Exec(ctx); err != nil {
 			t.Fatal(err)
@@ -137,6 +143,13 @@ func check(t *testing.T, d *db.DB, want *model.Series, now time.Time) {
 	_ = d.NewSelect().Model(&prefs).Limit(1).Scan(ctx)
 	if !strings.Contains(prefs.Data, "webtoon") {
 		t.Fatalf("reader settings %+v", prefs)
+	}
+	var session model.ReadingSession
+	if err := d.NewSelect().Model(&session).Where("id = ?", "copy-session-0001").Scan(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if session.SeriesID != want.ID || session.ActiveSeconds != 95 || !session.UpdatedAt.Equal(now) {
+		t.Fatalf("reading session %+v", session)
 	}
 	if n, _ := d.NewSelect().Model((*model.Follow)(nil)).Count(ctx); n != 1 {
 		t.Fatalf("follows %d", n)

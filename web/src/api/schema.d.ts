@@ -1338,6 +1338,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/read/chapters/{id}/time": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record cumulative active time for one web-reader session */
+        post: operations["read-time"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/read/series/{id}/chapters": {
         parameters: {
             query?: never;
@@ -4672,6 +4689,11 @@ export interface components {
             };
             /** Format: int64 */
             seriesId?: number;
+        };
+        "Read-timeRequest": {
+            /** Format: int64 */
+            activeSeconds: number;
+            sessionId: string;
         };
         ReadAhead: {
             /** Format: int64 */
@@ -9066,6 +9088,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["Read-progressRequest"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "read-time": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Read-timeRequest"];
             };
         };
         responses: {

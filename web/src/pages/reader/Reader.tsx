@@ -13,6 +13,7 @@ import { WebtoonViewer } from "./WebtoonViewer";
 import { SettingsPanel } from "./SettingsPanel";
 import { ChapterPicker } from "./ChapterPicker";
 import { ImagePreloader, useImagePreload } from "./preload";
+import { useReadingTime } from "./time";
 
 const chapterQuery = (id: number) => ({
   queryKey: ["read-chapter", id],
@@ -35,6 +36,7 @@ function Reader({ chapterId, preloader }: { chapterId: number; preloader: ImageP
   const qc = useQueryClient();
   const [search] = useSearchParams();
   const { data: ch, error } = useQuery(chapterQuery(chapterId));
+  useReadingTime(ch?.id ?? 0);
   const { settings: s, set, saveAsDefault, reset, hasOwn, loading: settingsLoading } = useReaderSettings(ch?.seriesId ?? 0, ch?.readingDirection ?? "");
   const { dims, need, natural } = useDims(chapterId, s.crop || s.splitWide || (s.mode === "paged" && s.spread !== "single"));
   const vp = useViewport();
