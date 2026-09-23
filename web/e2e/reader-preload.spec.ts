@@ -1,0 +1,52 @@
+import { expect, test } from "@playwright/test";
+
+const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="700" height="1000"><rect width="100%" height="100%" fill="#333"/></svg>';
+
+test("preloads upcoming reader pages and cancels pages skipped by a fast jump", async ({ page }) => {
+  const requested = new Set<number>();
+  const cancelled = new Set<number>();
+  page.on("requestfailed", (request) => {
+    const match = new URL(request.url()).pathname.match(/\/read\/chapters\/1\/pages\/(\d+)$/);
+    if (match) cancelled.add(Number(match[1]));
+  });
+  await page.route("**/api/v1/**", async (route) => {
+    const url = new URL(route.request().url());
+    const path = url.pathname;
+    const image = path.match(/\/read\/chapters\/1\/pages\/(\d+)$/);
+    if (image) {
+      const number = Number(image[1]);
+      requested.add(number);
+      if (number >= 2 && number <= 5 && url.searchParams.get("w") !== "320") {
+        await new Promise((resolve) => setTimeout(resolve, 2_000));
+      }
+      await route.fulfill({ contentType: "image/svg+xml", body: svg }).catch(() => undefined);
+      return;
+    }
+    if (path.endsWith("/auth/status")) {
+      await route.fulfill({ json: { authenticated: true, authDisabled: true, account: { kind: "anonymous", id: 0, permissions: [] } } });
+      return;
+    }
+    if (path.endsWith("/read/settings")) {
+      await route.fulfill({ json: { defaults: { direction: "ltr", keepAwake: false, mode: "paged", preload: 4, spread: "single" }, series: null } });
+      return;
+    }
+    if (path.endsWith("/read/chapters/1") && route.request().method() === "GET") {
+      await route.fulfill({ json: {
+        id: 1, seriesId: 1, seriesTitle: "Preload Test", number: "1", readingDirection: "ltr", downloaded: true, canDownload: false,
+        pages: Array.from({ length: 20 }, (_, index) => ({ number: index + 1, mediaType: "image/svg+xml" })),
+        progress: { page: 0, completed: false },
+      } });
+      return;
+    }
+    await route.fulfill({ json: {} });
+  });
+
+  await page.goto("/read/1");
+  await expect(page.getByText("1 / 20")).toBeVisible();
+  await expect.poll(() => [2, 3, 4, 5].every((number) => requested.has(number))).toBe(true);
+
+  await page.getByRole("slider", { name: "Page" }).fill("10");
+  await expect(page.getByText("10 / 20")).toBeVisible();
+  await expect.poll(() => [11, 12, 13, 14].every((number) => requested.has(number))).toBe(true);
+  await expect.poll(() => [2, 3, 4, 5].some((number) => cancelled.has(number))).toBe(true);
+});

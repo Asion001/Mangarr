@@ -10,6 +10,19 @@ type Chapter = S["ReadChapter"];
 /** A screen of the paged viewer: one or two pages, a half page, or a chapter edge. */
 export type View = { pages: number[]; half?: Half } | { edge: "start" | "end" };
 
+/** Exact rendered size for a page in a paged-reader screen. */
+export function pageLayout(page: number, view: Extract<View, { pages: number[] }>, dims: Record<number, Dims>, s: ReaderSettings, viewport: { w: number; h: number }) {
+  const d = dims[page];
+  let aspect = 0.7;
+  let naturalW: number | undefined;
+  if (d) {
+    const width = (s.crop ? d.w : d.width) / (view.half ? 2 : 1);
+    aspect = width / (s.crop ? d.h : d.height);
+    naturalW = width;
+  }
+  return fit(aspect, viewport.w / view.pages.length, viewport.h, s.scale, naturalW);
+}
+
 /** buildViews lays pages out into screens. */
 export function buildViews(count: number, dims: Record<number, Dims>, s: ReaderSettings, landscape: boolean): View[] {
   const out: View[] = [{ edge: "start" }];
@@ -151,20 +164,12 @@ export function PagedViewer({
       />
     );
   } else {
-    const count = view.pages.length;
     const order = s.direction === "rtl" ? [...view.pages].reverse() : view.pages;
     content = (
       <div className="flex min-h-full min-w-full items-center justify-center" style={{ width: "max-content", height: "max-content" }}>
         {order.map((p) => {
           const d = dims[p];
-          let aspect = 0.7;
-          let naturalW: number | undefined;
-          if (d) {
-            const w = (s.crop ? d.w : d.width) / (view.half ? 2 : 1);
-            aspect = w / (s.crop ? d.h : d.height);
-            naturalW = w;
-          }
-          const size = fit(aspect, vp.w / count, vp.h, s.scale, naturalW);
+          const size = pageLayout(p, view, dims, s, vp);
           return (
             <PageImage
               key={`${chapter.id}-${p}-${view.half ?? ""}`}

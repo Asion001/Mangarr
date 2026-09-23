@@ -9,10 +9,11 @@ import { ErrorBox, Spinner } from "../../components/ui";
 import { useToast } from "../../lib/toast";
 import { useReaderSettings } from "./settings";
 import { displayWidth, pageUrl, useDims, useViewport, type Half } from "./page";
-import { buildViews, indexOf, PagedViewer } from "./PagedViewer";
+import { buildViews, indexOf, pageLayout, PagedViewer } from "./PagedViewer";
 import { WebtoonViewer } from "./WebtoonViewer";
 import { SettingsPanel } from "./SettingsPanel";
 import { ChapterPicker } from "./ChapterPicker";
+import { ImagePreloader, useImagePreload } from "./preload";
 
 const chapterQuery = (id: number) => ({
   queryKey: ["read-chapter", id],
@@ -23,12 +24,14 @@ const chapterQuery = (id: number) => ({
 /** ReaderPage is the full-screen web reader (/read/:id). */
 export function ReaderPage() {
   const { id } = useParams();
-  return <Reader key={id} chapterId={Number(id)} />;
+  const preloader = useMemo(() => new ImagePreloader(), []);
+  useEffect(() => () => preloader.clear(), [preloader]);
+  return <Reader key={id} chapterId={Number(id)} preloader={preloader} />;
 }
 
 type Pos = { page: number; half?: Half; edge?: "start" | "end" };
 
-function Reader({ chapterId }: { chapterId: number }) {
+function Reader({ chapterId, preloader }: { chapterId: number; preloader: ImagePreloader }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const toast = useToast();
@@ -89,17 +92,39 @@ function Reader({ chapterId }: { chapterId: number }) {
     need(around);
   }, [ch, page, count, s.mode, s.preload, need]);
 
-  // preload the next pages, and near the end the next chapter
-  useEffect(() => {
-    if (!ch || s.mode !== "paged") return;
-    const w = displayWidth(vp.w);
-    for (let k = page + 1; k <= Math.min(count, page + s.preload); k++) new Image().src = pageUrl(ch.id, k, w);
-    if (ch.next && page >= count - 2) {
-      const next = ch.next.id;
-      void qc.prefetchQuery(chapterQuery(next));
-      for (const k of [1, 2]) new Image().src = pageUrl(next, k, w);
+  // Preload the exact image sizes the viewer will request. Keep an in-flight
+  // page when it becomes visible, and cancel pages skipped by a fast jump.
+  const imagePreloads = useMemo(() => {
+    if (!ch || s.mode !== "paged") return { load: [] as string[], retain: [] as string[] };
+    const retain = view && "pages" in view
+      ? view.pages.map((p) => pageUrl(ch.id, p, displayWidth(pageLayout(p, view, dims, s, vp).w)))
+      : [];
+    const load: string[] = [];
+    const seen = new Set(retain);
+    for (let i = index + 1; i < views.length && load.length < s.preload; i++) {
+      const candidate = views[i];
+      if (!("pages" in candidate)) continue;
+      for (const p of candidate.pages) {
+        const url = pageUrl(ch.id, p, displayWidth(pageLayout(p, candidate, dims, s, vp).w));
+        if (!seen.has(url)) {
+          seen.add(url);
+          load.push(url);
+        }
+        if (load.length >= s.preload) break;
+      }
     }
-  }, [ch, page, count, s.mode, s.preload, vp.w, qc]);
+    if (ch.next && page >= count - 2) {
+      const width = displayWidth(vp.w);
+      for (const p of [1, 2]) load.push(pageUrl(ch.next.id, p, width));
+    }
+    return { load, retain };
+  }, [ch, s, view, index, views, dims, vp, page, count]);
+  useImagePreload(imagePreloads.load, imagePreloads.retain, preloader);
+
+  // Near the end, also have the next chapter's metadata ready.
+  useEffect(() => {
+    if (ch?.next && s.mode === "paged" && page >= count - 2) void qc.prefetchQuery(chapterQuery(ch.next.id));
+  }, [ch, page, count, s.mode, qc]);
 
   // save progress (debounced; right away when leaving)
   const saved = useRef(0);
