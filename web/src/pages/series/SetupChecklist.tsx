@@ -67,7 +67,7 @@ export function SetupChecklist() {
       id: "source",
       title: t("Add a source"),
       kind: "required",
-      body: t("Where chapters come from. mangarr sources covers MangaDex, Weeb Central, Atsumaru, MangaLib and Senkuro with nothing else to run."),
+      body: t("Where chapters come from. mangarr sources covers 23 sites, including MangaDex, MANGA Plus, Weeb Central and MangaFire, with nothing else to run."),
       done: !missing("Sources"),
       action: (
         <div className="flex flex-wrap items-center gap-3">

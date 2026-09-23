@@ -50,8 +50,8 @@ when it loads pages. mangarr itself speaks HTTP/1.1 and cleartext HTTP/2
    naming `{Series Title} Ch.{Chapter:0000}`; don't put scanlator, source or
    volume in file names.
 3. Settings → Source modules → *mangarr sources* is there by default: the
-   sites mangarr talks to itself (MangaDex, Weeb Central, Atsumaru, MangaLib,
-   Senkuro). Set *FlareSolverr URL* only if a site you use is behind a
+   23 sites mangarr talks to itself (MangaDex, MANGA Plus, Weeb Central,
+   MangaFire, MangaLib, … see §4). Set *FlareSolverr URL* only if a site you use is behind a
    browser check. For anything else, add *Suwayomi*: URL
    `http://suwayomi:4567`, *Use FlareSolverr* on, URL
    `http://flaresolverr:8191`. "Manage Suwayomi settings" turns off
@@ -74,9 +74,14 @@ when it loads pages. mangarr itself speaks HTTP/1.1 and cleartext HTTP/2
 
 ## 4. Sources: where chapters come from
 
-mangarr speaks to several sites itself — MangaDex, Weeb Central, Atsumaru,
-MangaLib, Senkuro — with no extension engine in between. That is the *mangarr
-sources* module, and it needs nothing running beside it. Suwayomi is still
+mangarr speaks to 23 sites itself, with no extension engine in between:
+MangaDex, MANGA Plus, MangaFire, MangaDot, Manga Ball, OniSaga, XCOMIC (one
+catalog per language each), Weeb Central, Atsumaru, MangaTaro, MangaCloud,
+MangaKatana, VyvyManga, LikeManga, MangaK, KaliScan, MangaHub, Mangakakalot,
+Manganato, Scans.gg, Dynasty Scans, and MangaLib and Senkuro in Russian.
+Catalog ids match the Mihon/Keiyoushi extensions for the same sites, so a Mihon
+backup links straight to them. That is the *mangarr sources* module, and it
+needs nothing running beside it. Suwayomi is still
 there for everything else, and the two live side by side: a series can have
 links to both.
 

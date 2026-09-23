@@ -35,8 +35,8 @@ which mangarr tells to rescan after every change.
   series.
 - **Everything external is a module** behind a Go interface — see
   [docs/modules.md](docs/modules.md):
-  - `source` — **mangarr's own sites** (MangaDex, Weeb Central, Atsumaru,
-    MangaLib, Senkuro — no extension engine to run) and **Suwayomi**
+  - `source` — **mangarr's own sites** (23 of them: MangaDex, MANGA Plus,
+    Weeb Central, MangaFire, MangaLib, … — no extension engine to run) and **Suwayomi**
     (Keiyoushi extensions, FlareSolverr, extension manager, per-source
     settings) for the rest. Identities are portable `(sourceId, url)`, so
     *Switch engine* moves an existing library from one to the other.
@@ -126,8 +126,8 @@ See [docker/compose.example.yml](docker/compose.example.yml) and the full
    port).
 2. Open `http://<host>:8787`, create the admin account.
 3. **Settings → Media management**: add a root folder (e.g. `/data/manga/en`).
-4. **Settings → Source modules**: *mangarr sources* (MangaDex, Weeb Central,
-   Atsumaru, MangaLib, Senkuro) is there already. For other sites add
+4. **Settings → Source modules**: *mangarr sources* (MangaDex, MANGA Plus,
+   Weeb Central, MangaFire and 19 more sites) is there already. For other sites add
    *Suwayomi* (`http://suwayomi:4567`, FlareSolverr
    `http://flaresolverr:8191`) and install extensions under **Sources**.
 5. **Sources → Catalogs**: put the catalogs you want searched first on top.
