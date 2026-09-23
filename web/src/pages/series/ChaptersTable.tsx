@@ -212,7 +212,30 @@ export function ChaptersTable({ seriesId, manage = true, nextChapterId }: { seri
       {data && data.length === 0 && <p className="text-sm text-muted">{t("No chapters yet. Refresh the series to fetch the chapter list.")}</p>}
       {list.length > 0 && (
         <div ref={tableTop}>
-          <Table className="border-0">
+          <div className="divide-y divide-border xl:hidden">
+            {visible.map((chapter) => (
+              <ChapterMobileRow
+                key={chapter.id}
+                chapter={chapter}
+                manage={manage}
+                selected={selected.has(chapter.id)}
+                open={expanded.has(chapter.id)}
+                accountKind={account?.kind}
+                onSelect={toggleSelected}
+                onExpand={toggleExpanded}
+                onMonitor={monitorOne}
+                onSearch={searchOne}
+                onRestore={restore}
+                onDelete={(id) => setDeleteIds([id])}
+                onMark={mark}
+                onQueueAction={queueAction}
+                onExplain={setExplain}
+                queuePaused={queuePaused}
+                next={chapter.id === nextChapterId}
+              />
+            ))}
+          </div>
+          <Table className="hidden border-0 xl:block">
             <thead>
               <tr>
                 <Th className="w-8">
@@ -465,47 +488,144 @@ const ChapterRow = memo(function ChapterRow({
       {open && (
         <tr>
           <Td colSpan={8} className="bg-bg/60">
-            {c.releases.length === 0 ? (
-              <p className="text-xs text-muted">{t("No releases.")}</p>
-            ) : (
-              <div className="flex flex-col gap-1">
-                {c.releases.map((r) => (
-                  <div key={r.id} className="flex flex-wrap items-center gap-2 text-xs">
-                    <Badge>{r.sourceName}</Badge>
-                    <span className={r.removed ? "line-through text-muted" : ""}>{r.name}</span>
-                    {r.scanlator && <span className="text-muted">{t("by") + " "}{r.scanlator}</span>}
-                    <span className="text-muted">{date(r.uploadDate)}</span>
-                    {r.blocklisted && <Badge tone="err">{t("blocklisted")}</Badge>}
-                    {c.file?.releaseId === r.id && <Badge tone="ok">{t("current file")}</Badge>}
-                    {r.webUrl && (
-                      <a href={r.webUrl} target="_blank" rel="noreferrer" className="text-muted hover:text-accent-2">
-                        <ExternalLink className="size-3" />
-                      </a>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
-              <span className="text-xs font-medium text-muted">{t("Read by")}</span>
-              {c.readBy.map((r) => (
-                <Badge key={r.readerId} tone={r.completed ? "ok" : "info"} title={r.completed ? `read ${relative(r.readAt)}` : `page ${r.page}`}>
-                  <Eye className="size-3" /> {accountKind === "user" ? (r.completed ? t("Read") : `${t("Page")} ${r.page}`) : r.reader}
-                </Badge>
-              ))}
-              {c.readBy.length === 0 && <span className="text-xs text-muted">{t("Nobody yet")}</span>}
-              <span className="ml-auto flex gap-1">
-                <Button size="sm" onClick={() => onMark(c, true)}>{t("Mark read")}</Button>
-                <Button size="sm" onClick={() => onMark(c, false)}>{t("Mark unread")}</Button>
-              </span>
-            </div>
-            {c.job?.error && <p className="mt-2 text-xs text-err">{t("Last error:") + " "}{c.job.error}</p>}
+            <ChapterExpandedInfo chapter={c} accountKind={accountKind} onMark={onMark} />
           </Td>
         </tr>
       )}
     </Fragment>
   );
 });
+
+/** Phone and tablet rows keep the reading action visible without a wide table. */
+const ChapterMobileRow = memo(function ChapterMobileRow({
+  chapter: c,
+  manage,
+  selected,
+  open,
+  accountKind,
+  onSelect,
+  onExpand,
+  onMonitor,
+  onSearch,
+  onRestore,
+  onDelete,
+  onMark,
+  onQueueAction,
+  onExplain,
+  queuePaused,
+  next,
+}: ChapterRowProps) {
+  const read = c.readBy.length > 0 && c.readBy.every((r) => r.completed);
+  return (
+    <article className={clsx("py-3", !c.monitored && "opacity-60", next && "bg-accent/5 shadow-[inset_3px_0_0_var(--color-accent)]")}>
+      <div className="flex min-w-0 items-center gap-2">
+        {manage && <input className="shrink-0" type="checkbox" checked={selected} onChange={() => onSelect(c.id)} aria-label={`${t("Select")} ${t("Chapter")} ${c.number}`} />}
+        <button className="flex min-w-0 flex-1 items-center gap-2 text-left hover:text-accent-2" onClick={() => onExpand(c.id)} aria-expanded={open}>
+          {open ? <ChevronDown className="size-4 shrink-0" /> : <ChevronRight className="size-4 shrink-0" />}
+          <span className={clsx("shrink-0 font-mono text-xs", read && "text-muted")}>{c.volume ? `v${c.volume} ` : ""}{c.number}</span>
+          <span className={clsx("min-w-0 flex-1 truncate text-sm", read && "text-muted")}>{c.title || t("Chapter") + " " + c.number}</span>
+        </button>
+        {readable(c) && (
+          <Link className="shrink-0" to={`/read/${c.id}`} title={c.file ? tr("Read") : tr("Read (streamed from the source)")}>
+            <Button size="sm" variant={next ? "primary" : read ? "ghost" : "secondary"} icon={<BookOpen className="size-4" />}>
+              {next ? t("Continue") : read ? t("Re-read") : t("Read")}
+            </Button>
+          </Link>
+        )}
+      </div>
+      <div className={clsx("mt-2 flex flex-wrap items-center gap-1.5 text-xs", manage && "pl-6")}>
+        {next && <Badge tone="accent">{t("Up next")}</Badge>}
+        {read && <Badge tone="ok"><Check className="size-3" /> {t("read")}</Badge>}
+        {queuePaused && c.job?.status === "queued" ? (
+          <Badge tone="warn" title={t("Queue paused")}>{c.state} · {t("paused")}</Badge>
+        ) : (
+          <Badge tone={stateTone[c.state] ?? "default"}>{c.state}</Badge>
+        )}
+        {c.file && <span className="text-muted">{c.file.pageCount}{t("p ·") + " "}{bytes(c.file.size)}</span>}
+        {c.releases.length > 1 && <Badge>{t("{count} releases", { count: c.releases.length })}</Badge>}
+      </div>
+      {c.job && ["downloading", "processing", "importing"].includes(c.job.status) && (
+        <div className={clsx("mt-2 max-w-48", manage && "ml-6")}><Progress value={c.job.progress} /></div>
+      )}
+      {open && (
+        <div className="mt-3 border-t border-border bg-bg/50 px-1 pt-3">
+          {manage && (
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <span className="flex items-center gap-2 text-xs text-muted"><Switch checked={c.monitored} onChange={(monitored) => onMonitor(c.id, monitored)} /> {t("Monitored")}</span>
+              {c.job && !["completed", "failed"].includes(c.job.status) && (
+                <>
+                  <Button size="sm" icon={<ArrowUpToLine className="size-3.5" />} onClick={() => onQueueAction(c.job!.id, "top")}>{t("Top")}</Button>
+                  <Button size="sm" icon={<ArrowDownToLine className="size-3.5" />} onClick={() => onQueueAction(c.job!.id, "bottom")}>{t("Bottom")}</Button>
+                  {c.job.status === "paused" ? (
+                    <Button size="sm" icon={<Play className="size-3.5" />} onClick={() => onQueueAction(c.job!.id, "resume")}>{t("Resume")}</Button>
+                  ) : (
+                    <Button size="sm" icon={<Pause className="size-3.5" />} onClick={() => onQueueAction(c.job!.id, "pause")}>{t("Pause")}</Button>
+                  )}
+                </>
+              )}
+              {c.state === "cleaned" ? (
+                <Button size="sm" icon={<RotateCcw className="size-3.5" />} onClick={() => onRestore(c)}>{t("Restore")}</Button>
+              ) : (
+                <Button size="sm" icon={<Search className="size-3.5" />} onClick={() => onSearch(c.id)}>{t("Search")}</Button>
+              )}
+              {deletableFile(c) && <Button size="sm" variant="danger" icon={<Trash2 className="size-3.5" />} onClick={() => onDelete(c.id)}>{t("Delete chapter file")}</Button>}
+              <Button size="sm" icon={<HelpCircle className="size-3.5" />} onClick={() => onExplain(c)}>{t("Why (not) downloaded?")}</Button>
+            </div>
+          )}
+          {c.file && (
+            <div className="mb-3 text-xs text-muted">
+              {c.file.scanlator || c.file.sourceName} · {c.file.avgWidth}px
+              {c.file.upscaled && <> · {t("upscaled")}</>}
+              {(c.file.format === "avif" || c.file.format === "jxl") && <> · {c.file.format}</>}
+              {c.file.processState === "failed" && <p className="mt-1 text-err">{c.file.processError}</p>}
+            </div>
+          )}
+          <ChapterExpandedInfo chapter={c} accountKind={accountKind} onMark={onMark} />
+        </div>
+      )}
+    </article>
+  );
+});
+
+function ChapterExpandedInfo({ chapter: c, accountKind, onMark }: { chapter: Chapter; accountKind?: string; onMark: (chapter: Chapter, read: boolean) => void }) {
+  return <>
+    {c.releases.length === 0 ? (
+      <p className="text-xs text-muted">{t("No releases.")}</p>
+    ) : (
+      <div className="flex flex-col gap-1">
+        {c.releases.map((r) => (
+          <div key={r.id} className="flex flex-wrap items-center gap-2 text-xs">
+            <Badge>{r.sourceName}</Badge>
+            <span className={r.removed ? "line-through text-muted" : ""}>{r.name}</span>
+            {r.scanlator && <span className="text-muted">{t("by") + " "}{r.scanlator}</span>}
+            <span className="text-muted">{date(r.uploadDate)}</span>
+            {r.blocklisted && <Badge tone="err">{t("blocklisted")}</Badge>}
+            {c.file?.releaseId === r.id && <Badge tone="ok">{t("current file")}</Badge>}
+            {r.webUrl && (
+              <a href={r.webUrl} target="_blank" rel="noreferrer" className="text-muted hover:text-accent-2">
+                <ExternalLink className="size-3" />
+              </a>
+            )}
+          </div>
+        ))}
+      </div>
+    )}
+    <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
+      <span className="text-xs font-medium text-muted">{t("Read by")}</span>
+      {c.readBy.map((r) => (
+        <Badge key={r.readerId} tone={r.completed ? "ok" : "info"} title={r.completed ? `read ${relative(r.readAt)}` : `page ${r.page}`}>
+          <Eye className="size-3" /> {accountKind === "user" ? (r.completed ? t("Read") : `${t("Page")} ${r.page}`) : r.reader}
+        </Badge>
+      ))}
+      {c.readBy.length === 0 && <span className="text-xs text-muted">{t("Nobody yet")}</span>}
+      <span className="ml-auto flex gap-1">
+        <Button size="sm" onClick={() => onMark(c, true)}>{t("Mark read")}</Button>
+        <Button size="sm" onClick={() => onMark(c, false)}>{t("Mark unread")}</Button>
+      </span>
+    </div>
+    {c.job?.error && <p className="mt-2 text-xs text-err">{t("Last error:") + " "}{c.job.error}</p>}
+  </>;
+}
 
 function DecisionModal({ seriesId, chapter, onClose }: { seriesId: number; chapter: Chapter; onClose: () => void }) {
   const { data, error } = useQuery({
