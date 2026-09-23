@@ -2,8 +2,9 @@ import { t as tr, t } from "../../lib/i18n/core";
 import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import { ArrowRight, Pencil, Plus, Trash2 } from "lucide-react";
-import { api, apiUrl, unwrap, type Profile, type S } from "../../api/client";
+import { ArrowRight, Pencil, Plus, Trash2, TriangleAlert } from "lucide-react";
+import { Link } from "react-router";
+import { api, ApiError, apiUrl, unwrap, type Profile, type S } from "../../api/client";
 import { useChapters, useProfiles, useSeriesList } from "../../api/queries";
 import { Badge, Button, Card, Confirm, ErrorBox, Field, IconButton, Input, Loading, Modal, PageHeader, Segmented, Select, Switch, TagInput } from "../../components/ui";
 import { bytes } from "../../lib/format";
@@ -317,7 +318,7 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
                 </span>
                 <span className="flex-1" />
                 {processing && <span className="text-xs text-muted">{cfg.processTiming === "inline" ? t("before import") : t("in the background")}</span>}
-                {encoding && <Button size="sm" onClick={() => setPreviewing(true)}>{t("Preview on a chapter…")}</Button>}
+                {processing && <Button size="sm" onClick={() => setPreviewing(true)}>{t("Preview on a chapter…")}</Button>}
               </div>
 
               <Step
@@ -489,7 +490,7 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
           )}
         </div>
       </div>
-      {previewing && <EncodePreview encode={enc} onClose={() => setPreviewing(false)} />}
+      {previewing && <PipelinePreview upscale={up} encode={enc} onClose={() => setPreviewing(false)} />}
       <Confirm
         open={!!applyTo}
         title={t("Process existing chapters?")}
@@ -520,20 +521,27 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
   );
 }
 
-/** EncodePreview re-encodes three pages of a chapter with the current settings. */
-function EncodePreview({ encode, onClose }: { encode: Cfg["encode"]; onClose: () => void }) {
+/** PipelinePreview runs the unsaved upscale and encode settings on three pages of a chapter. */
+function PipelinePreview({ upscale, encode, onClose }: { upscale: Cfg["upscale"]; encode: Cfg["encode"]; onClose: () => void }) {
   const { data: series } = useSeriesList();
   const [seriesId, setSeriesId] = useState(0);
   const { data: chapters } = useChapters(seriesId);
   const withFiles = (chapters ?? []).filter((c) => c.file);
   const [chapterId, setChapterId] = useState(0);
+  // encodeOnly retries without upscaling when no upscaler is online
+  const [encodeOnly, setEncodeOnly] = useState(false);
+  const encoding = encode.format !== "keep";
+  const upscaling = upscale.enabled && !encodeOnly;
   const run = useMutation({
-    mutationFn: () => unwrap(api.POST("/api/v1/processing/preview", { body: { chapterId: chapterId || withFiles[0]?.id, encode } })),
+    mutationFn: () =>
+      unwrap(api.POST("/api/v1/processing/preview", { body: { chapterId: chapterId || withFiles[0]?.id, encode, upscale: upscaling ? upscale : undefined } })),
   });
   const res = run.data;
+  const noUpscaler = run.error instanceof ApiError && run.error.status === 409;
   const img = (i: number, v: "original" | "encoded") => apiUrl(`api/v1/processing/preview/${res!.token}/${i}/${v}`);
+  const steps = [upscaling && t("upscale"), encoding && formatName(encode.format)].filter(Boolean).join(" → ");
   return (
-    <Modal open onClose={onClose} title={`Preview ${encode.format.toUpperCase()} (${encode.preset})`} size="xl">
+    <Modal open onClose={onClose} title={<span className="flex flex-wrap items-baseline gap-x-3">{t("Preview: {steps}", { steps })}<span className="text-xs font-normal text-muted">{t("Uses the unsaved settings")}</span></span>} size="xl">
       <div className="mb-4 flex flex-wrap items-end gap-2">
         <Field label={t("Series")} className="min-w-48 flex-1">
           <Select value={seriesId} onChange={(e) => (setSeriesId(Number(e.target.value)), setChapterId(0))}>
@@ -554,29 +562,69 @@ function EncodePreview({ encode, onClose }: { encode: Cfg["encode"]; onClose: ()
             ))}
           </Select>
         </Field>
-        <Button variant="primary" disabled={!withFiles.length} loading={run.isPending} onClick={() => run.mutate()}>{t("Encode 3 pages")}</Button>
+        <Button variant="primary" disabled={!withFiles.length} loading={run.isPending} onClick={() => run.mutate()}>{t("Run on 3 pages")}</Button>
       </div>
-      {run.error && <ErrorBox error={run.error} />}
+      {noUpscaler ? (
+        <div role="alert" className="flex gap-3 rounded-lg border border-warn/40 bg-warn/10 p-3.5">
+          <TriangleAlert className="mt-0.5 size-4.5 shrink-0 text-warn" />
+          <div className="flex flex-col gap-1 text-sm">
+            <strong className="font-semibold">{t("No upscaler is available right now")}</strong>
+            <span className="text-fg/80">{(run.error as ApiError).message}</span>
+            <span className="mt-1 flex flex-wrap gap-3">
+              <Link to="/system/workers" className="font-semibold text-accent-2 hover:underline">{t("Open Workers")}</Link>
+              {encoding && (
+                <button type="button" className="font-semibold text-accent-2 hover:underline" onClick={() => (setEncodeOnly(true), run.reset())}>
+                  {t("Preview {format} only", { format: formatName(encode.format) })}
+                </button>
+              )}
+            </span>
+          </div>
+        </div>
+      ) : (
+        run.error && <ErrorBox error={run.error} />
+      )}
       {res && (
         <>
-          <p className="mb-3 text-sm text-muted">
-            {res.engine} · {res.seconds.toFixed(1)}{" " + t("s ·")}{" "}
-            <a className="text-accent-2 hover:underline" href={apiUrl(`api/v1/processing/preview/${res.token}/sample.cbz`)}>{t("download sample CBZ")}</a>{" "}{t("to check it in your reader app")}</p>
+          <p className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md bg-bg px-3 py-2 text-sm text-muted">
+            {res.upscaler && <span><b className="font-semibold text-fg">{res.upscaler}</b> · {t("upscale {s} s", { s: res.upscaleSeconds.toFixed(1) })}</span>}
+            {res.engine && <span><b className="font-semibold text-fg">{res.engine}</b> · {t("encode {s} s", { s: res.encodeSeconds.toFixed(1) })}</span>}
+            <span className="flex-1" />
+            <a className="text-accent-2 hover:underline" href={apiUrl(`api/v1/processing/preview/${res.token}/sample.cbz`)}>{t("Download sample CBZ")}</a>
+          </p>
           <div className="flex flex-col gap-4">
-            {res.pages.map((pg) => (
-              <div key={pg.index} className="grid grid-cols-2 gap-2">
-                {(["original", "encoded"] as const).map((v) => (
-                  <figure key={v} className="flex flex-col gap-1">
-                    <a href={img(pg.index, v)} target="_blank" rel="noreferrer">
-                      <img src={img(pg.index, v)} alt={`${v} ${pg.name}`} className="w-full rounded border border-border" loading="lazy" />
-                    </a>
-                    <figcaption className="text-xs text-muted">
-                      {v === "original" ? `${pg.originalFormat} · ${bytes(pg.originalSize)}` : `${pg.encodedFormat} · ${bytes(pg.encodedSize)} (${Math.round(100 - (100 * pg.encodedSize) / Math.max(pg.originalSize, 1))}% smaller)`}
-                    </figcaption>
-                  </figure>
-                ))}
-              </div>
-            ))}
+            {res.pages.map((pg) => {
+              const smaller = Math.round(100 - (100 * pg.encodedSize) / Math.max(pg.originalSize, 1));
+              const scale = pg.width ? pg.resultWidth / pg.width : 1;
+              const chips = [
+                pg.upscaled ? t("upscaled {x}×", { x: scale.toFixed(1) }) : upscaling ? t("wide enough, not upscaled") : "",
+                smaller >= 0 ? t("{n}% smaller", { n: smaller }) : t("{n}% larger", { n: -smaller }),
+              ].filter(Boolean);
+              return (
+                <div key={pg.index} className="grid grid-cols-2 gap-3">
+                  {(["original", "encoded"] as const).map((v) => (
+                    <figure key={v} className="flex flex-col gap-1.5">
+                      <a href={img(pg.index, v)} target="_blank" rel="noreferrer">
+                        <img src={img(pg.index, v)} alt={`${v} ${pg.name}`} className="w-full rounded border border-border" loading="lazy" />
+                      </a>
+                      <figcaption className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+                        {v === "original" ? (
+                          <>
+                            <span className="font-semibold text-fg/80">{t("Original")}</span>
+                            {pg.width} × {pg.height} · {pg.originalFormat.toUpperCase()} · {bytes(pg.originalSize)}
+                          </>
+                        ) : (
+                          <>
+                            <span className="font-semibold text-fg/80">{t("Result")}</span>
+                            {pg.resultWidth} × {pg.resultHeight} · {pg.encodedFormat.toUpperCase()} · {bytes(pg.encodedSize)}
+                            <Badge tone={pg.upscaled ? "info" : "default"}>{chips.join(" · ")}</Badge>
+                          </>
+                        )}
+                      </figcaption>
+                    </figure>
+                  ))}
+                </div>
+              );
+            })}
           </div>
         </>
       )}

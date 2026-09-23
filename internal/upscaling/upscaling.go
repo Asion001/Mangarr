@@ -30,6 +30,11 @@ type Processor struct {
 
 func New(m *modules.Manager) *Processor { return &Processor{mods: m} }
 
+// ErrNoUpscaler means no upscaler is configured or none is reachable now.
+type ErrNoUpscaler struct{ Reason string }
+
+func (e ErrNoUpscaler) Error() string { return "no upscaler available: " + e.Reason }
+
 // upscaler returns the configured upscaler, or the first reachable one by priority.
 func (p *Processor) upscaler(ctx context.Context, cfg model.UpscaleConfig) (upscale.Module, *upscale.Info, error) {
 	if cfg.UpscalerID > 0 {
@@ -42,7 +47,7 @@ func (p *Processor) upscaler(ctx context.Context, cfg model.UpscaleConfig) (upsc
 	}
 	list := modules.ActiveAs[upscale.Module](p.mods, modules.KindUpscale)
 	if len(list) == 0 {
-		return nil, nil, errors.New("no upscaler module is configured")
+		return nil, nil, ErrNoUpscaler{"no upscaler module is configured"}
 	}
 	var errs []string
 	for _, t := range ranked(ctx, list) {
@@ -61,7 +66,7 @@ func (p *Processor) upscaler(ctx context.Context, cfg model.UpscaleConfig) (upsc
 		}
 		errs = append(errs, t.Def.Name+": "+err.Error())
 	}
-	return nil, nil, fmt.Errorf("no upscaler available (%s)", strings.Join(errs, "; "))
+	return nil, nil, ErrNoUpscaler{strings.Join(errs, "; ")}
 }
 
 // ranked orders the upscalers by where they stand now: the workers module

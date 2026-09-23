@@ -4588,6 +4588,18 @@
             "format": "int64",
             "type": "integer"
           },
+          "resultHeight": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "resultWidth": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "upscaled": {
+            "description": "The page was narrower than the threshold and went through the upscaler",
+            "type": "boolean"
+          },
           "width": {
             "format": "int64",
             "type": "integer"
@@ -4601,13 +4613,20 @@
           "originalFormat",
           "originalSize",
           "encodedFormat",
-          "encodedSize"
+          "encodedSize",
+          "resultWidth",
+          "resultHeight",
+          "upscaled"
         ],
         "type": "object"
       },
       "PreviewResult": {
         "additionalProperties": false,
         "properties": {
+          "encodeSeconds": {
+            "format": "double",
+            "type": "number"
+          },
           "engine": {
             "type": "string"
           },
@@ -4623,11 +4642,21 @@
           },
           "token": {
             "type": "string"
+          },
+          "upscaleSeconds": {
+            "format": "double",
+            "type": "number"
+          },
+          "upscaler": {
+            "type": "string"
           }
         },
         "required": [
           "token",
           "engine",
+          "upscaler",
+          "upscaleSeconds",
+          "encodeSeconds",
           "seconds",
           "pages"
         ],
@@ -4734,6 +4763,10 @@
           },
           "encode": {
             "$ref": "#/components/schemas/EncodeConfig"
+          },
+          "upscale": {
+            "$ref": "#/components/schemas/UpscaleConfig",
+            "description": "Upscale settings to try first; omitted or disabled skips upscaling"
           }
         },
         "required": [
@@ -13129,6 +13162,7 @@
     },
     "/api/v1/processing/preview": {
       "post": {
+        "description": "Runs the same steps a download would: pages narrower than the upscale threshold go through the upscaler chosen by priority, then every page is re-encoded. 409 means no upscaler is available right now.",
         "operationId": "processing-preview",
         "requestBody": {
           "content": {
@@ -13162,7 +13196,7 @@
             "description": "Error"
           }
         },
-        "summary": "Re-encode three pages of a chapter with the given settings to compare quality and size",
+        "summary": "Upscale and re-encode three pages of a chapter with the given settings to compare quality and size",
         "tags": [
           "Processing"
         ]

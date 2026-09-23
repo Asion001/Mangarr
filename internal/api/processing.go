@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -19,6 +20,7 @@ import (
 	"github.com/Asion001/mangarr/internal/processing"
 	"github.com/Asion001/mangarr/internal/progress"
 	"github.com/Asion001/mangarr/internal/settings"
+	"github.com/Asion001/mangarr/internal/upscaling"
 )
 
 func init() { register((*Server).registerProcessing) }
@@ -82,15 +84,25 @@ type PreviewPage struct {
 	Height         int    `json:"height"`
 	OriginalFormat string `json:"originalFormat"`
 	OriginalSize   int64  `json:"originalSize"`
-	EncodedFormat  string `json:"encodedFormat"`
-	EncodedSize    int64  `json:"encodedSize"`
+	// Encoded* and Result* describe the page as it would be stored, after
+	// upscaling and re-encoding.
+	EncodedFormat string `json:"encodedFormat"`
+	EncodedSize   int64  `json:"encodedSize"`
+	ResultWidth   int    `json:"resultWidth"`
+	ResultHeight  int    `json:"resultHeight"`
+	Upscaled      bool   `json:"upscaled" doc:"The page was narrower than the threshold and went through the upscaler"`
 }
 
 type PreviewResult struct {
-	Token   string        `json:"token"`
-	Engine  string        `json:"engine"`
-	Seconds float64       `json:"seconds"`
-	Pages   []PreviewPage `json:"pages"`
+	Token string `json:"token"`
+	// Engine is the encoder; empty when pages aren't re-encoded.
+	Engine string `json:"engine"`
+	// Upscaler is the model the upscaled pages ran with; empty when none was.
+	Upscaler       string        `json:"upscaler"`
+	UpscaleSeconds float64       `json:"upscaleSeconds"`
+	EncodeSeconds  float64       `json:"encodeSeconds"`
+	Seconds        float64       `json:"seconds"`
+	Pages          []PreviewPage `json:"pages"`
 }
 
 type preview struct {
@@ -264,13 +276,24 @@ func (s *Server) registerProcessing() {
 		})
 
 	huma.Register(s.api, huma.Operation{OperationID: "processing-preview", Method: http.MethodPost, Path: "/api/v1/processing/preview", Tags: tags,
-		Summary: "Re-encode three pages of a chapter with the given settings to compare quality and size"},
+		Summary: "Upscale and re-encode three pages of a chapter with the given settings to compare quality and size",
+		Description: "Runs the same steps a download would: pages narrower than the upscale threshold go through the upscaler " +
+			"chosen by priority, then every page is re-encoded. 409 means no upscaler is available right now."},
 		func(ctx context.Context, in *struct {
 			Body struct {
-				ChapterID int64              `json:"chapterId"`
-				Encode    model.EncodeConfig `json:"encode"`
+				ChapterID int64                `json:"chapterId"`
+				Encode    model.EncodeConfig   `json:"encode"`
+				Upscale   *model.UpscaleConfig `json:"upscale,omitempty" doc:"Upscale settings to try first; omitted or disabled skips upscaling"`
 			}
 		}) (*struct{ Body PreviewResult }, error) {
+			upscale := in.Body.Upscale != nil && in.Body.Upscale.Enabled
+			encoding := in.Body.Encode.Format != "" && in.Body.Encode.Format != "keep"
+			if !upscale && !encoding {
+				return nil, huma.Error422UnprocessableEntity("nothing to preview: upscaling and re-encoding are both off")
+			}
+			if upscale && (s.app.Processing == nil || s.app.Processing.Up == nil) {
+				return nil, huma.Error409Conflict("no upscaler available: upscaling is not set up on this server")
+			}
 			s.cleanPreviews()
 			var f model.ChapterFile
 			if err := s.app.DB.NewSelect().Model(&f).Where("chapter_id = ?", in.Body.ChapterID).Scan(ctx); err != nil {
@@ -298,7 +321,7 @@ func (s *Server) registerProcessing() {
 			}
 			// first page after the cover, the middle one and a late one
 			picks := []int{min(1, len(pages)-1), len(pages) / 2, max(len(pages)-2, 0)}
-			var in2 []imageenc.Page
+			var in2 []downloads.PageFile
 			seen := map[int]bool{}
 			for _, i := range picks {
 				if seen[i] {
@@ -313,21 +336,55 @@ func (s *Server) registerProcessing() {
 				if err := os.WriteFile(p, pages[i].Data, 0o664); err != nil {
 					return nil, toHTTPError(err)
 				}
-				in2 = append(in2, imageenc.Page{Name: pages[i].Name, Path: p, Format: info.Format, Width: info.Width, Height: info.Height})
+				in2 = append(in2, downloads.PageFile{Name: pages[i].Name, Path: p, Format: info.Format, Width: info.Width, Height: info.Height})
 			}
-			cfg := in.Body.Encode
-			cfg.MinSavingsPct = -1000 // always show the encoded page
+			res := PreviewResult{Token: token, Pages: []PreviewPage{}}
 			start := time.Now()
-			out, st, err := s.app.Encoder.EncodePages(ctx, in2, cfg, work)
-			if err != nil {
-				os.RemoveAll(work)
-				return nil, huma.Error422UnprocessableEntity(err.Error())
+			out := in2
+			if upscale {
+				ucfg := *in.Body.Upscale
+				if encoding {
+					ucfg.Format = "png" // lossless hand-off to the encoder, as in processing.Process
+				}
+				t := time.Now()
+				up, applied, mdl, err := s.app.Processing.Up.Process(ctx, ucfg, out, work)
+				if err != nil {
+					os.RemoveAll(work)
+					var none upscaling.ErrNoUpscaler
+					if errors.As(err, &none) {
+						return nil, huma.Error409Conflict(none.Error())
+					}
+					return nil, huma.Error422UnprocessableEntity("upscaling: " + err.Error())
+				}
+				if applied {
+					out, res.Upscaler = up, mdl
+				}
+				res.UpscaleSeconds = time.Since(t).Seconds()
 			}
-			res := PreviewResult{Token: token, Engine: st.Engine, Seconds: time.Since(start).Seconds(), Pages: []PreviewPage{}}
+			if encoding {
+				cfg := in.Body.Encode
+				cfg.MinSavingsPct = -1000 // always show the encoded page
+				enc := make([]imageenc.Page, len(out))
+				for i, pg := range out {
+					enc[i] = imageenc.Page{Name: pg.Name, Path: pg.Path, Format: pg.Format, Width: pg.Width, Height: pg.Height}
+				}
+				t := time.Now()
+				done, st, err := s.app.Encoder.EncodePages(ctx, enc, cfg, work)
+				if err != nil {
+					os.RemoveAll(work)
+					return nil, huma.Error422UnprocessableEntity(err.Error())
+				}
+				res.Engine, res.EncodeSeconds = st.Engine, time.Since(t).Seconds()
+				out = make([]downloads.PageFile, len(done))
+				for i, pg := range done {
+					out[i] = downloads.PageFile{Name: pg.Name, Path: pg.Path, Format: pg.Format, Width: pg.Width, Height: pg.Height}
+				}
+			}
+			res.Seconds = time.Since(start).Seconds()
 			pv := &preview{dir: work, created: time.Now()}
 			for i := range in2 {
 				pp := PreviewPage{Index: i, Name: in2[i].Name, Width: in2[i].Width, Height: in2[i].Height, OriginalFormat: in2[i].Format,
-					EncodedFormat: out[i].Format}
+					EncodedFormat: out[i].Format, ResultWidth: out[i].Width, ResultHeight: out[i].Height, Upscaled: out[i].Width > in2[i].Width}
 				if fi, err := os.Stat(in2[i].Path); err == nil {
 					pp.OriginalSize = fi.Size()
 				}

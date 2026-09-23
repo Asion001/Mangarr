@@ -1014,7 +1014,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Re-encode three pages of a chapter with the given settings to compare quality and size */
+        /**
+         * Upscale and re-encode three pages of a chapter with the given settings to compare quality and size
+         * @description Runs the same steps a download would: pages narrower than the upscale threshold go through the upscaler chosen by priority, then every page is re-encoded. 409 means no upscaler is available right now.
+         */
         post: operations["processing-preview"];
         delete?: never;
         options?: never;
@@ -4506,14 +4509,25 @@ export interface components {
             /** Format: int64 */
             originalSize: number;
             /** Format: int64 */
+            resultHeight: number;
+            /** Format: int64 */
+            resultWidth: number;
+            /** @description The page was narrower than the threshold and went through the upscaler */
+            upscaled: boolean;
+            /** Format: int64 */
             width: number;
         };
         PreviewResult: {
+            /** Format: double */
+            encodeSeconds: number;
             engine: string;
             pages: components["schemas"]["PreviewPage"][];
             /** Format: double */
             seconds: number;
             token: string;
+            /** Format: double */
+            upscaleSeconds: number;
+            upscaler: string;
         };
         PriorityPreview: {
             previousMode: string;
@@ -4548,6 +4562,8 @@ export interface components {
             /** Format: int64 */
             chapterId: number;
             encode: components["schemas"]["EncodeConfig"];
+            /** @description Upscale settings to try first; omitted or disabled skips upscaling */
+            upscale?: components["schemas"]["UpscaleConfig"];
         };
         ProcessingDay: {
             /** Format: int64 */
