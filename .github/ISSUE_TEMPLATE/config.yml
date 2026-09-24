@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/Asion001/Mangarr/security/advisories/new
+    about: Please report security problems privately.
+  - name: Setup guide
+    url: https://github.com/Asion001/Mangarr/blob/main/docs/setup.md
+    about: Most setup questions are answered here.

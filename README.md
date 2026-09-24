@@ -1,5 +1,9 @@
 # mangarr
 
+[![CI](https://github.com/Asion001/Mangarr/actions/workflows/ci.yml/badge.svg)](https://github.com/Asion001/Mangarr/actions/workflows/ci.yml)
+[![Image](https://img.shields.io/badge/image-ghcr.io%2Fasion001%2Fmangarr-blue)](https://github.com/Asion001/Mangarr/pkgs/container/mangarr)
+![Go](https://img.shields.io/github/go-mod/go-version/Asion001/Mangarr)
+
 A self-hosted, Sonarr-style PVR for manga. mangarr monitors series, finds new
 chapters on the sites it speaks itself or on
 [Keiyoushi](https://keiyoushi.github.io) (Mihon/Tachiyomi) extension sources,
@@ -186,7 +190,7 @@ The API accepts the `X-Api-Key` header (Settings → General).
 - [Writing modules](docs/modules.md).
 
 Planned work and bugs are tracked in
-[GitHub issues](https://github.com/Asion001/mangarr/issues).
+[GitHub issues](https://github.com/Asion001/Mangarr/issues).
 
 ## Development
 
@@ -206,3 +210,6 @@ Russian and Ukrainian translation), `npm test` (Vitest) and `npm run test:e2e`
 (Playwright). After changing a settings field or environment variable,
 regenerate [docs/configuration.md](docs/configuration.md) with
 `go run ./cmd/mangarr env --markdown > docs/configuration.md`.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request, and
+[SECURITY.md](SECURITY.md) to report a vulnerability.

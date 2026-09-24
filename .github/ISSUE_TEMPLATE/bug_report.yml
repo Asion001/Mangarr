@@ -1,0 +1,49 @@
+name: Bug report
+description: Something doesn't work as it should
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to …
+        2. Click …
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: System → Status, or `mangarr version`.
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How you run mangarr
+      options:
+        - Docker (latest image)
+        - Docker (slim image)
+        - Binary
+        - Built from source
+    validations:
+      required: true
+  - type: dropdown
+    id: db
+    attributes:
+      label: Database
+      options:
+        - SQLite
+        - PostgreSQL
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant log lines. Check them for anything private first; a diagnostics zip (System → Status) already masks secrets.
+      render: text

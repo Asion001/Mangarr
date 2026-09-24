@@ -1,0 +1,25 @@
+name: Source broken or wanted
+description: A site stopped working, or you'd like a new native source
+labels: [sources]
+body:
+  - type: input
+    id: site
+    attributes:
+      label: Site
+      description: Name and URL.
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What's the problem
+      options:
+        - An existing source is broken
+        - Please add this site as a native source
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: Error messages, an example series URL, and whether a Keiyoushi extension for it works through Suwayomi.
