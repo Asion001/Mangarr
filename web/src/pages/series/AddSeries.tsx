@@ -4,14 +4,16 @@ import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 import { ArrowDown, ArrowUp, Plus, Search, X } from "lucide-react";
-import { api, apiUrl, unwrap, type AddRequest, type LookupResult, type S } from "../../api/client";
-import { useCatalogs, useProfiles, useRootFolders } from "../../api/queries";
+import { api, apiUrl, unwrap, type AddEditionsRequest, type EditionOptions, type LookupResult, type S } from "../../api/client";
+import { useCatalogs, useProfiles } from "../../api/queries";
 import { Cover } from "../../components/Cover";
 import { Badge, Button, ErrorBox, Field, IconButton, Input, Loading, PageHeader, Select, Spinner, Switch } from "../../components/ui";
 import { sessionState, useQueryParam } from "../../lib/urlState";
 import { useToast } from "../../lib/toast";
 import { useAccount } from "../../lib/account";
 import { useSettingsDoc } from "../settings/useSettingsDoc";
+import { LanguageSelect, useLanguageFolders } from "../../components/LanguageSelect";
+import { languageName } from "../../lib/format";
 import { SourceSearchModal, pickKey, useCatalogTargets, useQuickSearch, type Picked, type Scope } from "./SourceSearch";
 
 /** MetadataSearch looks up series across metadata modules. */
@@ -216,21 +218,29 @@ function usePicked(storageKey: string): [Picked[], (fn: (cur: Picked[]) => Picke
 }
 
 type Options = {
-  rootId: number;
-  profileId: number;
   monitor: string;
   latestCount: number;
   fromChapter: number;
   monitorNew: string;
-  direction: string;
 };
+
+/** Per-language settings of an edition; 0 and "__default" follow the language defaults. */
+type EditionChoice = { profileId: number; direction: string };
 
 const pickOf = (c: S["QuickCandidate"]): Picked => ({ manga: c.manga, group: { moduleId: c.moduleId, sourceId: c.sourceId, sourceName: c.sourceName, lang: c.lang } });
 
+/** normLang: catalogs spanning several languages have no edition language. */
+const normLang = (l?: string) => {
+  const v = (l ?? "").trim().toLowerCase();
+  return v === "all" || v === "multi" ? "" : v;
+};
+/** editionLang is the edition a picked source goes to. */
+const editionLang = (p: Picked) => normLang(p.lang) || normLang(p.group.lang);
+
 /**
  * Step 2 (/add/:moduleId/:metaId/sources): review and add. The best match at
- * your sources is picked for you; fallbacks, what to download and where go
- * on the same page, and the button says what adding will do.
+ * your sources is picked for you; sources in several languages become one
+ * edition per language, each in that language's folder.
  */
 export function AddReviewStep() {
   const nav = useNavigate();
@@ -241,12 +251,11 @@ export function AddReviewStep() {
   const src = params.get("src");
   const keys = useMemo(() => (src ? src.split(",") : []), [src]);
   const scope: Scope = keys.length ? "custom" : "active";
-  const { data: roots } = useRootFolders();
   const { data: profiles } = useProfiles();
   const sourceSettings = useSettingsDoc<S["Sources"]>("sources");
   const [picked, setPicked] = usePicked(ctx.storageKey);
-  const [searching, setSearching] = useState<"change" | "add" | null>(null);
-  const defaults: Options = { rootId: 0, profileId: 0, monitor: "all", latestCount: 10, fromChapter: 1, monitorNew: "all", direction: "__default" };
+  const [searching, setSearching] = useState<{ mode: "change" | "add"; lang: string } | null>(null);
+  const defaults: Options = { monitor: "all", latestCount: 10, fromChapter: 1, monitorNew: "all" };
   const [o, setO] = useState<Options>(() => ({ ...defaults, ...sessionState.get<Partial<Options>>(ctx.storageKey + ":options", {}) }));
   const patch = (p: Partial<Options>) =>
     setO((cur) => {
@@ -254,25 +263,47 @@ export function AddReviewStep() {
       sessionState.set(ctx.storageKey + ":options", next);
       return next;
     });
+  const [choices, setChoices] = useState<Record<string, EditionChoice>>(() => sessionState.get(ctx.storageKey + ":editions", {}));
+  const choose = (lang: string, p: Partial<EditionChoice>) =>
+    setChoices((cur) => {
+      const next = { ...cur, [lang]: { ...{ profileId: 0, direction: "__default" }, ...cur[lang], ...p } };
+      sessionState.set(ctx.storageKey + ":editions", next);
+      return next;
+    });
   const [adding, setAdding] = useState<"" | "download" | "later">("");
-  const languageDefaults = sourceSettings.value?.languageDefaults?.find((p) => p.language.toLowerCase() === ctx.language.toLowerCase());
-  const rootId = o.rootId || languageDefaults?.rootFolderId || roots?.find((r) => r.language === ctx.language)?.id || roots?.[0]?.id || 0;
-  const profileId = o.profileId || languageDefaults?.profileId || profiles?.find((p) => p.isDefault)?.id || profiles?.[0]?.id || 0;
-  const direction = o.direction === "__default" ? (languageDefaults?.readingDirection || (ctx.meta?.format === "manhwa" || ctx.meta?.format === "manhua" ? "webtoon" : "")) : o.direction;
+
+  // editions in the order their languages first appear
+  const langs = Array.from(new Set(picked.map(editionLang)));
+  const groups = langs.map((lang) => ({ lang, items: picked.filter((p) => editionLang(p) === lang) }));
+  const folders = useLanguageFolders(langs.filter(Boolean));
+  const langDefault = (lang: string) => sourceSettings.value?.languageDefaults?.find((p) => p.language.toLowerCase() === lang);
+  const profileOf = (lang: string) => choices[lang]?.profileId || langDefault(lang)?.profileId || profiles?.find((p) => p.isDefault)?.id || profiles?.[0]?.id || 0;
+  const directionOf = (lang: string) => {
+    const d = choices[lang]?.direction ?? "__default";
+    if (d !== "__default") return d;
+    return langDefault(lang)?.readingDirection || (ctx.meta?.format === "manhwa" || ctx.meta?.format === "manhua" ? "webtoon" : "");
+  };
+  const blocked = langs.some((lang) => !lang || !folders.get(lang) || !!folders.get(lang)?.error);
 
   const query = params.get("sq") || ctx.title;
-  // no language picked: look at sources in the language of the folder it goes to
-  const searchLang = ctx.language || roots?.find((r) => r.id === rootId)?.language || "";
+  const searchLang = ctx.language;
   const { gen } = useCatalogTargets(scope, searchLang, keys);
-  const quick = useQuickSearch({ query, titles: ctx.titles, scope, keys, lang: searchLang, rootFolderId: rootId, enabled: !ctx.metaLoading && !!query && !!roots, gen });
-  // the best match is picked once, unless you already chose sources
+  const quick = useQuickSearch({ query, titles: ctx.titles, scope, keys, lang: searchLang, enabled: !ctx.metaLoading && !!query, gen });
+  const threshold = quick.data?.threshold ?? 0.88;
+  // the best match is picked once, unless you already chose sources; for a
+  // request, the best match in every language is picked
   useEffect(() => {
     const m = quick.data?.match;
     const auto = ctx.storageKey + ":auto";
-    if (m && !sessionState.get(auto, false)) {
-      sessionState.set(auto, true);
-      setPicked((cur) => (cur.length ? cur : [pickOf(m)]));
+    if (!m || sessionState.get(auto, false)) return;
+    sessionState.set(auto, true);
+    const best = [m];
+    if (ctx.requestId) {
+      for (const c of [...(quick.data?.top ?? [])].sort((a, b) => b.score - a.score)) {
+        if (c.score >= threshold && !best.some((b) => normLang(b.lang) === normLang(c.lang))) best.push(c);
+      }
     }
+    setPicked((cur) => (cur.length ? cur : best.map(pickOf)));
   }, [quick.data]);
 
   if (ctx.metaLoading) return <Loading />;
@@ -285,37 +316,44 @@ export function AddReviewStep() {
   const countOf = (p: Picked) => counts.get(pickKey(p)) ?? p.manga.chapterCount ?? undefined;
   const total = picked[0] ? countOf(picked[0]) : undefined;
   const queued = { all: total, future: 0, latest: total === undefined ? undefined : Math.min(o.latestCount, total), from: undefined, none: 0 }[o.monitor as "all"];
-  const also = (quick.data?.top ?? []).filter((c) => c.score >= (quick.data?.threshold ?? 0.88) && !picked.some((p) => pickKey(p) === pickKey(pickOf(c)))).slice(0, 4);
+  const also = (quick.data?.top ?? []).filter((c) => c.score >= threshold && !picked.some((p) => pickKey(p) === pickKey(pickOf(c)))).slice(0, 4);
   const matchKey = quick.data?.match ? pickKey(pickOf(quick.data.match)) : "";
-  const move = (i: number, j: number) => setPicked((c) => swap(c, i, j));
+  // moving swaps with the neighbour in the same edition
+  const move = (p: Picked, dir: -1 | 1) =>
+    setPicked((cur) => {
+      const same = cur.map((x, i) => [x, i] as const).filter(([x]) => editionLang(x) === editionLang(p)).map(([, i]) => i);
+      const at = same.indexOf(cur.findIndex((x) => pickKey(x) === pickKey(p)));
+      const to = same[at + dir];
+      return to === undefined ? cur : swap(cur, same[at], to);
+    });
+  const setLang = (p: Picked, lang: string) => setPicked((cur) => cur.map((x) => (pickKey(x) === pickKey(p) ? { ...x, lang } : x)));
 
   const add = async (searchMissing: boolean) => {
     setAdding(searchMissing ? "download" : "later");
     try {
-      const s = await unwrap(
-        api.POST("/api/v1/series", {
+      const res = await unwrap(
+        api.POST("/api/v1/series/editions", {
           body: {
             metadata: ctx.meta ? { moduleId: ctx.meta.moduleId, provider: ctx.meta.provider, id: ctx.meta.id } : undefined,
             title: ctx.meta ? undefined : ctx.title,
-            sources: picked.map((p) => ({ moduleId: p.group.moduleId, sourceId: p.group.sourceId, url: p.manga.url, engineRef: p.manga.engineRef, title: p.manga.title, sourceName: p.group.sourceName, lang: p.group.lang })),
-            language: ctx.language || picked[0]?.group.lang || searchLang || undefined,
-            rootFolderId: rootId,
-            profileId: profileId || undefined,
-            monitor: o.monitor as AddRequest["monitor"],
+            sources: picked.map((p) => ({ moduleId: p.group.moduleId, sourceId: p.group.sourceId, url: p.manga.url, engineRef: p.manga.engineRef, title: p.manga.title, sourceName: p.group.sourceName, lang: editionLang(p) || p.group.lang })),
+            editions: langs.map((lang) => ({ language: lang, profileId: profileOf(lang) || undefined, readingDirection: (directionOf(lang) || undefined) as EditionOptions["readingDirection"] })),
+            monitor: o.monitor as AddEditionsRequest["monitor"],
             latestCount: o.monitor === "latest" ? o.latestCount : undefined,
             fromChapter: o.monitor === "from" ? o.fromChapter : undefined,
-            monitorNew: o.monitorNew as AddRequest["monitorNew"],
+            monitorNew: o.monitorNew as AddEditionsRequest["monitorNew"],
             searchMissing,
-            readingDirection: (direction || undefined) as AddRequest["readingDirection"],
             requestId: ctx.requestId || undefined,
           },
         }),
       );
-      for (const k of [":picked", ":options", ":request", ":auto"]) sessionState.remove(ctx.storageKey + k);
+      for (const k of [":picked", ":options", ":editions", ":request", ":auto"]) sessionState.remove(ctx.storageKey + k);
       qc.invalidateQueries({ queryKey: ["series"] });
       qc.invalidateQueries({ queryKey: ["requests"] });
-      toast.success(`${s.title} added`, tr("Fetching chapters…"));
-      nav(`/series/${s.id}`);
+      qc.invalidateQueries({ queryKey: ["rootfolders"] });
+      const first = res.editions[0];
+      toast.success(res.editions.length > 1 ? tr("{title} added in {count} languages", { title: first.title, count: res.editions.length }) : tr("{title} added", { title: first.title }), tr("Fetching chapters…"));
+      nav(`/series/${first.id}`);
     } catch (e) {
       toast.fromError(e, tr("Could not add series"));
     } finally {
@@ -330,15 +368,21 @@ export function AddReviewStep() {
     { id: "from", label: t("From a chapter"), sub: t("Where you are in the story") },
     { id: "none", label: t("Nothing, just track it"), sub: t("Read by streaming from the source") },
   ];
-  const cta = !picked.length ? t("Pick a source first") : queued === 0 ? t("Add series") : queued === undefined ? t("Add and download") : t("Add and download {count} chapters", { count: queued });
+  const editions = langs.length;
+  const cta = !picked.length
+    ? t("Pick a source first")
+    : editions > 1
+      ? queued === 0 ? t("Add {count} editions", { count: editions }) : t("Add {count} editions and download", { count: editions })
+      : queued === 0 ? t("Add series") : queued === undefined ? t("Add and download") : t("Add and download {count} chapters", { count: queued });
   const addButtons = (
     <div className="flex flex-col gap-2">
-      <Button variant="primary" className="h-11 text-base" loading={adding === "download"} disabled={!picked.length || !rootId || !!adding} onClick={() => void add(queued !== 0)}>{cta}</Button>
+      <Button variant="primary" className="h-11 text-base" loading={adding === "download"} disabled={!picked.length || blocked || !!adding} onClick={() => void add(queued !== 0)}>{cta}</Button>
       {queued !== 0 && picked.length > 0 && (
-        <Button variant="ghost" loading={adding === "later"} disabled={!rootId || !!adding} onClick={() => void add(false)}>{t("Add, don’t download yet")}</Button>
+        <Button variant="ghost" loading={adding === "later"} disabled={blocked || !!adding} onClick={() => void add(false)}>{t("Add, don’t download yet")}</Button>
       )}
     </div>
   );
+  const pickedLangs = new Set(langs);
 
   return (
     <>
@@ -365,9 +409,9 @@ export function AddReviewStep() {
           <section aria-labelledby="add-src" className="rounded-xl border border-border bg-panel">
             <header className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
               <h2 id="add-src" className="flex-1 font-semibold">{t("Where chapters come from")}</h2>
-              <Button size="sm" onClick={() => setSearching("add")}>{t("Search all sources")}</Button>
+              <Button size="sm" onClick={() => setSearching({ mode: "add", lang: "" })}>{t("Search all sources")}</Button>
             </header>
-            <div className="flex flex-col gap-2 p-3">
+            <div className="flex flex-col gap-3 p-3">
               {quick.isFetching && !picked.length && (
                 <p className="flex items-center gap-2 p-2 text-sm text-muted"><Spinner />{t("Finding it at your sources…")}</p>
               )}
@@ -375,95 +419,112 @@ export function AddReviewStep() {
               {!quick.isFetching && !picked.length && (
                 <div className="flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-border p-3 text-sm">
                   <span className="flex-1 text-muted">{t("No confident match at your sources. Search them to pick one.")}</span>
-                  <Button size="sm" variant="primary" onClick={() => setSearching("add")}>{t("Search sources")}</Button>
+                  <Button size="sm" variant="primary" onClick={() => setSearching({ mode: "add", lang: "" })}>{t("Search sources")}</Button>
                 </div>
               )}
-              {picked.map((p, i) => {
-                const n = countOf(p);
+              {groups.map((g) => {
+                const folder = g.lang ? folders.get(g.lang) : undefined;
                 return (
-                  <div key={pickKey(p)} className={clsx("flex flex-wrap items-center gap-3 rounded-lg border p-3 sm:flex-nowrap", i === 0 ? "border-accent/40 bg-accent/5" : "border-border")}>
-                    <span className="w-4 shrink-0 text-center font-semibold text-muted">{i + 1}</span>
-                    <div className="flex min-w-48 flex-1 flex-col gap-0.5">
-                      <span className="flex flex-wrap items-center gap-2">
-                        <span className="font-semibold">{p.group.sourceName}</span>
-                        {i === 0 ? <Badge tone="accent">{t("Primary")}</Badge> : <span className="text-xs text-muted">{t("fallback")}</span>}
-                        {pickKey(p) === matchKey && quick.data?.match && <Badge tone="ok">{t("Best match · {score}%", { score: Math.round(quick.data.match.score * 100) })}</Badge>}
-                      </span>
-                      <span className="truncate text-sm text-muted">
-                        “{p.manga.title}”{n !== undefined ? ` · ${t("{count} chapters", { count: n })}` : ""}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {i === 0 && <Button size="sm" onClick={() => setSearching("change")}>{t("Change")}</Button>}
-                      <IconButton title={t("Up")} disabled={i === 0} onClick={() => move(i, i - 1)}><ArrowUp className="size-3.5" /></IconButton>
-                      <IconButton title={t("Down")} disabled={i === picked.length - 1} onClick={() => move(i, i + 1)}><ArrowDown className="size-3.5" /></IconButton>
-                      <IconButton title={t("Remove")} onClick={() => setPicked((c) => c.filter((x) => pickKey(x) !== pickKey(p)))}><X className="size-3.5" /></IconButton>
-                    </div>
+                  <div key={g.lang || "?"} role="group" aria-label={g.lang ? tr("{lang} edition", { lang: languageName(g.lang) }) : tr("Language not chosen")} className="flex flex-col gap-2">
+                    {(
+                      <div className="flex flex-wrap items-baseline gap-2 px-1 text-sm">
+                        <span className="font-semibold">{g.lang ? tr("{lang} edition", { lang: languageName(g.lang) }) : tr("Language not chosen")}</span>
+                        {folder?.path && <span className="truncate font-mono text-xs text-muted">{folder.path}{folder.exists ? "" : ` · ${tr("new folder")}`}</span>}
+                        {folder?.error && <span className="text-xs text-warn">{folder.error}</span>}
+                        {!g.lang && <span className="text-xs text-warn">{t("These sources have titles in several languages; choose which one you want.")}</span>}
+                      </div>
+                    )}
+                    {g.items.map((p, i) => {
+                      const n = countOf(p);
+                      return (
+                        <div key={pickKey(p)} className={clsx("flex flex-wrap items-center gap-3 rounded-lg border p-3 sm:flex-nowrap", i === 0 ? "border-accent/40 bg-accent/5" : "border-border")}>
+                          <span className="w-4 shrink-0 text-center font-semibold text-muted">{i + 1}</span>
+                          <div className="flex min-w-48 flex-1 flex-col gap-0.5">
+                            <span className="flex flex-wrap items-center gap-2">
+                              <span className="font-semibold">{p.group.sourceName}</span>
+                              {i === 0 ? <Badge tone="accent">{t("Primary")}</Badge> : <span className="text-xs text-muted">{t("fallback")}</span>}
+                              {pickKey(p) === matchKey && quick.data?.match && <Badge tone="ok">{t("Best match · {score}%", { score: Math.round(quick.data.match.score * 100) })}</Badge>}
+                            </span>
+                            <span className="truncate text-sm text-muted">
+                              “{p.manga.title}”{n !== undefined ? ` · ${t("{count} chapters", { count: n })}` : ""}
+                            </span>
+                          </div>
+                          {!normLang(p.group.lang) && (
+                            <LanguageSelect aria-label={t("Edition language")} className="w-36" value={normLang(p.lang)} onChange={(l) => setLang(p, l)} placeholder="—" />
+                          )}
+                          <div className="flex items-center gap-1">
+                            {i === 0 && <Button size="sm" onClick={() => setSearching({ mode: "change", lang: g.lang })}>{t("Change")}</Button>}
+                            <IconButton title={t("Up")} disabled={i === 0} onClick={() => move(p, -1)}><ArrowUp className="size-3.5" /></IconButton>
+                            <IconButton title={t("Down")} disabled={i === g.items.length - 1} onClick={() => move(p, 1)}><ArrowDown className="size-3.5" /></IconButton>
+                            <IconButton title={t("Remove")} onClick={() => setPicked((c) => c.filter((x) => pickKey(x) !== pickKey(p)))}><X className="size-3.5" /></IconButton>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 );
               })}
               {picked.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2 px-1 pt-1 text-sm">
                   <span className="text-muted">{also.length ? t("Also found, add as fallback:") : ""}</span>
-                  {also.map((c) => (
-                    <button key={pickKey(pickOf(c))} type="button" onClick={() => setPicked((cur) => [...cur, pickOf(c)])} className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-3 py-1 hover:border-accent/60">
-                      <Plus className="size-3" />
-                      {c.sourceName}
-                      {c.chapters ? ` · ${t("{count} chapters", { count: c.chapters.count })}` : ""} · {Math.round(c.score * 100)}%
-                    </button>
-                  ))}
-                  <button type="button" onClick={() => setSearching("add")} className="inline-flex items-center gap-1 text-accent-2 hover:underline">
+                  {also.map((c) => {
+                    const lang = normLang(c.lang);
+                    return (
+                      <button key={pickKey(pickOf(c))} type="button" onClick={() => setPicked((cur) => [...cur, pickOf(c)])} className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-3 py-1 hover:border-accent/60">
+                        <Plus className="size-3" />
+                        {c.sourceName}
+                        {lang && !pickedLangs.has(lang) ? ` · ${tr("new {lang} edition", { lang: languageName(lang) })}` : lang ? ` · ${languageName(lang)}` : ""}
+                        {c.chapters ? ` · ${t("{count} chapters", { count: c.chapters.count })}` : ""} · {Math.round(c.score * 100)}%
+                      </button>
+                    );
+                  })}
+                  <button type="button" onClick={() => setSearching({ mode: "add", lang: "" })} className="inline-flex items-center gap-1 text-accent-2 hover:underline">
                     <Plus className="size-3" />
-                    {t("Add a fallback")}
+                    {t("Add a source")}
                   </button>
                 </div>
               )}
+              {groups.length > 1 && <p className="px-1 text-xs text-muted">{t("Each language becomes its own edition of this title, in that language's folder.")}</p>}
             </div>
           </section>
         </div>
 
         <aside aria-labelledby="add-dl" className="flex w-full shrink-0 flex-col rounded-xl border border-border bg-panel lg:sticky lg:top-0 lg:w-96">
           <h2 id="add-dl" className="border-b border-border px-4 py-3 font-semibold">{t("What to download")}</h2>
-          {!roots?.length ? (
-            <div className="p-4"><ErrorBox error="Add a root folder in Settings → Media management first." /></div>
-          ) : (
-            <>
-              <fieldset className="flex flex-col gap-1.5 p-3">
-                <legend className="sr-only">{t("Existing chapters")}</legend>
-                {monitorOptions.map((m) => {
-                  const on = o.monitor === m.id;
-                  const n = { all: total, future: 0, latest: total === undefined ? undefined : Math.min(o.latestCount, total), from: undefined, none: 0 }[m.id as "all"];
-                  return (
-                    <label key={m.id} className={clsx("flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5", on ? "border-accent/60 bg-accent/5" : "border-border hover:border-muted/40")}>
-                      <input type="radio" name="monitor" checked={on} onChange={() => patch({ monitor: m.id })} className="accent-accent" />
-                      <span className="flex min-w-0 flex-1 flex-col">
-                        <span className="font-medium">{m.label}</span>
-                        <span className="text-xs text-muted">{m.sub}</span>
-                      </span>
-                      {m.id === "latest" && on && <Input type="number" min={1} aria-label={t("Number of latest chapters")} className="w-16" value={o.latestCount} onChange={(e) => patch({ latestCount: Number(e.target.value) })} />}
-                      {m.id === "from" && on && <Input type="number" step="0.1" aria-label={t("First chapter")} className="w-20" value={o.fromChapter} onChange={(e) => patch({ fromChapter: Number(e.target.value) })} />}
-                      {n !== undefined && <span className="text-xs tabular-nums text-muted">{n}</span>}
-                    </label>
-                  );
-                })}
-              </fieldset>
-              <div className="flex flex-col gap-3 px-4 pb-4">
-                <Switch checked={o.monitorNew === "all"} onChange={(v) => patch({ monitorNew: v ? "all" : "none" })} label={t("Download new chapters when they come out")} />
-                <Field label={t("Save to")}>
-                  <Select value={rootId} onChange={(e) => patch({ rootId: Number(e.target.value) })}>
-                    {roots.map((r) => <option key={r.id} value={r.id}>{r.path} {r.language ? `(${r.language})` : ""}</option>)}
-                  </Select>
-                </Field>
-                <details className="text-sm">
-                  <summary className="cursor-pointer text-muted">{t("Profile and reading direction")}</summary>
-                  <div className="mt-3 flex flex-col gap-3">
+          <fieldset className="flex flex-col gap-1.5 p-3">
+            <legend className="sr-only">{t("Existing chapters")}</legend>
+            {monitorOptions.map((m) => {
+              const on = o.monitor === m.id;
+              const n = { all: total, future: 0, latest: total === undefined ? undefined : Math.min(o.latestCount, total), from: undefined, none: 0 }[m.id as "all"];
+              return (
+                <label key={m.id} className={clsx("flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5", on ? "border-accent/60 bg-accent/5" : "border-border hover:border-muted/40")}>
+                  <input type="radio" name="monitor" checked={on} onChange={() => patch({ monitor: m.id })} className="accent-accent" />
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="font-medium">{m.label}</span>
+                    <span className="text-xs text-muted">{m.sub}</span>
+                  </span>
+                  {m.id === "latest" && on && <Input type="number" min={1} aria-label={t("Number of latest chapters")} className="w-16" value={o.latestCount} onChange={(e) => patch({ latestCount: Number(e.target.value) })} />}
+                  {m.id === "from" && on && <Input type="number" step="0.1" aria-label={t("First chapter")} className="w-20" value={o.fromChapter} onChange={(e) => patch({ fromChapter: Number(e.target.value) })} />}
+                  {n !== undefined && <span className="text-xs tabular-nums text-muted">{n}</span>}
+                </label>
+              );
+            })}
+          </fieldset>
+          <div className="flex flex-col gap-3 px-4 pb-4">
+            <Switch checked={o.monitorNew === "all"} onChange={(v) => patch({ monitorNew: v ? "all" : "none" })} label={t("Download new chapters when they come out")} />
+            <details className="text-sm">
+              <summary className="cursor-pointer text-muted">{t("Profile and reading direction")}</summary>
+              <div className="mt-3 flex flex-col gap-4">
+                {(langs.filter(Boolean).length ? langs.filter(Boolean) : [""]).map((lang) => (
+                  <div key={lang || "?"} className="flex flex-col gap-3">
+                    {langs.filter(Boolean).length > 1 && <span className="text-xs font-semibold text-muted">{languageName(lang)}</span>}
                     <Field label={t("Profile")}>
-                      <Select value={profileId} onChange={(e) => patch({ profileId: Number(e.target.value) })}>
+                      <Select value={profileOf(lang)} onChange={(e) => choose(lang, { profileId: Number(e.target.value) })}>
                         {profiles?.map((p) => <option key={p.id} value={p.id}>{p.name}{p.isDefault ? tr(" (default)") : ""}</option>)}
                       </Select>
                     </Field>
                     <Field label={t("Reading direction")}>
-                      <Select value={direction} onChange={(e) => patch({ direction: e.target.value })}>
+                      <Select value={directionOf(lang)} onChange={(e) => choose(lang, { direction: e.target.value })}>
                         <option value="">{t("Automatic")}</option>
                         <option value="rtl">{t("Right to left (manga)")}</option>
                         <option value="ltr">{t("Left to right")}</option>
@@ -471,34 +532,36 @@ export function AddReviewStep() {
                       </Select>
                     </Field>
                   </div>
-                </details>
+                ))}
               </div>
-              <div className="hidden flex-col gap-2 border-t border-border bg-panel-2/40 px-4 py-4 lg:flex">
-                {queued !== undefined && queued > 0 && <p className="flex justify-between text-sm"><span className="text-muted">{t("Queued now")}</span><strong>{t("{count} chapters", { count: queued })}</strong></p>}
-                {addButtons}
-              </div>
-            </>
-          )}
+            </details>
+          </div>
+          <div className="hidden flex-col gap-2 border-t border-border bg-panel-2/40 px-4 py-4 lg:flex">
+            {queued !== undefined && queued > 0 && <p className="flex justify-between text-sm"><span className="text-muted">{t("Queued now")}</span><strong>{t("{count} chapters", { count: queued })}</strong></p>}
+            {addButtons}
+          </div>
         </aside>
       </div>
-      {!!roots?.length && (
-        <div className="sticky bottom-0 -mx-4 mt-4 border-t border-border bg-panel/95 px-4 py-3 backdrop-blur lg:hidden">
-          {queued !== undefined && queued > 0 && <p className="mb-2 text-center text-xs text-muted">{t("Queues {count} chapters now", { count: queued })}</p>}
-          {addButtons}
-        </div>
-      )}
+      <div className="sticky bottom-0 -mx-4 mt-4 border-t border-border bg-panel/95 px-4 py-3 backdrop-blur lg:hidden">
+        {queued !== undefined && queued > 0 && <p className="mb-2 text-center text-xs text-muted">{t("Queues {count} chapters now", { count: queued })}</p>}
+        {addButtons}
+      </div>
       {searching && (
         <SourceSearchModal
           initialQuery={query}
-          initialLang={searchLang}
-          rootFolderId={rootId}
+          initialLang={searching.lang || searchLang}
           titles={ctx.titles}
-          title={searching === "change" ? t("Change the primary source") : t("Add a fallback source")}
+          title={searching.mode === "change" ? t("Change the primary source") : t("Add a source")}
           linked={picked.map((p) => ({ moduleId: p.group.moduleId, sourceId: p.group.sourceId, url: p.manga.url }))}
           onClose={() => setSearching(null)}
           onPick={(m, g) => {
-            const p = { manga: m, group: g };
-            setPicked((cur) => (searching === "change" ? [p, ...cur.slice(1)] : [...cur, p]));
+            // a catalog in several languages joins the edition it was searched for
+            const p: Picked = { manga: m, group: g, lang: normLang(g.lang) ? undefined : searching.lang || undefined };
+            setPicked((cur) => {
+              if (searching.mode !== "change") return [...cur, p];
+              const at = cur.findIndex((x) => editionLang(x) === searching.lang);
+              return at < 0 ? [p, ...cur] : cur.map((x, i) => (i === at ? p : x));
+            });
             setSearching(null);
           }}
         />

@@ -275,7 +275,7 @@ func CoreVars(env map[string]string) []Var {
 		out = append(out, Var{Name: d.Name, Scope: "core", Type: "string", Default: d.Default, Description: d.Description, Set: set, Value: v})
 	}
 	v, set := env[RootFoldersVar]
-	out = append(out, Var{Name: RootFoldersVar, Scope: "rootfolders", Type: "list", Description: "Root folders to create and lock, comma-separated; append |lang to set a language (/data/manga/ja|ja).", Set: set, Value: v})
+	out = append(out, Var{Name: RootFoldersVar, Scope: "rootfolders", Type: "list", Description: "Root folders to create and lock, comma-separated; append |lang to set a language (/data/manga/ja|ja), or |* for the automatic folder that gets a subfolder per language (/data/manga|*).", Set: set, Value: v})
 	return out
 }
 

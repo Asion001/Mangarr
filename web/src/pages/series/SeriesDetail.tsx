@@ -3,12 +3,12 @@ import { t as tr, t } from "../../lib/i18n/core";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { Bell, BellOff, BookOpen, ExternalLink, Eye, FilePen, HardDrive, Pencil, RefreshCw, Search, Sparkles, Trash2, FileSearch, BookText, Link2, Unlink } from "lucide-react";
+import { Bell, BellOff, Plus, BookOpen, ExternalLink, Eye, FilePen, HardDrive, Pencil, RefreshCw, Search, Sparkles, Trash2, FileSearch, BookText, Link2, Unlink } from "lucide-react";
 import { api, apiUrl, unwrap, type Chapter, type S } from "../../api/client";
 import { useChapters, usePushCommand, useSeries, useSeriesList } from "../../api/queries";
 import { Cover } from "../../components/Cover";
 import { Badge, Button, Confirm, ErrorBox, Loading, Menu, Modal, Select, Switch } from "../../components/ui";
-import { bytes, relative } from "../../lib/format";
+import { bytes, languageName, relative } from "../../lib/format";
 import { useToast } from "../../lib/toast";
 import { statusTone } from "./SeriesIndex";
 import { SourcesPanel } from "./SourcesPanel";
@@ -16,6 +16,7 @@ import { ChaptersTable, readable } from "./ChaptersTable";
 import { EditSeriesModal } from "./EditSeriesModal";
 import { RenameModal } from "./Organize";
 import { useAccount } from "../../lib/account";
+import { AddLanguageModal } from "./AddLanguage";
 
 export function SeriesDetail() {
   const id = Number(useParams().id);
@@ -38,6 +39,7 @@ export function SeriesDetail() {
   const [grouping, setGrouping] = useState(false);
   const [groupTarget, setGroupTarget] = useState("");
   const [groupBusy, setGroupBusy] = useState(false);
+  const [addingLang, setAddingLang] = useState(false);
 
   if (isLoading) return <Loading />;
   if (error || !s) return <ErrorBox error={error ?? "Series not found"} />;
@@ -104,7 +106,7 @@ export function SeriesDetail() {
             {md.format && <Badge>{md.format}</Badge>}
             {md.year ? <Badge>{md.year}</Badge> : null}
             <Badge>{s.readingDirection}</Badge>
-            {s.language && <Badge>{s.language}</Badge>}
+            {s.language && <Badge>{languageName(s.language)}</Badge>}
             {md.ageRating && <Badge tone="warn">{md.ageRating}</Badge>}
             {(md.genres ?? []).slice(0, 8).map((g) => (
               <Badge key={g} tone="info">
@@ -114,7 +116,7 @@ export function SeriesDetail() {
           </div>
         </div>
         <div className="col-span-2 min-w-0 md:col-span-1 md:col-start-2">
-          {(s.editions?.length ?? 0) > 1 && (
+          {((s.editions?.length ?? 0) > 1 || manage) && (
             <nav className="mt-3 flex flex-wrap gap-2" aria-label={t("Language editions")}>
               {(s.editions ?? []).map((edition) => (
                 <Link
@@ -123,10 +125,19 @@ export function SeriesDetail() {
                   aria-current={edition.id === id ? "page" : undefined}
                   className={`rounded-md border px-3 py-1.5 text-sm ${edition.id === id ? "border-accent bg-accent/15 text-accent-2" : "border-border bg-panel hover:border-accent/60"}`}
                 >
-                  <span className="font-medium uppercase">{edition.language || "?"}</span>
+                  <span className="font-medium">{edition.language ? languageName(edition.language) : "?"}</span>
                   {edition.title !== s.title && <span className="ml-2 text-muted">{edition.title}</span>}
                 </Link>
               ))}
+              {manage && (
+                <button
+                  type="button"
+                  onClick={() => setAddingLang(true)}
+                  className="inline-flex items-center gap-1 rounded-md border border-dashed border-border px-3 py-1.5 text-sm text-accent-2 hover:border-accent/60"
+                >
+                  <Plus className="size-4" />{t("Add language")}
+                </button>
+              )}
             </nav>
           )}
           <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-4">
@@ -216,6 +227,7 @@ export function SeriesDetail() {
 
       {manage && edit && <EditSeriesModal series={s} onClose={() => setEdit(false)} />}
       {manage && renaming && <RenameModal seriesIds={[id]} onClose={() => setRenaming(false)} />}
+      {manage && addingLang && <AddLanguageModal series={s} onClose={() => setAddingLang(false)} />}
       {manage && grouping && (
         <Modal open onClose={() => setGrouping(false)} title={t("Group language edition")}>
           <p className="mb-4 text-sm text-muted">{t("Choose the title this edition belongs to. Files, sources, settings, and reading progress stay separate.")}</p>
@@ -223,7 +235,7 @@ export function SeriesDetail() {
             <option value="">{t("Choose a title…")}</option>
             {(library ?? []).filter((candidate) => candidate.workId !== s.workId).map((candidate) => (
               <option key={candidate.workId} value={candidate.workId}>
-                {candidate.title}{candidate.editions?.length ? ` (${candidate.editions.map((edition) => edition.language || "—").join(", ")})` : ""}
+                {candidate.title}{candidate.editions?.length ? ` (${candidate.editions.map((edition) => (edition.language ? languageName(edition.language) : "—")).join(", ")})` : ""}
               </option>
             ))}
           </Select>

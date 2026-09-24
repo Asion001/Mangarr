@@ -216,43 +216,56 @@ func (s *Service) autoAdd(id int64) {
 	if err := s.DB.NewSelect().Model(&r).Where("id = ?", id).Scan(ctx); err != nil || r.Status != model.RequestPending {
 		return
 	}
-	var roots []model.RootFolder
-	if err := s.DB.NewSelect().Model(&roots).Order("id").Scan(ctx); err != nil || len(roots) != 1 {
-		s.Log.Info("request waits for a manager: target library is ambiguous", "request", r.Title)
-		s.attemptFailed(ctx, id, "The target library is ambiguous; choose a library and retry Add.", err)
+	langs, err := s.Series.Languages(ctx)
+	if err != nil || len(langs) == 0 {
+		s.Log.Info("request waits for a manager: no language to add it in", "request", r.Title)
+		s.attemptFailed(ctx, id, "Set a language on a root folder (or default search languages) so requests know where to go; choose sources and retry Add.", err)
 		return
 	}
-	res, err := s.Search.Quick(ctx, sourcesearch.QuickSearchInput{Query: r.Title, Titles: append([]string{r.Title}, r.Metadata.AltTitles...), RootFolderID: roots[0].ID, Lang: roots[0].Language}, sourcesearch.QuickOptions{})
-	if err != nil || res.Match == nil {
-		s.Log.Info("request waits for a manager: no confident source", "request", r.Title, "err", err)
-		s.attemptFailed(ctx, id, "No confident source match was found; choose a source and retry Add.", err)
+	// the best confident match in each language becomes that language's edition
+	var links []series.SourceLink
+	var names []string
+	for _, lang := range langs {
+		res, err := s.Search.Quick(ctx, sourcesearch.QuickSearchInput{Query: r.Title, Titles: append([]string{r.Title}, r.Metadata.AltTitles...), Lang: lang}, sourcesearch.QuickOptions{})
+		if err != nil || res.Match == nil {
+			continue
+		}
+		m := res.Match
+		links = append(links, series.SourceLink{ModuleID: m.ModuleID, SourceID: m.SourceID, URL: m.Manga.URL, EngineRef: m.Manga.EngineRef,
+			Title: m.Manga.Title, SourceName: m.SourceName, Lang: firstLang(m.Lang, lang)})
+		names = append(names, m.SourceName)
+	}
+	if len(links) == 0 {
+		s.Log.Info("request waits for a manager: no confident source", "request", r.Title, "languages", langs)
+		s.attemptFailed(ctx, id, "No confident source match was found; choose a source and retry Add.", nil)
 		return
 	}
-	m := res.Match
-	dir := ""
-	if r.Metadata.Format == "manhwa" || r.Metadata.Format == "manhua" {
-		dir = "webtoon"
-	}
-	ser, err := s.Series.Add(ctx, series.AddRequest{
+	res, err := s.Series.AddEditions(ctx, series.AddEditionsRequest{
 		Metadata: &metadataagg.Ref{ModuleID: r.Metadata.ModuleID, Provider: r.Metadata.Provider, ID: r.Metadata.ID},
-		Sources: []series.SourceLink{{ModuleID: m.ModuleID, SourceID: m.SourceID, URL: m.Manga.URL, EngineRef: m.Manga.EngineRef,
-			Title: m.Manga.Title, SourceName: m.SourceName, Lang: m.Lang}},
-		RootFolderID: roots[0].ID, Monitor: model.MonitorAll, MonitorNew: model.MonitorAll, SearchMissing: true, ReadingDirection: dir,
+		Sources:  links, Monitor: model.MonitorAll, MonitorNew: model.MonitorAll, SearchMissing: true,
 	})
-	var exists series.ExistsError
-	if errors.As(err, &exists) {
-		ser, err = s.Series.Get(ctx, exists.SeriesID)
-	}
-	if err != nil {
+	if err != nil && (res == nil || len(res.Editions) == 0) {
 		s.Log.Warn("request waits for a manager: couldn't add it", "request", r.Title, "err", err)
 		s.attemptFailed(ctx, id, "Automatic add failed.", err)
 		return
 	}
-	s.Log.Info("request added automatically", "request", r.Title, "series", ser.ID, "source", m.SourceName)
+	if err != nil {
+		s.Log.Warn("request added in some languages only", "request", r.Title, "err", err)
+	}
+	ser := res.Editions[0]
+	s.Log.Info("request added automatically", "request", r.Title, "series", ser.ID, "sources", names)
 	if err := s.Link(ctx, id, ser.ID, nil); err != nil {
 		s.Log.Warn("request added but could not be linked", "request", r.Title, "series", ser.ID, "err", err)
 		s.attemptFailed(ctx, id, fmt.Sprintf("Series %d was added, but request fulfilment failed; use Link to retry.", ser.ID), err)
 	}
+}
+
+// firstLang keeps a catalog's own language unless it spans several.
+func firstLang(catalog, searched string) string {
+	if l := strings.ToLower(strings.TrimSpace(catalog)); l != "" && l != "all" && l != "multi" {
+		return l
+	}
+	return searched
 }
 
 func (s *Service) attemptFailed(ctx context.Context, id int64, message string, cause error) {

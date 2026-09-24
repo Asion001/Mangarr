@@ -88,7 +88,7 @@ type AddRequest struct {
 	Metadata         *metadataagg.Ref `json:"metadata,omitempty"`
 	Title            string           `json:"title,omitempty"`
 	Sources          []SourceLink     `json:"sources"`
-	RootFolderID     int64            `json:"rootFolderId"`
+	RootFolderID     int64            `json:"rootFolderId,omitempty"` // 0: the language\'s folder
 	ProfileID        int64            `json:"profileId,omitempty"`
 	Monitor          string           `json:"monitor" enum:"all,future,latest,from,none"`
 	LatestCount      int              `json:"latestCount,omitempty"`
@@ -111,9 +111,15 @@ func (s *Service) Add(ctx context.Context, req AddRequest) (*model.Series, error
 	if len(req.Sources) == 0 {
 		return nil, ValidationError{"at least one source is required"}
 	}
-	rf, err := s.lib.RootFolder(ctx, req.RootFolderID)
-	if err != nil {
-		return nil, ValidationError{"root folder not found"}
+	// no folder given: the edition's language picks it
+	var rf *model.RootFolder
+	var err error
+	if req.RootFolderID > 0 {
+		if rf, err = s.lib.RootFolder(ctx, req.RootFolderID); err != nil {
+			return nil, ValidationError{"root folder not found"}
+		}
+	} else if rf, err = s.lib.FolderForLanguage(ctx, firstNonEmpty(library.NormalizeLanguage(req.Language), sourcesLanguage(req.Sources))); err != nil {
+		return nil, ValidationError{err.Error()}
 	}
 	profileID, err := s.profileID(ctx, req.ProfileID)
 	if err != nil {
@@ -265,6 +271,17 @@ func (s *Service) profileID(ctx context.Context, id int64) (int64, error) {
 		return 0, ValidationError{"profile not found"}
 	}
 	return p.ID, nil
+}
+
+// sourcesLanguage is the first edition language among the sources (catalogs
+// in several languages have none).
+func sourcesLanguage(links []SourceLink) string {
+	for _, l := range links {
+		if lang := library.NormalizeLanguage(l.Lang); lang != "" {
+			return lang
+		}
+	}
+	return ""
 }
 
 func sameLanguage(a, b string) bool {

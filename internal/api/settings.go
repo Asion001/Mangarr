@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"path/filepath"
 	"regexp"
@@ -12,9 +13,19 @@ import (
 	"github.com/uptrace/bun"
 
 	"github.com/Asion001/mangarr/internal/fsutil"
+	"github.com/Asion001/mangarr/internal/library"
 	"github.com/Asion001/mangarr/internal/model"
 	"github.com/Asion001/mangarr/internal/settings"
 )
+
+// LanguageFolder is where titles in a language go.
+type LanguageFolder struct {
+	Language string `json:"language"`
+	Path     string `json:"path,omitempty"`
+	// Exists is false when the folder is made on the first add.
+	Exists bool   `json:"exists"`
+	Error  string `json:"error,omitempty"`
+}
 
 type RootFolderResource struct {
 	model.RootFolder
@@ -184,12 +195,58 @@ func (s *Server) registerSettings() {
 			if err := fsutil.Writable(p); err != nil {
 				return nil, huma.Error400BadRequest("folder is not writable: " + err.Error())
 			}
-			rf := model.RootFolder{Path: p, Language: in.Body.Language, CreatedAt: time.Now().UTC()}
+			lang := library.NormalizeLanguage(in.Body.Language)
+			if lang == "" {
+				return nil, huma.Error400BadRequest("a root folder needs a language")
+			}
+			if err := s.languageFree(ctx, lang, 0); err != nil {
+				return nil, err
+			}
+			rf := model.RootFolder{Path: p, Language: lang, CreatedAt: time.Now().UTC()}
 			if _, err := s.app.DB.NewInsert().Model(&rf).Exec(ctx); err != nil {
 				return nil, huma.Error409Conflict("root folder already exists")
 			}
 			s.app.Bus.Changed("rootfolder", "created", rf.ID)
 			return &struct{ Body model.RootFolder }{rf}, nil
+		})
+	huma.Register(s.api, huma.Operation{OperationID: "rootfolders-for-language", Method: http.MethodGet, Path: "/api/v1/rootfolders/for-language", Tags: rtags,
+		Summary: "Where titles in a language go", Description: "The language's root folder, or the one the library folder would get; error when there is neither."},
+		func(ctx context.Context, in *struct {
+			Lang string `query:"lang" required:"true"`
+		}) (*struct{ Body LanguageFolder }, error) {
+			out := LanguageFolder{Language: library.NormalizeLanguage(in.Lang)}
+			path, exists, err := s.app.Library.PlanFolder(ctx, in.Lang)
+			out.Path, out.Exists = path, exists
+			if err != nil {
+				out.Error = err.Error()
+			}
+			return &struct{ Body LanguageFolder }{out}, nil
+		})
+	huma.Register(s.api, huma.Operation{OperationID: "rootfolders-language", Method: http.MethodPut, Path: "/api/v1/rootfolders/{id}/language", Tags: rtags,
+		Summary: "Set the language a root folder holds"},
+		func(ctx context.Context, in *struct {
+			ID   int64 `path:"id"`
+			Body struct {
+				Language string `json:"language" minLength:"1"`
+			}
+		}) (*struct{ Body model.RootFolder }, error) {
+			rf, err := s.app.Library.RootFolder(ctx, in.ID)
+			if err != nil {
+				return nil, huma.Error404NotFound("root folder not found")
+			}
+			lang := library.NormalizeLanguage(in.Body.Language)
+			if lang == "" {
+				return nil, huma.Error400BadRequest("a root folder needs a language")
+			}
+			if err := s.languageFree(ctx, lang, rf.ID); err != nil {
+				return nil, err
+			}
+			rf.Language = lang
+			if _, err := s.app.DB.NewUpdate().Model(rf).Column("language").WherePK().Exec(ctx); err != nil {
+				return nil, toHTTPError(err)
+			}
+			s.app.Bus.Changed("rootfolder", "updated", rf.ID)
+			return &struct{ Body model.RootFolder }{*rf}, nil
 		})
 	huma.Register(s.api, huma.Operation{OperationID: "rootfolders-delete", Method: http.MethodDelete, Path: "/api/v1/rootfolders/{id}", Tags: rtags},
 		func(ctx context.Context, in *IDPath) (*struct{}, error) {
@@ -413,3 +470,16 @@ func validateProfile(p *model.Profile) error {
 }
 
 func compileScanlatorPattern(p string) (*regexp.Regexp, error) { return regexp.Compile("(?i)" + p) }
+
+// languageFree fails when another root folder already holds the language:
+// each language has exactly one folder.
+func (s *Server) languageFree(ctx context.Context, lang string, except int64) error {
+	n, err := s.app.DB.NewSelect().Model((*model.RootFolder)(nil)).Where("LOWER(language) = ? AND id <> ?", lang, except).Count(ctx)
+	if err != nil {
+		return toHTTPError(err)
+	}
+	if n > 0 {
+		return huma.Error409Conflict(fmt.Sprintf("another root folder already holds %q; each language has one folder", lang))
+	}
+	return nil
+}

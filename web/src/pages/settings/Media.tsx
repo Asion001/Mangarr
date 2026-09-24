@@ -5,7 +5,8 @@ import { FolderInput, FolderPlus, Trash2 } from "lucide-react";
 import { api, unwrap, type S } from "../../api/client";
 import { useRootFolders } from "../../api/queries";
 import { Badge, Button, Card, EnvLock, ErrorBox, Field, IconButton, Input, Loading, Modal, PageHeader, SaveBar, Switch, Table, Td, Th } from "../../components/ui";
-import { bytes } from "../../lib/format";
+import { bytes, languageName } from "../../lib/format";
+import { AUTO, LanguageSelect } from "../../components/LanguageSelect";
 import { useToast } from "../../lib/toast";
 import { useSettingsDoc } from "./useSettingsDoc";
 
@@ -91,12 +92,14 @@ function RootFolders() {
   const qc = useQueryClient();
   const toast = useToast();
   const [path, setPath] = useState("");
-  const [lang, setLang] = useState("en");
+  const [lang, setLang] = useState("");
+  const refresh = () => qc.invalidateQueries({ queryKey: ["rootfolders"] });
   const add = async () => {
     try {
       await unwrap(api.POST("/api/v1/rootfolders", { body: { path, language: lang } }));
       setPath("");
-      qc.invalidateQueries({ queryKey: ["rootfolders"] });
+      setLang("");
+      refresh();
     } catch (e) {
       toast.fromError(e);
     }
@@ -108,7 +111,15 @@ function RootFolders() {
       await unwrap(api.PUT("/api/v1/rootfolders/{id}", { params: { path: { id: relocating.id } }, body: { path: relocating.path, moveFiles: relocating.moveFiles } }));
       toast.success(relocating.moveFiles ? "Moving the root folder in the background" : "Root folder location updated");
       setRelocating(null);
-      qc.invalidateQueries({ queryKey: ["rootfolders"] });
+      refresh();
+    } catch (e) {
+      toast.fromError(e);
+    }
+  };
+  const setLanguage = async (id: number, language: string) => {
+    try {
+      await unwrap(api.PUT("/api/v1/rootfolders/{id}/language", { params: { path: { id } }, body: { language } }));
+      refresh();
     } catch (e) {
       toast.fromError(e);
     }
@@ -116,11 +127,34 @@ function RootFolders() {
   const remove = async (id: number) => {
     try {
       await unwrap(api.DELETE("/api/v1/rootfolders/{id}", { params: { path: { id } } }));
-      qc.invalidateQueries({ queryKey: ["rootfolders"] });
+      refresh();
     } catch (e) {
       toast.fromError(e);
     }
   };
+  const rows = [...(data ?? [])].sort((a, b) => a.id - b.id);
+  const auto = rows.find((r) => r.language === AUTO);
+  // folders the automatic one made are listed on its row, not as overrides
+  const madeByAuto = (r: (typeof rows)[number]) => !!auto && r.id !== auto.id && parentOf(r.path) === auto.path.replace(/\/+$/, "");
+  const made = rows.filter(madeByAuto);
+  const overrides = rows.filter((r) => r !== auto && !madeByAuto(r));
+  // each language has one folder: the oldest one holding it wins
+  const holder = new Map<string, number>();
+  for (const r of rows) {
+    const l = r.language.toLowerCase();
+    if (l && !holder.has(l)) holder.set(l, r.id);
+  }
+  const actions = (r: (typeof rows)[number], seriesCount: number) => (
+    <Td className="text-right">
+      <IconButton title={t("Change location")} disabled={!!r.managedBy} onClick={() => setRelocating({ id: r.id, path: r.path, moveFiles: true })}>
+        <FolderInput className="size-4" />
+      </IconButton>
+      <IconButton title={r.managedBy ? tr("Set by MANGARR_ROOT_FOLDERS") : tr("Remove")} onClick={() => remove(r.id)} disabled={seriesCount > 0 || !!r.managedBy}>
+        <Trash2 className="size-4" />
+      </IconButton>
+    </Td>
+  );
+  const space = (r: (typeof rows)[number]) => <Td>{r.accessible ? bytes(r.freeSpace) : <Badge tone="err">{r.error}</Badge>}</Td>;
   return (
     <Card title={t("Root folders")} className="mb-6">
       {relocating && (
@@ -151,11 +185,11 @@ function RootFolders() {
         </Modal>
       )}
       {isLoading && <Loading />}
-      {data && data.length > 0 && (
+      {rows.length > 0 && (
         <Table className="mb-4">
           <thead>
             <tr>
-              <Th>{t("Path")}</Th>
+              <Th>{t("Folder")}</Th>
               <Th>{t("Language")}</Th>
               <Th>{t("Series")}</Th>
               <Th>{t("Free space")}</Th>
@@ -163,33 +197,75 @@ function RootFolders() {
             </tr>
           </thead>
           <tbody>
-            {data.map((r) => (
+            {auto && (
+              <tr className="bg-accent/5">
+                <Td>
+                  <span className="flex flex-col gap-1">
+                    <span className="font-mono text-xs">
+                      {auto.path.replace(/\/+$/, "")}/<span className="text-accent-2">{"{language}"}</span> {auto.managedBy && <EnvLock env="MANGARR_ROOT_FOLDERS" />}
+                    </span>
+                    {made.length > 0 && <span className="text-xs text-muted">{t("Made so far: {list}", { list: made.map((r) => languageName(r.language)).join(" · ") })}</span>}
+                  </span>
+                </Td>
+                <Td>
+                  <span className="flex flex-wrap items-center gap-2">
+                    {t("Every other language")}
+                    <Badge tone="accent">{t("automatic")}</Badge>
+                  </span>
+                </Td>
+                <Td>{made.reduce((n, r) => n + r.seriesCount, auto.seriesCount)}</Td>
+                {space(auto)}
+                {actions(auto, auto.seriesCount + made.length)}
+              </tr>
+            )}
+            {overrides.map((r) => (
               <tr key={r.id}>
                 <Td className="font-mono text-xs">
                   {r.path} {r.managedBy && <EnvLock env="MANGARR_ROOT_FOLDERS" />}
                 </Td>
-                <Td>{r.language || "—"}</Td>
-                <Td>{r.seriesCount}</Td>
-                <Td>{r.accessible ? bytes(r.freeSpace) : <Badge tone="err">{r.error}</Badge>}</Td>
-                <Td className="text-right">
-                  <IconButton title={t("Change location")} disabled={!!r.managedBy} onClick={() => setRelocating({ id: r.id, path: r.path, moveFiles: true })}>
-                    <FolderInput className="size-4" />
-                  </IconButton>
-                  <IconButton title={r.managedBy ? tr("Set by MANGARR_ROOT_FOLDERS") : tr("Remove")} onClick={() => remove(r.id)} disabled={r.seriesCount > 0 || !!r.managedBy}>
-                    <Trash2 className="size-4" />
-                  </IconButton>
+                <Td>
+                  {r.language ? (
+                    <span className="flex flex-wrap items-center gap-2">
+                      {languageName(r.language)}
+                      {holder.get(r.language.toLowerCase()) !== r.id && <Badge tone="warn" title={tr("Another folder already holds this language; new titles go there.")}>{t("unused")}</Badge>}
+                    </span>
+                  ) : (
+                    <LanguagePicker onSet={(l) => void setLanguage(r.id, l)} />
+                  )}
                 </Td>
+                <Td>{r.seriesCount}</Td>
+                {space(r)}
+                {actions(r, r.seriesCount)}
               </tr>
             ))}
           </tbody>
         </Table>
       )}
       <div className="flex flex-wrap gap-2">
-        <Input className="max-w-md flex-1" value={path} onChange={(e) => setPath(e.target.value)} placeholder="/data/manga/en" />
-        <Input className="w-24" value={lang} onChange={(e) => setLang(e.target.value)} placeholder="en" />
-        <Button icon={<FolderPlus className="size-4" />} disabled={!path} onClick={add}>{t("Add root folder")}</Button>
+        <Input className="max-w-md flex-1" aria-label={t("Path")} value={path} onChange={(e) => setPath(e.target.value)} placeholder={"/data/manga"} />
+        <LanguageSelect aria-label={t("Language")} className="w-56" value={lang} onChange={setLang} auto={!auto} placeholder={tr("Language…")} />
+        <Button icon={<FolderPlus className="size-4" />} disabled={!path || !lang} onClick={add}>{t("Add folder")}</Button>
       </div>
-      <p className="mt-2 text-xs text-muted">{t("Use one root folder per language. Mount the same folder read-only into Komga/Kavita.")}</p>
+      <p className="mt-2 text-xs text-muted">
+        {auto
+          ? t("The automatic folder gets a subfolder for each language the first time you add a title in it. A folder set for one language takes that language instead.")
+          : t("Add an automatic folder to get a subfolder for each language, or add a folder for each language yourself. A title in a language without a folder can't be added.")}
+      </p>
     </Card>
+  );
+}
+
+function parentOf(path: string): string {
+  return path.replace(/\/+$/, "").replace(/\/[^/]*$/, "");
+}
+
+/** LanguagePicker sets the language of a folder that has none. */
+function LanguagePicker({ onSet }: { onSet: (lang: string) => void }) {
+  const [v, setV] = useState("");
+  return (
+    <span className="flex items-center gap-1">
+      <LanguageSelect aria-label={t("Language")} className="w-40" value={v} onChange={setV} placeholder={tr("Choose…")} />
+      <Button size="sm" disabled={!v} onClick={() => onSet(v)}>{t("Set")}</Button>
+    </span>
   );
 }

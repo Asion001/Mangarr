@@ -30,6 +30,12 @@ export function SearchSettingsPage() {
   const doc = useSettingsDoc<Sources>("sources");
   const { data: catalogs } = useCatalogs();
   const { data: roots } = useRootFolders();
+  // the language's own folder, else the one the automatic folder would make
+  const folderFor = (lang: string) => {
+    const own = roots?.find((root) => root.language.toLowerCase() === lang.toLowerCase());
+    const auto = roots?.find((root) => root.language === "*");
+    return own?.path ?? (auto && lang ? `${auto.path.replace(/\/+$/, "")}/${lang.toLowerCase()}` : "—");
+  };
   const { data: profiles } = useProfiles();
   const v = doc.value;
   const catalogLangs = Array.from(new Set((catalogs?.items ?? []).filter((c) => !c.hidden).map((c) => c.lang))).filter((l) => l && l !== "all" && l !== "multi").sort();
@@ -82,7 +88,7 @@ export function SearchSettingsPage() {
             </div>
           </Card>
           <Card title={t("Language defaults")} className="mb-6">
-            <p className="mb-4 text-sm text-muted">{t("Choose the source order, root folder, profile and reading direction used for each language.")}</p>
+            <p className="mb-4 text-sm text-muted">{t("Choose the source order, profile and reading direction used for each language.")}</p>
             <div className="flex flex-col gap-4">
               {languageDefaults.map((item, index) => {
                 const chosen = new Set(item.sources);
@@ -92,11 +98,8 @@ export function SearchSettingsPage() {
                       <Field label={t("Language")}>
                         <Input value={item.language} onChange={(e) => patchLanguage(index, { language: e.target.value.trim().toLowerCase() })} />
                       </Field>
-                      <Field label={t("Root folder")}>
-                        <Select value={item.rootFolderId || 0} onChange={(e) => patchLanguage(index, { rootFolderId: Number(e.target.value) })}>
-                          <option value={0}>{t("Automatic")}</option>
-                          {roots?.map((root) => <option key={root.id} value={root.id}>{root.path}</option>)}
-                        </Select>
+                      <Field label={t("Folder")} help={t("Set in Media management")}>
+                        <span className="block truncate py-2 font-mono text-xs text-muted">{folderFor(item.language)}</span>
                       </Field>
                       <Field label={t("Profile")}>
                         <Select value={item.profileId || 0} onChange={(e) => patchLanguage(index, { profileId: Number(e.target.value) })}>
@@ -145,7 +148,7 @@ export function SearchSettingsPage() {
                 onClick={() => {
                   const known = Array.from(new Set(["en", "ru", ...(catalogs?.items ?? []).map((catalog) => catalog.lang)])).filter((language) => language !== "all" && language !== "multi");
                   const language = known.find((candidate) => !languageDefaults.some((item) => item.language === candidate)) ?? "";
-                  doc.patch({ languageDefaults: [...languageDefaults, { language, sources: [], rootFolderId: 0, profileId: 0, readingDirection: "" }] });
+                  doc.patch({ languageDefaults: [...languageDefaults, { language, sources: [], profileId: 0, readingDirection: "" }] });
                 }}
               >{t("Add language")}</Button>
             </div>

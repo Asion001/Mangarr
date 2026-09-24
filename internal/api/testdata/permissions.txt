@@ -134,9 +134,12 @@ requests-list GET /api/v1/requests -> requests.create | requests.manage | librar
 requests-withdraw DELETE /api/v1/requests/{id}/mine -> requests.create
 rootfolders-create POST /api/v1/rootfolders -> admin
 rootfolders-delete DELETE /api/v1/rootfolders/{id} -> admin
+rootfolders-for-language GET /api/v1/rootfolders/for-language -> library.manage | requests.manage
+rootfolders-language PUT /api/v1/rootfolders/{id}/language -> admin
 rootfolders-list GET /api/v1/rootfolders -> library.manage | requests.manage
 rootfolders-move PUT /api/v1/rootfolders/{id} -> admin
 series-add POST /api/v1/series -> library.manage | requests.manage
+series-add-editions POST /api/v1/series/editions -> library.manage | requests.manage
 series-chapters GET /api/v1/series/{id}/chapters -> signedin
 series-cover GET /api/v1/series/{id}/cover -> signedin
 series-delete DELETE /api/v1/series/{id} -> library.manage

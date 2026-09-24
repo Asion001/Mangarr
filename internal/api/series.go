@@ -71,6 +71,12 @@ type ReaderProgress struct {
 	LastReadAt *time.Time `json:"lastReadAt,omitempty"`
 }
 
+// AddEditionsResponse is the title and the editions an add touched.
+type AddEditionsResponse struct {
+	WorkID   int64            `json:"workId"`
+	Editions []SeriesResource `json:"editions"`
+}
+
 type SeriesResource struct {
 	model.Series
 	Stats    SeriesStats          `json:"stats"`
@@ -815,6 +821,29 @@ func (s *Server) registerSeries() {
 				}
 			}
 			return &struct{ Body SeriesResource }{s.seriesResource(ctx, *ser, nil, true)}, nil
+		})
+
+	huma.Register(s.api, huma.Operation{OperationID: "series-add-editions", Method: http.MethodPost, Path: "/api/v1/series/editions", Tags: tags,
+		Summary: "Add a title in one or more languages", Description: "Sources are split by language; each language becomes an edition in its own root folder."},
+		func(ctx context.Context, in *struct{ Body series.AddEditionsRequest }) (*struct{ Body AddEditionsResponse }, error) {
+			res, err := s.app.Series.AddEditions(ctx, in.Body)
+			if err != nil && (res == nil || len(res.Editions) == 0) {
+				return nil, seriesError(err)
+			}
+			if err != nil {
+				return nil, huma.Error500InternalServerError(fmt.Sprintf("some editions were added, but not all: %v", err))
+			}
+			if in.Body.RequestID > 0 {
+				if err := s.app.Requests.Link(ctx, in.Body.RequestID, res.Editions[0].ID, access.From(ctx)); err != nil {
+					return nil, huma.Error500InternalServerError(fmt.Sprintf(
+						"series %d was added, but the request is still pending: %v; retry Add or link it from Requests", res.Editions[0].ID, err))
+				}
+			}
+			out := AddEditionsResponse{WorkID: res.WorkID, Editions: make([]SeriesResource, 0, len(res.Editions))}
+			for _, ser := range res.Editions {
+				out.Editions = append(out.Editions, s.seriesResource(ctx, *ser, nil, true))
+			}
+			return &struct{ Body AddEditionsResponse }{out}, nil
 		})
 
 	huma.Register(s.api, huma.Operation{OperationID: "series-update", Method: http.MethodPut, Path: "/api/v1/series/{id}", Tags: tags},

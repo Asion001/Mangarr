@@ -168,6 +168,17 @@ func (a *Aggregator) ResolveLanguage(ctx context.Context, primary Ref, fallback 
 	return &Resolved{Metadata: merged, Provenance: prov, Refs: refs}, nil
 }
 
+// RefFor picks the first active metadata module that knows one of these
+// external IDs, so another language edition can be resolved from them.
+func (a *Aggregator) RefFor(ids map[string]string) *Ref {
+	for _, m := range modules.ActiveAs[metadata.Module](a.mods, modules.KindMetadata) {
+		if id := ids[m.Def.Implementation]; id != "" {
+			return &Ref{ModuleID: m.Def.ID, Provider: m.Def.Implementation, ID: id}
+		}
+	}
+	return nil
+}
+
 // ResolveRefs re-fetches known refs (used by metadata refresh).
 func (a *Aggregator) ResolveRefs(ctx context.Context, refs []Ref, fallback *source.MangaDetails) (*Resolved, error) {
 	var parts []metadata.SeriesMetadata

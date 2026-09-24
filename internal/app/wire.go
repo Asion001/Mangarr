@@ -30,6 +30,9 @@ type Services struct {
 func (a *App) wire(ctx context.Context) error {
 	log := a.Log
 	a.Library = library.New(a.DB, a.Settings, a.HTTP, a.Cfg.DataDir, log.With("component", "library"))
+	if err := a.Library.AssignFolderLanguages(ctx); err != nil {
+		return fmt.Errorf("root folder languages: %w", err)
+	}
 	a.Metadata = metadataagg.New(a.Modules, log.With("component", "metadata"))
 	a.DLQueue = downloads.NewQueue(a.DB, a.Bus)
 	a.Searcher = downloads.NewSearcher(a.DB, a.DLQueue, log.With("component", "search"))

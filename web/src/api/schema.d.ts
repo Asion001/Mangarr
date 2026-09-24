@@ -1712,6 +1712,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/rootfolders/for-language": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Where titles in a language go
+         * @description The language's root folder, or the one the library folder would get; error when there is neither.
+         */
+        get: operations["rootfolders-for-language"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/rootfolders/{id}": {
         parameters: {
             query?: never;
@@ -1729,6 +1749,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/rootfolders/{id}/language": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set the language a root folder holds */
+        put: operations["rootfolders-language"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/series": {
         parameters: {
             query?: never;
@@ -1739,6 +1776,26 @@ export interface paths {
         get: operations["series-list"];
         put?: never;
         post: operations["series-add"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/editions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a title in one or more languages
+         * @description Sources are split by language; each language becomes an edition in its own root folder.
+         */
+        post: operations["series-add-editions"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3139,6 +3196,32 @@ export interface components {
             /** Format: int64 */
             moduleId: number;
         };
+        AddEditionsRequest: {
+            blockedScanlators?: string[];
+            editions?: components["schemas"]["EditionOptions"][];
+            /** Format: double */
+            fromChapter?: number;
+            /** Format: int64 */
+            latestCount?: number;
+            metadata?: components["schemas"]["MetadataRef"];
+            /** @enum {string} */
+            monitor: "all" | "future" | "latest" | "from" | "none";
+            /** @enum {string} */
+            monitorNew?: "all" | "none";
+            /** Format: int64 */
+            requestId?: number;
+            searchMissing: boolean;
+            sources: components["schemas"]["SourceLink"][];
+            tags?: number[];
+            title?: string;
+            /** Format: int64 */
+            workId?: number;
+        };
+        AddEditionsResponse: {
+            editions: components["schemas"]["SeriesResource"][];
+            /** Format: int64 */
+            workId: number;
+        };
         AddOptions: {
             /** Format: double */
             fromChapter?: number;
@@ -3167,7 +3250,7 @@ export interface components {
             /** Format: int64 */
             requestId?: number;
             /** Format: int64 */
-            rootFolderId: number;
+            rootFolderId?: number;
             searchMissing: boolean;
             sources: components["schemas"]["SourceLink"][];
             tags?: number[];
@@ -3716,6 +3799,13 @@ export interface components {
             dsn: string;
             overwrite?: boolean;
         };
+        EditionOptions: {
+            language: string;
+            /** Format: int64 */
+            profileId?: number;
+            /** @enum {string} */
+            readingDirection?: "" | "rtl" | "ltr" | "vertical" | "webtoon";
+        };
         EditionSummary: {
             coverUrl: string;
             /** Format: int64 */
@@ -4185,6 +4275,12 @@ export interface components {
             /** Format: int64 */
             rootFolderId?: number;
             sources: string[];
+        };
+        LanguageFolder: {
+            error?: string;
+            exists: boolean;
+            language: string;
+            path?: string;
         };
         LinkedAccount: {
             externalUser: string;
@@ -5181,6 +5277,9 @@ export interface components {
         "Rootfolders-createRequest": {
             language: string;
             path: string;
+        };
+        "Rootfolders-languageRequest": {
+            language: string;
         };
         "Rootfolders-moveRequest": {
             moveFiles: boolean;
@@ -10192,6 +10291,37 @@ export interface operations {
             };
         };
     };
+    "rootfolders-for-language": {
+        parameters: {
+            query: {
+                lang: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LanguageFolder"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "rootfolders-move": {
         parameters: {
             query?: never;
@@ -10256,6 +10386,41 @@ export interface operations {
             };
         };
     };
+    "rootfolders-language": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Rootfolders-languageRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RootFolder"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "series-list": {
         parameters: {
             query?: never;
@@ -10305,6 +10470,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SeriesResource"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "series-add-editions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddEditionsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddEditionsResponse"];
                 };
             };
             /** @description Error */

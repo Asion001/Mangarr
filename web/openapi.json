@@ -71,6 +71,104 @@
         ],
         "type": "object"
       },
+      "AddEditionsRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "blockedScanlators": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "editions": {
+            "items": {
+              "$ref": "#/components/schemas/EditionOptions"
+            },
+            "type": "array"
+          },
+          "fromChapter": {
+            "format": "double",
+            "type": "number"
+          },
+          "latestCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/MetadataRef"
+          },
+          "monitor": {
+            "enum": [
+              "all",
+              "future",
+              "latest",
+              "from",
+              "none"
+            ],
+            "type": "string"
+          },
+          "monitorNew": {
+            "enum": [
+              "all",
+              "none"
+            ],
+            "type": "string"
+          },
+          "requestId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "searchMissing": {
+            "type": "boolean"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SourceLink"
+            },
+            "type": "array"
+          },
+          "tags": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": "string"
+          },
+          "workId": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sources",
+          "monitor",
+          "searchMissing"
+        ],
+        "type": "object"
+      },
+      "AddEditionsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "editions": {
+            "items": {
+              "$ref": "#/components/schemas/SeriesResource"
+            },
+            "type": "array"
+          },
+          "workId": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "workId",
+          "editions"
+        ],
+        "type": "object"
+      },
       "AddOptions": {
         "additionalProperties": false,
         "properties": {
@@ -184,7 +282,6 @@
         },
         "required": [
           "sources",
-          "rootFolderId",
           "monitor",
           "searchMissing"
         ],
@@ -1938,6 +2035,32 @@
         ],
         "type": "object"
       },
+      "EditionOptions": {
+        "additionalProperties": false,
+        "properties": {
+          "language": {
+            "type": "string"
+          },
+          "profileId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "readingDirection": {
+            "enum": [
+              "",
+              "rtl",
+              "ltr",
+              "vertical",
+              "webtoon"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "language"
+        ],
+        "type": "object"
+      },
       "EditionSummary": {
         "additionalProperties": false,
         "properties": {
@@ -3443,6 +3566,28 @@
         "required": [
           "language",
           "sources"
+        ],
+        "type": "object"
+      },
+      "LanguageFolder": {
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "exists": {
+            "type": "boolean"
+          },
+          "language": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "language",
+          "exists"
         ],
         "type": "object"
       },
@@ -6739,6 +6884,19 @@
         },
         "required": [
           "path",
+          "language"
+        ],
+        "type": "object"
+      },
+      "Rootfolders-languageRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "language": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
           "language"
         ],
         "type": "object"
@@ -15524,6 +15682,49 @@
         ]
       }
     },
+    "/api/v1/rootfolders/for-language": {
+      "get": {
+        "description": "The language's root folder, or the one the library folder would get; error when there is neither.",
+        "operationId": "rootfolders-for-language",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "lang",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LanguageFolder"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Where titles in a language go",
+        "tags": [
+          "Root folders"
+        ]
+      }
+    },
     "/api/v1/rootfolders/{id}": {
       "delete": {
         "operationId": "rootfolders-delete",
@@ -15608,6 +15809,58 @@
         ]
       }
     },
+    "/api/v1/rootfolders/{id}/language": {
+      "put": {
+        "operationId": "rootfolders-language",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Rootfolders-languageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RootFolder"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Set the language a root folder holds",
+        "tags": [
+          "Root folders"
+        ]
+      }
+    },
     "/api/v1/series": {
       "get": {
         "operationId": "series-list",
@@ -15674,6 +15927,48 @@
             "description": "Error"
           }
         },
+        "tags": [
+          "Series"
+        ]
+      }
+    },
+    "/api/v1/series/editions": {
+      "post": {
+        "description": "Sources are split by language; each language becomes an edition in its own root folder.",
+        "operationId": "series-add-editions",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddEditionsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddEditionsResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Add a title in one or more languages",
         "tags": [
           "Series"
         ]

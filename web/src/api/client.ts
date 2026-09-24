@@ -69,4 +69,6 @@ export function apiUrl(path: string, params?: Record<string, string | number | u
 }
 
 export type AddRequest = S["AddRequest"];
+export type AddEditionsRequest = S["AddEditionsRequest"];
+export type EditionOptions = S["EditionOptions"];
 export type UpdateRequest = S["UpdateRequest"];

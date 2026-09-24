@@ -6562,5 +6562,117 @@
   "Series with their own source order: {n}. They ignore this list.": {
     "ru": "Серий со своим порядком источников: {n}. Этот список они не используют.",
     "uk": "Серій із власним порядком джерел: {n}. Цей список вони не використовують."
+  },
+  "Add a language to {title}": {
+    "ru": "Добавить язык к «{title}»",
+    "uk": "Додати мову до «{title}»"
+  },
+  "Add an automatic folder to get a subfolder for each language, or add a folder for each language yourself. A title in a language without a folder can't be added.": {
+    "ru": "Добавьте автоматическую папку, чтобы для каждого языка создавалась подпапка, или добавьте папку для каждого языка сами. Тайтл на языке без папки добавить нельзя.",
+    "uk": "Додайте автоматичну теку, щоб для кожної мови створювалася підтека, або додайте теку для кожної мови самі. Тайтл мовою без теки додати не можна."
+  },
+  "Add {count} editions and download": {
+    "ru": "Добавить изданий: {count} и скачать",
+    "uk": "Додати видань: {count} і завантажити"
+  },
+  "Add {count} editions": {
+    "ru": "Добавить изданий: {count}",
+    "uk": "Додати видань: {count}"
+  },
+  "Another folder already holds this language; new titles go there.": {
+    "ru": "Этот язык уже закреплён за другой папкой; новые тайтлы попадут туда.",
+    "uk": "Цю мову вже закріплено за іншою текою; нові тайтли потраплять туди."
+  },
+  "Choose the source order, profile and reading direction used for each language.": {
+    "ru": "Выберите порядок источников, профиль и направление чтения для каждого языка.",
+    "uk": "Виберіть порядок джерел, профіль і напрямок читання для кожної мови."
+  },
+  "Each language becomes its own edition of this title, in that language's folder.": {
+    "ru": "Каждый язык становится отдельным изданием этого тайтла в папке своего языка.",
+    "uk": "Кожна мова стає окремим виданням цього тайтла в теці своєї мови."
+  },
+  "Edition language": {
+    "ru": "Язык издания",
+    "uk": "Мова видання"
+  },
+  "Every language (automatic)": {
+    "ru": "Все языки (автоматически)",
+    "uk": "Усі мови (автоматично)"
+  },
+  "Every other language": {
+    "ru": "Все остальные языки",
+    "uk": "Усі інші мови"
+  },
+  "Joins the {lang} edition this title already has": {
+    "ru": "Добавится к уже существующему изданию: {lang}",
+    "uk": "Додасться до наявного видання: {lang}"
+  },
+  "Language not chosen": {
+    "ru": "Язык не выбран",
+    "uk": "Мову не вибрано"
+  },
+  "Language…": {
+    "ru": "Язык…",
+    "uk": "Мова…"
+  },
+  "Made so far: {list}": {
+    "ru": "Уже создано: {list}",
+    "uk": "Уже створено: {list}"
+  },
+  "Saved to": {
+    "ru": "Сохраняется в",
+    "uk": "Зберігається в"
+  },
+  "Set in Media management": {
+    "ru": "Настраивается в «Управлении медиа»",
+    "uk": "Налаштовується в «Керуванні медіа»"
+  },
+  "Set": {
+    "ru": "Задать",
+    "uk": "Задати"
+  },
+  "The automatic folder gets a subfolder for each language the first time you add a title in it. A folder set for one language takes that language instead.": {
+    "ru": "В автоматической папке подпапка для языка создаётся, когда вы впервые добавляете тайтл на нём. Папка, закреплённая за языком, забирает этот язык себе.",
+    "uk": "В автоматичній теці підтека для мови створюється, коли ви вперше додаєте тайтл цією мовою. Тека, закріплена за мовою, забирає цю мову собі."
+  },
+  "The new edition uses this language's profile and reading direction from Settings → Search, and downloads every chapter.": {
+    "ru": "Новое издание использует профиль и направление чтения этого языка из «Настройки → Поиск» и скачивает все главы.",
+    "uk": "Нове видання використовує профіль і напрямок читання цієї мови з «Налаштування → Пошук» і завантажує всі розділи."
+  },
+  "These sources have titles in several languages; choose which one you want.": {
+    "ru": "В этих источниках тайтлы на нескольких языках; выберите нужный.",
+    "uk": "У цих джерелах тайтли кількома мовами; виберіть потрібну."
+  },
+  "automatic": {
+    "ru": "автоматически",
+    "uk": "автоматично"
+  },
+  "new folder": {
+    "ru": "новая папка",
+    "uk": "нова тека"
+  },
+  "new {lang} edition": {
+    "ru": "новое издание: {lang}",
+    "uk": "нове видання: {lang}"
+  },
+  "unused": {
+    "ru": "не используется",
+    "uk": "не використовується"
+  },
+  "{lang} edition added": {
+    "ru": "Издание добавлено: {lang}",
+    "uk": "Видання додано: {lang}"
+  },
+  "{lang} edition": {
+    "ru": "Издание: {lang}",
+    "uk": "Видання: {lang}"
+  },
+  "{title} added in {count} languages": {
+    "ru": "«{title}» добавлен, языков: {count}",
+    "uk": "«{title}» додано, мов: {count}"
+  },
+  "{title} added": {
+    "ru": "«{title}» добавлен",
+    "uk": "«{title}» додано"
   }
 }

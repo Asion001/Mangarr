@@ -21,7 +21,7 @@ Lists are comma-separated (`a,b,c`) or JSON; key/value settings use `key=value,k
 | `MANGARR_AUTH_DISABLED` | `false` | Disable login and API key checks (only behind an auth proxy). |
 | `MANGARR_WEB_DIR` | `` | Serve the UI from this directory instead of the embedded copy (development). |
 | `MANGARR_KOMGA_LISTEN` | `:25600` | Listen address of the Komga-compatible API for reading apps (when enabled in Settings → Reading apps). |
-| `MANGARR_ROOT_FOLDERS` | `` | Root folders to create and lock, comma-separated; append \|lang to set a language (/data/manga/ja\|ja). |
+| `MANGARR_ROOT_FOLDERS` | `` | Root folders to create and lock, comma-separated; append \|lang to set a language (/data/manga/ja\|ja), or \|* for the automatic folder that gets a subfolder per language (/data/manga\|*). |
 
 ## Workers (`MANGARR_MODE=worker`)
 

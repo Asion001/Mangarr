@@ -10,7 +10,8 @@ import { relative } from "../../lib/format";
 import { useSettingsDoc } from "../settings/useSettingsDoc";
 
 export type PickGroup = Pick<SearchGroup, "moduleId" | "sourceId" | "sourceName" | "lang">;
-export type Picked = { manga: SourceManga; group: PickGroup };
+/** Picked is a chosen source; lang is the edition a catalog in several languages goes to. */
+export type Picked = { manga: SourceManga; group: PickGroup; lang?: string };
 export type Scope = "active" | "all" | "custom";
 
 /** Linked is a link a series already has (catalog and manga address). */

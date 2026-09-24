@@ -153,11 +153,13 @@ type Sources struct {
 // LanguageDefault configures the normal add path for one edition language.
 // Sources contains ordered "moduleId:sourceId" catalog keys.
 type LanguageDefault struct {
-	Language         string   `json:"language"`
-	Sources          []string `json:"sources"`
-	RootFolderID     int64    `json:"rootFolderId,omitempty"`
-	ProfileID        int64    `json:"profileId,omitempty"`
-	ReadingDirection string   `json:"readingDirection,omitempty" enum:",rtl,ltr,webtoon"`
+	Language string   `json:"language"`
+	Sources  []string `json:"sources"`
+	// RootFolderID is superseded by the folder's own language (#17); kept
+	// until the add screen stops sending it.
+	RootFolderID     int64  `json:"rootFolderId,omitempty"`
+	ProfileID        int64  `json:"profileId,omitempty"`
+	ReadingDirection string `json:"readingDirection,omitempty" enum:",rtl,ltr,webtoon"`
 }
 
 // ForLanguage returns a case-insensitive language default.
