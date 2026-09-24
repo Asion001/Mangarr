@@ -699,6 +699,41 @@
         ],
         "type": "object"
       },
+      "CatalogHealth": {
+        "additionalProperties": false,
+        "properties": {
+          "failing": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "lastCheckedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "lastSuccessAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "moduleId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "series": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sourceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "moduleId",
+          "sourceId",
+          "series",
+          "failing"
+        ],
+        "type": "object"
+      },
       "CatalogList": {
         "additionalProperties": false,
         "properties": {
@@ -10473,6 +10508,40 @@
           }
         },
         "summary": "Change preferences of several catalogs, keyed by moduleId:sourceId",
+        "tags": [
+          "Catalogs"
+        ]
+      }
+    },
+    "/api/v1/catalogs/health": {
+      "get": {
+        "operationId": "catalogs-health",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CatalogHealth"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "How many series use each catalog, how many of those links are failing, and when it last worked",
         "tags": [
           "Catalogs"
         ]

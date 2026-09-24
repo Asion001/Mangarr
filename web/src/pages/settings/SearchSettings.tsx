@@ -32,6 +32,7 @@ export function SearchSettingsPage() {
   const { data: roots } = useRootFolders();
   const { data: profiles } = useProfiles();
   const v = doc.value;
+  const catalogLangs = Array.from(new Set((catalogs?.items ?? []).filter((c) => !c.hidden).map((c) => c.lang))).filter((l) => l && l !== "all" && l !== "multi").sort();
   const qs = v?.quickSearch;
   const setQS = (p: Partial<Sources["quickSearch"]>) => v && doc.patch({ quickSearch: { ...v.quickSearch, ...p } });
   const setT = (p: Partial<Throttle>) => v && doc.patch({ throttle: { ...v.throttle, ...p } });
@@ -51,6 +52,35 @@ export function SearchSettingsPage() {
       {doc.error && <ErrorBox error={doc.error} />}
       {v && qs && (
         <>
+          <Card title={t("Catalogs")} className="mb-6">
+            <div className="flex flex-col gap-3">
+              <Switch
+                checked={v.hideNsfw}
+                env={doc.lock("hideNsfw")}
+                onChange={(hideNsfw) => doc.patch({ hideNsfw })}
+                label={t("Hide NSFW catalogs everywhere (search, browse, add series)")}
+              />
+              <div className="flex flex-wrap items-center gap-1.5 text-sm">
+                <span className="mr-1 text-muted">{t("Search languages by default:")}</span>
+                {catalogLangs.map((l) => {
+                  const on = (v.defaultLanguages ?? []).includes(l);
+                  return (
+                    <button
+                      key={l}
+                      type="button"
+                      aria-pressed={on}
+                      disabled={!!doc.lock("defaultLanguages")}
+                      onClick={() => doc.patch({ defaultLanguages: on ? v.defaultLanguages.filter((x) => x !== l) : [...(v.defaultLanguages ?? []), l] })}
+                      className={`rounded border px-2 py-0.5 text-xs ${on ? "border-accent bg-accent/15 text-fg" : "border-border text-muted hover:text-fg"}`}
+                    >
+                      {l}
+                    </button>
+                  );
+                })}
+                {!(v.defaultLanguages ?? []).length && <span className="text-xs text-muted">{t("(none selected = all languages)")}</span>}
+              </div>
+            </div>
+          </Card>
           <Card title={t("Language defaults")} className="mb-6">
             <p className="mb-4 text-sm text-muted">{t("Choose the source order, root folder, profile and reading direction used for each language.")}</p>
             <div className="flex flex-col gap-4">

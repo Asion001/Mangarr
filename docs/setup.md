@@ -57,10 +57,12 @@ when it loads pages. mangarr itself speaks HTTP/1.1 and cleartext HTTP/2
    `http://flaresolverr:8191`. "Manage Suwayomi settings" turns off
    Suwayomi's own updater and auto-download (mangarr schedules everything).
    Press **Test**.
-4. Sources → Catalogs → put the catalogs you want searched first at the top,
-   and open a catalog's settings (the gear) for what it offers: the language
-   its titles come in, which of its servers to read pages from, whether to
-   include adult titles. With Suwayomi, Sources → Extensions installs more.
+4. Sources → My catalogs → drag the catalogs you want searched first to the
+   top, and open a catalog's settings (its ⋯ menu → *Catalog settings…*) for
+   what it offers: the language its titles come in, which of its servers to
+   read pages from, whether to include adult titles. With Suwayomi, Sources →
+   Add catalogs installs more (and asks which of an extension's languages to
+   turn on).
 5. Settings → Metadata → *AniList* (and *Shikimori* for Russian titles and
    synopses).
 6. Settings → Library servers → *Komga*:
@@ -85,13 +87,16 @@ needs nothing running beside it. Suwayomi is still
 there for everything else, and the two live side by side: a series can have
 links to both.
 
-- **Catalog order.** Sources → Catalogs lists every catalog of a module with
-  its order, whether it is searched, and how gently it is hit. Searches go
-  top-down; downloads prefer the sources a series already has, in the order
-  they were linked.
-- **A catalog's own settings** are behind the gear on its row: the language
-  its titles come in, which of its page servers to read from, whether adult
-  titles are included — whatever that site offers.
+- **Catalog order.** Sources → My catalogs lists the catalogs that are on, in
+  search order, with how many series use each and whether their links work
+  (failing links, a pause after 429s with *Resume now*). Catalogs that are
+  off are folded away underneath. Searches go top-down; downloads prefer the
+  sources a series already has, in the order they were linked.
+- **A catalog's own settings** are in its ⋯ menu, with its request speed:
+  the language its titles come in, which of its page servers to read from,
+  whether adult titles are included — whatever that site offers.
+- **Search defaults** (the languages searched, hiding NSFW catalogs) are in
+  Settings → Search & throttling.
 - **Sites behind a browser check** need FlareSolverr; set its address on the
   module (Settings → Source modules → *mangarr sources*). Sites that don't
   need it never pay for it.
@@ -102,12 +107,14 @@ links to both.
 
 ### Priorities per language and library
 
-The catalog order is the global default. Sources → **Priorities** can
-override it for one language or one root folder (the library order wins over
-the language order); catalogs not listed keep their global place. Series
-added afterwards inherit it. Series that already have their own order keep
-it until you **Preview migration** and apply it, which changes only the order:
-it links no source and starts no download.
+The catalog order is the global default. On Sources → My catalogs, **Order
+for** picks one language or one root folder to give its own order (the
+library order wins over the language order); catalogs not listed keep their
+global place, and *Use the global order* drops it again. Series added
+afterwards inherit it. Series that already have their own order keep it; the
+banner above the list shows how many, and **Review…** switches them to the
+shared order, which changes only the order: it links no source and starts no
+download.
 
 Settings → Search & throttling → **Language defaults** sets, per language,
 which catalogs an added series gets, and its root folder, profile and reading

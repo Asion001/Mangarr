@@ -1,20 +1,23 @@
-import { t } from "../../lib/i18n/core";
-import { useMemo, useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, RefreshCw, Settings2, Trash2, ArrowUpCircle, Plus } from "lucide-react";
-import { api, apiUrl, unwrap, type Extension, type ModuleResource, type SourceInfo } from "../../api/client";
-import { useModules, useSources } from "../../api/queries";
+import { t as tr, t } from "../../lib/i18n/core";
+import { useMemo, useState, type ReactNode } from "react";
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router";
+import { useQuery } from "@tanstack/react-query";
+import clsx from "clsx";
+import { Settings2 } from "lucide-react";
+import { api, apiUrl, unwrap, type Catalog, type ModuleResource, type S } from "../../api/client";
+import { useCatalogs, useModules, useSeriesList } from "../../api/queries";
 import { Cover } from "../../components/Cover";
-import { Badge, Button, Card, EmptyState, ErrorBox, IconButton, Input, Loading, PageHeader, Select, Switch, Tabs } from "../../components/ui";
-import { useToast } from "../../lib/toast";
-import { useListParam, useQueryParam } from "../../lib/urlState";
-import { Catalogs } from "./Catalogs";
+import { Button, EmptyState, ErrorBox, Input, Loading, PageHeader, Segmented, Select } from "../../components/ui";
+import { useListParam } from "../../lib/urlState";
+import { useSettingsDoc } from "../settings/useSettingsDoc";
+import { AddCatalogs, useExtensions } from "./AddCatalogs";
+import { CatalogIcon, Catalogs } from "./Catalogs";
 import { SourceSettings } from "./SourceSettings";
-import { SourcePriorities } from "./SourcePriorities";
 import { SwitchEngine } from "./SwitchEngine";
 
-type Tab = "extensions" | "catalogs" | "priorities" | "browse" | "stores";
+type Tab = "catalogs" | "add" | "browse";
+// older addresses of the tabs this page replaced
+const moved: Record<string, Tab> = { extensions: "add", stores: "add", priorities: "catalogs" };
 
 export function SourcesPage() {
   const { data: modules, isLoading } = useModules("source");
@@ -25,7 +28,12 @@ export function SourcesPage() {
   const moduleId = Number(params.get("module") ?? 0);
   const current = mods.find((m) => m.id === moduleId) ?? mods[0];
   const [switching, setSwitching] = useState(false);
+  const { data: catalogs } = useCatalogs();
+  const src = useSettingsDoc<S["Sources"]>("sources").value;
+  const hasExtensions = !!current?.capabilities.includes("extensions");
+  const { data: extensions } = useExtensions(current ?? ({ id: 0, capabilities: [] } as unknown as ModuleResource));
 
+  if (tabParam && moved[tabParam]) return <Navigate replace to={{ pathname: `/sources/${moved[tabParam]}`, search: params.toString() ? `?${params}` : "" }} />;
   if (isLoading) return <Loading />;
   if (!mods.length)
     return (
@@ -35,260 +43,191 @@ export function SourcesPage() {
         </EmptyState>
       </>
     );
-  const caps = current?.capabilities ?? [];
-  const tabs: { value: Tab; label: string }[] = [
-    ...(caps.includes("extensions") ? [{ value: "extensions" as const, label: "Extensions" }] : []),
-    { value: "catalogs", label: "Catalogs" },
-    { value: "priorities", label: "Priorities" },
-    { value: "browse", label: "Browse" },
-    ...(caps.includes("extensions") ? [{ value: "stores" as const, label: "Stores" }] : []),
+  const on = (catalogs?.items ?? []).filter((c) => c.moduleId === current?.id && c.enabled && !c.hidden).length;
+  const updates = (extensions ?? []).filter((e) => e.installed && e.hasUpdate).length;
+  const tabs: { value: Tab; label: ReactNode }[] = [
+    { value: "catalogs", label: <>{t("My catalogs")} <span className="font-normal text-muted">{on}</span></> },
+    ...(hasExtensions
+      ? [{ value: "add" as const, label: <>{t("Add catalogs")} {updates > 0 && <span className="ml-1 rounded-full bg-accent/15 px-1.5 py-0.5 text-[11px] font-semibold text-accent-2">{t("{n} updates", { n: updates })}</span>}</> }]
+      : []),
+    { value: "browse", label: t("Browse") },
   ];
-  const tab: Tab = tabs.some((t) => t.value === tabParam) ? (tabParam as Tab) : tabs[0].value;
-  const go = (t: Tab) => nav({ pathname: `/sources/${t}`, search: current && mods.length > 1 ? `?module=${current.id}` : "" });
+  const tab: Tab = tabs.some((x) => x.value === tabParam) ? (tabParam as Tab) : "catalogs";
+  const go = (x: Tab) => nav({ pathname: `/sources/${x}`, search: current && mods.length > 1 ? `?module=${current.id}` : "" });
+  const langs = src?.defaultLanguages ?? [];
   return (
     <>
       <PageHeader
         title={t("Sources")}
+        subtitle={
+          src && (
+            <>
+              {[langs.length ? t("Searching {langs}", { langs: langs.join(", ") }) : t("Searching every language"), src.hideNsfw ? t("NSFW hidden") : t("NSFW shown")].join(" · ")} ·{" "}
+              <Link to="/settings/search" className="text-accent-2 hover:underline">{t("change in Settings → Search")}</Link>
+            </>
+          )
+        }
         actions={
           mods.length > 1 && (
             <>
+              <label className="flex items-center gap-2 text-sm text-muted">
+                {t("Engine")}
+                <Select className="w-auto" value={current?.id} onChange={(e) => setParams({ module: e.target.value })}>
+                  {mods.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </Select>
+              </label>
               <Button onClick={() => setSwitching(true)}>{t("Switch engine…")}</Button>
-              <Select value={current?.id} onChange={(e) => setParams({ module: e.target.value })}>
-                {mods.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-              </Select>
             </>
           )
         }
       />
-      <Tabs value={tab} onChange={go} tabs={tabs} />
-      {current && tab === "extensions" && <Extensions module={current} />}
+      <nav aria-label={t("Sources sections")} className="mb-4 flex gap-1 overflow-x-auto border-b border-border">
+        {tabs.map((x) => (
+          <button
+            key={x.value}
+            type="button"
+            aria-current={tab === x.value ? "page" : undefined}
+            onClick={() => go(x.value)}
+            className={clsx("-mb-px shrink-0 border-b-2 px-3 py-2 text-sm font-medium", tab === x.value ? "border-accent text-fg" : "border-transparent text-muted hover:text-fg")}
+          >
+            {x.label}
+          </button>
+        ))}
+      </nav>
       {current && tab === "catalogs" && <Catalogs module={current} />}
-      {tab === "priorities" && <SourcePriorities />}
+      {current && tab === "add" && <AddCatalogs module={current} />}
       {current && tab === "browse" && <Browse module={current} />}
-      {current && tab === "stores" && <Stores module={current} />}
       {switching && current && <SwitchEngine modules={mods} from={current} onClose={() => setSwitching(false)} />}
     </>
   );
 }
 
-function Extensions({ module }: { module: ModuleResource }) {
-  const qc = useQueryClient();
-  const toast = useToast();
-  const [refresh, setRefresh] = useState(false);
-  const { data, isFetching, error } = useQuery({
-    queryKey: ["extensions", module.id, refresh],
-    queryFn: () => unwrap(api.GET("/api/v1/modules/{id}/extensions", { params: { path: { id: module.id }, query: { refresh } } })),
-  });
-  const [q, setQ] = useQueryParam("ext", "");
-  const [lang, setLang] = useListParam("lang", "");
-  const [showParam, setShow] = useListParam("show", "all");
-  const show = showParam as "all" | "installed" | "updates";
-  const [nsfwParam, setNsfw] = useListParam("nsfw", "");
-  const nsfw = nsfwParam === "1";
-  const [busy, setBusy] = useState<string>("");
-
-  const langs = useMemo(() => Array.from(new Set((data ?? []).map((e) => e.lang))).sort(), [data]);
-  const list = useMemo(() => {
-    let l = data ?? [];
-    if (!nsfw) l = l.filter((e) => !e.nsfw);
-    if (show === "installed") l = l.filter((e) => e.installed);
-    if (show === "updates") l = l.filter((e) => e.hasUpdate);
-    if (lang) l = l.filter((e) => e.lang === lang || e.lang === "all");
-    if (q) l = l.filter((e) => e.name.toLowerCase().includes(q.toLowerCase()));
-    return [...l].sort((a, b) => Number(b.installed) - Number(a.installed) || a.name.localeCompare(b.name));
-  }, [data, q, lang, show, nsfw]);
-
-  const act = async (e: Extension, action: "install" | "update" | "uninstall") => {
-    setBusy(e.pkg);
-    try {
-      await unwrap(api.POST("/api/v1/modules/{id}/extensions/{pkg}/{action}", { params: { path: { id: module.id, pkg: e.pkg, action } } }));
-      toast.success(`${e.name} ${action === "uninstall" ? "uninstalled" : action + "ed"}`);
-      qc.invalidateQueries({ queryKey: ["extensions"] });
-      qc.invalidateQueries({ queryKey: ["sources"] });
-    } catch (err) {
-      toast.fromError(err);
-    } finally {
-      setBusy("");
-    }
-  };
-
-  return (
-    <>
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Input className="max-w-xs" placeholder={t("Filter extensions…")} value={q} onChange={(e) => setQ(e.target.value)} />
-        <Select className="w-32" value={lang} onChange={(e) => setLang(e.target.value)}>
-          <option value="">{t("all langs")}</option>
-          {langs.map((l) => (
-            <option key={l}>{l}</option>
-          ))}
-        </Select>
-        <Select className="w-40" value={show} onChange={(e) => setShow(e.target.value)}>
-          <option value="all">{t("All")}</option>
-          <option value="installed">{t("Installed")}</option>
-          <option value="updates">{t("Updates")}</option>
-        </Select>
-        <Switch checked={nsfw} onChange={(v) => setNsfw(v ? "1" : "")} label={t("Show NSFW extensions")} />
-        <Button className="ml-auto" icon={<RefreshCw className="size-4" />} loading={isFetching && refresh} onClick={() => (setRefresh(true), qc.invalidateQueries({ queryKey: ["extensions"] }))}>{t("Refresh from stores")}</Button>
-      </div>
-      {isFetching && !data && <Loading />}
-      {error && <ErrorBox error={error} />}
-      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-        {list.slice(0, 300).map((e) => (
-          <div key={e.pkg} className="flex items-center gap-3 rounded-lg border border-border bg-panel p-2.5">
-            <img src={e.iconUrl ? apiUrl(`api/v1/modules/${module.id}/asset`, { path: e.iconUrl }) : undefined} alt="" className="size-9 rounded bg-panel-2" loading="lazy" />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
-                <span className="truncate font-medium">{e.name}</span>
-                <Badge>{e.lang}</Badge>
-                {e.nsfw && <Badge tone="err">18+</Badge>}
-              </div>
-              <div className="text-xs text-muted">
-                v{e.versionName}
-                {e.obsolete && <span className="ml-1 text-err">{t("obsolete")}</span>}
-              </div>
-            </div>
-            {e.installed ? (
-              <div className="flex gap-1">
-                {e.hasUpdate && (
-                  <Button size="sm" variant="primary" loading={busy === e.pkg} icon={<ArrowUpCircle className="size-3.5" />} onClick={() => act(e, "update")}>{t("Update")}</Button>
-                )}
-                <IconButton title={t("Uninstall")} disabled={busy === e.pkg} onClick={() => act(e, "uninstall")}>
-                  <Trash2 className="size-4" />
-                </IconButton>
-              </div>
-            ) : (
-              <Button size="sm" loading={busy === e.pkg} icon={<Download className="size-3.5" />} onClick={() => act(e, "install")}>{t("Install")}</Button>
-            )}
-          </div>
-        ))}
-      </div>
-      {list.length > 300 && <p className="mt-3 text-center text-sm text-muted">{t("Showing 300 of") + " "}{list.length}{t("; refine the filter.")}</p>}
-    </>
-  );
-}
-
+/** Browse lists a catalog's popular or latest series; a cover opens Add series with that catalog picked. */
 function Browse({ module }: { module: ModuleResource }) {
-  const { data: sources } = useSources();
+  const { data: catalogs } = useCatalogs();
+  const { data: library } = useSeriesList();
   const nav = useNavigate();
-  const mine = (sources ?? []).filter((s) => s.moduleId === module.id);
+  // the catalogs that are on, in your order
+  const mine = (catalogs?.items ?? []).filter((c) => c.moduleId === module.id && c.enabled && !c.hidden).sort((a, b) => a.priority - b.priority);
   const [sourceId, setSourceId] = useListParam("catalog", "");
   const [typeParam, setType] = useListParam("show", "popular");
   const type = typeParam as "popular" | "latest" | "search";
   const [q, setQ] = useListParam("q", "");
   const [pageParam, setPage] = useListParam("page", "1");
   const page = Math.max(1, Number(pageParam) || 1);
-  const [prefs, setPrefs] = useState<SourceInfo | null>(null);
+  const [filter, setFilter] = useState("");
+  const [prefs, setPrefs] = useState<Catalog | null>(null);
   const src = mine.find((s) => s.id === sourceId) ?? mine[0];
   const { data, isFetching, error } = useQuery({
     queryKey: ["browse", module.id, src?.id, type, q, page],
     queryFn: () => unwrap(api.GET("/api/v1/sources/{moduleId}/{sourceId}/browse", { params: { path: { moduleId: module.id, sourceId: src!.id }, query: { type, q, page } } })),
     enabled: !!src && (type !== "search" || q.length > 0),
   });
-  if (!mine.length) return <EmptyState title={t("No catalogs")}>{t("Install an extension first.")}</EmptyState>;
+  // series already in the library, by the source entry they link
+  const have = useMemo(() => new Set((library ?? []).flatMap((s) => (s.sources ?? []).map((l) => `${l.moduleId}:${l.sourceId}:${l.mangaUrl}`))), [library]);
+  if (!mine.length) return <EmptyState title={t("No catalogs")}>{t("Turn a catalog on under My catalogs first.")}</EmptyState>;
+  const rail = filter ? mine.filter((s) => s.displayName.toLowerCase().includes(filter.toLowerCase())) : mine;
+  const choose = (id: string) => (setSourceId(id), setPage("1"));
   return (
-    <>
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Select className="max-w-xs" value={src?.id} onChange={(e) => (setSourceId(e.target.value), setPage("1"))}>
-          {mine.map((s) => (
+    <div className="flex flex-col gap-4 md:flex-row md:gap-6">
+      <nav aria-label={t("Catalogs")} className="flex shrink-0 flex-col gap-1 md:w-56">
+        <Input aria-label={t("Filter catalogs")} placeholder={t("Filter catalogs…")} value={filter} onChange={(e) => setFilter(e.target.value)} className="mb-1" />
+        <Select className="md:hidden" aria-label={t("Catalog")} value={src?.id} onChange={(e) => choose(e.target.value)}>
+          {rail.map((s) => (
             <option key={s.id} value={s.id}>
               {s.displayName}
             </option>
           ))}
         </Select>
-        <Select className="w-32" value={type} onChange={(e) => (setType(e.target.value), setPage("1"))}>
-          <option value="popular">{t("Popular")}</option>
-          <option value="latest" disabled={!src?.supportsLatest}>{t("Latest")}</option>
-          <option value="search">{t("Search")}</option>
-        </Select>
-        {type === "search" && (
+        <div className="hidden max-h-[70vh] flex-col gap-0.5 overflow-y-auto md:flex">
+          {rail.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              aria-current={s.id === src?.id ? "page" : undefined}
+              onClick={() => choose(s.id)}
+              className={clsx("flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm", s.id === src?.id ? "bg-panel-2 font-semibold text-fg" : "text-fg/80 hover:bg-panel-2")}
+            >
+              <CatalogIcon moduleId={module.id} iconUrl={s.iconUrl} name={s.name} small />
+              <span className="min-w-0 flex-1 truncate">{s.name}</span>
+              <span className="text-[11px] text-muted">{s.lang}</span>
+            </button>
+          ))}
+        </div>
+      </nav>
+      <section aria-label={src?.displayName} className="min-w-0 flex-1">
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <h2 className="mr-1 text-base font-semibold">
+            {src?.name} <span className="text-sm font-normal text-muted">{src?.lang}</span>
+          </h2>
+          <Segmented
+            label={t("List")}
+            value={type === "search" ? "popular" : type}
+            onChange={(v) => (setType(v), setQ(""), setPage("1"))}
+            options={[
+              { value: "popular", label: t("Popular") },
+              ...(src?.supportsLatest ? [{ value: "latest" as const, label: t("Latest") }] : []),
+            ]}
+          />
           <form
+            className="min-w-48 max-w-96 flex-1"
             onSubmit={(e) => {
               e.preventDefault();
-              setQ(new FormData(e.currentTarget).get("q") as string);
+              const v = (new FormData(e.currentTarget).get("q") as string).trim();
+              setQ(v);
+              setType(v ? "search" : "popular");
               setPage("1");
             }}
           >
-            <Input name="q" placeholder={t("Search…")} defaultValue={q} />
+            <Input name="q" key={`${src?.id}:${q}`} aria-label={t("Search {name}", { name: src?.name ?? "" })} placeholder={t("Search {name}…", { name: src?.name ?? "" })} defaultValue={q} />
           </form>
-        )}
-        {module.capabilities.includes("preferences") && src && (
-          <Button icon={<Settings2 className="size-4" />} onClick={() => setPrefs(src)}>{t("Source settings")}</Button>
-        )}
-      </div>
-      {isFetching && <Loading />}
-      {error && <ErrorBox error={error} />}
-      {data && (
-        <>
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-4">
-            {data.mangas.map((m) => (
-              <button key={m.url} className="group flex flex-col gap-1.5 text-left" onClick={() => nav(`/add?q=${encodeURIComponent(m.title)}`)}>
-                <Cover
-                  src={apiUrl(`api/v1/sources/${module.id}/${src!.id}/thumbnail`, { url: m.url, engineRef: m.engineRef })}
-                  alt={m.title}
-                  className="aspect-[2/3] w-full ring-accent/60 group-hover:ring-2"
-                />
-                <span className="line-clamp-2 text-xs">{m.title}</span>
-              </button>
-            ))}
-          </div>
-          <div className="mt-4 flex justify-center gap-2">
-            <Button size="sm" disabled={page <= 1} onClick={() => setPage(String(page - 1))}>{t("Previous")}</Button>
-            <Button size="sm" disabled={!data.hasNext} onClick={() => setPage(String(page + 1))}>{t("Next")}</Button>
-          </div>
-        </>
-      )}
-      {prefs && <SourceSettings moduleId={module.id} sourceId={prefs.id} title={prefs.displayName} onClose={() => setPrefs(null)} />}
-    </>
-  );
-}
-
-function Stores({ module }: { module: ModuleResource }) {
-  const qc = useQueryClient();
-  const toast = useToast();
-  const key = ["stores", module.id];
-  const { data, isLoading, error } = useQuery({ queryKey: key, queryFn: () => unwrap(api.GET("/api/v1/modules/{id}/stores", { params: { path: { id: module.id } } })) });
-  const [url, setUrl] = useState("");
-  const add = async () => {
-    try {
-      await unwrap(api.POST("/api/v1/modules/{id}/stores", { params: { path: { id: module.id } }, body: { url } }));
-      setUrl("");
-      qc.invalidateQueries({ queryKey: key });
-      qc.invalidateQueries({ queryKey: ["extensions"] });
-    } catch (e) {
-      toast.fromError(e);
-    }
-  };
-  const remove = async (u: string) => {
-    try {
-      await unwrap(api.DELETE("/api/v1/modules/{id}/stores", { params: { path: { id: module.id }, query: { url: u } } }));
-      qc.invalidateQueries({ queryKey: key });
-    } catch (e) {
-      toast.fromError(e);
-    }
-  };
-  return (
-    <Card title={t("Extension stores")}>
-      {isLoading && <Loading />}
-      {error && <ErrorBox error={error} />}
-      <div className="flex flex-col gap-2">
-        {data?.map((u) => (
-          <div key={u} className="flex items-center gap-2 rounded bg-panel-2 px-3 py-2 text-sm">
-            <span className="flex-1 truncate font-mono text-xs">{u}</span>
-            <IconButton title={t("Remove")} onClick={() => remove(u)}>
-              <Trash2 className="size-4" />
-            </IconButton>
-          </div>
-        ))}
-        <div className="mt-2 flex gap-2">
-          <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…/index.min.json" />
-          <Button icon={<Plus className="size-4" />} disabled={!url} onClick={add}>{t("Add store")}</Button>
+          <span className="flex-1" />
+          {module.capabilities.includes("preferences") && src && (
+            <Button icon={<Settings2 className="size-4" />} onClick={() => setPrefs(src)}>{t("Catalog settings…")}</Button>
+          )}
         </div>
-        <p className="text-xs text-muted">{t("Keiyoushi is added by default. Only add stores you trust: extensions run as code inside the engine.")}</p>
-      </div>
-    </Card>
+        {isFetching && <Loading />}
+        {error && <ErrorBox error={error} />}
+        {data && (
+          <>
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-4">
+              {data.mangas.map((m) => {
+                const inLibrary = have.has(`${module.id}:${src!.id}:${m.url}`);
+                const title = encodeURIComponent(m.title);
+                return (
+                  <button
+                    key={m.url}
+                    type="button"
+                    className="group flex flex-col gap-1.5 text-left"
+                    // Add series, searching only this catalog, so this entry is the pick
+                    onClick={() => nav(`/add/manual/-/sources?title=${title}&sq=${title}&src=${encodeURIComponent(`${module.id}:${src!.id}`)}${src!.lang && src!.lang !== "all" ? `&lang=${src!.lang}` : ""}`)}
+                  >
+                    <span className="relative">
+                      <Cover
+                        src={apiUrl(`api/v1/sources/${module.id}/${src!.id}/thumbnail`, { url: m.url, engineRef: m.engineRef })}
+                        alt={m.title}
+                        className="aspect-[2/3] w-full ring-accent/60 group-hover:ring-2"
+                      />
+                      {inLibrary && <span className="absolute left-1.5 top-1.5 rounded-full bg-bg/85 px-2 py-0.5 text-[11px] font-semibold text-ok">{tr("In library")}</span>}
+                    </span>
+                    <span className="line-clamp-2 text-xs">{m.title}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {!data.mangas.length && <p className="text-sm text-muted">{t("Nothing found.")}</p>}
+            <div className="mt-4 flex justify-center gap-2">
+              <Button size="sm" disabled={page <= 1} onClick={() => setPage(String(page - 1))}>{t("Previous")}</Button>
+              <Button size="sm" disabled={!data.hasNext} onClick={() => setPage(String(page + 1))}>{t("Next")}</Button>
+            </div>
+          </>
+        )}
+      </section>
+      {prefs && <SourceSettings moduleId={module.id} sourceId={prefs.id} title={prefs.displayName} onClose={() => setPrefs(null)} />}
+    </div>
   );
 }

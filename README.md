@@ -129,8 +129,9 @@ See [docker/compose.example.yml](docker/compose.example.yml) and the full
 4. **Settings → Source modules**: *mangarr sources* (MangaDex, MANGA Plus,
    Weeb Central, MangaFire and 19 more sites) is there already. For other sites add
    *Suwayomi* (`http://suwayomi:4567`, FlareSolverr
-   `http://flaresolverr:8191`) and install extensions under **Sources**.
-5. **Sources → Catalogs**: put the catalogs you want searched first on top.
+   `http://flaresolverr:8191`) and install extensions under **Sources → Add
+   catalogs**.
+5. **Sources → My catalogs**: put the catalogs you want searched first on top.
 6. **Settings → Metadata**: add *AniList* (and *Shikimori* for Russian
    titles).
 7. **Settings → Library servers**: add *Komga* with an admin API key and a

@@ -141,6 +141,7 @@ var operationPermissions = map[string][]string{
 	"sources-manga":           {access.LibraryManage, access.RequestsManage},
 	"sources-thumbnail":       {access.LibraryManage, access.RequestsManage},
 	"catalogs-list":           {access.LibraryManage, access.RequestsManage},
+	"catalogs-health":         {access.LibraryManage},
 	"rootfolders-list":        {access.LibraryManage, access.RequestsManage},
 	"profiles-list":           {access.LibraryManage, access.RequestsManage},
 	"tags-create":             {access.LibraryManage},

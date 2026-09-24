@@ -187,6 +187,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/catalogs/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How many series use each catalog, how many of those links are failing, and when it last worked */
+        get: operations["catalogs-health"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chapters/delete": {
         parameters: {
             query?: never;
@@ -3315,6 +3332,19 @@ export interface components {
             priority: number;
             supportsLatest: boolean;
             throttle: components["schemas"]["ThrottleConfig"];
+        };
+        CatalogHealth: {
+            /** Format: int64 */
+            failing: number;
+            /** Format: date-time */
+            lastCheckedAt?: string;
+            /** Format: date-time */
+            lastSuccessAt?: string;
+            /** Format: int64 */
+            moduleId: number;
+            /** Format: int64 */
+            series: number;
+            sourceId: string;
         };
         CatalogList: {
             errors: string[];
@@ -6485,6 +6515,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CatalogList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "catalogs-health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogHealth"][];
                 };
             };
             /** @description Error */

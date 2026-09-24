@@ -1,5 +1,5 @@
 import { t, label as translateLabel } from "../lib/i18n/core";
-import { useEffect, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import clsx from "clsx";
 import { ChevronDown, Loader2, Lock, X, Plus, Trash2 } from "lucide-react";
 
@@ -376,6 +376,7 @@ export function Modal({
   footer?: ReactNode;
   size?: "sm" | "md" | "lg" | "xl";
 }) {
+  const titleId = useId();
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -386,6 +387,9 @@ export function Modal({
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 pt-[8vh]" onMouseDown={onClose}>
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
         onMouseDown={(e) => e.stopPropagation()}
         className={clsx(
           "w-full rounded-xl border border-border bg-panel shadow-2xl",
@@ -396,7 +400,7 @@ export function Modal({
         )}
       >
         <header className="flex items-center justify-between border-b border-border px-5 py-3.5">
-          <h2 className="font-semibold">{title}</h2>
+          <h2 id={titleId} className="font-semibold">{title}</h2>
           <IconButton title={t("Close")} onClick={onClose}>
             <X className="size-4" />
           </IconButton>
