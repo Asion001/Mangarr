@@ -102,6 +102,31 @@ func seed(t *testing.T, d *db.DB) (*model.Series, time.Time) {
 			t.Fatal(err)
 		}
 	}
+	link := &model.MessengerLink{
+		UserID: u.ID, Kind: model.MessengerTelegram, ExternalID: "telegram-123", DisplayName: "Ann",
+		Mode: model.DeliveryInstant, Events: []string{"chapter.downloaded"}, Status: model.LinkActive,
+		CreatedAt: now, UpdatedAt: now,
+	}
+	if _, err := d.NewInsert().Model(link).Exec(ctx); err != nil {
+		t.Fatal(err)
+	}
+	delivery := &model.NotificationDelivery{
+		UserID: u.ID, DedupeKey: "chapter:1:user:1", EventType: "chapter.downloaded", SeriesID: &ser.ID,
+		Payload: map[string]any{"title": ser.Title, "chapters": []any{"1.5"}}, CreatedAt: now,
+	}
+	for _, m := range []any{
+		&model.MessengerLinkToken{TokenHash: "sha256:copy-token", UserID: u.ID, Kind: model.MessengerTelegram, ExpiresAt: now.Add(time.Minute), CreatedAt: now},
+		delivery,
+	} {
+		if _, err := d.NewInsert().Model(m).Exec(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := d.NewInsert().Model(&model.NotificationDispatch{
+		DeliveryID: delivery.ID, LinkID: link.ID, AvailableAt: now,
+	}).Exec(ctx); err != nil {
+		t.Fatal(err)
+	}
 	return ser, now
 }
 
@@ -156,6 +181,26 @@ func check(t *testing.T, d *db.DB, want *model.Series, now time.Time) {
 	}
 	if n, _ := d.NewSelect().Model((*model.RequestUser)(nil)).Count(ctx); n != 1 {
 		t.Fatalf("requesters %d", n)
+	}
+	var link model.MessengerLink
+	if err := d.NewSelect().Model(&link).Limit(1).Scan(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if link.ExternalID != "telegram-123" || len(link.Events) != 1 || link.Events[0] != "chapter.downloaded" {
+		t.Fatalf("messenger link %+v", link)
+	}
+	var delivery model.NotificationDelivery
+	if err := d.NewSelect().Model(&delivery).Limit(1).Scan(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if delivery.SeriesID == nil || *delivery.SeriesID != want.ID || delivery.Payload["title"] != want.Title {
+		t.Fatalf("notification delivery %+v", delivery)
+	}
+	if n, _ := d.NewSelect().Model((*model.MessengerLinkToken)(nil)).Count(ctx); n != 1 {
+		t.Fatalf("messenger link tokens %d", n)
+	}
+	if n, _ := d.NewSelect().Model((*model.NotificationDispatch)(nil)).Count(ctx); n != 1 {
+		t.Fatalf("notification dispatches %d", n)
 	}
 	// new rows get new ids after the copied ones
 	extra := &model.Tag{Label: "new in " + string(d.Kind)}

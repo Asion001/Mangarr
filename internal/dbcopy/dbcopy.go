@@ -18,8 +18,10 @@ import (
 // (TestTablesCoverSchema keeps it complete).
 var Tables = []string{
 	"groups", "readers", "users", "user_ui_preferences", "source_priority_lists", "sessions", "invites",
+	"messenger_links", "messenger_link_tokens",
 	"settings", "tags", "root_folders", "profiles", "provider_definitions", "catalog_prefs",
 	"works", "series", "series_sources", "chapters", "chapter_releases", "chapter_files",
+	"notification_deliveries", "notification_dispatches",
 	"download_jobs", "history", "blocklist", "commands", "scheduled_tasks",
 	"reader_accounts", "chapter_read_states",
 	"imports", "import_entries", "reading_keys", "read_events", "reading_sessions", "reader_prefs",

@@ -82,6 +82,73 @@ type Invite struct {
 	CreatedAt     time.Time  `bun:"created_at,notnull" json:"createdAt"`
 }
 
+// MessengerLink is a user's identity on an admin-owned Telegram or Discord
+// bot. It deliberately contains no bot credentials or user-controlled URL.
+type MessengerLink struct {
+	bun.BaseModel `bun:"table:messenger_links"`
+	ID            int64      `bun:"id,pk,autoincrement" json:"id"`
+	UserID        int64      `bun:"user_id,notnull" json:"userId"`
+	Kind          string     `bun:"kind,notnull" json:"kind"`
+	ExternalID    string     `bun:"external_id,notnull" json:"-"`
+	DisplayName   string     `bun:"display_name,notnull" json:"displayName"`
+	Mode          string     `bun:"mode,notnull" json:"mode"`
+	Events        []string   `bun:"events,notnull" json:"events"`
+	Status        string     `bun:"status,notnull" json:"status"`
+	LastError     string     `bun:"last_error,notnull" json:"lastError,omitempty"`
+	LastAttemptAt *time.Time `bun:"last_attempt_at" json:"lastAttemptAt,omitempty"`
+	CreatedAt     time.Time  `bun:"created_at,notnull" json:"createdAt"`
+	UpdatedAt     time.Time  `bun:"updated_at,notnull" json:"updatedAt"`
+}
+
+const (
+	MessengerTelegram = "telegram"
+	MessengerDiscord  = "discord"
+	DeliveryOff       = "off"
+	DeliveryInstant   = "instant"
+	DeliveryDigest    = "daily_digest"
+	DeliveryBoth      = "instant_and_digest"
+	LinkActive        = "active"
+	LinkBroken        = "broken"
+)
+
+// MessengerLinkToken is a short-lived, single-use account-link token. Only
+// its hash is persisted.
+type MessengerLinkToken struct {
+	bun.BaseModel `bun:"table:messenger_link_tokens"`
+	ID            int64     `bun:"id,pk,autoincrement" json:"id"`
+	TokenHash     string    `bun:"token_hash,notnull" json:"-"`
+	UserID        int64     `bun:"user_id,notnull" json:"userId"`
+	Kind          string    `bun:"kind,notnull" json:"kind"`
+	ExpiresAt     time.Time `bun:"expires_at,notnull" json:"expiresAt"`
+	CreatedAt     time.Time `bun:"created_at,notnull" json:"createdAt"`
+}
+
+// NotificationDelivery is the durable per-user inbox entry. DedupeKey is
+// unique for a user so replaying an event is idempotent.
+type NotificationDelivery struct {
+	bun.BaseModel `bun:"table:notification_deliveries"`
+	ID            int64          `bun:"id,pk,autoincrement" json:"id"`
+	UserID        int64          `bun:"user_id,notnull" json:"userId"`
+	DedupeKey     string         `bun:"dedupe_key,notnull" json:"dedupeKey"`
+	EventType     string         `bun:"event_type,notnull" json:"eventType"`
+	SeriesID      *int64         `bun:"series_id" json:"seriesId,omitempty"`
+	Payload       map[string]any `bun:"payload,notnull" json:"payload"`
+	CreatedAt     time.Time      `bun:"created_at,notnull" json:"createdAt"`
+}
+
+// NotificationDispatch tracks one inbox entry's independent delivery to one
+// linked messenger account.
+type NotificationDispatch struct {
+	bun.BaseModel `bun:"table:notification_dispatches"`
+	ID            int64      `bun:"id,pk,autoincrement" json:"id"`
+	DeliveryID    int64      `bun:"delivery_id,notnull" json:"deliveryId"`
+	LinkID        int64      `bun:"link_id,notnull" json:"linkId"`
+	AvailableAt   time.Time  `bun:"available_at,notnull" json:"availableAt"`
+	SentAt        *time.Time `bun:"sent_at" json:"sentAt,omitempty"`
+	Attempts      int        `bun:"attempts,notnull" json:"attempts"`
+	LastError     string     `bun:"last_error,notnull" json:"lastError,omitempty"`
+}
+
 type Setting struct {
 	bun.BaseModel `bun:"table:settings"`
 	Key           string    `bun:"key,pk"`
