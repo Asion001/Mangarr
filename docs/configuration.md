@@ -43,7 +43,7 @@ Read wherever the engine runs: in the server, or on a worker with the upscale ro
 | Variable | Old name | Default | Description |
 |---|---|---|---|
 | `MANGARR_UPSCALER_TOOLS_DIR` | UPSCALER_TOOLS_DIR | `/opt/upscalers` | Folder with the ncnn upscalers. |
-| `MANGARR_UPSCALER_GPU` | UPSCALER_GPU | `auto` | Vulkan device (auto or index). |
+| `MANGARR_UPSCALER_GPU` | UPSCALER_GPU | `auto` | Vulkan device indices: auto selects one default device, or use a comma-separated list such as 0,1 to run batches in parallel across those devices. |
 | `MANGARR_UPSCALER_THREADS` | UPSCALER_THREADS | `` | ncnn load:proc:save threads. |
 | `MANGARR_UPSCALER_TILE` | UPSCALER_TILE | `0` | Tile size (0 = auto; lower on small GPUs). |
 | `MANGARR_UPSCALER_TIMEOUT` | UPSCALER_TIMEOUT | `30m` | Maximum time per batch. |
@@ -300,7 +300,7 @@ MANGARR_MODULE_KOMGA_API_KEY=...
 
 | Suffix | Type | Description |
 |---|---|---|
-| `_GPU` | string | GPU. auto, or the Vulkan device index (pass /dev/dri to the container for Intel/AMD) |
+| `_GPU` | string | GPU. auto, or comma-separated Vulkan device indices such as 0,1 (pass /dev/dri to the container for Intel/AMD) |
 | `_MODEL` | string | Upscale model. Empty uses the profile's model |
 | `_THREADS` | string | Threads. load:proc:save threads (ncnn -j) |
 | `_TILE` | int | Tile size. 0 = automatic; lower it when the GPU runs out of memory |

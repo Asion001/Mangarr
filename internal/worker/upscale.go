@@ -47,7 +47,7 @@ func (w *Worker) upscale(ctx context.Context, t Task) (result, error) {
 	beat := w.beating(ctx, t, len(images))
 	defer beat()
 
-	out, err := w.up.Process(ctx, params, images)
+	out, gpu, err := w.up.ProcessDevice(ctx, params, images)
 	if err != nil {
 		return result{Pages: 0, BytesIn: int64(len(in))}, err
 	}
@@ -58,7 +58,7 @@ func (w *Worker) upscale(ctx context.Context, t Task) (result, error) {
 	if err := w.output(ctx, t.ID, data); err != nil {
 		return result{}, err
 	}
-	return result{Pages: len(out), BytesIn: int64(len(in)), BytesOut: int64(len(data))}, nil
+	return result{Pages: len(out), BytesIn: int64(len(in)), BytesOut: int64(len(data)), GPU: gpu}, nil
 }
 
 // beating keeps a task's lease while something slow runs, and stops when

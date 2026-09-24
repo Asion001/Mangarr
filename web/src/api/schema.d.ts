@@ -6065,6 +6065,7 @@ export interface components {
             bytesIn: number;
             /** Format: int64 */
             bytesOut: number;
+            gpu?: string;
             /** Format: int64 */
             pages: number;
         };
@@ -6119,6 +6120,7 @@ export interface components {
             bytesOut: number;
             /** Format: int64 */
             failed: number;
+            gpus?: string[];
             /** Format: int64 */
             pages: number;
             /** Format: double */

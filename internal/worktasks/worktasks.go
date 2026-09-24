@@ -239,6 +239,7 @@ type Progress struct {
 	PagesTotal int
 	BytesIn    int64
 	BytesOut   int64
+	GPU        string
 }
 
 // Heartbeat renews a lease and records progress. It reports whether the
@@ -292,6 +293,16 @@ func (l *Ledger) close(ctx context.Context, taskID, workerID int64, state, reaso
 		return err
 	}
 	err := l.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		if p.GPU != "" {
+			spec := make(map[string]any, len(t.Spec)+1)
+			for k, v := range t.Spec {
+				spec[k] = v
+			}
+			spec["gpu"] = p.GPU
+			if _, err := tx.NewUpdate().Model((*model.WorkerTask)(nil)).Set("spec = ?", spec).Where("id = ?", taskID).Exec(ctx); err != nil {
+				return err
+			}
+		}
 		res, err := tx.NewUpdate().Model((*model.WorkerTask)(nil)).
 			Set("state = ?", state).Set("error = ?", reason).Set("finished_at = ?", now).
 			Set("pages_done = ?", p.PagesDone).Set("pages_total = ?", p.PagesTotal).

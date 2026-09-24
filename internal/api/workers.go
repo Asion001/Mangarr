@@ -50,6 +50,8 @@ type WorkerRecent struct {
 	BytesOut int64 `json:"bytesOut"`
 	// Seconds is how long it was busy, so the UI can show a rate.
 	Seconds float64 `json:"seconds"`
+	// GPUs are the devices its finished upscale batches ran on.
+	GPUs []string `json:"gpus,omitempty"`
 }
 
 // NewWorkerOutput carries the key, which is shown once and never again.
@@ -236,7 +238,36 @@ func (s *Server) workerWork(ctx context.Context) (map[int64][]WorkerBusy, map[in
 				BytesOut: r.BytesOut, Seconds: r.Seconds}
 		}
 	}
+	var finished []model.WorkerTask
+	if err := s.app.DB.NewSelect().Model(&finished).Column("worker_id", "spec").Where("finished_at IS NOT NULL AND finished_at > ? AND worker_id IS NOT NULL AND kind = ?", since, model.TaskUpscale).Scan(ctx); err == nil {
+		seen := map[int64]map[string]bool{}
+		for _, task := range finished {
+			gpu := taskGPU(task.Spec)
+			if gpu == "" {
+				continue
+			}
+			if seen[task.WorkerID] == nil {
+				seen[task.WorkerID] = map[string]bool{}
+			}
+			if !seen[task.WorkerID][gpu] {
+				recent[task.WorkerID] = appendGPU(recent[task.WorkerID], gpu)
+				seen[task.WorkerID][gpu] = true
+			}
+		}
+	}
 	return busy, recent
+}
+
+func taskGPU(spec map[string]any) string {
+	if gpu, ok := spec["gpu"].(string); ok {
+		return gpu
+	}
+	return ""
+}
+
+func appendGPU(recent WorkerRecent, gpu string) WorkerRecent {
+	recent.GPUs = append(recent.GPUs, gpu)
+	return recent
 }
 
 // elapsedSeconds is how long a finished task took, in the dialect's own way.

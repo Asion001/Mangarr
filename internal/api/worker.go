@@ -262,9 +262,10 @@ func (s *Server) registerWorkerProtocol() {
 		func(ctx context.Context, in *struct {
 			ID   int64 `path:"id"`
 			Body struct {
-				Pages    int   `json:"pages"`
-				BytesIn  int64 `json:"bytesIn"`
-				BytesOut int64 `json:"bytesOut"`
+				Pages    int    `json:"pages"`
+				BytesIn  int64  `json:"bytesIn"`
+				BytesOut int64  `json:"bytesOut"`
+				GPU      string `json:"gpu,omitempty"`
 			}
 		}) (*struct{}, error) {
 			w, err := s.worker(ctx)
@@ -275,7 +276,7 @@ func (s *Server) registerWorkerProtocol() {
 			if err != nil {
 				return nil, huma.Error409Conflict("this task is not yours any more")
 			}
-			p := worktasks.Progress{PagesDone: in.Body.Pages, PagesTotal: task.PagesTotal, BytesIn: in.Body.BytesIn, BytesOut: in.Body.BytesOut}
+			p := worktasks.Progress{PagesDone: in.Body.Pages, PagesTotal: task.PagesTotal, BytesIn: in.Body.BytesIn, BytesOut: in.Body.BytesOut, GPU: in.Body.GPU}
 			if err := s.app.Tasks.Finish(ctx, in.ID, w.ID, p); err != nil {
 				return nil, workerConflict(err)
 			}

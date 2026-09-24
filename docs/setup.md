@@ -489,6 +489,10 @@ someone else's NAT works exactly like one in the same rack.
    ```
    It appears online in System → Workers within a few seconds, with its build,
    its platform and (for upscaling) the models and devices it found.
+   To use multiple GPUs in parallel, set `MANGARR_UPSCALER_GPU=0,1` on the
+   worker (or set the built-in upscaler's **GPU** setting to `0,1`). Each
+   listed index gets one concurrent batch slot. `auto` keeps one default
+   device slot. The worker stats API reports the GPU index used by its batches.
 
 The roles:
 

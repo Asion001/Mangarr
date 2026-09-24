@@ -9608,6 +9608,9 @@
             "format": "int64",
             "type": "integer"
           },
+          "gpu": {
+            "type": "string"
+          },
           "pages": {
             "format": "int64",
             "type": "integer"
@@ -9770,6 +9773,12 @@
           "failed": {
             "format": "int64",
             "type": "integer"
+          },
+          "gpus": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "pages": {
             "format": "int64",

@@ -257,7 +257,7 @@ func (w *Worker) do(ctx context.Context, t Task) {
 		return
 	}
 	if err := w.call(ctx, http.MethodPost, fmt.Sprintf("/api/v1/worker/tasks/%d/complete", t.ID),
-		map[string]any{"pages": res.Pages, "bytesIn": res.BytesIn, "bytesOut": res.BytesOut}, nil); err != nil {
+		map[string]any{"pages": res.Pages, "bytesIn": res.BytesIn, "bytesOut": res.BytesOut, "gpu": res.GPU}, nil); err != nil {
 		w.log.Warn("could not report a finished task", "task", t.ID, "err", err)
 		return
 	}
@@ -270,6 +270,7 @@ type result struct {
 	Pages    int
 	BytesIn  int64
 	BytesOut int64
+	GPU      string
 }
 
 // bye hands back whatever this worker still holds, so a restart doesn't

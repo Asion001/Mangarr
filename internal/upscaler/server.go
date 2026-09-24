@@ -27,6 +27,7 @@ import (
 
 type Config struct {
 	TmpDir  string
+	GPU     string // auto or comma-separated Vulkan device indices
 	CWebP   string // path to cwebp; empty = look up in PATH
 	Timeout time.Duration
 	MaxBody int64
@@ -34,11 +35,12 @@ type Config struct {
 }
 
 type Server struct {
-	cfg    Config
-	runner Runner
-	log    *slog.Logger
-	slot   chan struct{}
-	queued atomic.Int32
+	cfg       Config
+	runner    Runner
+	log       *slog.Logger
+	slots     chan string
+	configErr error
+	queued    atomic.Int32
 }
 
 func NewServer(cfg Config, runner Runner, log *slog.Logger) *Server {
@@ -56,7 +58,15 @@ func NewServer(cfg Config, runner Runner, log *slog.Logger) *Server {
 			cfg.CWebP = p
 		}
 	}
-	return &Server{cfg: cfg, runner: runner, log: log, slot: make(chan struct{}, 1)}
+	devices, err := parseGPUs(cfg.GPU)
+	if err != nil {
+		devices = []string{""}
+	}
+	s := &Server{cfg: cfg, runner: runner, log: log, slots: make(chan string, len(devices)), configErr: err}
+	for _, device := range devices {
+		s.slots <- device
+	}
+	return s
 }
 
 type Info struct {
@@ -149,35 +159,68 @@ type Image struct {
 
 type badRequest struct{ error }
 
-// Process upscales images with one engine run, waiting for the GPU slot
-// (one job at a time). It is used by the HTTP handler and in-process by the
-// server's built-in upscaler.
+// Process upscales images with one engine run.
 func (s *Server) Process(ctx context.Context, p Params, images []Image) ([]Image, error) {
+	out, _, err := s.ProcessDevice(ctx, p, images)
+	return out, err
+}
+
+func (s *Server) ProcessDevice(ctx context.Context, p Params, images []Image) ([]Image, string, error) {
+	if s.configErr != nil {
+		return nil, "", fmt.Errorf("invalid upscaler GPU setting: %w", s.configErr)
+	}
 	eng, ok := findEngine(p.Model)
 	if !ok || !s.runner.Available(eng) {
-		return nil, badRequest{fmt.Errorf("model not available: %s", p.Model)}
+		return nil, "", badRequest{fmt.Errorf("model not available: %s", p.Model)}
 	}
 	if !contains(eng.Scales, p.Scale) {
-		return nil, badRequest{fmt.Errorf("model %s supports scales %v", eng.Name, eng.Scales)}
+		return nil, "", badRequest{fmt.Errorf("model %s supports scales %v", eng.Name, eng.Scales)}
 	}
 	s.queued.Add(1)
+	var device string
 	select {
-	case s.slot <- struct{}{}:
+	case device = <-s.slots:
 		s.queued.Add(-1)
 	case <-ctx.Done():
 		s.queued.Add(-1)
-		return nil, ctx.Err()
+		return nil, "", ctx.Err()
 	}
-	defer func() { <-s.slot }()
+	defer func() { s.slots <- device }()
 	ctx, cancel := context.WithTimeout(ctx, s.cfg.Timeout)
 	defer cancel()
 	start := time.Now()
-	out, err := s.process(ctx, eng, p, images)
+	out, err := s.process(ctx, eng, p, images, device)
 	if err == nil {
-		s.log.Info("upscaled batch", "model", p.Model, "scale", p.Scale, "pages", len(out), "duration", time.Since(start).Round(time.Millisecond))
+		s.log.Info("upscaled batch", "model", p.Model, "gpu", device, "scale", p.Scale, "pages", len(out), "duration", time.Since(start).Round(time.Millisecond))
 	}
-	return out, err
+	return out, device, err
 }
+
+func parseGPUs(value string) ([]string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return []string{""}, nil
+	}
+	if value == "auto" {
+		// One slot, and no -g: the tool picks its default device.
+		return []string{"auto"}, nil
+	}
+	parts := strings.Split(value, ",")
+	seen := map[string]bool{}
+	for i, part := range parts {
+		part = strings.TrimSpace(part)
+		n, err := strconv.Atoi(part)
+		if err != nil || n < 0 || seen[part] {
+			return nil, fmt.Errorf("invalid GPU list %q", value)
+		}
+		seen[part] = true
+		parts[i] = strconv.Itoa(n)
+	}
+	return parts, nil
+}
+
+// ParseGPUs validates a GPU setting, for use by module settings validators.
+func ParseGPUs(value string) ([]string, error) { return parseGPUs(value) }
 
 func unzipImages(body []byte) ([]Image, error) {
 	zr, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
@@ -221,7 +264,7 @@ func zipImages(images []Image) ([]byte, error) {
 }
 
 // process writes the images to disk, runs the engine and reads the results.
-func (s *Server) process(ctx context.Context, eng Engine, p Params, images []Image) ([]Image, error) {
+func (s *Server) process(ctx context.Context, eng Engine, p Params, images []Image, device string) ([]Image, error) {
 	work, err := os.MkdirTemp(s.cfg.TmpDir, "upscale-*")
 	if err != nil {
 		return nil, err
@@ -265,7 +308,13 @@ func (s *Server) process(ctx context.Context, eng Engine, p Params, images []Ima
 	if len(names) == 0 {
 		return nil, badRequest{errors.New("no images in request")}
 	}
-	if err := s.runner.Run(ctx, eng, in, outDir, p.Scale, p.Noise); err != nil {
+	var runErr error
+	if runner, ok := s.runner.(DeviceRunner); ok {
+		runErr = runner.RunDevice(ctx, eng, in, outDir, p.Scale, p.Noise, device)
+	} else {
+		runErr = s.runner.Run(ctx, eng, in, outDir, p.Scale, p.Noise)
+	}
+	if err := runErr; err != nil {
 		return nil, err
 	}
 	out := make([]Image, 0, len(names))

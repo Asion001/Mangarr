@@ -53,6 +53,9 @@ func LoadEngineConfig(getenv func(string) string) (EngineConfig, error) {
 	c := EngineConfig{ToolsDir: get("MANGARR_UPSCALER_TOOLS_DIR"), GPU: get("MANGARR_UPSCALER_GPU"),
 		Threads: get("MANGARR_UPSCALER_THREADS"), TmpDir: get("MANGARR_UPSCALER_TMP_DIR"), CWebP: get("MANGARR_UPSCALER_CWEBP")}
 	var err error
+	if _, err = parseGPUs(c.GPU); err != nil {
+		return c, fmt.Errorf("MANGARR_UPSCALER_GPU: %w", err)
+	}
 	if c.Tile, err = strconv.Atoi(get("MANGARR_UPSCALER_TILE")); err != nil {
 		return c, fmt.Errorf("MANGARR_UPSCALER_TILE: %w", err)
 	}
@@ -65,5 +68,5 @@ func LoadEngineConfig(getenv func(string) string) (EngineConfig, error) {
 // NewEngine builds the upscaling engine for c.
 func NewEngine(c EngineConfig, log *slog.Logger) *Server {
 	runner := CLIRunner{ToolsDir: c.ToolsDir, GPU: c.GPU, Threads: c.Threads, Tile: c.Tile, Log: log}
-	return NewServer(Config{TmpDir: c.TmpDir, CWebP: c.CWebP, Timeout: c.Timeout, Version: version.Version}, runner, log)
+	return NewServer(Config{TmpDir: c.TmpDir, GPU: c.GPU, CWebP: c.CWebP, Timeout: c.Timeout, Version: version.Version}, runner, log)
 }

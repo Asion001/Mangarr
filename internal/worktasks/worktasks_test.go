@@ -267,8 +267,12 @@ func TestFinishCountsOnTheWorker(t *testing.T) {
 		if cancelled, err := l.Heartbeat(ctx, done.ID, worker, worktasks.Progress{PagesDone: 5, PagesTotal: 20}); err != nil || cancelled {
 			t.Fatalf("heartbeat: %v %v", err, cancelled)
 		}
-		if err := l.Finish(ctx, done.ID, worker, worktasks.Progress{PagesDone: 20, PagesTotal: 20, BytesIn: 1000, BytesOut: 900}); err != nil {
+		if err := l.Finish(ctx, done.ID, worker, worktasks.Progress{PagesDone: 20, PagesTotal: 20, BytesIn: 1000, BytesOut: 900, GPU: "1"}); err != nil {
 			t.Fatal(err)
+		}
+		var finished model.WorkerTask
+		if err := d.NewSelect().Model(&finished).Where("id = ?", done.ID).Scan(ctx); err != nil || finished.Spec["gpu"] != "1" {
+			t.Fatalf("GPU report not stored on task: %+v %v", finished, err)
 		}
 		if err := l.Fail(ctx, failed.ID, worker, "the site said no", worktasks.Progress{PagesDone: 1, BytesIn: 10}); err != nil {
 			t.Fatal(err)

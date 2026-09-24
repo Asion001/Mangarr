@@ -12,7 +12,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"golang.org/x/image/draw"
 )
@@ -139,5 +141,83 @@ func TestProcessKeepsEnginePNG(t *testing.T) {
 	cfg, err := png.DecodeConfig(bytes.NewReader(out[0].Data))
 	if err != nil || cfg.Width != 60 || cfg.Height != 450 {
 		t.Fatalf("a PNG over the cap should be scaled down: %+v %v", cfg, err)
+	}
+}
+
+type deviceRunner struct {
+	fakeRunner
+	mu        sync.Mutex
+	devices   []string
+	active    int
+	maxActive int
+	barrier   chan struct{}
+}
+
+func (r *deviceRunner) RunDevice(ctx context.Context, e Engine, in, out string, scale, noise int, device string) error {
+	r.mu.Lock()
+	r.devices = append(r.devices, device)
+	r.active++
+	if r.active > r.maxActive {
+		r.maxActive = r.active
+	}
+	if r.active == 2 {
+		close(r.barrier)
+	}
+	r.mu.Unlock()
+	select {
+	case <-r.barrier:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	defer func() { r.mu.Lock(); r.active--; r.mu.Unlock() }()
+	return r.fakeRunner.Run(ctx, e, in, out, scale, noise)
+}
+
+func TestProcessUsesOnePinnedSlotPerGPU(t *testing.T) {
+	r := &deviceRunner{barrier: make(chan struct{})}
+	s := NewServer(Config{TmpDir: t.TempDir(), GPU: "0,1"}, r, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	params := Params{Model: "waifu2x-cunet", Scale: 2, Format: "png"}
+	images := []Image{{Name: "page.jpg", Data: jpegPage(8, 8)}}
+	var wg sync.WaitGroup
+	errs := make(chan error, 2)
+	for range 2 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _, err := s.ProcessDevice(context.Background(), params, images)
+			errs <- err
+		}()
+	}
+	done := make(chan struct{})
+	go func() { wg.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("two configured GPUs did not run concurrently")
+	}
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.maxActive != 2 || len(r.devices) != 2 || r.devices[0] == r.devices[1] {
+		t.Fatalf("active=%d devices=%v", r.maxActive, r.devices)
+	}
+}
+
+func TestParseGPUs(t *testing.T) {
+	for input, want := range map[string][]string{"auto": {"auto"}, "0, 1": {"0", "1"}, "": {""}} {
+		got, err := parseGPUs(input)
+		if err != nil || strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Fatalf("parseGPUs(%q) = %v, %v", input, got, err)
+		}
+	}
+	for _, input := range []string{"-1", "0,", "1,1", "one"} {
+		if _, err := parseGPUs(input); err == nil {
+			t.Errorf("parseGPUs(%q) succeeded", input)
+		}
 	}
 }

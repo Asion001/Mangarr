@@ -17,7 +17,7 @@ import (
 
 type Settings struct {
 	ToolsDir string `json:"toolsDir" label:"Tools folder" order:"1" help:"Where the waifu2x/Real-CUGAN/Real-ESRGAN ncnn binaries are (included in the full image)."`
-	GPU      string `json:"gpu" label:"GPU" order:"2" placeholder:"auto" help:"auto, or the Vulkan device index (pass /dev/dri to the container for Intel/AMD)."`
+	GPU      string `json:"gpu" label:"GPU" order:"2" placeholder:"auto" help:"auto, or comma-separated Vulkan device indices such as 0,1 (pass /dev/dri to the container for Intel/AMD)."`
 	Threads  string `json:"threads" label:"Threads" advanced:"true" order:"3" placeholder:"1:2:2" help:"load:proc:save threads (ncnn -j)."`
 	Tile     int    `json:"tile" label:"Tile size" advanced:"true" order:"4" help:"0 = automatic; lower it when the GPU runs out of memory."`
 	// Model is what this server upscales with; empty uses the profile's.
@@ -31,6 +31,9 @@ func init() {
 		Settings:    func() any { return &Settings{ToolsDir: "/opt/upscalers", GPU: "auto"} },
 		New: func(deps modules.Deps, s any) (modules.Instance, error) {
 			st := s.(*Settings)
+			if _, err := upscaler.ParseGPUs(st.GPU); err != nil {
+				return nil, fmt.Errorf("GPU: %w", err)
+			}
 			tmp := filepath.Join(deps.DataDir, "tmp")
 			if deps.DataDir == "" {
 				tmp = os.TempDir()
@@ -38,7 +41,7 @@ func init() {
 			_ = os.MkdirAll(tmp, 0o775)
 			runner := upscaler.CLIRunner{ToolsDir: st.ToolsDir, GPU: st.GPU, Threads: st.Threads, Tile: st.Tile, Log: deps.Log}
 			log := deps.Log
-			srv := upscaler.NewServer(upscaler.Config{TmpDir: tmp, Version: version.Version}, runner, log)
+			srv := upscaler.NewServer(upscaler.Config{TmpDir: tmp, GPU: st.GPU, Version: version.Version}, runner, log)
 			return &Module{srv: srv, dir: st.ToolsDir, model: st.Model}, nil
 		},
 	})
@@ -80,7 +83,7 @@ func (m *Module) Upscale(ctx context.Context, images []upscale.Image, p upscale.
 			}
 		}
 	}
-	out, err := m.srv.Process(ctx, upscaler.Params{Model: p.Model, Scale: p.Scale, Noise: p.Noise, Format: p.Format, Quality: p.Quality, MaxWidth: p.MaxWidth}, in)
+	out, _, err := m.srv.ProcessDevice(ctx, upscaler.Params{Model: p.Model, Scale: p.Scale, Noise: p.Noise, Format: p.Format, Quality: p.Quality, MaxWidth: p.MaxWidth}, in)
 	if err != nil {
 		return nil, err
 	}

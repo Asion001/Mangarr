@@ -62,6 +62,11 @@ type Runner interface {
 	Run(ctx context.Context, e Engine, inDir, outDir string, scale, noise int) error
 }
 
+// DeviceRunner runs one batch pinned to the selected Vulkan device.
+type DeviceRunner interface {
+	RunDevice(ctx context.Context, e Engine, inDir, outDir string, scale, noise int, device string) error
+}
+
 // CLIRunner runs the real ncnn binaries from ToolsDir/<tool>/.
 type CLIRunner struct {
 	ToolsDir string
@@ -95,6 +100,10 @@ var RetryTiles = []int{256, 128}
 // memory (killed by the kernel, or a Vulkan allocation failure) it is run
 // again with smaller tiles.
 func (r CLIRunner) Run(ctx context.Context, e Engine, inDir, outDir string, scale, noise int) error {
+	return r.RunDevice(ctx, e, inDir, outDir, scale, noise, r.GPU)
+}
+
+func (r CLIRunner) RunDevice(ctx context.Context, e Engine, inDir, outDir string, scale, noise int, device string) error {
 	tiles := []int{r.Tile}
 	for _, t := range RetryTiles {
 		if r.Tile <= 0 || t < r.Tile {
@@ -103,7 +112,7 @@ func (r CLIRunner) Run(ctx context.Context, e Engine, inDir, outDir string, scal
 	}
 	var err error
 	for i, tile := range tiles {
-		err = r.run(ctx, e, inDir, outDir, scale, noise, tile)
+		err = r.run(ctx, e, inDir, outDir, scale, noise, tile, device)
 		if err == nil || !errors.Is(err, ErrOutOfMemory) || i == len(tiles)-1 {
 			if err == nil && i > 0 && r.Log != nil {
 				r.Log.Warn("upscaler ran out of memory with larger tiles; set this tile size to avoid retries", "tile", tile, "tool", e.Binary)
@@ -117,7 +126,7 @@ func (r CLIRunner) Run(ctx context.Context, e Engine, inDir, outDir string, scal
 	return err
 }
 
-func (r CLIRunner) run(ctx context.Context, e Engine, inDir, outDir string, scale, noise, tile int) error {
+func (r CLIRunner) run(ctx context.Context, e Engine, inDir, outDir string, scale, noise, tile int, device string) error {
 	args := []string{"-i", inDir, "-o", outDir, "-s", strconv.Itoa(scale), "-f", "png",
 		"-m", filepath.Join(r.ToolsDir, e.Tool, e.ModelDir)}
 	if e.ModelName != "" {
@@ -125,8 +134,8 @@ func (r CLIRunner) run(ctx context.Context, e Engine, inDir, outDir string, scal
 	} else if len(e.NoiseLevels) > 0 {
 		args = append(args, "-n", strconv.Itoa(noise))
 	}
-	if r.GPU != "" && r.GPU != "auto" {
-		args = append(args, "-g", r.GPU)
+	if device != "" && device != "auto" {
+		args = append(args, "-g", device)
 	}
 	if r.Threads != "" {
 		args = append(args, "-j", r.Threads)
