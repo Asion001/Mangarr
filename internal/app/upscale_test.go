@@ -45,7 +45,7 @@ func bytesReader(b []byte) io.Reader { return bytes.NewReader(b) }
 func TestReprocessWithNothingToDo(t *testing.T) {
 	dsn := dbtest.DSNs(t)["sqlite"]
 	sc := fakesource.NewScenario("reprocess-noop")
-	sc.PageWidth = 64
+	sc.PageWidth = 200
 	sc.Sources = []source.SourceInfo{{ID: "A", Name: "Source A", Lang: "en"}}
 	sc.AddManga(&fakesource.Manga{SourceID: "A", URL: "/m", Title: "Wide Enough", Status: source.StatusOngoing,
 		Chapters: []fakesource.Chapter{{URL: "/c1", Name: "Chapter 1", Number: 1, Uploaded: time.Now()}}})

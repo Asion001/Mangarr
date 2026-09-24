@@ -28,7 +28,7 @@ import (
 // are the same as with an upscaler on this machine.
 func TestWorkerUpscalesAChapter(t *testing.T) {
 	sc := fakesource.NewScenario("worker-upscale")
-	sc.PageWidth = 64
+	sc.PageWidth = 200
 	sc.Sources = []source.SourceInfo{{ID: "A", Name: "Source A", Lang: "en"}}
 	sc.AddManga(&fakesource.Manga{SourceID: "A", URL: "/m", Title: "Small Pages", Status: source.StatusOngoing,
 		Chapters: []fakesource.Chapter{
@@ -85,13 +85,13 @@ func TestWorkerUpscalesAChapter(t *testing.T) {
 	e.runCommand(t, "RefreshSeries", map[string]any{"seriesId": ser.ID})
 	waitFor(t, 30*time.Second, "downloads", func() bool { return len(e.chapterFiles(t, ser.ID)) == 2 })
 	first := e.chapterFiles(t, ser.ID)["1"]
-	if w := pageWidths(t, filepath.Join(e.Root, "Small Pages", first.RelativePath)); w[0] != 64 || first.Upscaled {
+	if w := pageWidths(t, filepath.Join(e.Root, "Small Pages", first.RelativePath)); w[0] != 200 || first.Upscaled {
 		t.Fatalf("the pages should arrive as they are: %v upscaled=%v", w, first.Upscaled)
 	}
 
 	var prof model.Profile
 	_ = e.App.DB.NewSelect().Model(&prof).Where("id = ?", ser.ProfileID).Scan(e.Ctx)
-	prof.Config.Upscale = model.UpscaleConfig{Enabled: true, MinWidth: 100, Model: "waifu2x-cunet", Noise: 1, Format: "png", Quality: 90}
+	prof.Config.Upscale = model.UpscaleConfig{Enabled: true, MinWidth: 300, Model: "waifu2x-cunet", Noise: 1, Format: "png", Quality: 90}
 	if _, err := e.App.DB.NewUpdate().Model(&prof).WherePK().Exec(e.Ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -109,11 +109,11 @@ func TestWorkerUpscalesAChapter(t *testing.T) {
 	})
 
 	after := e.chapterFiles(t, ser.ID)["1"]
-	if after.UpscaleModel != "waifu2x-cunet" || after.AvgWidth != 128 {
+	if after.UpscaleModel != "waifu2x-cunet" || after.AvgWidth != 400 {
 		t.Fatalf("after upscaling on a worker: %+v", after)
 	}
 	path := filepath.Join(e.Root, "Small Pages", after.RelativePath)
-	if w := pageWidths(t, path); len(w) != 6 || w[0] != 128 {
+	if w := pageWidths(t, path); len(w) != 6 || w[0] != 400 {
 		t.Fatalf("pages: %v", w)
 	}
 	if after.RelativePath != first.RelativePath {

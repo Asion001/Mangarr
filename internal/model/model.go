@@ -130,6 +130,10 @@ type ProfileConfig struct {
 	Upscale UpscaleConfig `json:"upscale"`
 	// Encode re-encodes pages to save space (AVIF, lossless JPEG XL).
 	Encode EncodeConfig `json:"encode"`
+	// Pages are size rules applied to every page, with or without upscaling.
+	Pages PageRules `json:"pages"`
+	// LowRes decides what happens to a release whose pages are mostly too narrow.
+	LowRes LowResRule `json:"lowRes"`
 	// ProcessTiming: "background" (default) imports the original and
 	// processes it later; "inline" processes before import.
 	ProcessTiming string `json:"processTiming,omitempty" enum:",background,inline"`
@@ -150,8 +154,19 @@ func (c ProfileConfig) ProcessParams() string {
 	var parts struct {
 		Upscale *UpscaleConfig `json:"u,omitempty"`
 		Encode  *EncodeConfig  `json:"e,omitempty"`
+		// only non-default page rules take part, so older profiles keep
+		// their hash and their files aren't processed again
+		Junk     int `json:"j,omitempty"`
+		MaxWidth int `json:"w,omitempty"`
 	}
 	encoding := c.Encode.Format != "" && c.Encode.Format != "keep"
+	parts.MaxWidth = c.Pages.MaxWidth
+	if j := c.Pages.JunkSize(); j != DefaultJunkUnder && (c.Upscale.Enabled || encoding || parts.MaxWidth > 0) {
+		parts.Junk = j
+		if j == 0 {
+			parts.Junk = -1
+		}
+	}
 	if c.Upscale.Enabled {
 		u := c.Upscale
 		u.UpscalerID = 0 // which worker runs it doesn't change the result
@@ -165,7 +180,7 @@ func (c ProfileConfig) ProcessParams() string {
 		e.RecycleOriginals = false
 		parts.Encode = &e
 	}
-	if parts.Upscale == nil && parts.Encode == nil {
+	if parts.Upscale == nil && parts.Encode == nil && parts.MaxWidth == 0 {
 		return ""
 	}
 	b, _ := json.Marshal(parts)
@@ -202,6 +217,75 @@ type EncodeConfig struct {
 	MinSavingsPct int `json:"minSavingsPct"`
 	// RecycleOriginals moves replaced files to the recycle bin (else they're deleted).
 	RecycleOriginals bool `json:"recycleOriginals"`
+}
+
+// DefaultJunkUnder is the longest side (px) under which an image is junk
+// (spacers, logos, tracking pixels) when a profile doesn't set its own.
+const DefaultJunkUnder = 300
+
+// PageRules are the page size limits of a profile.
+type PageRules struct {
+	// JunkUnder: images whose longest side is under this many pixels are
+	// junk: never upscaled or re-encoded, and a chapter of nothing but junk
+	// is rejected. 0 = DefaultJunkUnder, negative = off.
+	JunkUnder int `json:"junkUnder"`
+	// RemoveJunk drops junk images from the chapter file.
+	RemoveJunk bool `json:"removeJunk"`
+	// MaxWidth shrinks pages wider than this (landscape spreads may be twice
+	// as wide). 0 = no limit.
+	MaxWidth int `json:"maxWidth"`
+}
+
+// JunkSize is the junk threshold in pixels (0 = off).
+func (r PageRules) JunkSize() int {
+	switch {
+	case r.JunkUnder < 0:
+		return 0
+	case r.JunkUnder == 0:
+		return DefaultJunkUnder
+	}
+	return r.JunkUnder
+}
+
+// IsJunk reports whether a w×h image is junk under threshold junk.
+func IsJunk(w, h, junk int) bool { return junk > 0 && w > 0 && h > 0 && max(w, h) < junk }
+
+// PageWidth is the width of one page: a landscape image is a two-page
+// spread, so each half counts.
+func PageWidth(w, h int) int {
+	if w > h && h > 0 {
+		return w / 2
+	}
+	return w
+}
+
+// DefaultLowResWidth is the page width a low-resolution rule uses when it
+// doesn't set one.
+const DefaultLowResWidth = 720
+
+// Low-resolution release actions.
+const (
+	LowResKeep   = "keep"   // import it anyway (the default)
+	LowResRetry  = "retry"  // try another source, keep it when none is left
+	LowResReject = "reject" // never import it
+)
+
+// LowResRule handles releases whose pages are mostly narrower than Width.
+type LowResRule struct {
+	// Width in pixels (0 = DefaultLowResWidth).
+	Width  int    `json:"width"`
+	Action string `json:"action" enum:",keep,retry,reject"`
+}
+
+// MinWidth is the rule's threshold, or 0 when low resolution is accepted.
+func (r LowResRule) MinWidth() int {
+	if r.Action != LowResRetry && r.Action != LowResReject {
+		return 0
+	}
+	if r.Width <= 0 {
+		return DefaultLowResWidth
+	}
+	return r.Width
 }
 
 type UpscaleConfig struct {

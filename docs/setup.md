@@ -425,6 +425,15 @@ resume it (System → Status).
   Chrome shows a low-detail page first and sharpens it as it downloads; other
   readers (Apple's decoder on iOS, libavif in Mihon) show the full-quality page
   as usual. It costs about 6% in size and 20% in encoding time.
+- Page size rules (Profile → Page processing → Page size) apply to every
+  page: images under the junk size (300 px on the longest side by default:
+  spacers, logos, tracking pixels) are never upscaled or re-encoded and can be
+  removed from the chapter, and pages wider than the limit are shrunk (a
+  two-page spread may be twice as wide). A chapter made only of junk is
+  blocklisted on that source and the next source is tried.
+- Low-resolution releases (Profile → Releases): when most pages are narrower
+  than the set width, mangarr can try another source first and keep the
+  release only when no other source has the chapter, or reject it outright.
 - Pages are kept as they are unless re-encoding saves at least the configured
   percentage; black-and-white pages are encoded without color.
 - Try settings on your own pages: Profile → *Preview on a chapter* (shows the

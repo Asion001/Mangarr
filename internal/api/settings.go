@@ -387,6 +387,12 @@ func validateProfile(p *model.Profile) error {
 			return badRequest("invalid scanlator pattern " + re + ": " + err.Error())
 		}
 	}
+	if p.Config.Pages.MaxWidth < 0 {
+		p.Config.Pages.MaxWidth = 0
+	}
+	if p.Config.LowRes.Width < 0 {
+		p.Config.LowRes.Width = 0
+	}
 	u := &p.Config.Upscale
 	// Upscalers are installation-wide workers selected by availability and
 	// priority. Profiles describe the desired output, not a specific machine.

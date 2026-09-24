@@ -59,6 +59,11 @@ type ProcessResult struct {
 	Encoder        string
 	// Seconds is how long processing took (set by the manager).
 	Seconds float64
+	// UpscaleSeconds and EncodeSeconds time the two steps (for previews).
+	UpscaleSeconds float64
+	EncodeSeconds  float64
+	// Shrunk counts pages downsized to the profile's maximum width.
+	Shrunk int
 }
 
 // Processor upscales and/or re-encodes pages according to a profile.
@@ -577,6 +582,14 @@ func (m *Manager) run(ctx context.Context, job model.DownloadJob) {
 func (m *Manager) finish(ctx context.Context, job model.DownloadJob, jc *jobCtx, pages []PageFile, workDir string) {
 	log := m.log.With("job", job.ID, "chapterId", job.ChapterID)
 	ctx = worktasks.WithJob(ctx, job.ID)
+	if job.Kind == model.JobKindDownload {
+		kept, err := m.screenPages(ctx, jc, pages)
+		if err != nil {
+			m.fail(ctx, &job, jc, err)
+			return
+		}
+		pages = kept
+	}
 	// processing (upscale / re-encode)
 	cfg := jc.profile.Config
 	params := cfg.ProcessParams()

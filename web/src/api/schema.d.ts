@@ -4251,6 +4251,12 @@ export interface components {
             /** Format: int64 */
             year?: number;
         };
+        LowResRule: {
+            /** @enum {string} */
+            action: "" | "keep" | "retry" | "reject";
+            /** Format: int64 */
+            width: number;
+        };
         MangaDetailsResult: {
             cached: boolean;
             chapters: components["schemas"]["SourceChapter"][];
@@ -4484,6 +4490,13 @@ export interface components {
             /** Format: int64 */
             y: number;
         };
+        PageRules: {
+            /** Format: int64 */
+            junkUnder: number;
+            /** Format: int64 */
+            maxWidth: number;
+            removeJunk: boolean;
+        };
         Patch: {
             clearCooldown?: boolean;
             enabled?: boolean;
@@ -4504,6 +4517,8 @@ export interface components {
             height: number;
             /** Format: int64 */
             index: number;
+            /** @description The image is under the junk size and is left alone */
+            junk: boolean;
             name: string;
             originalFormat: string;
             /** Format: int64 */
@@ -4512,6 +4527,8 @@ export interface components {
             resultHeight: number;
             /** Format: int64 */
             resultWidth: number;
+            /** @description The page was wider than the profile allows and was downsized */
+            shrunk: boolean;
             /** @description The page was narrower than the threshold and went through the upscaler */
             upscaled: boolean;
             /** Format: int64 */
@@ -4562,6 +4579,8 @@ export interface components {
             /** Format: int64 */
             chapterId: number;
             encode: components["schemas"]["EncodeConfig"];
+            /** @description Page size rules (junk size, maximum width) */
+            pages?: components["schemas"]["PageRules"];
             /** @description Upscale settings to try first; omitted or disabled skips upscaling */
             upscale?: components["schemas"]["UpscaleConfig"];
         };
@@ -4618,8 +4637,10 @@ export interface components {
             blockedScanlators: string[];
             cleanup: components["schemas"]["CleanupOverride"];
             encode: components["schemas"]["EncodeConfig"];
+            lowRes: components["schemas"]["LowResRule"];
             /** Format: int64 */
             minPages: number;
+            pages: components["schemas"]["PageRules"];
             preferredScanlators: string[];
             /** Format: date-time */
             processChangedAt?: string;

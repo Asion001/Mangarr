@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/Asion001/mangarr/internal/downloads"
 	"github.com/Asion001/mangarr/internal/imageenc"
@@ -36,7 +37,9 @@ func (u Unavailable) Unwrap() error { return u.Err }
 // Temporary tells the download manager to retry later.
 func (u Unavailable) Temporary() bool { return true }
 
-// Process runs the stages enabled in cfg.
+// Process runs the stages enabled in cfg: shrink pages wider than the
+// profile allows, upscale the narrow ones, then re-encode. Junk images (under
+// the profile's junk size) pass through untouched.
 func (p *Processor) Process(ctx context.Context, cfg model.ProfileConfig, pages []downloads.PageFile, workDir string) (downloads.ProcessResult, error) {
 	res := downloads.ProcessResult{Pages: pages}
 	encoding := cfg.Encode.Format != "" && cfg.Encode.Format != "keep"
@@ -45,27 +48,66 @@ func (p *Processor) Process(ctx context.Context, cfg model.ProfileConfig, pages 
 			return res, Unavailable{fmt.Errorf("re-encoding is paused: %s", reason)}
 		}
 	}
+	cur := append([]downloads.PageFile(nil), pages...)
+	var real []int // indexes of the pages that aren't junk
+	for i, junk := range junkMask(pages, cfg.Pages) {
+		if !junk {
+			real = append(real, i)
+		}
+	}
+	pick := func() []downloads.PageFile {
+		out := make([]downloads.PageFile, len(real))
+		for k, i := range real {
+			out[k] = cur[i]
+		}
+		return out
+	}
+	put := func(out []downloads.PageFile) {
+		for k, i := range real {
+			cur[i] = out[k]
+		}
+	}
+	maxWidth := cfg.Pages.MaxWidth
+	for _, i := range real {
+		if NeedsShrink(cur[i], maxWidth) {
+			out, err := shrink(cur[i], maxWidth, encoding, workDir)
+			if err != nil {
+				return res, err
+			}
+			cur[i] = out
+			res.Shrunk++
+			res.Changed = true
+		}
+	}
 	if cfg.Upscale.Enabled && p.Up != nil {
 		ucfg := cfg.Upscale
+		if maxWidth > 0 {
+			ucfg.MaxWidth = maxWidth
+		}
 		if encoding {
 			ucfg.Format = "png" // lossless hand-off to the encoder
 		}
-		out, applied, mdl, err := p.Up.Process(ctx, ucfg, pages, workDir)
+		started := time.Now()
+		out, applied, mdl, err := p.Up.Process(ctx, ucfg, pick(), workDir)
 		if err != nil {
 			return res, Unavailable{fmt.Errorf("upscaling: %w", err)}
 		}
+		res.UpscaleSeconds = time.Since(started).Seconds()
 		if applied {
-			res.Pages, res.Upscaled, res.UpscaleModel, res.Changed = out, true, mdl, true
+			put(out)
+			res.Upscaled, res.UpscaleModel, res.Changed = true, mdl, true
 		}
 	}
 	if encoding {
 		if p.Enc == nil {
 			return res, Unavailable{imageenc.ErrNoEngine}
 		}
-		in := make([]imageenc.Page, len(res.Pages))
-		for i, pg := range res.Pages {
+		sel := pick()
+		in := make([]imageenc.Page, len(sel))
+		for i, pg := range sel {
 			in[i] = imageenc.Page{Name: pg.Name, Path: pg.Path, Format: pg.Format, Width: pg.Width, Height: pg.Height}
 		}
+		started := time.Now()
 		out, st, err := p.Enc.EncodePages(ctx, in, cfg.Encode, workDir)
 		if err != nil {
 			if errors.Is(err, imageenc.ErrNoEngine) {
@@ -73,14 +115,17 @@ func (p *Processor) Process(ctx context.Context, cfg model.ProfileConfig, pages 
 			}
 			return res, fmt.Errorf("encoding: %w", err)
 		}
+		res.EncodeSeconds = time.Since(started).Seconds()
 		if st.Encoded > 0 {
-			pages := make([]downloads.PageFile, len(out))
+			enc := make([]downloads.PageFile, len(out))
 			for i, pg := range out {
-				pages[i] = downloads.PageFile{Name: pg.Name, Path: pg.Path, Format: pg.Format, Width: pg.Width, Height: pg.Height}
+				enc[i] = downloads.PageFile{Name: pg.Name, Path: pg.Path, Format: pg.Format, Width: pg.Width, Height: pg.Height}
 			}
-			res.Pages, res.Encoded, res.Encoder, res.Changed = pages, st.Encoded, st.Engine, true
+			put(enc)
+			res.Encoded, res.Encoder, res.Changed = st.Encoded, st.Engine, true
 		}
 	}
+	res.Pages = cur
 	res.ProcessedPages = changedPageCount(pages, res.Pages)
 	return res, nil
 }

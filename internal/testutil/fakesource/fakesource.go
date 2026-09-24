@@ -94,7 +94,7 @@ var (
 
 // NewScenario registers and returns a scenario.
 func NewScenario(name string) *Scenario {
-	s := &Scenario{Mangas: map[string]*Manga{}, PageWidth: 64, Browses: map[string]int{}, BrowseErr: map[string]error{}}
+	s := &Scenario{Mangas: map[string]*Manga{}, PageWidth: 200, Browses: map[string]int{}, BrowseErr: map[string]error{}}
 	mu.Lock()
 	scenarios[name] = s
 	mu.Unlock()
@@ -334,7 +334,7 @@ func (s *Scenario) PagePNG(index int) ([]byte, error) {
 	noise := s.PageNoise
 	s.mu.Unlock()
 	if w == 0 {
-		w = 64
+		w = 200 // a small but real page: 200×300 is above the default junk size
 	}
 	img := image.NewRGBA(image.Rect(0, 0, w, w*3/2))
 	img.Set(0, 0, color.Black)

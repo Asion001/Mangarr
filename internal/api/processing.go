@@ -15,7 +15,6 @@ import (
 	"github.com/Asion001/mangarr/internal/cbz"
 	"github.com/Asion001/mangarr/internal/downloads"
 	"github.com/Asion001/mangarr/internal/imagecheck"
-	"github.com/Asion001/mangarr/internal/imageenc"
 	"github.com/Asion001/mangarr/internal/model"
 	"github.com/Asion001/mangarr/internal/processing"
 	"github.com/Asion001/mangarr/internal/progress"
@@ -91,6 +90,8 @@ type PreviewPage struct {
 	ResultWidth   int    `json:"resultWidth"`
 	ResultHeight  int    `json:"resultHeight"`
 	Upscaled      bool   `json:"upscaled" doc:"The page was narrower than the threshold and went through the upscaler"`
+	Shrunk        bool   `json:"shrunk" doc:"The page was wider than the profile allows and was downsized"`
+	Junk          bool   `json:"junk" doc:"The image is under the junk size and is left alone"`
 }
 
 type PreviewResult struct {
@@ -284,12 +285,17 @@ func (s *Server) registerProcessing() {
 				ChapterID int64                `json:"chapterId"`
 				Encode    model.EncodeConfig   `json:"encode"`
 				Upscale   *model.UpscaleConfig `json:"upscale,omitempty" doc:"Upscale settings to try first; omitted or disabled skips upscaling"`
+				Pages     *model.PageRules     `json:"pages,omitempty" doc:"Page size rules (junk size, maximum width)"`
 			}
 		}) (*struct{ Body PreviewResult }, error) {
 			upscale := in.Body.Upscale != nil && in.Body.Upscale.Enabled
 			encoding := in.Body.Encode.Format != "" && in.Body.Encode.Format != "keep"
-			if !upscale && !encoding {
-				return nil, huma.Error422UnprocessableEntity("nothing to preview: upscaling and re-encoding are both off")
+			var rules model.PageRules
+			if in.Body.Pages != nil {
+				rules = *in.Body.Pages
+			}
+			if !upscale && !encoding && rules.MaxWidth <= 0 {
+				return nil, huma.Error422UnprocessableEntity("nothing to preview: every processing step is off")
 			}
 			if upscale && (s.app.Processing == nil || s.app.Processing.Up == nil) {
 				return nil, huma.Error409Conflict("no upscaler available: upscaling is not set up on this server")
@@ -339,52 +345,38 @@ func (s *Server) registerProcessing() {
 				in2 = append(in2, downloads.PageFile{Name: pages[i].Name, Path: p, Format: info.Format, Width: info.Width, Height: info.Height})
 			}
 			res := PreviewResult{Token: token, Pages: []PreviewPage{}}
-			start := time.Now()
-			out := in2
+			// the same steps a download runs, minus the pause a library
+			// server's failed read check puts on re-encoding
+			proc := processing.New(nil, s.app.Encoder)
+			if s.app.Processing != nil {
+				cp := *s.app.Processing
+				cp.Guard = nil
+				proc = &cp
+			}
+			cfg := model.ProfileConfig{Encode: in.Body.Encode, Pages: rules}
+			cfg.Encode.MinSavingsPct = -1000 // always show the encoded page
 			if upscale {
-				ucfg := *in.Body.Upscale
-				if encoding {
-					ucfg.Format = "png" // lossless hand-off to the encoder, as in processing.Process
-				}
-				t := time.Now()
-				up, applied, mdl, err := s.app.Processing.Up.Process(ctx, ucfg, out, work)
-				if err != nil {
-					os.RemoveAll(work)
-					var none upscaling.ErrNoUpscaler
-					if errors.As(err, &none) {
-						return nil, huma.Error409Conflict(none.Error())
-					}
-					return nil, huma.Error422UnprocessableEntity("upscaling: " + err.Error())
-				}
-				if applied {
-					out, res.Upscaler = up, mdl
-				}
-				res.UpscaleSeconds = time.Since(t).Seconds()
+				cfg.Upscale = *in.Body.Upscale
 			}
-			if encoding {
-				cfg := in.Body.Encode
-				cfg.MinSavingsPct = -1000 // always show the encoded page
-				enc := make([]imageenc.Page, len(out))
-				for i, pg := range out {
-					enc[i] = imageenc.Page{Name: pg.Name, Path: pg.Path, Format: pg.Format, Width: pg.Width, Height: pg.Height}
+			start := time.Now()
+			pr, err := proc.Process(ctx, cfg, in2, work)
+			if err != nil {
+				os.RemoveAll(work)
+				var none upscaling.ErrNoUpscaler
+				if errors.As(err, &none) {
+					return nil, huma.Error409Conflict(none.Error())
 				}
-				t := time.Now()
-				done, st, err := s.app.Encoder.EncodePages(ctx, enc, cfg, work)
-				if err != nil {
-					os.RemoveAll(work)
-					return nil, huma.Error422UnprocessableEntity(err.Error())
-				}
-				res.Engine, res.EncodeSeconds = st.Engine, time.Since(t).Seconds()
-				out = make([]downloads.PageFile, len(done))
-				for i, pg := range done {
-					out[i] = downloads.PageFile{Name: pg.Name, Path: pg.Path, Format: pg.Format, Width: pg.Width, Height: pg.Height}
-				}
+				return nil, huma.Error422UnprocessableEntity(err.Error())
 			}
+			out := pr.Pages
+			res.Engine, res.Upscaler = pr.Encoder, pr.UpscaleModel
+			res.UpscaleSeconds, res.EncodeSeconds = pr.UpscaleSeconds, pr.EncodeSeconds
 			res.Seconds = time.Since(start).Seconds()
 			pv := &preview{dir: work, created: time.Now()}
 			for i := range in2 {
 				pp := PreviewPage{Index: i, Name: in2[i].Name, Width: in2[i].Width, Height: in2[i].Height, OriginalFormat: in2[i].Format,
-					EncodedFormat: out[i].Format, ResultWidth: out[i].Width, ResultHeight: out[i].Height, Upscaled: out[i].Width > in2[i].Width}
+					EncodedFormat: out[i].Format, ResultWidth: out[i].Width, ResultHeight: out[i].Height, Upscaled: out[i].Width > in2[i].Width,
+					Shrunk: out[i].Width < in2[i].Width, Junk: model.IsJunk(in2[i].Width, in2[i].Height, rules.JunkSize())}
 				if fi, err := os.Stat(in2[i].Path); err == nil {
 					pp.OriginalSize = fi.Size()
 				}

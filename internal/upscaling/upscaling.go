@@ -126,8 +126,9 @@ func OutputFormat(profile, page string) string {
 }
 
 // NeedsUpscale reports whether a page should be upscaled.
+// A landscape two-page spread is judged by the width of each half.
 func NeedsUpscale(pg downloads.PageFile, minWidth int) bool {
-	if minWidth <= 0 || pg.Width <= 0 || pg.Width >= minWidth {
+	if minWidth <= 0 || pg.Width <= 0 || model.PageWidth(pg.Width, pg.Height) >= minWidth {
 		return false
 	}
 	switch pg.Format {
@@ -166,16 +167,20 @@ func (p *Processor) Process(ctx context.Context, cfg model.UpscaleConfig, pages 
 	// group pages by the scale and output format they need so each batch is
 	// one engine run
 	type batch struct {
-		scale  int
-		format string
+		scale    int
+		format   string
+		maxWidth int
 	}
 	groups := map[batch][]int{}
 	for _, i := range todo {
-		s := ChooseScale(pages[i].Width, cfg.MinWidth, mdl.Scales)
+		s := ChooseScale(model.PageWidth(pages[i].Width, pages[i].Height), cfg.MinWidth, mdl.Scales)
 		if s == 0 {
 			continue
 		}
-		b := batch{s, OutputFormat(cfg.Format, pages[i].Format)}
+		b := batch{s, OutputFormat(cfg.Format, pages[i].Format), cfg.MaxWidth}
+		if b.maxWidth > 0 && pages[i].Width > pages[i].Height {
+			b.maxWidth *= 2 // a spread holds two pages
+		}
 		groups[b] = append(groups[b], i)
 	}
 	out := append([]downloads.PageFile(nil), pages...)
@@ -194,7 +199,7 @@ func (p *Processor) Process(ctx context.Context, cfg model.UpscaleConfig, pages 
 	for b, group := range groups {
 		for start := 0; start < len(group); start += ChunkPages {
 			idxs := group[start:min(start+ChunkPages, len(group))]
-			if err := p.upscaleChunk(ctx, up, mdl, cfg, b.format, b.scale, pages, idxs, out, outDir); err != nil {
+			if err := p.upscaleChunk(ctx, up, mdl, cfg, b.format, b.scale, b.maxWidth, pages, idxs, out, outDir); err != nil {
 				return nil, false, "", err
 			}
 			done += len(idxs)
@@ -213,7 +218,7 @@ func (p *Processor) Process(ctx context.Context, cfg model.UpscaleConfig, pages 
 // show progress.
 var ChunkPages = 8
 
-func (p *Processor) upscaleChunk(ctx context.Context, up upscale.Module, mdl *upscale.Model, cfg model.UpscaleConfig, format string, scale int,
+func (p *Processor) upscaleChunk(ctx context.Context, up upscale.Module, mdl *upscale.Model, cfg model.UpscaleConfig, format string, scale, maxWidth int,
 	pages []downloads.PageFile, idxs []int, out []downloads.PageFile, outDir string) error {
 	imgs := make([]upscale.Image, 0, len(idxs))
 	for _, i := range idxs {
@@ -224,7 +229,7 @@ func (p *Processor) upscaleChunk(ctx context.Context, up upscale.Module, mdl *up
 		imgs = append(imgs, upscale.Image{Name: pages[i].Name, Data: data})
 	}
 	res, err := up.Upscale(ctx, imgs, upscale.Params{Model: mdl.Name, Scale: scale, Noise: cfg.Noise, Format: format,
-		Quality: cfg.Quality, MaxWidth: cfg.MaxWidth})
+		Quality: cfg.Quality, MaxWidth: maxWidth})
 	if err != nil {
 		return err
 	}

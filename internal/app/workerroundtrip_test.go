@@ -26,7 +26,7 @@ import (
 // address, uploads them, and the server imports the chapter.
 func TestWorkerDownloadsAChapter(t *testing.T) {
 	sc := fakesource.NewScenario("worker-roundtrip")
-	sc.PageWidth = 64
+	sc.PageWidth = 200
 	sc.Sources = []source.SourceInfo{{ID: "A", Name: "Source A", Lang: "en"}}
 	sc.AddManga(&fakesource.Manga{SourceID: "A", URL: "/m", Title: "Remote Work", Status: source.StatusOngoing,
 		Chapters: []fakesource.Chapter{{URL: "/c1", Name: "Chapter 1", Number: 1, Pages: 5, Uploaded: time.Now()}}})

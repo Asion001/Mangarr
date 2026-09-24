@@ -186,6 +186,24 @@ func (s *Searcher) NextCandidate(ctx context.Context, seriesID, chapterID int64)
 	return d.Approved, d.IsUpgrade, nil
 }
 
+// HasAlternative reports whether another release of the chapter (not
+// exclude, not blocklisted, from an enabled source) could be tried instead.
+func (s *Searcher) HasAlternative(ctx context.Context, seriesID, chapterID, exclude int64) (bool, error) {
+	st, err := s.load(ctx, seriesID, []int64{chapterID})
+	if err != nil || len(st.chapters) == 0 {
+		return false, err
+	}
+	var others []decision.Candidate
+	for _, c := range st.releases[chapterID] {
+		if c.Release.ID != exclude {
+			others = append(others, c)
+		}
+	}
+	in := st.input(st.chapters[0], true)
+	in.Queued, in.CurrentFile, in.CurrentRelease = false, nil, nil
+	return decision.Decide(in, others).Approved != nil, nil
+}
+
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }
 
 func boolStr(b bool) string { return strconv.FormatBool(b) }

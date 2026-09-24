@@ -3726,6 +3726,29 @@
         ],
         "type": "object"
       },
+      "LowResRule": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "",
+              "keep",
+              "retry",
+              "reject"
+            ],
+            "type": "string"
+          },
+          "width": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "width",
+          "action"
+        ],
+        "type": "object"
+      },
       "MangaDetailsResult": {
         "additionalProperties": false,
         "properties": {
@@ -4521,6 +4544,28 @@
         ],
         "type": "object"
       },
+      "PageRules": {
+        "additionalProperties": false,
+        "properties": {
+          "junkUnder": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "maxWidth": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "removeJunk": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "junkUnder",
+          "removeJunk",
+          "maxWidth"
+        ],
+        "type": "object"
+      },
       "Patch": {
         "additionalProperties": false,
         "properties": {
@@ -4578,6 +4623,10 @@
             "format": "int64",
             "type": "integer"
           },
+          "junk": {
+            "description": "The image is under the junk size and is left alone",
+            "type": "boolean"
+          },
           "name": {
             "type": "string"
           },
@@ -4595,6 +4644,10 @@
           "resultWidth": {
             "format": "int64",
             "type": "integer"
+          },
+          "shrunk": {
+            "description": "The page was wider than the profile allows and was downsized",
+            "type": "boolean"
           },
           "upscaled": {
             "description": "The page was narrower than the threshold and went through the upscaler",
@@ -4616,7 +4669,9 @@
           "encodedSize",
           "resultWidth",
           "resultHeight",
-          "upscaled"
+          "upscaled",
+          "shrunk",
+          "junk"
         ],
         "type": "object"
       },
@@ -4763,6 +4818,10 @@
           },
           "encode": {
             "$ref": "#/components/schemas/EncodeConfig"
+          },
+          "pages": {
+            "$ref": "#/components/schemas/PageRules",
+            "description": "Page size rules (junk size, maximum width)"
           },
           "upscale": {
             "$ref": "#/components/schemas/UpscaleConfig",
@@ -4943,9 +5002,15 @@
           "encode": {
             "$ref": "#/components/schemas/EncodeConfig"
           },
+          "lowRes": {
+            "$ref": "#/components/schemas/LowResRule"
+          },
           "minPages": {
             "format": "int64",
             "type": "integer"
+          },
+          "pages": {
+            "$ref": "#/components/schemas/PageRules"
           },
           "preferredScanlators": {
             "items": {
@@ -4979,6 +5044,8 @@
           "minPages",
           "upscale",
           "encode",
+          "pages",
+          "lowRes",
           "processExisting",
           "cleanup"
         ],

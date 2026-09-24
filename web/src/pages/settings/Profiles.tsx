@@ -23,10 +23,16 @@ const emptyConfig: Cfg = {
   minPages: 0,
   upscale: { enabled: false, upscalerId: 0, minWidth: 1400, maxWidth: 2048, model: "waifu2x-cunet", noise: 1, format: "source", quality: 90 },
   encode: { format: "keep", preset: "balanced", quality: 0, speed: 0, grayscale: true, progressive: false, minSavingsPct: 10, recycleOriginals: true },
+  pages: { junkUnder: 0, removeJunk: false, maxWidth: 0 },
+  lowRes: { width: 0, action: "retry" },
   processTiming: "background",
   processExisting: false,
   cleanup: {},
 };
+
+// server defaults (model.DefaultJunkUnder, model.DefaultLowResWidth)
+const defaultJunk = 300;
+const defaultLowRes = 720;
 
 // AVIF quality each speed preset uses when Quality is left empty (imageenc.Resolve)
 const presetQuality: Record<Preset, number> = { fast: 60, balanced: 55, max: 48 };
@@ -48,7 +54,10 @@ function normalize(profile: Profile): Profile {
   // separate WebP/JPEG/PNG choice is gone
   upscale.format = "source";
   const encode = { ...emptyConfig.encode, ...profile.config.encode };
-  return { ...profile, config: { ...emptyConfig, ...profile.config, upscale, encode } };
+  // the width limit moved from the upscale step to every page
+  const pages = profile.config.pages ?? { junkUnder: 0, removeJunk: false, maxWidth: upscale.enabled ? upscale.maxWidth : 0 };
+  const lowRes = profile.config.lowRes ?? { width: 0, action: "" };
+  return { ...profile, config: { ...emptyConfig, ...profile.config, upscale, encode, pages, lowRes } };
 }
 
 const formatName = (f: Cfg["encode"]["format"]) => (f === "avif" ? "AVIF" : f === "jxl" ? "JPEG XL" : "");
@@ -57,6 +66,7 @@ const presetName = (p: Preset) => (p === "fast" ? tr("Fast") : p === "max" ? tr(
 /** processingSummary is the one-line pipeline of a profile, e.g. "Upscale under 1400 px → AVIF". */
 function processingSummary(c: Cfg) {
   const steps = [];
+  if (c.pages?.maxWidth) steps.push(tr("shrink over {px} px", { px: c.pages.maxWidth }));
   if (c.upscale.enabled) steps.push(tr("Upscale under {px} px", { px: c.upscale.minWidth }));
   if (c.encode?.format && c.encode.format !== "keep") steps.push(formatName(c.encode.format));
   return steps.length ? steps.join(" → ") : tr("Pages as downloaded");
@@ -197,16 +207,22 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
       ? t("No upscaler is available right now. Remembered worker models are still listed.")
       : modelLocations || t("This saved model is unavailable.");
 
+  const pg = cfg.pages;
+  const setPages = (v: Partial<Cfg["pages"]>) => setCfg({ pages: { ...pg, ...v } });
+  const junkSize = pg.junkUnder < 0 ? 0 : pg.junkUnder || defaultJunk;
   const encoding = enc.format !== "keep";
-  const processing = up.enabled || encoding;
-  const changedProcessing = JSON.stringify([base.config.upscale, base.config.encode]) !== JSON.stringify([cfg.upscale, cfg.encode]);
+  const processing = up.enabled || encoding || pg.maxWidth > 0;
+  const changedProcessing =
+    JSON.stringify([base.config.upscale, base.config.encode, base.config.pages.maxWidth]) !== JSON.stringify([cfg.upscale, cfg.encode, pg.maxWidth]);
 
   const save = async () => {
     setSaving(true);
+    // the upscaler caps what it writes with the same limit
+    const body = { ...p, config: { ...cfg, upscale: { ...up, maxWidth: pg.maxWidth } } };
     try {
       const saved = p.id
-        ? await unwrap(api.PUT("/api/v1/profiles/{id}", { params: { path: { id: p.id } }, body: p }))
-        : await unwrap(api.POST("/api/v1/profiles", { body: p }));
+        ? await unwrap(api.PUT("/api/v1/profiles/{id}", { params: { path: { id: p.id } }, body }))
+        : await unwrap(api.POST("/api/v1/profiles", { body }));
       qc.invalidateQueries({ queryKey: ["profiles"] });
       toast.success(tr("Profile saved"));
       if (processing && changedProcessing && !cfg.processExisting && p.id) {
@@ -293,8 +309,34 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
                   value={cfg.minPages || ""}
                   onChange={(e) => setCfg({ minPages: Number(e.target.value) || 0 })}
                 />
-                {t("pages")}
+                {t("real pages")}
               </label>
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                {t("If most pages are narrower than")}
+                <Input
+                  className="w-20"
+                  type="number"
+                  min={1}
+                  aria-label={t("Low-resolution width (px)")}
+                  placeholder={String(defaultLowRes)}
+                  value={cfg.lowRes.width || ""}
+                  onChange={(e) => setCfg({ lowRes: { ...cfg.lowRes, width: Number(e.target.value) || 0 } })}
+                />
+                px
+                <Select
+                  className="w-auto"
+                  aria-label={t("What to do with low-resolution releases")}
+                  value={cfg.lowRes.action || "keep"}
+                  onChange={(e) => setCfg({ lowRes: { ...cfg.lowRes, action: e.target.value as Cfg["lowRes"]["action"] } })}
+                >
+                  <option value="retry">{t("try another source, else keep it")}</option>
+                  <option value="keep">{t("keep it")}</option>
+                  <option value="reject">{t("reject it")}</option>
+                </Select>
+              </div>
+              <p className="rounded-md bg-bg px-3 py-2.5 text-xs text-muted">
+                {t("Junk images don't count as pages. A chapter that is only junk (a “not available” banner, blank pages) is blocklisted on that source and the next source is tried. If none is left, the chapter stays wanted and History says why.")}
+              </p>
             </div>
           )}
 
@@ -302,6 +344,14 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
             <div className="flex flex-col gap-4">
               <div role="img" aria-label={t("What happens to each downloaded page")} className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-bg px-3.5 py-3 text-sm">
                 <span className="rounded bg-panel-2 px-2.5 py-1 text-fg/80">{t("Downloaded page")}</span>
+                {(junkSize > 0 || pg.maxWidth > 0) && (
+                  <>
+                    <ArrowRight className="size-4 text-muted" />
+                    <span className="rounded bg-panel-2 px-2.5 py-1 text-fg/80">
+                      {[junkSize > 0 && t("skip tiny"), pg.maxWidth > 0 && t("shrink over {px} px", { px: pg.maxWidth })].filter(Boolean).join(" · ")}
+                    </span>
+                  </>
+                )}
                 {up.enabled && (
                   <>
                     <ArrowRight className="size-4 text-muted" />
@@ -321,14 +371,39 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
                 {processing && <Button size="sm" onClick={() => setPreviewing(true)}>{t("Preview on a chapter…")}</Button>}
               </div>
 
+              <Step n={1} title={t("Page size")} hint={t("Applies to every page, with or without upscaling.")}>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field label={t("Treat images as junk under (px)")} help={t("Spacers, logos and tracking pixels: never upscaled or re-encoded. Empty = off.")}>
+                    <Input
+                      type="number"
+                      min={1}
+                      placeholder={t("off")}
+                      value={junkSize || ""}
+                      onChange={(e) => setPages({ junkUnder: Number(e.target.value) > 0 ? Number(e.target.value) : -1 })}
+                    />
+                  </Field>
+                  <Field label={t("Shrink pages wider than (px)")} help={t("Two-page spreads may be twice as wide. Empty keeps full size.")}>
+                    <Input type="number" min={0} placeholder={t("no limit")} value={pg.maxWidth || ""} onChange={(e) => setPages({ maxWidth: Number(e.target.value) || 0 })} />
+                  </Field>
+                  <div className="md:col-span-2">
+                    <Switch
+                      checked={pg.removeJunk}
+                      disabled={!junkSize}
+                      onChange={(v) => setPages({ removeJunk: v })}
+                      label={<>{t("Remove junk images from the chapter")} <span className="text-xs text-muted">{t("off: they stay in the file, untouched")}</span></>}
+                    />
+                  </div>
+                </div>
+              </Step>
+
               <Step
-                n={1}
+                n={2}
                 title={t("Upscale small pages")}
                 hint={up.enabled ? t("Wider pages skip this step.") : t("Off. Turn on to sharpen low-resolution scans.")}
                 action={<Switch checked={up.enabled} onChange={(v) => setUp({ enabled: v })} label={<span className="sr-only">{t("Upscale small pages")}</span>} />}
               >
                 {up.enabled && (
-                  <div className="grid gap-4 md:grid-cols-3">
+                  <div className="grid gap-4 md:grid-cols-2">
                     <Field label={t("Model")} help={modelHelp}>
                       <Select value={up.model} onChange={(e) => setUp({ model: e.target.value })}>
                         {modelOptions.map((m) => {
@@ -341,13 +416,10 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
                         })}
                       </Select>
                     </Field>
-                    <Field label={t("When narrower than (px)")} help={t("iPad portrait: ~1600–2000")}>
+                    <Field label={t("When narrower than (px)")} help={t("iPad portrait: ~1600–2000. Two-page spreads count each half.")}>
                       <Input type="number" min={1} value={up.minWidth} onChange={(e) => setUp({ minWidth: Number(e.target.value) })} />
                     </Field>
-                    <Field label={t("Then shrink to at most (px)")} help={t("Empty = no limit")}>
-                      <Input type="number" min={0} placeholder={t("no limit")} value={up.maxWidth || ""} onChange={(e) => setUp({ maxWidth: Number(e.target.value) || 0 })} />
-                    </Field>
-                    <div className="flex flex-wrap items-center gap-3 md:col-span-3">
+                    <div className="flex flex-wrap items-center gap-3 md:col-span-2">
                       <span className="text-sm font-medium">{t("Noise reduction")}</span>
                       <Segmented
                         label={t("Noise reduction")}
@@ -361,7 +433,7 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
                 )}
               </Step>
 
-              <Step n={2} title={t("Save pages as")} hint={encoding && up.enabled ? t("Upscaled pages go straight into it, lossless.") : undefined}>
+              <Step n={3} title={t("Save pages as")} hint={encoding && up.enabled ? t("Upscaled pages go straight into it, lossless.") : undefined}>
                 <div role="radiogroup" aria-label={t("Save pages as")} className="grid gap-2 sm:grid-cols-3">
                   {saveAs.map((f) => (
                     <label key={f.value} className={clsx("flex cursor-pointer flex-col gap-1 rounded-md border p-2.5", enc.format === f.value ? "border-accent bg-accent/8" : "border-border hover:border-muted")}>
@@ -429,7 +501,7 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
 
               {processing && (
                 <Step
-                  n={3}
+                  n={4}
                   title={t("When")}
                   hint={t("In the background, chapters are readable right away; night hours are in Settings → Schedule.")}
                   action={
@@ -490,7 +562,7 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
           )}
         </div>
       </div>
-      {previewing && <PipelinePreview upscale={up} encode={enc} onClose={() => setPreviewing(false)} />}
+      {previewing && <PipelinePreview upscale={up} encode={enc} pages={pg} onClose={() => setPreviewing(false)} />}
       <Confirm
         open={!!applyTo}
         title={t("Process existing chapters?")}
@@ -506,7 +578,12 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
         onConfirm={async () => {
           if (!applyTo) return;
           try {
-            await unwrap(api.PUT("/api/v1/profiles/{id}", { params: { path: { id: applyTo.id } }, body: { ...p, id: applyTo.id, config: { ...cfg, processExisting: true } } }));
+            await unwrap(
+              api.PUT("/api/v1/profiles/{id}", {
+                params: { path: { id: applyTo.id } },
+                body: { ...p, id: applyTo.id, config: { ...cfg, upscale: { ...up, maxWidth: pg.maxWidth }, processExisting: true } },
+              }),
+            );
             qc.invalidateQueries({ queryKey: ["profiles"] });
             toast.success(tr("Existing chapters will be processed in the background"));
           } catch (e) {
@@ -522,7 +599,7 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
 }
 
 /** PipelinePreview runs the unsaved upscale and encode settings on three pages of a chapter. */
-function PipelinePreview({ upscale, encode, onClose }: { upscale: Cfg["upscale"]; encode: Cfg["encode"]; onClose: () => void }) {
+function PipelinePreview({ upscale, encode, pages, onClose }: { upscale: Cfg["upscale"]; encode: Cfg["encode"]; pages: Cfg["pages"]; onClose: () => void }) {
   const { data: series } = useSeriesList();
   const [seriesId, setSeriesId] = useState(0);
   const { data: chapters } = useChapters(seriesId);
@@ -534,12 +611,12 @@ function PipelinePreview({ upscale, encode, onClose }: { upscale: Cfg["upscale"]
   const upscaling = upscale.enabled && !encodeOnly;
   const run = useMutation({
     mutationFn: () =>
-      unwrap(api.POST("/api/v1/processing/preview", { body: { chapterId: chapterId || withFiles[0]?.id, encode, upscale: upscaling ? upscale : undefined } })),
+      unwrap(api.POST("/api/v1/processing/preview", { body: { chapterId: chapterId || withFiles[0]?.id, encode, pages, upscale: upscaling ? upscale : undefined } })),
   });
   const res = run.data;
   const noUpscaler = run.error instanceof ApiError && run.error.status === 409;
   const img = (i: number, v: "original" | "encoded") => apiUrl(`api/v1/processing/preview/${res!.token}/${i}/${v}`);
-  const steps = [upscaling && t("upscale"), encoding && formatName(encode.format)].filter(Boolean).join(" → ");
+  const steps = [pages.maxWidth > 0 && t("shrink"), upscaling && t("upscale"), encoding && formatName(encode.format)].filter(Boolean).join(" → ");
   return (
     <Modal open onClose={onClose} title={<span className="flex flex-wrap items-baseline gap-x-3">{t("Preview: {steps}", { steps })}<span className="text-xs font-normal text-muted">{t("Uses the unsaved settings")}</span></span>} size="xl">
       <div className="mb-4 flex flex-wrap items-end gap-2">
@@ -595,10 +672,12 @@ function PipelinePreview({ upscale, encode, onClose }: { upscale: Cfg["upscale"]
             {res.pages.map((pg) => {
               const smaller = Math.round(100 - (100 * pg.encodedSize) / Math.max(pg.originalSize, 1));
               const scale = pg.width ? pg.resultWidth / pg.width : 1;
-              const chips = [
-                pg.upscaled ? t("upscaled {x}×", { x: scale.toFixed(1) }) : upscaling ? t("wide enough, not upscaled") : "",
-                smaller >= 0 ? t("{n}% smaller", { n: smaller }) : t("{n}% larger", { n: -smaller }),
-              ].filter(Boolean);
+              const chips = pg.junk
+                ? [t("junk image, left alone")]
+                : [
+                    pg.upscaled ? t("upscaled {x}×", { x: scale.toFixed(1) }) : pg.shrunk ? t("shrunk from {px} px", { px: pg.width }) : upscaling ? t("wide enough, not upscaled") : "",
+                    smaller >= 0 ? t("{n}% smaller", { n: smaller }) : t("{n}% larger", { n: -smaller }),
+                  ].filter(Boolean);
               return (
                 <div key={pg.index} className="grid grid-cols-2 gap-3">
                   {(["original", "encoded"] as const).map((v) => (
