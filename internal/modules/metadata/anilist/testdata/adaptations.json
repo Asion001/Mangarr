@@ -1,0 +1,196 @@
+{
+  "id": 700001,
+  "idMal": 800001,
+  "title": {
+    "english": "Cloud Lantern"
+  },
+  "relations": {
+    "edges": [
+      {
+        "relationType": "ADAPTATION",
+        "node": {
+          "id": 700002,
+          "idMal": 800002,
+          "type": "ANIME",
+          "format": "TV",
+          "title": {
+            "english": "Cloud Lantern Screen",
+            "romaji": "Cloud Lantern Screen Romaji"
+          },
+          "startDate": {
+            "year": 2021
+          },
+          "coverImage": {
+            "extraLarge": "https://images.example/screen-large.jpg",
+            "large": "https://images.example/screen.jpg"
+          },
+          "siteUrl": "https://anilist.co/anime/700002"
+        }
+      },
+      {
+        "relationType": "ADAPTATION",
+        "node": {
+          "id": 700003,
+          "idMal": null,
+          "type": "ANIME",
+          "format": "MOVIE",
+          "title": {
+            "romaji": "Cloud Lantern Voyage"
+          },
+          "startDate": null,
+          "coverImage": {
+            "extraLarge": null,
+            "large": "https://images.example/voyage.jpg"
+          }
+        }
+      },
+      {
+        "relationType": "ADAPTATION",
+        "node": {
+          "id": 700004,
+          "idMal": null,
+          "type": "ANIME",
+          "format": "OVA",
+          "title": {
+            "romaji": "Cloud Lantern OVA"
+          },
+          "startDate": null,
+          "coverImage": null
+        }
+      },
+      {
+        "relationType": "ADAPTATION",
+        "node": {
+          "id": 700005,
+          "idMal": null,
+          "type": "ANIME",
+          "format": "ONA",
+          "title": {
+            "romaji": "Cloud Lantern ONA"
+          },
+          "startDate": null,
+          "coverImage": null
+        }
+      },
+      {
+        "relationType": "ADAPTATION",
+        "node": {
+          "id": 700006,
+          "idMal": null,
+          "type": "ANIME",
+          "format": "SPECIAL",
+          "title": {
+            "romaji": "Cloud Lantern SPECIAL"
+          },
+          "startDate": null,
+          "coverImage": null
+        }
+      },
+      {
+        "relationType": "ADAPTATION",
+        "node": {
+          "id": 700007,
+          "idMal": null,
+          "type": "ANIME",
+          "format": "TV_SHORT",
+          "title": {
+            "romaji": "Cloud Lantern TV_SHORT"
+          },
+          "startDate": null,
+          "coverImage": null
+        }
+      },
+      {
+        "relationType": "ADAPTATION",
+        "node": {
+          "id": 700002,
+          "idMal": 800002,
+          "type": "ANIME",
+          "format": "TV",
+          "title": {
+            "english": "Cloud Lantern Screen",
+            "romaji": "Cloud Lantern Screen Romaji"
+          },
+          "startDate": {
+            "year": 2021
+          },
+          "coverImage": {
+            "extraLarge": "https://images.example/screen-large.jpg",
+            "large": "https://images.example/screen.jpg"
+          },
+          "siteUrl": "https://anilist.co/anime/700002"
+        }
+      },
+      {
+        "relationType": "ADAPTATION",
+        "node": null
+      },
+      {
+        "relationType": "SEQUEL",
+        "node": {
+          "id": 700020,
+          "type": "ANIME",
+          "format": "TV",
+          "title": {
+            "english": "Cloud Lantern Other"
+          }
+        }
+      },
+      {
+        "relationType": "SOURCE",
+        "node": {
+          "id": 700021,
+          "type": "ANIME",
+          "format": "TV",
+          "title": {
+            "english": "Cloud Lantern Other"
+          }
+        }
+      },
+      {
+        "relationType": "ADAPTATION",
+        "node": {
+          "id": 700022,
+          "type": "MANGA",
+          "format": "MANGA",
+          "title": {
+            "english": "Cloud Lantern Other"
+          }
+        }
+      },
+      {
+        "relationType": "ADAPTATION",
+        "node": {
+          "id": 700023,
+          "type": "ANIME",
+          "format": "MUSIC",
+          "title": {
+            "english": "Cloud Lantern Other"
+          }
+        }
+      },
+      {
+        "relationType": "ADAPTATION",
+        "node": {
+          "id": 700024,
+          "type": "ANIME",
+          "format": null,
+          "title": {
+            "english": "Cloud Lantern Other"
+          }
+        }
+      },
+      {
+        "relationType": "ADAPTATION",
+        "node": {
+          "id": 0,
+          "type": "ANIME",
+          "format": "TV",
+          "title": {
+            "english": "Cloud Lantern Other"
+          }
+        }
+      }
+    ]
+  }
+}

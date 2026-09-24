@@ -3213,6 +3213,19 @@ export interface components {
             /** Format: int64 */
             moduleId: number;
         };
+        Adaptation: {
+            coverUrl?: string;
+            externalIds: {
+                [key: string]: string;
+            };
+            format: string;
+            links: {
+                [key: string]: string;
+            };
+            title: string;
+            /** Format: int64 */
+            year?: number;
+        };
         AddEditionsRequest: {
             blockedScanlators?: string[];
             editions?: components["schemas"]["EditionOptions"][];
@@ -4376,6 +4389,7 @@ export interface components {
             status: string;
         };
         LookupResult: {
+            adaptations?: components["schemas"]["Adaptation"][];
             adult?: boolean;
             also?: components["schemas"]["MetadataRef"][];
             altTitles?: string[];
@@ -5436,6 +5450,7 @@ export interface components {
             workId: number;
         };
         SeriesMetadata: {
+            adaptations?: components["schemas"]["Adaptation"][];
             ageRating?: string;
             altTitles?: string[];
             artists?: string[];
@@ -5470,6 +5485,7 @@ export interface components {
             title: string;
         };
         SeriesResource: {
+            adaptations: components["schemas"]["Adaptation"][];
             addOptions: components["schemas"]["AddOptions"];
             /** Format: date-time */
             addedAt: string;

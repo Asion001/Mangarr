@@ -79,11 +79,12 @@ type AddEditionsResponse struct {
 
 type SeriesResource struct {
 	model.Series
-	Stats    SeriesStats          `json:"stats"`
-	Sources  []model.SeriesSource `json:"sources,omitempty"`
-	CoverURL string               `json:"coverUrl"`
-	FullPath string               `json:"fullPath,omitempty"`
-	Reading  *ReadingInfo         `json:"reading,omitempty"`
+	Adaptations []model.Adaptation   `json:"adaptations" nullable:"false"`
+	Stats       SeriesStats          `json:"stats"`
+	Sources     []model.SeriesSource `json:"sources,omitempty"`
+	CoverURL    string               `json:"coverUrl"`
+	FullPath    string               `json:"fullPath,omitempty"`
+	Reading     *ReadingInfo         `json:"reading,omitempty"`
 	// Following: you follow it (new chapters on your notification targets).
 	Following bool `json:"following"`
 	// WorkTitle is the canonical list title; Editions are independently
@@ -339,6 +340,7 @@ func (s *Server) sourceCounts(ctx context.Context, links []model.SeriesSource) {
 func (s *Server) seriesResource(ctx context.Context, ser model.Series, stats map[int64]SeriesStats, detail bool) SeriesResource {
 	r := SeriesResource{Series: ser, Stats: stats[ser.ID],
 		CoverURL: seriesCoverURL(ser)}
+	r.Adaptations = append([]model.Adaptation{}, ser.Metadata.Adaptations...)
 	if detail {
 		_ = s.app.DB.NewSelect().Model(&r.Sources).Where("series_id = ?", ser.ID).Order("priority", "id").Scan(ctx)
 		if ranks, err := sourcepriority.Ranks(ctx, s.app.DB, ser, r.Sources); err == nil {

@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/Asion001/mangarr/internal/model"
 	"github.com/Asion001/mangarr/internal/modules"
 )
 
@@ -32,6 +33,9 @@ type SeriesMetadata struct {
 	Format        string            `json:"format,omitempty"`  // manga, manhwa, manhua, comic, oneshot, novel
 	Country       string            `json:"country,omitempty"` // ISO country of origin
 	URL           string            `json:"url,omitempty"`
+
+	// Adaptations is nil when the provider did not fetch relations.
+	Adaptations []model.Adaptation `json:"adaptations,omitempty"`
 }
 
 type Module interface {

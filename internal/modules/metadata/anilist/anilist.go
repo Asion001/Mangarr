@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Asion001/mangarr/internal/model"
 	"github.com/Asion001/mangarr/internal/modules"
 	"github.com/Asion001/mangarr/internal/modules/metadata"
 )
@@ -61,12 +62,26 @@ type Module struct {
 	lastReq time.Time
 }
 
-const mediaFields = `id idMal title { romaji english native userPreferred } synonyms status format countryOfOrigin isAdult
+// searchFields is what a search asks for; lookups by id add the relations,
+// which would make a whole page of search results far costlier.
+const searchFields = `id idMal title { romaji english native userPreferred } synonyms status format countryOfOrigin isAdult
 chapters startDate { year } genres tags { name rank isMediaSpoiler } coverImage { extraLarge large }
 siteUrl description(asHtml: false) staff(perPage: 8) { edges { role node { name { full } } } }
 externalLinks { site url type }`
 
+const mediaFields = searchFields + `
+relations { edges { relationType node { id idMal type format title { romaji english native userPreferred }
+startDate { year } coverImage { extraLarge large } siteUrl } } }`
+
 type media struct {
+	Type string `json:"type"`
+	// Relations is nil when the query didn't ask for them.
+	Relations *struct {
+		Edges []struct {
+			RelationType string `json:"relationType"`
+			Node         *media `json:"node"`
+		} `json:"edges"`
+	} `json:"relations"`
 	ID    int `json:"id"`
 	IDMal int `json:"idMal"`
 	Title struct {
@@ -182,7 +197,7 @@ func (m *Module) Search(ctx context.Context, q string, limit int) ([]metadata.Se
 			Media []media `json:"media"`
 		} `json:"Page"`
 	}
-	err := m.query(ctx, `query ($s: String, $n: Int) { Page(perPage: $n) { media(search: $s, type: MANGA, sort: SEARCH_MATCH) { `+mediaFields+` } } }`,
+	err := m.query(ctx, `query ($s: String, $n: Int) { Page(perPage: $n) { media(search: $s, type: MANGA, sort: SEARCH_MATCH) { `+searchFields+` } } }`,
 		map[string]any{"s": q, "n": limit}, &out)
 	if err != nil {
 		return nil, err
@@ -243,7 +258,7 @@ func cleanDescription(s string) string {
 	return strings.TrimSpace(blankLines.ReplaceAllString(s, "\n\n"))
 }
 
-func (m *Module) convert(md media) metadata.SeriesMetadata {
+func (m *Module) title(md media) string {
 	title := md.Title.UserPreferred
 	switch m.s.TitleLanguage {
 	case "english":
@@ -253,6 +268,11 @@ func (m *Module) convert(md media) metadata.SeriesMetadata {
 	case "native":
 		title = firstNonEmpty(md.Title.Native, md.Title.Romaji)
 	}
+	return title
+}
+
+func (m *Module) convert(md media) metadata.SeriesMetadata {
+	title := m.title(md)
 	alt := []string{}
 	for _, t := range append([]string{md.Title.English, md.Title.Romaji, md.Title.Native}, md.Synonyms...) {
 		if t != "" && t != title {
@@ -266,6 +286,9 @@ func (m *Module) convert(md media) metadata.SeriesMetadata {
 		Adult: md.IsAdult, TotalChapters: md.Chapters, Country: md.CountryOfOrigin,
 		Links:       map[string]string{"AniList": md.SiteURL},
 		ExternalIDs: map[string]string{"anilist": strconv.Itoa(md.ID)},
+	}
+	if md.Relations != nil {
+		out.Adaptations = adaptations(m, md)
 	}
 	if md.IDMal > 0 {
 		out.ExternalIDs["mal"] = strconv.Itoa(md.IDMal)
@@ -342,3 +365,35 @@ func dedupe(xs []string) []string {
 }
 
 var _ metadata.ExternalLookup = (*Module)(nil)
+
+// adaptations are md's anime adaptations, in AniList's order.
+func adaptations(m *Module, md media) []model.Adaptation {
+	out := []model.Adaptation{}
+	seen := map[int]bool{}
+	for _, edge := range md.Relations.Edges {
+		anime := edge.Node
+		if edge.RelationType != "ADAPTATION" || anime == nil || anime.Type != "ANIME" || anime.ID <= 0 || seen[anime.ID] {
+			continue
+		}
+		switch anime.Format {
+		case "TV", "TV_SHORT", "MOVIE", "OVA", "ONA", "SPECIAL":
+		default:
+			continue
+		}
+		seen[anime.ID] = true
+		id := strconv.Itoa(anime.ID)
+		adaptation := model.Adaptation{
+			Title: m.title(*anime), Format: strings.ToLower(anime.Format), Year: anime.StartDate.Year,
+			CoverURL:    firstNonEmpty(anime.CoverImage.ExtraLarge, anime.CoverImage.Large),
+			ExternalIDs: map[string]string{"anilist": id},
+			Links:       map[string]string{"AniList": firstNonEmpty(anime.SiteURL, "https://anilist.co/anime/"+id)},
+		}
+		if anime.IDMal > 0 {
+			malID := strconv.Itoa(anime.IDMal)
+			adaptation.ExternalIDs["mal"] = malID
+			adaptation.Links["MyAnimeList"] = "https://myanimelist.net/anime/" + malID
+		}
+		out = append(out, adaptation)
+	}
+	return out
+}

@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -318,6 +319,10 @@ func Merge(parts []metadata.SeriesMetadata) (metadata.SeriesMetadata, map[string
 		}
 	}
 	for _, p := range parts {
+		if out.Adaptations == nil && p.Adaptations != nil {
+			out.Adaptations = p.Adaptations
+			prov["adaptations"] = p.Provider
+		}
 		str("title", &out.Title, p.Title, p.Provider)
 		str("description", &out.Description, p.Description, p.Provider)
 		str("status", &out.Status, p.Status, p.Provider)
@@ -404,6 +409,16 @@ func Apply(s *model.Series, r *Resolved) bool {
 	}
 	if rating := ageRating(md); rating != "" && !cur.Locked("ageRating") && cur.AgeRating != rating {
 		cur.AgeRating, changed = rating, true
+	}
+	// A fetched empty list clears removed relations; an unavailable provider
+	// leaves the last successful result intact.
+	if md.Adaptations != nil || cur.ExternalIDs["anilist"] == "" {
+		if len(cur.Adaptations) != len(md.Adaptations) || (len(md.Adaptations) > 0 && !reflect.DeepEqual(cur.Adaptations, md.Adaptations)) {
+			cur.Adaptations, changed = md.Adaptations, true
+		}
+		if md.Adaptations == nil {
+			delete(cur.Provenance, "adaptations")
+		}
 	}
 	if cur.Links == nil {
 		cur.Links = map[string]string{}

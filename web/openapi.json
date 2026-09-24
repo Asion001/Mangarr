@@ -71,6 +71,43 @@
         ],
         "type": "object"
       },
+      "Adaptation": {
+        "additionalProperties": false,
+        "properties": {
+          "coverUrl": {
+            "type": "string"
+          },
+          "externalIds": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "format": {
+            "type": "string"
+          },
+          "links": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "title": {
+            "type": "string"
+          },
+          "year": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "title",
+          "format",
+          "externalIds",
+          "links"
+        ],
+        "type": "object"
+      },
       "AddEditionsRequest": {
         "additionalProperties": false,
         "properties": {
@@ -3843,6 +3880,12 @@
       "LookupResult": {
         "additionalProperties": false,
         "properties": {
+          "adaptations": {
+            "items": {
+              "$ref": "#/components/schemas/Adaptation"
+            },
+            "type": "array"
+          },
           "adult": {
             "type": "boolean"
           },
@@ -7459,6 +7502,12 @@
       "SeriesMetadata": {
         "additionalProperties": false,
         "properties": {
+          "adaptations": {
+            "items": {
+              "$ref": "#/components/schemas/Adaptation"
+            },
+            "type": "array"
+          },
           "ageRating": {
             "type": "string"
           },
@@ -7573,6 +7622,12 @@
       "SeriesResource": {
         "additionalProperties": false,
         "properties": {
+          "adaptations": {
+            "items": {
+              "$ref": "#/components/schemas/Adaptation"
+            },
+            "type": "array"
+          },
           "addOptions": {
             "$ref": "#/components/schemas/AddOptions"
           },
@@ -7683,6 +7738,7 @@
           }
         },
         "required": [
+          "adaptations",
           "stats",
           "coverUrl",
           "following",

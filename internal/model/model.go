@@ -522,8 +522,19 @@ type AddOptions struct {
 	SearchMissing bool    `json:"searchMissing,omitempty"`
 }
 
+// Adaptation is an anime related to a series by its metadata provider.
+type Adaptation struct {
+	Title       string            `json:"title"`
+	Format      string            `json:"format"` // tv | tv_short | movie | ova | ona | special
+	Year        int               `json:"year,omitempty"`
+	CoverURL    string            `json:"coverUrl,omitempty"`
+	ExternalIDs map[string]string `json:"externalIds"`
+	Links       map[string]string `json:"links"`
+}
+
 // SeriesMetadata is the merged metadata of a series plus provenance and locks.
 type SeriesMetadata struct {
+	Adaptations   []Adaptation      `json:"adaptations,omitempty"`
 	AltTitles     []string          `json:"altTitles,omitempty"`
 	Description   string            `json:"description,omitempty"`
 	Year          int               `json:"year,omitempty"`

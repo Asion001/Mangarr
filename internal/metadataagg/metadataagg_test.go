@@ -66,3 +66,34 @@ func TestFindSame(t *testing.T) {
 		t.Fatal(Normalize("Re:Zero - Starting Life"))
 	}
 }
+
+func TestAdaptationsMergeAndApply(t *testing.T) {
+	original := model.Adaptation{Title: "Cloud Lantern Screen", Format: "tv", ExternalIDs: map[string]string{"anilist": "700002"}}
+	updated := model.Adaptation{Title: "Cloud Lantern Voyage", Format: "movie", ExternalIDs: map[string]string{"anilist": "700003"}}
+	s := &model.Series{Metadata: model.SeriesMetadata{ExternalIDs: map[string]string{"anilist": "700001"}}}
+	apply := func(parts ...metadata.SeriesMetadata) bool {
+		md, prov := Merge(parts)
+		return Apply(s, &Resolved{Metadata: md, Provenance: prov})
+	}
+	first := metadata.SeriesMetadata{Provider: "anilist", Adaptations: []model.Adaptation{original}}
+	if !apply(metadata.SeriesMetadata{Provider: "shikimori"}, first) || len(s.Metadata.Adaptations) != 1 || s.Metadata.Provenance["adaptations"] != "anilist" {
+		t.Fatalf("initial merge: %+v", s.Metadata)
+	}
+	if apply(first) {
+		t.Fatal("unchanged adaptations reported changed")
+	}
+	if apply(metadata.SeriesMetadata{Provider: "shikimori"}) || len(s.Metadata.Adaptations) != 1 {
+		t.Fatal("unavailable AniList cleared adaptations")
+	}
+	if !apply(metadata.SeriesMetadata{Provider: "anilist", Adaptations: []model.Adaptation{updated}}) || s.Metadata.Adaptations[0].Title != updated.Title {
+		t.Fatal("refresh did not replace adaptations")
+	}
+	if !apply(metadata.SeriesMetadata{Provider: "anilist", Adaptations: []model.Adaptation{}}) || len(s.Metadata.Adaptations) != 0 {
+		t.Fatal("empty refresh did not clear adaptations")
+	}
+	apply(first)
+	s.Metadata.ExternalIDs = map[string]string{}
+	if !apply(metadata.SeriesMetadata{Provider: "shikimori"}) || len(s.Metadata.Adaptations) != 0 || s.Metadata.Provenance["adaptations"] != "" {
+		t.Fatal("relink retained adaptations")
+	}
+}

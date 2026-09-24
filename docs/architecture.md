@@ -59,7 +59,16 @@ interface table are in [modules.md](modules.md).
 - **Metadata**: every enabled module is searched in parallel, results are
   joined by cross ids (AniList, MAL, MangaUpdates, …) or title, and merged
   field by field by priority (`internal/metadataagg`). Fields a user edits are
-  locked against refreshes.
+  locked against refreshes. AniList also fetches direct `ADAPTATION` relations
+  to anime (TV, TV short, movie, OVA, ONA and special). These are stored in
+  the series metadata JSON alongside external IDs and links; no separate
+  table is needed. Series API resources expose an `adaptations` array with
+  title, lowercase format, year and cover URL when known, plus `externalIds`
+  (`anilist`, optionally `mal`) and `links`. Older records and series without
+  AniList data return `[]`. A successful metadata refresh replaces this list,
+  including clearing removed relations; a failed AniList fetch preserves the
+  last successful result. This is metadata only, without media-server matching
+  or a web UI.
 
 ## Chapters and the pipeline
 
