@@ -3,6 +3,7 @@
 [![CI](https://github.com/Asion001/Mangarr/actions/workflows/ci.yml/badge.svg)](https://github.com/Asion001/Mangarr/actions/workflows/ci.yml)
 [![Image](https://img.shields.io/badge/image-ghcr.io%2Fasion001%2Fmangarr-blue)](https://github.com/Asion001/Mangarr/pkgs/container/mangarr)
 ![Go](https://img.shields.io/github/go-mod/go-version/Asion001/Mangarr)
+[![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)](LICENSE)
 
 A self-hosted, Sonarr-style PVR for manga. mangarr monitors series, finds new
 chapters on the sites it speaks itself or on
@@ -213,3 +214,13 @@ regenerate [docs/configuration.md](docs/configuration.md) with
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request, and
 [SECURITY.md](SECURITY.md) to report a vulnerability.
+
+## License
+
+mangarr is free software under the
+[GNU Affero General Public License v3.0 or later](LICENSE). If you run a
+modified version for other people over a network, you have to offer them its
+source code.
+
+`internal/chapternum` is a port of Mihon's chapter recognition, which is
+under the Apache License 2.0.
