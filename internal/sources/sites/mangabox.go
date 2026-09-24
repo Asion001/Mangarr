@@ -27,11 +27,12 @@ var mboxSites = []mboxSite{
 	// two requests a second and three at a time for images.
 	{id: sourcekit.KeiyoushiID("Mangakakalot", "en", 1), name: "Mangakakalot", base: "https://www.mangakakalot.gg",
 		perMinute: 120, concurrent: 3, oldIDSlugs: true},
-	// Manganato (natomanga) runs the same site under another name, and
-	// answers on nelomanga.net and manganato.gg too. Its id is set in the
-	// extension's build file. Entries from the old manganato.com family of
-	// domains can't be read any more and need migrating, as in Mihon.
-	{id: "1024627298672457456", name: "Manganato", base: "https://www.natomanga.com",
+	// Manganato runs the same site on several domains. manganato.gg is the
+	// canonical mirror because natomanga.com and nelomanga.net currently put
+	// non-browser clients behind Cloudflare. Its id is set in the extension's
+	// build file. Entries from the old manganato.com family of domains can't
+	// be read any more and need migrating, as in Mihon.
+	{id: "1024627298672457456", name: "Manganato", base: "https://www.manganato.gg",
 		legacyDomains: []string{"https://chapmanganato.to/", "https://manganato.com/", "https://readmanganato.com/"}},
 }
 

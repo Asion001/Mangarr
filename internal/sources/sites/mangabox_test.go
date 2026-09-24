@@ -182,6 +182,24 @@ func TestMangaBoxSlugs(t *testing.T) {
 	}
 }
 
+func TestManganatoUsesTheUnchallengedMirror(t *testing.T) {
+	var nato *mboxSite
+	for i := range mboxSites {
+		if mboxSites[i].name == "Manganato" {
+			nato = &mboxSites[i]
+			break
+		}
+	}
+	if nato == nil || nato.base != "https://www.manganato.gg" {
+		t.Fatalf("Manganato base = %+v", nato)
+	}
+	// Existing entries can contain an absolute URL from the previous mirror;
+	// the stored slug is sufficient to rebase them without a migration.
+	if got, err := nato.slug(sourcekit.Ref{URL: "https://www.natomanga.com/manga/dandadan"}); err != nil || got != "dandadan" {
+		t.Fatalf("previous mirror slug = %q, %v", got, err)
+	}
+}
+
 // TestMangaBoxNormalize is the site's own search normalization.
 func TestMangaBoxNormalize(t *testing.T) {
 	for in, want := range map[string]string{
