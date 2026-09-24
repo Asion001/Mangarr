@@ -2555,7 +2555,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Add a backup zip from another install (restore it from the list) */
+        /** Add and verify a backup zip from another install (restore it from the list) */
         post: operations["backups-upload"];
         delete?: never;
         options?: never;
@@ -2590,6 +2590,23 @@ export interface paths {
         put?: never;
         /** Replace all data with a backup's and restart (progress under /api/v1/system/database) */
         post: operations["backups-restore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/backups/{name}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify a backup before restore */
+        post: operations["backups-verify"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3276,9 +3293,11 @@ export interface components {
             /** Format: date-time */
             created: string;
             name: string;
+            restorable: boolean;
             /** Format: int64 */
             size: number;
             type: string;
+            verification?: components["schemas"]["BackupVerification"];
         };
         BackupChapter: {
             lang?: string;
@@ -3314,6 +3333,20 @@ export interface components {
             };
             url: string;
             webUrl?: string;
+        };
+        BackupVerification: {
+            checksum: string;
+            rows: {
+                [key: string]: number;
+            };
+            /** Format: int64 */
+            size: number;
+            sourceDatabase: string;
+            sourceVersion: string;
+            /** Format: int64 */
+            total: number;
+            /** Format: date-time */
+            verifiedAt: string;
         };
         BlocklistView: {
             /** Format: int64 */
@@ -12500,13 +12533,22 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
+            /** @description Verified backup */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["BackupBackup"];
+                };
+            };
+            /** @description Invalid backup archive */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
                 };
             };
             /** @description Error */
@@ -12595,6 +12637,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "backups-verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupVerification"];
+                };
             };
             /** @description Error */
             default: {

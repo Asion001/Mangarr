@@ -3,8 +3,8 @@ package backup
 
 import (
 	"archive/zip"
-	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,11 +21,27 @@ import (
 	"github.com/Asion001/mangarr/internal/version"
 )
 
+const MaxUploadSize = 4 << 30
+
 type Backup struct {
-	Name    string    `json:"name"`
-	Type    string    `json:"type"` // manual | scheduled
-	Size    int64     `json:"size"`
-	Created time.Time `json:"created"`
+	Name         string        `json:"name"`
+	Type         string        `json:"type"` // manual | scheduled
+	Size         int64         `json:"size"`
+	Created      time.Time     `json:"created"`
+	Restorable   bool          `json:"restorable"`
+	Verification *Verification `json:"verification,omitempty"`
+}
+
+type Verification struct {
+	VerifiedAt     time.Time `json:"verifiedAt"`
+	SourceVersion  string    `json:"sourceVersion"`
+	SourceDatabase string    `json:"sourceDatabase"`
+	Checksum       string    `json:"checksum"`
+	// Size is the archive's size when it was verified; List trusts the
+	// record only while it still matches, instead of re-hashing every zip.
+	Size  int64          `json:"size"`
+	Rows  map[string]int `json:"rows"`
+	Total int            `json:"total"`
 }
 
 type Service struct {
@@ -107,6 +123,11 @@ func (s *Service) Create(ctx context.Context, typ string) (*Backup, error) {
 	if err := os.Rename(tmp, path); err != nil {
 		return nil, err
 	}
+	verification, err := s.Verify(ctx, name)
+	if err != nil {
+		_ = os.Remove(path)
+		return nil, fmt.Errorf("created backup failed verification: %w", err)
+	}
 	if typ == "scheduled" {
 		g, _ := s.settings.General(ctx)
 		s.prune(g.BackupRetention)
@@ -115,7 +136,7 @@ func (s *Service) Create(ctx context.Context, typ string) (*Backup, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Backup{Name: name, Type: typ, Size: st.Size(), Created: st.ModTime()}, nil
+	return &Backup{Name: name, Type: typ, Size: st.Size(), Created: st.ModTime(), Restorable: true, Verification: verification}, nil
 }
 
 func addFile(zw *zip.Writer, name, path string) error {
@@ -167,34 +188,207 @@ func (s *Service) List() ([]Backup, error) {
 		case strings.Contains(e.Name(), "_uploaded_"):
 			typ = "uploaded"
 		}
-		out = append(out, Backup{Name: e.Name(), Type: typ, Size: info.Size(), Created: info.ModTime()})
+		b := Backup{Name: e.Name(), Type: typ, Size: info.Size(), Created: info.ModTime()}
+		if v, err := s.readVerification(e.Name()); err == nil {
+			if v.Size == info.Size() && !info.ModTime().After(v.VerifiedAt) {
+				b.Restorable, b.Verification = true, v
+			}
+		}
+		out = append(out, b)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Created.After(out[j].Created) })
 	return out, nil
 }
 
-// Save stores an uploaded backup zip (it must hold a database).
-func (s *Service) Save(data []byte) (*Backup, error) {
-	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
-	if err != nil {
-		return nil, errors.New("not a zip file")
-	}
-	found := false
-	for _, f := range zr.File {
-		found = found || f.Name == "mangarr.db"
-	}
-	if !found {
-		return nil, errors.New("not a mangarr backup with a database in it")
-	}
+// SaveFrom stores and verifies an uploaded backup without keeping its body in memory.
+func (s *Service) SaveFrom(ctx context.Context, src io.Reader) (*Backup, error) {
+	return s.saveFromLimit(ctx, src, MaxUploadSize)
+}
+
+func (s *Service) saveFromLimit(ctx context.Context, src io.Reader, maxSize int64) (*Backup, error) {
 	if err := os.MkdirAll(s.dir, 0o775); err != nil {
+		return nil, err
+	}
+	tmp, err := os.CreateTemp(s.dir, ".upload-*.partial")
+	if err != nil {
+		return nil, err
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	n, err := io.Copy(tmp, io.LimitReader(src, maxSize+1))
+	if err != nil {
+		_ = tmp.Close()
+		return nil, err
+	}
+	if n > maxSize {
+		_ = tmp.Close()
+		return nil, fmt.Errorf("backup upload exceeds the %d byte limit", maxSize)
+	}
+	if err := tmp.Close(); err != nil {
+		return nil, err
+	}
+	verification, err := s.verifyPath(ctx, tmpPath)
+	if err != nil {
 		return nil, err
 	}
 	name := fmt.Sprintf("mangarr_uploaded_%s.zip", time.Now().UTC().Format("2006.01.02_15.04.05"))
 	path := filepath.Join(s.dir, name)
-	if err := os.WriteFile(path, data, 0o664); err != nil {
+	if err := os.Rename(tmpPath, path); err != nil {
 		return nil, err
 	}
-	return &Backup{Name: name, Type: "uploaded", Size: int64(len(data)), Created: time.Now()}, nil
+	if err := s.writeVerification(name, verification); err != nil {
+		_ = os.Remove(path)
+		return nil, err
+	}
+	st, err := os.Stat(path)
+	if err != nil {
+		_ = os.Remove(path)
+		return nil, err
+	}
+	return &Backup{Name: name, Type: "uploaded", Size: st.Size(), Created: st.ModTime(), Restorable: true, Verification: verification}, nil
+}
+
+// Verify validates an existing archive and records the result alongside it.
+func (s *Service) Verify(ctx context.Context, name string) (*Verification, error) {
+	path, err := s.Path(name)
+	if err != nil {
+		return nil, err
+	}
+	v, err := s.verifyPath(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.writeVerification(name, v); err != nil {
+		return nil, err
+	}
+	return v, nil
+}
+
+func (s *Service) verifyPath(ctx context.Context, path string) (*Verification, error) {
+	zr, err := zip.OpenReader(path)
+	if err != nil {
+		return nil, fmt.Errorf("invalid backup ZIP: %w", err)
+	}
+	defer zr.Close()
+	var manifest *zip.File
+	var database *zip.File
+	for _, f := range zr.File {
+		switch f.Name {
+		case "manifest.json":
+			manifest = f
+		case "mangarr.db":
+			database = f
+		}
+	}
+	if manifest == nil || database == nil {
+		return nil, errors.New("backup must contain manifest.json and mangarr.db")
+	}
+	mr, err := manifest.Open()
+	if err != nil {
+		return nil, fmt.Errorf("read backup manifest: %w", err)
+	}
+	var info struct {
+		Version  string `json:"version"`
+		Database string `json:"database"`
+	}
+	err = json.NewDecoder(io.LimitReader(mr, 1<<20)).Decode(&info)
+	_ = mr.Close()
+	if err != nil || strings.TrimSpace(info.Version) == "" || strings.TrimSpace(info.Database) == "" {
+		return nil, errors.New("backup manifest is missing a readable version or database")
+	}
+	// The extracted database can be as big as the library's, so it goes
+	// next to the backups rather than in a possibly small system temp dir.
+	dbPath := filepath.Join(s.dir, fmt.Sprintf(".verify-%d.db", time.Now().UnixNano()))
+	defer func() {
+		for _, suffix := range []string{"", "-wal", "-shm"} {
+			_ = os.Remove(dbPath + suffix)
+		}
+	}()
+	r, err := database.Open()
+	if err != nil {
+		return nil, fmt.Errorf("read backup database: %w", err)
+	}
+	out, err := os.OpenFile(dbPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		_ = r.Close()
+		return nil, err
+	}
+	n, copyErr := io.Copy(out, io.LimitReader(r, MaxUploadSize+1))
+	closeErr := out.Close()
+	rCloseErr := r.Close()
+	if copyErr != nil {
+		return nil, fmt.Errorf("extract backup database: %w", copyErr)
+	}
+	if n > MaxUploadSize {
+		return nil, errors.New("backup database exceeds the verification size limit")
+	}
+	if closeErr != nil {
+		return nil, closeErr
+	}
+	if rCloseErr != nil {
+		return nil, rCloseErr
+	}
+	checkDB, err := db.Open(ctx, "sqlite://"+dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("backup database cannot be opened: %w", err)
+	}
+	defer checkDB.Close()
+	var integrity string
+	if err := checkDB.QueryRowContext(ctx, "PRAGMA integrity_check").Scan(&integrity); err != nil || integrity != "ok" {
+		return nil, fmt.Errorf("backup database integrity check failed: %s", integrity)
+	}
+	if err := checkDB.Migrate(ctx); err != nil {
+		return nil, fmt.Errorf("backup database migrations failed: %w", err)
+	}
+	rows, err := dbcopy.CountRows(ctx, checkDB)
+	if err != nil {
+		return nil, fmt.Errorf("backup database is missing required tables: %w", err)
+	}
+	checksum, err := fileChecksum(path)
+	if err != nil {
+		return nil, err
+	}
+	st, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	return &Verification{VerifiedAt: time.Now().UTC(), SourceVersion: info.Version, SourceDatabase: info.Database, Checksum: checksum, Size: st.Size(), Rows: rows.Rows, Total: rows.Total}, nil
+}
+
+func (s *Service) readVerification(name string) (*Verification, error) {
+	data, err := os.ReadFile(filepath.Join(s.dir, name+".verify.json"))
+	if err != nil {
+		return nil, err
+	}
+	var v Verification
+	err = json.Unmarshal(data, &v)
+	return &v, err
+}
+
+func (s *Service) writeVerification(name string, v *Verification) error {
+	data, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return err
+	}
+	tmp := filepath.Join(s.dir, name+".verify.json.partial")
+	defer os.Remove(tmp)
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, filepath.Join(s.dir, name+".verify.json"))
+}
+
+func fileChecksum(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("sha256:%x", h.Sum(nil)), nil
 }
 
 // Path returns the absolute path of a backup, rejecting path traversal.
@@ -214,7 +408,11 @@ func (s *Service) Delete(name string) error {
 	if err != nil {
 		return err
 	}
-	return os.Remove(p)
+	if err := os.Remove(p); err != nil {
+		return err
+	}
+	_ = os.Remove(p + ".verify.json")
+	return nil
 }
 
 func (s *Service) prune(keep int) {

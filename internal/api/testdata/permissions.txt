@@ -11,6 +11,7 @@ backups-download GET /api/v1/system/backups/{name} -> admin
 backups-list GET /api/v1/system/backups -> admin
 backups-restore POST /api/v1/system/backups/{name}/restore -> admin
 backups-upload POST /api/v1/system/backups/upload -> admin
+backups-verify POST /api/v1/system/backups/{name}/verify -> admin
 blocklist-delete DELETE /api/v1/blocklist/{id} -> library.manage
 blocklist-list GET /api/v1/blocklist -> library.manage
 calendar GET /api/v1/calendar -> library.manage

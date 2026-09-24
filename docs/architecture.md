@@ -99,6 +99,13 @@ extension updates) are listed with their intervals under System → Tasks.
 A typed event bus feeds the SSE stream (`/api/v1/events`) the UI uses for live
 updates, and the notification digests.
 
+Database backup ZIPs are verified before they can be restored. Verification
+checks the manifest, SQLite integrity, current migrations and required tables
+on a temporary database copy, then records a SHA-256 checksum and row summary
+beside the archive. Uploads stream to a temporary file and are capped at 4 GiB.
+The system backup API exposes verification metadata and an explicit verify
+operation for older archives.
+
 The Updates feed applies account visibility and time bounds in SQL, merges
 indexed chapter/title streams, and uses a timestamp, event-kind and row-id
 cursor. Only the returned page gets release availability and reader-state

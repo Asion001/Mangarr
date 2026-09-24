@@ -105,15 +105,24 @@ func Copy(ctx context.Context, src, dst *db.DB, overwrite bool, progress Progres
 
 // Rows counts the rows of every table (0 = an empty mangarr database).
 func Rows(ctx context.Context, d *db.DB) (int, error) {
+	counts, err := CountRows(ctx, d)
+	return counts.Total, err
+}
+
+// CountRows counts every required mangarr table and returns its row summary.
+func CountRows(ctx context.Context, d *db.DB) (*Result, error) {
+	res := &Result{Rows: map[string]int{}}
 	total := 0
 	for _, t := range Tables {
 		var n int
 		if err := d.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+quote(t)).Scan(&n); err != nil {
-			return 0, err
+			return nil, err
 		}
+		res.Rows[t] = n
 		total += n
 	}
-	return total, nil
+	res.Total = total
+	return res, nil
 }
 
 func empty(ctx context.Context, d *db.DB) error {

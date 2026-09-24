@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"os"
@@ -82,21 +83,41 @@ func (s *Server) registerHealth() {
 			if err != nil {
 				return nil, huma.Error404NotFound("backup not found")
 			}
+			if _, err := s.app.Backups.Verify(ctx, in.Name); err != nil {
+				return nil, huma.Error400BadRequest("backup verification failed: " + err.Error())
+			}
 			if err := s.app.RestoreBackup(p, in.Name); err != nil {
 				return nil, huma.Error400BadRequest(err.Error())
 			}
 			return nil, nil
 		})
-	huma.Register(s.api, huma.Operation{OperationID: "backups-upload", Method: http.MethodPost, Path: "/api/v1/system/backups/upload", Tags: tags,
-		Summary: "Add a backup zip from another install (restore it from the list)", MaxBodyBytes: 4 << 30},
+	uploadOp := huma.Operation{OperationID: "backups-upload", Method: http.MethodPost, Path: "/api/v1/system/backups/upload", Tags: tags,
+		Summary: "Add and verify a backup zip from another install (restore it from the list)", MaxBodyBytes: -1,
+		RequestBody: &huma.RequestBody{Required: true, Content: map[string]*huma.MediaType{"application/zip": {Schema: &huma.Schema{Type: "string", Format: "binary"}}}},
+		Responses: map[string]*huma.Response{
+			"200":     {Description: "Verified backup", Content: map[string]*huma.MediaType{"application/json": {Schema: &huma.Schema{Ref: "#/components/schemas/BackupBackup"}}}},
+			"400":     {Description: "Invalid backup archive", Content: map[string]*huma.MediaType{"application/problem+json": {Schema: &huma.Schema{Ref: "#/components/schemas/ErrorModel"}}}},
+			"default": {Description: "Error", Content: map[string]*huma.MediaType{"application/problem+json": {Schema: &huma.Schema{Ref: "#/components/schemas/ErrorModel"}}}},
+		}}
+	s.api.OpenAPI().AddOperation(&uploadOp)
+	s.api.Adapter().Handle(&uploadOp, s.api.Middlewares().Handler(func(ctx huma.Context) {
+		b, err := s.app.Backups.SaveFrom(ctx.Context(), ctx.BodyReader())
+		if err != nil {
+			writeBackupAPIError(ctx, http.StatusBadRequest, err)
+			return
+		}
+		writeBackupAPIJSON(ctx, http.StatusOK, b)
+	}))
+	huma.Register(s.api, huma.Operation{OperationID: "backups-verify", Method: http.MethodPost, Path: "/api/v1/system/backups/{name}/verify", Tags: tags,
+		Summary: "Verify a backup before restore"},
 		func(ctx context.Context, in *struct {
-			RawBody []byte `contentType:"application/zip"`
-		}) (*struct{ Body *backup.Backup }, error) {
-			b, err := s.app.Backups.Save(in.RawBody)
+			Name string `path:"name"`
+		}) (*struct{ Body *backup.Verification }, error) {
+			v, err := s.app.Backups.Verify(ctx, in.Name)
 			if err != nil {
 				return nil, huma.Error400BadRequest(err.Error())
 			}
-			return &struct{ Body *backup.Backup }{b}, nil
+			return &struct{ Body *backup.Verification }{v}, nil
 		})
 	huma.Register(s.api, huma.Operation{OperationID: "backups-delete", Method: http.MethodDelete, Path: "/api/v1/system/backups/{name}", Tags: tags},
 		func(ctx context.Context, in *struct {
@@ -107,4 +128,16 @@ func (s *Server) registerHealth() {
 			}
 			return nil, nil
 		})
+}
+
+func writeBackupAPIJSON(ctx huma.Context, status int, value any) {
+	ctx.SetStatus(status)
+	ctx.SetHeader("Content-Type", "application/json")
+	_ = json.NewEncoder(ctx.BodyWriter()).Encode(value)
+}
+
+func writeBackupAPIError(ctx huma.Context, status int, err error) {
+	ctx.SetStatus(status)
+	ctx.SetHeader("Content-Type", "application/problem+json")
+	_ = json.NewEncoder(ctx.BodyWriter()).Encode(map[string]any{"detail": err.Error(), "status": status, "title": http.StatusText(status)})
 }

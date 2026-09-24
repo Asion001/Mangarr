@@ -347,19 +347,26 @@
           "name": {
             "type": "string"
           },
+          "restorable": {
+            "type": "boolean"
+          },
           "size": {
             "format": "int64",
             "type": "integer"
           },
           "type": {
             "type": "string"
+          },
+          "verification": {
+            "$ref": "#/components/schemas/BackupVerification"
           }
         },
         "required": [
           "name",
           "type",
           "size",
-          "created"
+          "created",
+          "restorable"
         ],
         "type": "object"
       },
@@ -477,6 +484,49 @@
           "title",
           "status",
           "favorite"
+        ],
+        "type": "object"
+      },
+      "BackupVerification": {
+        "additionalProperties": false,
+        "properties": {
+          "checksum": {
+            "type": "string"
+          },
+          "rows": {
+            "additionalProperties": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "object"
+          },
+          "size": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sourceDatabase": {
+            "type": "string"
+          },
+          "sourceVersion": {
+            "type": "string"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "verifiedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "verifiedAt",
+          "sourceVersion",
+          "sourceDatabase",
+          "checksum",
+          "size",
+          "rows",
+          "total"
         ],
         "type": "object"
       },
@@ -18758,7 +18808,17 @@
                 }
               }
             },
-            "description": "OK"
+            "description": "Verified backup"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Invalid backup archive"
           },
           "default": {
             "content": {
@@ -18771,7 +18831,7 @@
             "description": "Error"
           }
         },
-        "summary": "Add a backup zip from another install (restore it from the list)",
+        "summary": "Add and verify a backup zip from another install (restore it from the list)",
         "tags": [
           "System"
         ]
@@ -18870,6 +18930,47 @@
           }
         },
         "summary": "Replace all data with a backup's and restart (progress under /api/v1/system/database)",
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/api/v1/system/backups/{name}/verify": {
+      "post": {
+        "operationId": "backups-verify",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupVerification"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Verify a backup before restore",
         "tags": [
           "System"
         ]
