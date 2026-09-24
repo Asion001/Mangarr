@@ -19,6 +19,8 @@ type MihonSourcePreferences struct {
 
 // MarshalMihon writes b as a gzipped Mihon backup (the fields this package
 // reads), optionally with per-source string preferences.
+// Kotlinx decodes absent required lists (including backupManga and prefs) as
+// empty lists; an empty message would instead represent one invalid element.
 func MarshalMihon(b *Backup, preferences ...MihonSourcePreferences) []byte {
 	var out enc
 	cats := map[string]int64{}
@@ -28,7 +30,7 @@ func MarshalMihon(b *Backup, preferences ...MihonSourcePreferences) []byte {
 	for _, e := range b.Entries {
 		m := &enc{}
 		src, _ := strconv.ParseInt(e.SourceID, 10, 64)
-		m.varint(1, src).str(2, e.URL).str(3, e.Title).str(4, e.Artist).str(5, e.Author).str(6, e.Description)
+		m.varintAlways(1, src).strAlways(2, e.URL).str(3, e.Title).str(4, e.Artist).str(5, e.Author).str(6, e.Description)
 		for _, g := range e.Genres {
 			m.str(7, g)
 		}
@@ -37,7 +39,7 @@ func MarshalMihon(b *Backup, preferences ...MihonSourcePreferences) []byte {
 			m.varint(13, e.AddedAt.UnixMilli())
 		}
 		for _, c := range e.Chapters {
-			ch := (&enc{}).str(1, c.URL).str(2, c.Name).str(3, c.Scanlator).bool(4, c.Read).varint(6, int64(c.LastPageRead)).float(9, float32(c.Number))
+			ch := (&enc{}).strAlways(1, c.URL).strAlways(2, c.Name).str(3, c.Scanlator).bool(4, c.Read).varint(6, int64(c.LastPageRead)).float(9, float32(c.Number))
 			m.msg(16, ch)
 		}
 		for _, c := range e.Categories {
@@ -49,9 +51,9 @@ func MarshalMihon(b *Backup, preferences ...MihonSourcePreferences) []byte {
 			sync := map[string]int64{TrackerMAL: 1, TrackerAniList: 2, TrackerKitsu: 3, TrackerMangaUpdates: 7}[tracker]
 			n, _ := strconv.ParseInt(id, 10, 64)
 			if sync != 0 && n != 0 {
-				m.msg(18, (&enc{}).varint(1, sync).varint(100, n))
+				m.msg(18, (&enc{}).varintAlways(1, sync).varintAlways(2, 0).varint(100, n))
 			} else if tracker == TrackerMangaUpdates && id != "" {
-				m.msg(18, (&enc{}).varint(1, sync).str(4, "https://www.mangaupdates.com/series/"+id))
+				m.msg(18, (&enc{}).varintAlways(1, sync).varintAlways(2, 0).str(4, "https://www.mangaupdates.com/series/"+id))
 			}
 		}
 		if !e.Favorite {
@@ -60,7 +62,7 @@ func MarshalMihon(b *Backup, preferences ...MihonSourcePreferences) []byte {
 		}
 		for _, c := range e.Chapters {
 			if c.ReadAt != nil {
-				m.msg(104, (&enc{}).str(1, c.URL).varint(2, c.ReadAt.UnixMilli()))
+				m.msg(104, (&enc{}).strAlways(1, c.URL).varintAlways(2, c.ReadAt.UnixMilli()))
 			}
 		}
 		for _, s := range e.ExcludedScanlators {
@@ -69,11 +71,11 @@ func MarshalMihon(b *Backup, preferences ...MihonSourcePreferences) []byte {
 		out.msg(1, m)
 	}
 	for i, c := range b.Categories {
-		out.msg(2, (&enc{}).str(1, c).varint(2, int64(i+1)))
+		out.msg(2, (&enc{}).strAlways(1, c).varint(2, int64(i+1)))
 	}
 	for id, name := range b.Sources {
 		n, _ := strconv.ParseInt(id, 10, 64)
-		out.msg(101, (&enc{}).str(1, name).varint(2, n))
+		out.msg(101, (&enc{}).str(1, name).varintAlways(2, n))
 	}
 	for _, source := range preferences {
 		keys := make([]string, 0, len(source.Strings))
@@ -81,15 +83,15 @@ func MarshalMihon(b *Backup, preferences ...MihonSourcePreferences) []byte {
 			keys = append(keys, key)
 		}
 		sort.Strings(keys)
-		sp := (&enc{}).str(1, "source_"+source.SourceID)
+		sp := (&enc{}).strAlways(1, "source_"+source.SourceID)
 		for _, key := range keys {
 			// PreferenceValue is a kotlinx.serialization sealed class. Its
 			// protobuf representation stores the concrete class name in field
 			// 1 and that class' message in field 2.
 			value := (&enc{}).
-				str(1, "eu.kanade.tachiyomi.data.backup.models.StringPreferenceValue").
-				msg(2, (&enc{}).str(1, source.Strings[key]))
-			sp.msg(2, (&enc{}).str(1, key).msg(2, value))
+				strAlways(1, "eu.kanade.tachiyomi.data.backup.models.StringPreferenceValue").
+				msg(2, (&enc{}).strAlways(1, source.Strings[key]))
+			sp.msg(2, (&enc{}).strAlways(1, key).msg(2, value))
 		}
 		out.msg(105, sp)
 	}
@@ -108,6 +110,11 @@ func (p *enc) varint(num int, v int64) *enc {
 	if v == 0 {
 		return p // defaults are omitted, like kotlinx does
 	}
+	return p.varintAlways(num, v)
+}
+
+// Required scalar fields must be present even when their value is zero.
+func (p *enc) varintAlways(num int, v int64) *enc {
 	p.key(num, wireVarint)
 	p.b = binary.AppendUvarint(p.b, uint64(v))
 	return p
@@ -124,6 +131,10 @@ func (p *enc) str(num int, s string) *enc {
 	if s == "" {
 		return p
 	}
+	return p.strAlways(num, s)
+}
+
+func (p *enc) strAlways(num int, s string) *enc {
 	p.key(num, wireBytes)
 	p.b = binary.AppendUvarint(p.b, uint64(len(s)))
 	p.b = append(p.b, s...)
