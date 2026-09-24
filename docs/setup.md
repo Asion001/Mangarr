@@ -177,6 +177,7 @@ download. Progress syncs both ways.
 | Mihon (Android) | Komga extension (Keiyoushi repo): address + API key | Enable **Komga** under Settings → Tracking → enhanced services. Syncs finished chapters. |
 | KMReader (iPhone, iPad) | Add server: address + API key, or username and password | Page by page, live updates. Downloaded chapters can be saved offline. |
 | Paperback (iPhone, iPad) | Komga extension: address, any username and a device key as the password (or your mangarr login) | Finished chapters, through its Komga tracker |
+| KOReader | Add the `/opds` catalog; set its sync server to the mangarr address | Page progress through mangarr's KOReader sync server |
 
 For Mihon there is a shortcut: **My account → Reading apps → Set up Mihon
 from a backup** downloads a backup that restores your library with the
@@ -205,7 +206,29 @@ or Kavita. They then only see downloaded chapters:
 | Paperback (iOS/iPad) | built-in Komga source |
 | Tachimanga (iOS) | Komga |
 | Panels / Chunky | OPDS `http://komga:25600/opds/v1.2/catalog` (Panels also has a Komga integration) |
-| KOReader | OPDS + Komga's KOReader sync |
+
+**KOReader directly from mangarr.** Enable **Settings → Reading apps → Allow
+Komga apps to connect** (the same listener serves OPDS and the Komga API), then
+add `http://<mangarr-host>:25600/opds` as a catalog in KOReader. Sign in with
+your mangarr username and a reading-app device key. The catalog shows only the
+libraries and series your account can access. Open a chapter to download its
+CBZ; AVIF and JPEG XL pages are converted to JPEG for the downloaded copy.
+JPEG XL decoding needs `djxl` (included in the full Docker image).
+
+For progress sync, set KOReader's custom progress sync server to
+`http://<mangarr-host>:25600`, then log in with your mangarr username and a
+reading-app device key. Create a fresh device key after upgrading to a version
+with KOReader sync support; KOReader sends the MD5 of the entered key, and
+mangarr stores a verifier for keys issued after that version. Keep that key
+private like a password. `/users/create` is disabled because accounts belong
+to mangarr.
+
+Leave KOReader's document matching on the default **Binary** method: each CBZ
+downloaded from this catalog registers KOReader's partial-file MD5 against its
+chapter for your account. **Filename** matching is not supported. Sync stores
+KOReader's page number and percentage as chapter read progress. Other files
+that were not downloaded through this OPDS catalog have no automatic
+chapter mapping.
 
 ## 6. Accounts: reading together
 

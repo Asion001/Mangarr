@@ -12,6 +12,9 @@ type ReadingKey struct {
 	bun.BaseModel `bun:"table:reading_keys"`
 	ID            int64  `bun:"id,pk,autoincrement" json:"id"`
 	KeyHash       string `bun:"key_hash,notnull" json:"-"`
+	// KOReader hashes the password client-side with MD5. This SHA-256 verifier
+	// is populated for newly issued device keys without storing the key itself.
+	KOReaderHash string `bun:"koreader_hash,notnull" json:"-"`
 	// UserID is the user the device belongs to (0: from before accounts).
 	UserID int64  `bun:"user_id,nullzero" json:"userId,omitempty"`
 	Prefix string `bun:"prefix,notnull" json:"prefix"`
@@ -21,6 +24,14 @@ type ReadingKey struct {
 	LastClient string     `bun:"last_client,notnull" json:"lastClient"`
 	CreatedAt  time.Time  `bun:"created_at,notnull" json:"createdAt"`
 	LastUsedAt *time.Time `bun:"last_used_at" json:"lastUsedAt,omitempty"`
+}
+
+// KOReaderDocument maps KOReader's file digest to a chapter for one reader.
+type KOReaderDocument struct {
+	bun.BaseModel `bun:"table:koreader_documents"`
+	ReaderID      int64  `bun:"reader_id,pk"`
+	Document      string `bun:"document,pk"`
+	ChapterID     int64  `bun:"chapter_id,notnull"`
 }
 
 // ReadOriginApp marks read states written by reading apps through the

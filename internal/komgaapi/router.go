@@ -23,9 +23,27 @@ func (s *Service) router() http.Handler {
 
 	// public: KMReader checks that this is a Komga server before logging in
 	r.Get("/api/v1/client-settings/global/list", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, http.StatusOK, map[string]any{}) })
+	// KOReader sync uses its own MD5-key headers, not Komga authentication.
+	k := &koSyncHandlers{s}
+	r.Post("/users/create", k.create)
+	r.Get("/users/auth", k.auth)
+	r.Put("/syncs/progress", k.putProgress)
+	r.Get("/syncs/progress/{document}", k.getProgress)
 
 	r.Group(func(r chi.Router) {
 		r.Use(s.requireAuth)
+		o := &opdsHandlers{s}
+		r.Get("/opds", o.root)
+		r.Get("/opds/", o.root)
+		r.Get("/opds/search.xml", o.searchDescription)
+		r.Get("/opds/search", o.search)
+		r.Get("/opds/updated", o.updated)
+		r.Get("/opds/libraries", o.libraries)
+		r.Get("/opds/libraries/{id}", o.library)
+		r.Get("/opds/series/{id}", o.series)
+		r.Get("/opds/chapters/{id}", o.chapter)
+		r.Get("/opds/covers/series/{id}", o.seriesCover)
+		r.Get("/opds/covers/chapters/{id}", o.chapterCover)
 		s.routes(r)
 	})
 	return r

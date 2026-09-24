@@ -3,6 +3,7 @@ package komgaapi
 import (
 	"context"
 	"crypto/hmac"
+	"crypto/md5"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -129,7 +130,8 @@ func (s *Service) keyByID(ctx context.Context, id int64) (model.ReadingKey, bool
 func (s *Service) CreateKey(ctx context.Context, userID int64, comment, client string) (string, *model.ReadingKey, error) {
 	key := NewKey()
 	now := time.Now().UTC()
-	rk := &model.ReadingKey{KeyHash: HashKey(key), Prefix: key[:8], UserID: userID, Comment: strings.TrimSpace(comment), LastClient: client, CreatedAt: now}
+	md5Key := md5.Sum([]byte(key))
+	rk := &model.ReadingKey{KeyHash: HashKey(key), KOReaderHash: HashKey(hex.EncodeToString(md5Key[:])), Prefix: key[:8], UserID: userID, Comment: strings.TrimSpace(comment), LastClient: client, CreatedAt: now}
 	if rk.Comment == "" {
 		rk.Comment = "reading app"
 	}

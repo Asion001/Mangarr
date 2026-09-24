@@ -45,6 +45,16 @@ GET /api/v2/authors
 GET /api/v2/series/{id}/read-progress/tachiyomi
 GET /api/v2/users/me
 GET /api/v2/users/me/api-keys
+GET /opds
+GET /opds/chapters/{id}
+GET /opds/covers/chapters/{id}
+GET /opds/covers/series/{id}
+GET /opds/libraries
+GET /opds/libraries/{id}
+GET /opds/search
+GET /opds/search.xml
+GET /opds/series/{id}
+GET /opds/updated
 GET /sse/v1/events
 PATCH /api/v1/books/{id}/read-progress
 POST /api/logout
