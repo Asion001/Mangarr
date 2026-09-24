@@ -68,3 +68,14 @@ test('mobile expanded menu scrolls with account visible, traps focus and closes 
   await expect(dialog).toHaveCount(0);
   await expect(opener).toBeFocused();
 });
+test('settings on a phone use the same tab row as system',async({page})=>{
+  await mock(page);
+  await page.setViewportSize({width:390,height:700});
+  await page.goto('/settings/general');
+  const tabs=page.getByRole('navigation',{name:'Settings'}).filter({has:page.getByRole('link',{name:'Media management'})}).last();
+  await expect(tabs.getByRole('link',{name:'General',exact:true})).toHaveAttribute('aria-current','page');
+  await expect(tabs.getByRole('link',{name:'General',exact:true})).toBeInViewport();
+  await expect(page.getByRole('combobox')).toHaveCount(0);
+  await tabs.getByRole('link',{name:'Users & groups'}).click();
+  await expect(page).toHaveURL(/\/settings\/users$/);
+});

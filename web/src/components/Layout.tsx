@@ -3,7 +3,6 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import clsx from "clsx";
 import { useQueryClient } from "@tanstack/react-query";
-import { confirmLeave } from "./ui";
 import {
   BookOpen,
   PanelLeftClose,
@@ -45,10 +44,22 @@ const settingsGroups: { title: string; items: { to: string; label: string }[] }[
   { title: "System", items: [{ to: "/settings/general", label: "General" }] },
 ];
 
-/** SettingsNav is the navigation inside Settings: grouped links, a picker on phones. */
-function SettingsNav() {
+/** SectionTabs is the row of tabs at the top of a section with several pages; it scrolls sideways when the tabs don't fit. */
+function SectionTabs({ label: name, items }: { label: string; items: { to: string; label: string }[] }) {
+  const row = useRef<HTMLElement>(null);
   const loc = useLocation();
-  const navigate = useNavigate();
+  // keep the current page's tab in view when the row scrolls
+  useEffect(() => {
+    const nav = row.current, tab = nav?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (nav && tab && (tab.offsetLeft < nav.scrollLeft || tab.offsetLeft + tab.offsetWidth > nav.scrollLeft + nav.clientWidth)) nav.scrollLeft = tab.offsetLeft - 16;
+  }, [loc.pathname]);
+  return <nav ref={row} aria-label={name} className="-mt-1 mb-5 flex gap-1 overflow-x-auto border-b border-border">
+    {items.map(c=><NavLink key={c.to} to={c.to} className={({isActive})=>clsx("-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium",isActive?"border-accent text-fg":"border-transparent text-muted hover:text-fg")}>{label(c.label)}</NavLink>)}
+  </nav>;
+}
+
+/** SettingsNav is the navigation inside Settings: grouped links, and the same tabs as System on phones. */
+function SettingsNav() {
   return <>
     <nav aria-label={t("Settings")} className="hidden w-52 shrink-0 md:block">
       <div className="sticky top-0 flex flex-col gap-4">
@@ -58,12 +69,7 @@ function SettingsNav() {
         </div>)}
       </div>
     </nav>
-    <label className="mb-4 block md:hidden">
-      <span className="sr-only">{t("Settings")}</span>
-      <select value={loc.pathname} onChange={e=>{if(confirmLeave())navigate(e.target.value);}} className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-fg">
-        {settingsGroups.map(g=><optgroup key={g.title} label={label(g.title)}>{g.items.map(i=><option key={i.to} value={i.to}>{label(i.label)}</option>)}</optgroup>)}
-      </select>
-    </label>
+    <div className="md:hidden"><SectionTabs label={t("Settings")} items={settingsGroups.flatMap(g=>g.items)}/></div>
   </>;
 }
 
@@ -241,9 +247,7 @@ export function Layout() {
         <span className="font-semibold">mangarr</span>
       </header>
       <main className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 md:p-6">
-        {tabsFor&&<nav aria-label={label(tabsFor.label)} className="-mt-1 mb-5 flex gap-1 overflow-x-auto border-b border-border">
-          {tabsFor.children!.map(c=><NavLink key={c.to} to={c.to} className={({isActive})=>clsx("-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium",isActive?"border-accent text-fg":"border-transparent text-muted hover:text-fg")}>{label(c.label)}</NavLink>)}
-        </nav>}
+        {tabsFor&&<SectionTabs label={label(tabsFor.label)} items={tabsFor.children!}/>}
         {loc.pathname.startsWith("/settings")&&can("admin")
           ? <div className="md:flex md:gap-8"><SettingsNav/><div className="min-w-0 flex-1"><Outlet/></div></div>
           : <Outlet/>}
