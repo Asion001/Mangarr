@@ -96,8 +96,10 @@ func ContentBox(img image.Image) Bounds {
 		return int((299*cr + 587*cg + 114*cb) / 1000 >> 8)
 	}
 	stepX, stepY := max(1, w/300), max(1, h/300)
-	// border kinds: a line where nearly every sample is light (>= 225) or
-	// nearly every one is dark (<= 30)
+	// Border kinds: a line where nearly every sample is light or dark. Scan
+	// margins are often grey after JPEG compression, and a page number can
+	// occupy a small part of an otherwise empty row, so use broad tones and
+	// tolerate up to 8% outliers.
 	const (
 		none = iota
 		light
@@ -107,13 +109,16 @@ func ContentBox(img image.Image) Bounds {
 		n, l, d := 0, 0, 0
 		samples(func(v int) {
 			n++
-			if v >= 225 {
+			if v >= 180 {
 				l++
-			} else if v <= 30 {
+			} else if v <= 75 {
 				d++
 			}
 		})
-		limit := n - max(1, n/100) // allow 1% specks
+		if n == 0 {
+			return none
+		}
+		limit := n - max(1, (n*8+99)/100)
 		switch {
 		case l >= limit:
 			return light

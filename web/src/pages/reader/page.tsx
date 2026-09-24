@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, apiUrl, unwrap } from "../../api/client";
 
 /** Dims are a page's size and the box inside its borders (source pixels). */
-export type Dims = { width: number; height: number; x: number; y: number; w: number; h: number };
+export type Dims = { width: number; height: number; x: number; y: number; w: number; h: number; measured?: boolean };
 
 /** Widths the server keeps copies at (internal/imagedeliver). */
 const widths = [320, 720, 1080, 1440, 2160];
@@ -28,25 +28,35 @@ export const placeholderUrl = (chapterId: number, n: number) => pageUrl(chapterI
 export function useDims(chapterId: number, wantBounds: boolean) {
   const [dims, setDims] = useState<Record<number, Dims>>({});
   const asked = useRef(new Set<number>());
+  const failed = useRef(new Set<number>());
+  const naturalSizes = useRef(new Map<number, { width: number; height: number }>());
   // pages wanted before the chapter's bounds answered; asked for afterwards
   const waiting = useRef<number[]>([]);
   const ready = useRef(false);
   useEffect(() => {
     setDims({});
     asked.current = new Set();
+    failed.current = new Set();
+    naturalSizes.current = new Map();
     waiting.current = [];
     ready.current = false;
   }, [chapterId]);
+
+  const fallback = useCallback((n: number) => {
+    failed.current.add(n);
+    const size = naturalSizes.current.get(n);
+    if (size) setDims((d) => ({ ...d, [n]: { ...size, x: 0, y: 0, w: size.width, h: size.height, measured: true } }));
+  }, []);
 
   const ask = useCallback(
     (n: number) => {
       if (asked.current.has(n)) return;
       asked.current.add(n);
       unwrap(api.GET("/api/v1/read/chapters/{id}/pages/{n}/bounds", { params: { path: { id: chapterId, n } } }))
-        .then((b) => setDims((d) => ({ ...d, [n]: b })))
-        .catch(() => undefined);
+        .then((b) => setDims((d) => ({ ...d, [n]: { ...b, measured: true } })))
+        .catch(() => fallback(n));
     },
-    [chapterId],
+    [chapterId, fallback],
   );
 
   // one request for the whole chapter, instead of one per page
@@ -61,7 +71,9 @@ export function useDims(chapterId: number, wantBounds: boolean) {
         for (const b of list) asked.current.add(b.number);
         setDims((d) => {
           const next = { ...d };
-          for (const b of list) next[b.number] ??= b;
+          // A fast image decode may already have recorded its natural size.
+          // Measured server bounds must replace that full-page fallback.
+          for (const b of list) next[b.number] = { ...b, measured: true };
           return next;
         });
       })
@@ -92,9 +104,14 @@ export function useDims(chapterId: number, wantBounds: boolean) {
     },
     [wantBounds, ask],
   );
-  /** natural records a loaded image's size (the whole page is its box). */
+  /** natural records a loaded image's size and supplies a full-page fallback
+   * only when measuring that page failed. */
   const natural = useCallback((n: number, width: number, height: number) => {
-    setDims((d) => (d[n] ? d : { ...d, [n]: { width, height, x: 0, y: 0, w: width, h: height } }));
+    naturalSizes.current.set(n, { width, height });
+    setDims((d) => {
+      if (d[n]?.measured) return d;
+      return { ...d, [n]: { width, height, x: 0, y: 0, w: width, h: height, measured: failed.current.has(n) } };
+    });
   }, []);
   return { dims, need, natural };
 }
@@ -172,6 +189,15 @@ export function PageImage({
     );
   }
   const common = { src, alt: "", draggable: false, decoding: "async" as const, loading: eager ? ("eager" as const) : ("lazy" as const), onLoad: load, onError: () => setFailed(true) };
+  // Load the image so its natural size is available as an error fallback, but
+  // do not show an uncropped frame while the server is still measuring it.
+  if ((crop || half) && (!dims || dims.measured === false)) {
+    return (
+      <div style={{ width, height, position: "relative" }} data-reader-state="measuring-borders">
+        <img {...common} style={{ width, height, maxWidth: "none", objectFit: "contain", visibility: "hidden" }} className="select-none" />
+      </div>
+    );
+  }
   const transformed = box && dims && (crop || half) ? {
     position: "absolute" as const,
     maxWidth: "none",

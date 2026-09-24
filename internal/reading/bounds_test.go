@@ -63,3 +63,51 @@ func TestContentBox(t *testing.T) {
 		t.Fatalf("framed %+v", b)
 	}
 }
+
+func TestContentBoxNoisyGreyMarginsAndPageNumber(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 400, 600))
+	for y := 0; y < 600; y++ {
+		for x := 0; x < 400; x++ {
+			inside := x >= 45 && x < 355 && y >= 70 && y < 530
+			if inside {
+				img.Set(x, y, color.RGBA{R: uint8(30 + x%170), G: uint8(40 + y%150), B: 110, A: 255})
+				continue
+			}
+			// Off-white scan paper with enough variation to resemble JPEG noise.
+			v := uint8(198 + (x*7+y*11)%22)
+			img.Set(x, y, color.RGBA{R: v, G: v, B: v, A: 255})
+		}
+	}
+	// A small printed page number must not pin the entire top margin in place.
+	for y := 12; y < 28; y++ {
+		for x := 184; x < 212; x++ {
+			img.Set(x, y, color.RGBA{R: 55, G: 55, B: 55, A: 255})
+		}
+	}
+	b := ContentBox(img)
+	if b.X > 45 || b.Y > 70 || b.X < 35 || b.Y < 58 || b.W >= 380 || b.H >= 570 {
+		t.Fatalf("noisy off-white margins were not cropped: %+v", b)
+	}
+}
+
+func TestContentBoxDarkGreyMarginsWithSpecks(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 360, 540))
+	for y := 0; y < 540; y++ {
+		for x := 0; x < 360; x++ {
+			inside := x >= 36 && x < 324 && y >= 54 && y < 486
+			if inside {
+				img.Set(x, y, color.RGBA{R: uint8(95 + x%120), G: uint8(80 + y%130), B: 160, A: 255})
+				continue
+			}
+			v := uint8(45 + (x*5+y*3)%25)
+			if (x*13+y*17)%41 == 0 { // sparse scanner dust
+				v = 190
+			}
+			img.Set(x, y, color.RGBA{R: v, G: v, B: v, A: 255})
+		}
+	}
+	b := ContentBox(img)
+	if b.X > 36 || b.Y > 54 || b.X < 28 || b.Y < 45 || b.W >= 340 || b.H >= 515 {
+		t.Fatalf("dark grey margins were not cropped: %+v", b)
+	}
+}
