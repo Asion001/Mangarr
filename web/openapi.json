@@ -8711,6 +8711,108 @@
         ],
         "type": "object"
       },
+      "UpscalerModel": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "noiseLevels": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "scales": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/UpscalerModelLocation"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "scales",
+          "sources"
+        ],
+        "type": "object"
+      },
+      "UpscalerModelCatalog": {
+        "additionalProperties": false,
+        "properties": {
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/UpscalerModel"
+            },
+            "type": "array"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/UpscalerSource"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "models",
+          "sources"
+        ],
+        "type": "object"
+      },
+      "UpscalerModelLocation": {
+        "additionalProperties": false,
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "available"
+        ],
+        "type": "object"
+      },
+      "UpscalerSource": {
+        "additionalProperties": false,
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "devices": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "error": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "available",
+          "devices"
+        ],
+        "type": "object"
+      },
       "User": {
         "additionalProperties": false,
         "properties": {
@@ -18989,6 +19091,37 @@
         "summary": "Recently discovered chapters and newly added titles visible to you; initial catalog chapters are suppressed",
         "tags": [
           "Updates"
+        ]
+      }
+    },
+    "/api/v1/upscalers/models": {
+      "get": {
+        "operationId": "upscaler-models",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpscalerModelCatalog"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Models available from enabled built-in and worker upscalers",
+        "tags": [
+          "Profiles"
         ]
       }
     },

@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 import { ArrowRight, Pencil, Plus, Trash2 } from "lucide-react";
 import { api, apiUrl, unwrap, type Profile, type S } from "../../api/client";
-import { useChapters, useModules, useProfiles, useSeriesList } from "../../api/queries";
+import { useChapters, useProfiles, useSeriesList } from "../../api/queries";
 import { Badge, Button, Card, Confirm, ErrorBox, Field, IconButton, Input, Loading, Modal, PageHeader, Segmented, Select, Switch, TagInput } from "../../components/ui";
 import { bytes } from "../../lib/format";
 import { useToast } from "../../lib/toast";
@@ -13,6 +13,7 @@ import { useSettingsDoc } from "./useSettingsDoc";
 type Cfg = Profile["config"];
 type Tab = "releases" | "processing" | "cleanup";
 type Preset = Cfg["encode"]["preset"];
+type UpscalerModel = S["UpscalerModel"];
 
 const emptyConfig: Cfg = {
   preferredScanlators: [],
@@ -164,7 +165,6 @@ function Step({ n, title, hint, action, children }: { n: number; title: string; 
 function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => void }) {
   const qc = useQueryClient();
   const toast = useToast();
-  const { data: upscalers } = useModules("upscale");
   const globalCleanup = useSettingsDoc<S["Cleanup"]>("cleanup").value;
   const [base] = useState(() => normalize(profile));
   const [p, setP] = useState<Profile>(base);
@@ -178,13 +178,23 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
   const setUp = (u: Partial<Cfg["upscale"]>) => setCfg({ upscale: { ...up, ...u } });
   const enc = cfg.encode;
   const setEnc = (e: Partial<Cfg["encode"]>) => setCfg({ encode: { ...enc, ...e } });
-  const upscalerId = upscalers?.find((candidate) => candidate.enabled)?.id || 0;
-  const { data: info } = useQuery({
-    queryKey: ["upscaler-info", upscalerId],
-    queryFn: () => unwrap(api.GET("/api/v1/modules/{id}/upscaler-info", { params: { path: { id: upscalerId } } })),
-    enabled: upscalerId > 0 && up.enabled,
+  const { data: modelCatalog, error: modelError } = useQuery({
+    queryKey: ["upscaler-models"],
+    queryFn: () => unwrap(api.GET("/api/v1/upscalers/models")),
+    enabled: up.enabled,
     retry: false,
   });
+  const modelOptions: UpscalerModel[] = modelCatalog?.models.some((model) => model.name === up.model)
+    ? modelCatalog.models
+    : [...(modelCatalog?.models ?? []), { name: up.model, description: "", scales: [], sources: [] }];
+  const selectedModel = modelOptions.find((model) => model.name === up.model);
+  const modelLocations = selectedModel?.sources.map((source) => source.available ? source.name : `${source.name} (${t("offline")})`).join(", ");
+  const hasAvailableModel = modelCatalog?.models.some((model) => model.sources.some((source) => source.available));
+  const modelHelp = modelError
+    ? t("Could not load upscaler models.")
+    : modelCatalog && !hasAvailableModel
+      ? t("No upscaler is available right now. Remembered worker models are still listed.")
+      : modelLocations || t("This saved model is unavailable.");
 
   const encoding = enc.format !== "keep";
   const processing = up.enabled || encoding;
@@ -318,13 +328,16 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
               >
                 {up.enabled && (
                   <div className="grid gap-4 md:grid-cols-3">
-                    <Field label={t("Model")} help={info?.devices?.length ? `GPU: ${info.devices.join(", ")}` : undefined}>
+                    <Field label={t("Model")} help={modelHelp}>
                       <Select value={up.model} onChange={(e) => setUp({ model: e.target.value })}>
-                        {(info?.models ?? [{ name: up.model, description: "" }]).map((m) => (
-                          <option key={m.name} value={m.name} title={m.description}>
-                            {m.name}
-                          </option>
-                        ))}
+                        {modelOptions.map((m) => {
+                          const locations = m.sources.map((source) => source.available ? source.name : `${source.name} (${t("offline")})`).join(", ");
+                          return (
+                            <option key={m.name} value={m.name} title={m.description}>
+                              {m.name}{" — "}{locations || t("unavailable")}
+                            </option>
+                          );
+                        })}
                       </Select>
                     </Field>
                     <Field label={t("When narrower than (px)")} help={t("iPad portrait: ~1600–2000")}>
