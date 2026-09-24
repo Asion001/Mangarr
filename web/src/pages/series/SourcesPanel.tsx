@@ -48,7 +48,7 @@ export function SourcesPanel({ series }: { series: Series }) {
     setOrdering(true);
     try {
       await unwrap(api.PUT("/api/v1/series/{id}/sources/order", { params: { path: { id: series.id } }, body: { linkIds: order } }));
-      if (inherited) toast.info(t("This series now keeps its own source order"), t("Switch back to Library default any time."));
+      if (inherited) toast.info(t("This series now keeps its own source order"), t("Switch back to the library default source list any time."));
       await refresh();
     } catch (e) {
       toast.fromError(e);
@@ -101,7 +101,7 @@ export function SourcesPanel({ series }: { series: Series }) {
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs text-muted">{t("Order")}</span>
           <div role="group" aria-label={t("Source order")} className="flex rounded-md border border-border bg-bg p-0.5">
-            {([["inherit", t("Library default")], ["custom", t("Custom")]] as const).map(([mode, text]) => {
+            {([["inherit", t("Library default source list")], ["custom", t("Custom")]] as const).map(([mode, text]) => {
               const on = (mode === "inherit") === inherited;
               return (
                 <button key={mode} type="button" aria-pressed={on} onClick={() => !on && void setMode(mode)} className={clsx("rounded px-2.5 py-1 text-xs font-medium", on ? "bg-panel-2 text-fg" : "text-muted hover:text-fg")}>
