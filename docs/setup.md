@@ -413,6 +413,20 @@ threshold (default 1400 px) with waifu2x / Real-CUGAN / Real-ESRGAN.
 3. Settings → Profiles → enable upscaling, choose model and widths. If the
    upscaler is offline, chapters wait and are upscaled when it's back.
 
+### Tall webtoon pages
+
+Profiles can split very tall stored pages into shorter segments (2,500 px by
+default). The step runs after upscaling and before re-encoding, prefers a
+full-width light or dark gap near each balanced cut, and falls back to a hard
+cut when there is no safe gap. Every segment stays below the configured height.
+
+When re-encoding follows, segments use lossless PNG as the hand-off. Otherwise
+JPEG, PNG, WebP, BMP and AVIF keep their source format. Animated images and
+JPEG XL are left untouched. The CBZ is renumbered in reading order, ComicInfo's
+page count is updated, and saved per-user progress moves to the corresponding
+segment. The profile's existing-chapters prompt and reprocess action apply the
+same split to files already in the library.
+
 ### Re-encoding (AVIF / JPEG XL)
 
 | Format | Saves | Readers that can't open it |

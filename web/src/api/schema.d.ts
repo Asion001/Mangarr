@@ -1032,8 +1032,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Upscale and re-encode three pages of a chapter with the given settings to compare quality and size
-         * @description Runs the same steps a download would: pages narrower than the upscale threshold go through the upscaler chosen by priority, then every page is re-encoded. 409 means no upscaler is available right now.
+         * Process up to three chapter pages with the given settings to compare quality and size
+         * @description Runs the same steps a download would: shrink wide pages, upscale narrow pages, split tall pages, then re-encode. 409 means no upscaler is available right now.
          */
         post: operations["processing-preview"];
         delete?: never;
@@ -4524,8 +4524,11 @@ export interface components {
             /** Format: int64 */
             junkUnder: number;
             /** Format: int64 */
+            maxHeight: number;
+            /** Format: int64 */
             maxWidth: number;
             removeJunk: boolean;
+            splitTall: boolean;
         };
         Patch: {
             clearCooldown?: boolean;
@@ -4559,6 +4562,8 @@ export interface components {
             resultWidth: number;
             /** @description The page was wider than the profile allows and was downsized */
             shrunk: boolean;
+            /** @description The result is one segment of a tall source page */
+            split: boolean;
             /** @description The page was narrower than the threshold and went through the upscaler */
             upscaled: boolean;
             /** Format: int64 */
@@ -4609,7 +4614,7 @@ export interface components {
             /** Format: int64 */
             chapterId: number;
             encode: components["schemas"]["EncodeConfig"];
-            /** @description Page size rules (junk size, maximum width) */
+            /** @description Page size rules (junk size, maximum width and tall-page splitting) */
             pages?: components["schemas"]["PageRules"];
             /** @description Upscale settings to try first; omitted or disabled skips upscaling */
             upscale?: components["schemas"]["UpscaleConfig"];

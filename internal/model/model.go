@@ -140,14 +140,14 @@ type ProfileConfig struct {
 	// ProcessExisting also processes chapters imported before the processing
 	// settings last changed (otherwise only newer chapters are processed).
 	ProcessExisting bool `json:"processExisting"`
-	// ProcessChangedAt is set by the server when upscale/encode settings change.
+	// ProcessChangedAt is set by the server when processing settings change.
 	ProcessChangedAt *time.Time `json:"processChangedAt,omitempty"`
 	// Cleanup overrides; nil fields inherit the global cleanup settings.
 	Cleanup CleanupOverride `json:"cleanup"`
 }
 
 // ProcessParams identifies the processing a chapter file needs under this
-// profile: a short hash of the upscale/encode settings that change the output,
+// profile: a short hash of the processing settings that change the output,
 // or "" when the profile doesn't process files at all. Files are processed
 // again when their stored hash differs.
 func (c ProfileConfig) ProcessParams() string {
@@ -158,10 +158,12 @@ func (c ProfileConfig) ProcessParams() string {
 		// their hash and their files aren't processed again
 		Junk     int `json:"j,omitempty"`
 		MaxWidth int `json:"w,omitempty"`
+		Split    int `json:"h,omitempty"`
 	}
 	encoding := c.Encode.Format != "" && c.Encode.Format != "keep"
 	parts.MaxWidth = c.Pages.MaxWidth
-	if j := c.Pages.JunkSize(); j != DefaultJunkUnder && (c.Upscale.Enabled || encoding || parts.MaxWidth > 0) {
+	parts.Split = c.Pages.SplitHeight()
+	if j := c.Pages.JunkSize(); j != DefaultJunkUnder && (c.Upscale.Enabled || encoding || parts.MaxWidth > 0 || parts.Split > 0) {
 		parts.Junk = j
 		if j == 0 {
 			parts.Junk = -1
@@ -180,7 +182,7 @@ func (c ProfileConfig) ProcessParams() string {
 		e.RecycleOriginals = false
 		parts.Encode = &e
 	}
-	if parts.Upscale == nil && parts.Encode == nil && parts.MaxWidth == 0 {
+	if parts.Upscale == nil && parts.Encode == nil && parts.MaxWidth == 0 && parts.Split == 0 {
 		return ""
 	}
 	b, _ := json.Marshal(parts)
@@ -223,6 +225,10 @@ type EncodeConfig struct {
 // (spacers, logos, tracking pixels) when a profile doesn't set its own.
 const DefaultJunkUnder = 300
 
+// DefaultSplitHeight keeps webtoon segments quick to transfer and below the
+// dimension limits of common readers and image formats.
+const DefaultSplitHeight = 2500
+
 // PageRules are the page size limits of a profile.
 type PageRules struct {
 	// JunkUnder: images whose longest side is under this many pixels are
@@ -234,6 +240,21 @@ type PageRules struct {
 	// MaxWidth shrinks pages wider than this (landscape spreads may be twice
 	// as wide). 0 = no limit.
 	MaxWidth int `json:"maxWidth"`
+	// SplitTall enables splitting long strips after upscaling and before
+	// re-encoding. MaxHeight 0 uses DefaultSplitHeight.
+	SplitTall bool `json:"splitTall"`
+	MaxHeight int  `json:"maxHeight"`
+}
+
+// SplitHeight is the maximum segment height, or 0 when splitting is off.
+func (r PageRules) SplitHeight() int {
+	if !r.SplitTall {
+		return 0
+	}
+	if r.MaxHeight <= 0 {
+		return DefaultSplitHeight
+	}
+	return r.MaxHeight
 }
 
 // JunkSize is the junk threshold in pixels (0 = off).

@@ -83,4 +83,14 @@ func TestProcessParamsKeepsOlderHashes(t *testing.T) {
 	if (model.ProfileConfig{Pages: model.PageRules{MaxWidth: 2048}}).ProcessParams() == "" {
 		t.Fatal("shrinking alone needs processing")
 	}
+	splitting := old
+	splitting.Pages.SplitTall = true
+	if old.ProcessParams() == splitting.ProcessParams() || splitting.ProcessParams() == "" {
+		t.Fatal("tall-page splitting must be a processing change")
+	}
+	defaultHeight, explicitHeight := splitting, splitting
+	explicitHeight.Pages.MaxHeight = model.DefaultSplitHeight
+	if defaultHeight.ProcessParams() != explicitHeight.ProcessParams() {
+		t.Fatal("the default split height must have one stable processing hash")
+	}
 }

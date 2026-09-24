@@ -91,6 +91,7 @@ type PreviewPage struct {
 	ResultHeight  int    `json:"resultHeight"`
 	Upscaled      bool   `json:"upscaled" doc:"The page was narrower than the threshold and went through the upscaler"`
 	Shrunk        bool   `json:"shrunk" doc:"The page was wider than the profile allows and was downsized"`
+	Split         bool   `json:"split" doc:"The result is one segment of a tall source page"`
 	Junk          bool   `json:"junk" doc:"The image is under the junk size and is left alone"`
 }
 
@@ -135,7 +136,7 @@ func (s *Server) processingActivity(ctx context.Context, st *ProcessingStatus) {
 	var ids []int64
 	live := map[int64]downloads.LiveProgress{}
 	for _, lp := range s.app.Downloads.Live.All() {
-		if lp.Kind == model.JobKindReprocess || lp.Stage == progress.StageUpscale || lp.Stage == progress.StageEncode {
+		if lp.Kind == model.JobKindReprocess || lp.Stage == progress.StageUpscale || lp.Stage == progress.StageSplit || lp.Stage == progress.StageEncode {
 			ids = append(ids, lp.JobID)
 			live[lp.JobID] = lp
 		}
@@ -277,15 +278,15 @@ func (s *Server) registerProcessing() {
 		})
 
 	huma.Register(s.api, huma.Operation{OperationID: "processing-preview", Method: http.MethodPost, Path: "/api/v1/processing/preview", Tags: tags,
-		Summary: "Upscale and re-encode three pages of a chapter with the given settings to compare quality and size",
-		Description: "Runs the same steps a download would: pages narrower than the upscale threshold go through the upscaler " +
-			"chosen by priority, then every page is re-encoded. 409 means no upscaler is available right now."},
+		Summary: "Process up to three chapter pages with the given settings to compare quality and size",
+		Description: "Runs the same steps a download would: shrink wide pages, upscale narrow pages, split tall pages, then re-encode. " +
+			"409 means no upscaler is available right now."},
 		func(ctx context.Context, in *struct {
 			Body struct {
 				ChapterID int64                `json:"chapterId"`
 				Encode    model.EncodeConfig   `json:"encode"`
 				Upscale   *model.UpscaleConfig `json:"upscale,omitempty" doc:"Upscale settings to try first; omitted or disabled skips upscaling"`
-				Pages     *model.PageRules     `json:"pages,omitempty" doc:"Page size rules (junk size, maximum width)"`
+				Pages     *model.PageRules     `json:"pages,omitempty" doc:"Page size rules (junk size, maximum width and tall-page splitting)"`
 			}
 		}) (*struct{ Body PreviewResult }, error) {
 			upscale := in.Body.Upscale != nil && in.Body.Upscale.Enabled
@@ -294,7 +295,7 @@ func (s *Server) registerProcessing() {
 			if in.Body.Pages != nil {
 				rules = *in.Body.Pages
 			}
-			if !upscale && !encoding && rules.MaxWidth <= 0 {
+			if !upscale && !encoding && rules.MaxWidth <= 0 && rules.SplitHeight() <= 0 {
 				return nil, huma.Error422UnprocessableEntity("nothing to preview: every processing step is off")
 			}
 			if upscale && (s.app.Processing == nil || s.app.Processing.Up == nil) {
@@ -373,17 +374,26 @@ func (s *Server) registerProcessing() {
 			res.UpscaleSeconds, res.EncodeSeconds = pr.UpscaleSeconds, pr.EncodeSeconds
 			res.Seconds = time.Since(start).Seconds()
 			pv := &preview{dir: work, created: time.Now()}
-			for i := range in2 {
-				pp := PreviewPage{Index: i, Name: in2[i].Name, Width: in2[i].Width, Height: in2[i].Height, OriginalFormat: in2[i].Format,
-					EncodedFormat: out[i].Format, ResultWidth: out[i].Width, ResultHeight: out[i].Height, Upscaled: out[i].Width > in2[i].Width,
-					Shrunk: out[i].Width < in2[i].Width, Junk: model.IsJunk(in2[i].Width, in2[i].Height, rules.JunkSize())}
-				if fi, err := os.Stat(in2[i].Path); err == nil {
+			counts := make(map[int]int, len(in2))
+			for _, source := range pr.SourcePages {
+				counts[source]++
+			}
+			for i := range out {
+				source := i
+				if i < len(pr.SourcePages) && pr.SourcePages[i] >= 0 && pr.SourcePages[i] < len(in2) {
+					source = pr.SourcePages[i]
+				}
+				original := in2[source]
+				pp := PreviewPage{Index: i, Name: out[i].Name, Width: original.Width, Height: original.Height, OriginalFormat: original.Format,
+					EncodedFormat: out[i].Format, ResultWidth: out[i].Width, ResultHeight: out[i].Height, Upscaled: out[i].Width > original.Width,
+					Shrunk: out[i].Width < original.Width, Split: counts[source] > 1, Junk: model.IsJunk(original.Width, original.Height, rules.JunkSize())}
+				if fi, err := os.Stat(original.Path); err == nil {
 					pp.OriginalSize = fi.Size()
 				}
 				if fi, err := os.Stat(out[i].Path); err == nil {
 					pp.EncodedSize = fi.Size()
 				}
-				pv.orig, pv.enc = append(pv.orig, in2[i].Path), append(pv.enc, out[i].Path)
+				pv.orig, pv.enc = append(pv.orig, original.Path), append(pv.enc, out[i].Path)
 				res.Pages = append(res.Pages, pp)
 			}
 			previewMu.Lock()

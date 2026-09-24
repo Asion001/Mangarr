@@ -23,7 +23,7 @@ const emptyConfig: Cfg = {
   minPages: 0,
   upscale: { enabled: false, upscalerId: 0, minWidth: 1400, maxWidth: 2048, model: "waifu2x-cunet", noise: 1, format: "source", quality: 90 },
   encode: { format: "keep", preset: "balanced", quality: 0, speed: 0, grayscale: true, progressive: false, minSavingsPct: 10, recycleOriginals: true },
-  pages: { junkUnder: 0, removeJunk: false, maxWidth: 0 },
+  pages: { junkUnder: 0, removeJunk: false, maxWidth: 0, splitTall: false, maxHeight: 0 },
   lowRes: { width: 0, action: "retry" },
   processTiming: "background",
   processExisting: false,
@@ -55,7 +55,7 @@ function normalize(profile: Profile): Profile {
   upscale.format = "source";
   const encode = { ...emptyConfig.encode, ...profile.config.encode };
   // the width limit moved from the upscale step to every page
-  const pages = profile.config.pages ?? { junkUnder: 0, removeJunk: false, maxWidth: upscale.enabled ? upscale.maxWidth : 0 };
+  const pages = { ...emptyConfig.pages, ...(profile.config.pages ?? { maxWidth: upscale.enabled ? upscale.maxWidth : 0 }) };
   const lowRes = profile.config.lowRes ?? { width: 0, action: "" };
   return { ...profile, config: { ...emptyConfig, ...profile.config, upscale, encode, pages, lowRes } };
 }
@@ -68,6 +68,7 @@ function processingSummary(c: Cfg) {
   const steps = [];
   if (c.pages?.maxWidth) steps.push(tr("shrink over {px} px", { px: c.pages.maxWidth }));
   if (c.upscale.enabled) steps.push(tr("Upscale under {px} px", { px: c.upscale.minWidth }));
+  if (c.pages?.splitTall) steps.push(tr("Split over {px} px tall", { px: c.pages.maxHeight || 2500 }));
   if (c.encode?.format && c.encode.format !== "keep") steps.push(formatName(c.encode.format));
   return steps.length ? steps.join(" → ") : tr("Pages as downloaded");
 }
@@ -211,9 +212,10 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
   const setPages = (v: Partial<Cfg["pages"]>) => setCfg({ pages: { ...pg, ...v } });
   const junkSize = pg.junkUnder < 0 ? 0 : pg.junkUnder || defaultJunk;
   const encoding = enc.format !== "keep";
-  const processing = up.enabled || encoding || pg.maxWidth > 0;
+  const processing = up.enabled || encoding || pg.maxWidth > 0 || pg.splitTall;
   const changedProcessing =
-    JSON.stringify([base.config.upscale, base.config.encode, base.config.pages.maxWidth]) !== JSON.stringify([cfg.upscale, cfg.encode, pg.maxWidth]);
+    JSON.stringify([base.config.upscale, base.config.encode, base.config.pages.maxWidth, base.config.pages.splitTall, base.config.pages.maxHeight]) !==
+    JSON.stringify([cfg.upscale, cfg.encode, pg.maxWidth, pg.splitTall, pg.maxHeight]);
 
   const save = async () => {
     setSaving(true);
@@ -358,11 +360,17 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
                     <span className="rounded bg-info/15 px-2.5 py-1 text-info">{t("Upscale if narrower than {px} px", { px: up.minWidth })}</span>
                   </>
                 )}
+                {pg.splitTall && (
+                  <>
+                    <ArrowRight className="size-4 text-muted" />
+                    <span className="rounded bg-warn/15 px-2.5 py-1 text-warn">{t("Split over {px} px tall", { px: pg.maxHeight || 2500 })}</span>
+                  </>
+                )}
                 <ArrowRight className="size-4 text-muted" />
                 <span className={clsx("rounded px-2.5 py-1", encoding ? "bg-accent/15 text-accent-2" : "bg-panel-2 text-fg/80")}>
                   {encoding
                     ? t("Save as {format} · {speed}", { format: formatName(enc.format), speed: presetName(enc.preset).toLowerCase() })
-                    : up.enabled
+                    : up.enabled || pg.splitTall
                       ? t("Keep each page's format")
                       : t("Saved as downloaded")}
                 </span>
@@ -433,7 +441,20 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
                 )}
               </Step>
 
-              <Step n={3} title={t("Save pages as")} hint={encoding && up.enabled ? t("Upscaled pages go straight into it, lossless.") : undefined}>
+              <Step
+                n={3}
+                title={t("Split tall pages")}
+                hint={pg.splitTall ? t("Cuts near quiet rows after upscaling, before saving.") : t("Off. Long webtoon strips stay as one image.")}
+                action={<Switch checked={pg.splitTall} onChange={(v) => setPages({ splitTall: v })} label={<span className="sr-only">{t("Split tall pages")}</span>} />}
+              >
+                {pg.splitTall && (
+                  <Field label={t("Maximum segment height (px)")} help={t("Quiet rows near this height are preferred. Empty uses {px} px.", { px: 2500 })} className="max-w-64">
+                    <Input type="number" min={500} placeholder="2500" value={pg.maxHeight || ""} onChange={(e) => setPages({ maxHeight: Number(e.target.value) || 0 })} />
+                  </Field>
+                )}
+              </Step>
+
+              <Step n={4} title={t("Save pages as")} hint={encoding && (up.enabled || pg.splitTall) ? t("Changed pages go straight into it, lossless.") : undefined}>
                 <div role="radiogroup" aria-label={t("Save pages as")} className="grid gap-2 sm:grid-cols-3">
                   {saveAs.map((f) => (
                     <label key={f.value} className={clsx("flex cursor-pointer flex-col gap-1 rounded-md border p-2.5", enc.format === f.value ? "border-accent bg-accent/8" : "border-border hover:border-muted")}>
@@ -501,7 +522,7 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
 
               {processing && (
                 <Step
-                  n={4}
+                  n={5}
                   title={t("When")}
                   hint={t("In the background, chapters are readable right away; night hours are in Settings → Schedule.")}
                   action={
@@ -616,7 +637,7 @@ function PipelinePreview({ upscale, encode, pages, onClose }: { upscale: Cfg["up
   const res = run.data;
   const noUpscaler = run.error instanceof ApiError && run.error.status === 409;
   const img = (i: number, v: "original" | "encoded") => apiUrl(`api/v1/processing/preview/${res!.token}/${i}/${v}`);
-  const steps = [pages.maxWidth > 0 && t("shrink"), upscaling && t("upscale"), encoding && formatName(encode.format)].filter(Boolean).join(" → ");
+  const steps = [pages.maxWidth > 0 && t("shrink"), upscaling && t("upscale"), pages.splitTall && t("split"), encoding && formatName(encode.format)].filter(Boolean).join(" → ");
   return (
     <Modal open onClose={onClose} title={<span className="flex flex-wrap items-baseline gap-x-3">{t("Preview: {steps}", { steps })}<span className="text-xs font-normal text-muted">{t("Uses the unsaved settings")}</span></span>} size="xl">
       <div className="mb-4 flex flex-wrap items-end gap-2">
@@ -676,6 +697,7 @@ function PipelinePreview({ upscale, encode, pages, onClose }: { upscale: Cfg["up
                 ? [t("junk image, left alone")]
                 : [
                     pg.upscaled ? t("upscaled {x}×", { x: scale.toFixed(1) }) : pg.shrunk ? t("shrunk from {px} px", { px: pg.width }) : upscaling ? t("wide enough, not upscaled") : "",
+                    pg.split ? t("split to {px} px tall", { px: pg.resultHeight }) : "",
                     smaller >= 0 ? t("{n}% smaller", { n: smaller }) : t("{n}% larger", { n: -smaller }),
                   ].filter(Boolean);
               return (

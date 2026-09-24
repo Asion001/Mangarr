@@ -1,0 +1,205 @@
+package processing
+
+import (
+	"context"
+	"fmt"
+	"image"
+	"image/draw"
+	"image/jpeg"
+	"image/png"
+	"os"
+	"path/filepath"
+
+	"github.com/gen2brain/avif"
+	"github.com/gen2brain/webp"
+	"golang.org/x/image/bmp"
+
+	"github.com/Asion001/mangarr/internal/cbz"
+	"github.com/Asion001/mangarr/internal/downloads"
+	"github.com/Asion001/mangarr/internal/imagecheck"
+	"github.com/Asion001/mangarr/internal/model"
+	"github.com/Asion001/mangarr/internal/progress"
+)
+
+// splitTallPages cuts supported still images into balanced segments no taller
+// than the configured limit. A full-width light/dark quiet band near the
+// balanced cut is preferred; when none exists the balanced cut is used.
+func splitTallPages(ctx context.Context, pages []downloads.PageFile, sources []int, processable []bool, rules model.PageRules, toPNG bool, workDir string) ([]downloads.PageFile, []int, []bool, int, error) {
+	limit := rules.SplitHeight()
+	if limit <= 0 {
+		return pages, sources, processable, 0, nil
+	}
+	out, mapped, mask := make([]downloads.PageFile, 0, len(pages)), make([]int, 0, len(pages)), make([]bool, 0, len(pages))
+	split := 0
+	progress.Report(ctx, progress.Event{Stage: progress.StageSplit, Total: len(pages)})
+	for i, pg := range pages {
+		if err := ctx.Err(); err != nil {
+			return nil, nil, nil, split, err
+		}
+		parts := []downloads.PageFile{pg}
+		if processable[i] && pg.Height > limit && splitSupported(pg.Format) {
+			var err error
+			parts, err = splitTallPage(pg, limit, toPNG, workDir)
+			if err != nil {
+				return nil, nil, nil, split, err
+			}
+			if len(parts) > 1 {
+				split++
+			}
+		}
+		for _, part := range parts {
+			out = append(out, part)
+			mapped = append(mapped, sources[i])
+			mask = append(mask, processable[i])
+		}
+		progress.Report(ctx, progress.Event{Stage: progress.StageSplit, Done: i + 1, Total: len(pages)})
+	}
+	if split == 0 {
+		return pages, sources, processable, 0, nil
+	}
+	for i := range out {
+		out[i].Name = cbz.PageName(i, imagecheck.Ext(out[i].Format))
+	}
+	return out, mapped, mask, split, nil
+}
+
+func splitSupported(format string) bool {
+	switch format {
+	case "jpeg", "png", "webp", "bmp", "avif":
+		return true
+	}
+	return false // animations and JPEG XL stay untouched
+}
+
+func splitTallPage(pg downloads.PageFile, limit int, toPNG bool, workDir string) ([]downloads.PageFile, error) {
+	f, err := os.Open(pg.Path)
+	if err != nil {
+		return nil, err
+	}
+	var src image.Image
+	if pg.Format == "avif" {
+		src, err = avif.Decode(f)
+	} else {
+		src, _, err = image.Decode(f)
+	}
+	_ = f.Close()
+	if err != nil {
+		return nil, fmt.Errorf("split %s: %w", pg.Name, err)
+	}
+	b := src.Bounds()
+	cuts := splitCuts(src, limit)
+	if len(cuts) == 0 {
+		return []downloads.PageFile{pg}, nil
+	}
+	dir := filepath.Join(workDir, "split")
+	if err := os.MkdirAll(dir, 0o775); err != nil {
+		return nil, err
+	}
+	format := pg.Format
+	if toPNG {
+		format = "png"
+	}
+	points := append([]int{0}, cuts...)
+	points = append(points, b.Dy())
+	out := make([]downloads.PageFile, 0, len(points)-1)
+	for i := 0; i+1 < len(points); i++ {
+		h := points[i+1] - points[i]
+		segment := image.NewNRGBA(image.Rect(0, 0, b.Dx(), h))
+		draw.Draw(segment, segment.Bounds(), src, image.Pt(b.Min.X, b.Min.Y+points[i]), draw.Src)
+		name := fmt.Sprintf("%s-%03d%s", trimImageExt(pg.Name), i+1, imagecheck.Ext(format))
+		path := filepath.Join(dir, name)
+		if err := encodeSplit(path, format, segment); err != nil {
+			return nil, fmt.Errorf("split %s part %d: %w", pg.Name, i+1, err)
+		}
+		out = append(out, downloads.PageFile{Name: name, Path: path, Format: format, Width: b.Dx(), Height: h})
+	}
+	return out, nil
+}
+
+func trimImageExt(name string) string { return name[:len(name)-len(filepath.Ext(name))] }
+
+func encodeSplit(path, format string, img image.Image) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	switch format {
+	case "jpeg":
+		err = jpeg.Encode(f, img, &jpeg.Options{Quality: 92})
+	case "webp":
+		err = webp.Encode(f, img, webp.Options{Quality: 90, Method: 4})
+	case "bmp":
+		err = bmp.Encode(f, img)
+	case "avif":
+		err = avif.Encode(f, img, avif.Options{Quality: 60, Speed: 8})
+	default:
+		err = (&png.Encoder{CompressionLevel: png.BestSpeed}).Encode(f, img)
+	}
+	if closeErr := f.Close(); err == nil {
+		err = closeErr
+	}
+	return err
+}
+
+// splitCuts returns cut positions relative to img.Bounds().Min.Y.
+func splitCuts(img image.Image, limit int) []int {
+	h := img.Bounds().Dy()
+	if limit <= 0 || h <= limit {
+		return nil
+	}
+	var cuts []int
+	start := 0
+	for h-start > limit {
+		parts := (h - start + limit - 1) / limit
+		target := start + (h-start+parts-1)/parts
+		tolerance := max(limit/5, 24)
+		low := max(start+1, target-tolerance, h-(parts-1)*limit)
+		high := min(start+limit, target+tolerance)
+		cut := quietCut(img, target, low, high)
+		if cut == 0 {
+			cut = target
+		}
+		cuts = append(cuts, cut)
+		start = cut
+	}
+	return cuts
+}
+
+func quietCut(img image.Image, target, low, high int) int {
+	for offset := 0; target-offset >= low || target+offset <= high; offset++ {
+		for _, y := range []int{target - offset, target + offset} {
+			if y < low || y > high || y < 2 || y+2 >= img.Bounds().Dy() {
+				continue
+			}
+			quiet := true
+			for dy := -2; dy <= 2; dy++ {
+				if !quietRow(img, y+dy) {
+					quiet = false
+					break
+				}
+			}
+			if quiet {
+				return y
+			}
+		}
+	}
+	return 0
+}
+
+func quietRow(img image.Image, relativeY int) bool {
+	b := img.Bounds()
+	y := b.Min.Y + relativeY
+	minL, maxL := 255, 0
+	for x := b.Min.X; x < b.Max.X; x++ {
+		r, g, bl, a := img.At(x, y).RGBA()
+		if a == 0 {
+			continue
+		}
+		l := (299*int(r>>8) + 587*int(g>>8) + 114*int(bl>>8)) / 1000
+		minL, maxL = min(minL, l), max(maxL, l)
+		if maxL-minL > 18 {
+			return false
+		}
+	}
+	return maxL <= 45 || minL >= 210
+}

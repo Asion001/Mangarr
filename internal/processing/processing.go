@@ -1,6 +1,6 @@
 // Package processing is the download pipeline's processing stage: it
 // upscales pages narrower than the profile's minimum width (through an
-// upscale module) and then re-encodes pages to save space (AVIF / JPEG XL).
+// upscale module), splits tall strips and then re-encodes pages to save space.
 // It runs either before import or later in the background (ProcessBacklog).
 package processing
 
@@ -37,11 +37,14 @@ func (u Unavailable) Unwrap() error { return u.Err }
 // Temporary tells the download manager to retry later.
 func (u Unavailable) Temporary() bool { return true }
 
-// Process runs the stages enabled in cfg: shrink pages wider than the
-// profile allows, upscale the narrow ones, then re-encode. Junk images (under
-// the profile's junk size) pass through untouched.
+// Process runs the stages enabled in cfg: shrink pages wider than the profile
+// allows, upscale the narrow ones, split tall strips, then re-encode. Junk
+// images (under the profile's junk size) pass through untouched.
 func (p *Processor) Process(ctx context.Context, cfg model.ProfileConfig, pages []downloads.PageFile, workDir string) (downloads.ProcessResult, error) {
-	res := downloads.ProcessResult{Pages: pages}
+	res := downloads.ProcessResult{Pages: pages, SourcePages: make([]int, len(pages))}
+	for i := range res.SourcePages {
+		res.SourcePages[i] = i
+	}
 	encoding := cfg.Encode.Format != "" && cfg.Encode.Format != "keep"
 	if encoding && p.Guard != nil {
 		if blocked, reason := p.Guard.Blocked(); blocked {
@@ -49,9 +52,12 @@ func (p *Processor) Process(ctx context.Context, cfg model.ProfileConfig, pages 
 		}
 	}
 	cur := append([]downloads.PageFile(nil), pages...)
+	sources := append([]int(nil), res.SourcePages...)
+	processable := make([]bool, len(pages))
 	var real []int // indexes of the pages that aren't junk
 	for i, junk := range junkMask(pages, cfg.Pages) {
 		if !junk {
+			processable[i] = true
 			real = append(real, i)
 		}
 	}
@@ -98,6 +104,22 @@ func (p *Processor) Process(ctx context.Context, cfg model.ProfileConfig, pages 
 			res.Upscaled, res.UpscaleModel, res.Changed = true, mdl, true
 		}
 	}
+	if cfg.Pages.SplitHeight() > 0 {
+		out, mapped, mask, split, err := splitTallPages(ctx, cur, sources, processable, cfg.Pages, encoding, workDir)
+		if err != nil {
+			return res, err
+		}
+		if split > 0 {
+			cur, sources, processable = out, mapped, mask
+			real = real[:0]
+			for i, ok := range processable {
+				if ok {
+					real = append(real, i)
+				}
+			}
+			res.Split, res.Changed = split, true
+		}
+	}
 	if encoding {
 		if p.Enc == nil {
 			return res, Unavailable{imageenc.ErrNoEngine}
@@ -126,6 +148,7 @@ func (p *Processor) Process(ctx context.Context, cfg model.ProfileConfig, pages 
 		}
 	}
 	res.Pages = cur
+	res.SourcePages = sources
 	res.ProcessedPages = changedPageCount(pages, res.Pages)
 	return res, nil
 }

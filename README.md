@@ -64,6 +64,8 @@ which mangarr tells to rescan after every change.
   recycle bin, restore.
 - **Page upscaling** (off by default) — pages narrower than a threshold are
   upscaled 2×–4×; works on already downloaded chapters too.
+- **Fast webtoons** (off by default) — tall strips are split near quiet rows
+  after upscaling, so readers can download and decode smaller pages sooner.
 - **Re-encoding to save space** (off by default) — AVIF (typically 40–70%
   smaller) or lossless JPEG XL (~20%, reversible). Chapters are readable right
   away and processed in the background, at the same path; mangarr checks that

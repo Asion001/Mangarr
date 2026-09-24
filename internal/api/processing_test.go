@@ -111,4 +111,26 @@ func TestPreviewNeedsAnUpscaler(t *testing.T) {
 	if resp.StatusCode != 409 || !strings.Contains(string(msg), "no upscaler available") {
 		t.Fatalf("no upscaler: %d %s", resp.StatusCode, msg)
 	}
+	splitBody := fmt.Sprintf(`{"chapterId":%d,"encode":{"format":"keep","preset":"balanced","quality":0,"speed":0,"grayscale":true,"progressive":false,"minSavingsPct":10,"recycleOriginals":false},`+
+		`"pages":{"junkUnder":-1,"removeJunk":false,"maxWidth":0,"splitTall":true,"maxHeight":250}}`, ch.ID)
+	var preview api.PreviewResult
+	if code := c.do("POST", "/api/v1/processing/preview", splitBody, &preview); code != 200 {
+		t.Fatalf("split preview: %d", code)
+	}
+	if len(preview.Pages) != 3 {
+		t.Fatalf("split preview pages = %d, want 3: %+v", len(preview.Pages), preview.Pages)
+	}
+	for _, page := range preview.Pages {
+		if !page.Split || page.ResultHeight > 250 || page.EncodedFormat != "png" {
+			t.Fatalf("split preview page: %+v", page)
+		}
+	}
+	resp, err = http.Get(srv.URL + "/api/v1/processing/preview/" + preview.Token + "/1/encoded")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 200 || resp.Header.Get("Content-Type") != "image/png" {
+		t.Fatalf("split preview image: %d %s", resp.StatusCode, resp.Header.Get("Content-Type"))
+	}
 }

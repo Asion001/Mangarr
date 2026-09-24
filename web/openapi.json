@@ -4586,18 +4586,27 @@
             "format": "int64",
             "type": "integer"
           },
+          "maxHeight": {
+            "format": "int64",
+            "type": "integer"
+          },
           "maxWidth": {
             "format": "int64",
             "type": "integer"
           },
           "removeJunk": {
             "type": "boolean"
+          },
+          "splitTall": {
+            "type": "boolean"
           }
         },
         "required": [
           "junkUnder",
           "removeJunk",
-          "maxWidth"
+          "maxWidth",
+          "splitTall",
+          "maxHeight"
         ],
         "type": "object"
       },
@@ -4684,6 +4693,10 @@
             "description": "The page was wider than the profile allows and was downsized",
             "type": "boolean"
           },
+          "split": {
+            "description": "The result is one segment of a tall source page",
+            "type": "boolean"
+          },
           "upscaled": {
             "description": "The page was narrower than the threshold and went through the upscaler",
             "type": "boolean"
@@ -4706,6 +4719,7 @@
           "resultHeight",
           "upscaled",
           "shrunk",
+          "split",
           "junk"
         ],
         "type": "object"
@@ -4856,7 +4870,7 @@
           },
           "pages": {
             "$ref": "#/components/schemas/PageRules",
-            "description": "Page size rules (junk size, maximum width)"
+            "description": "Page size rules (junk size, maximum width and tall-page splitting)"
           },
           "upscale": {
             "$ref": "#/components/schemas/UpscaleConfig",
@@ -13298,7 +13312,7 @@
     },
     "/api/v1/processing/preview": {
       "post": {
-        "description": "Runs the same steps a download would: pages narrower than the upscale threshold go through the upscaler chosen by priority, then every page is re-encoded. 409 means no upscaler is available right now.",
+        "description": "Runs the same steps a download would: shrink wide pages, upscale narrow pages, split tall pages, then re-encode. 409 means no upscaler is available right now.",
         "operationId": "processing-preview",
         "requestBody": {
           "content": {
@@ -13332,7 +13346,7 @@
             "description": "Error"
           }
         },
-        "summary": "Upscale and re-encode three pages of a chapter with the given settings to compare quality and size",
+        "summary": "Process up to three chapter pages with the given settings to compare quality and size",
         "tags": [
           "Processing"
         ]

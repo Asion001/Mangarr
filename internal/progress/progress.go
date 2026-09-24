@@ -9,6 +9,7 @@ import "context"
 const (
 	StageDownload = "download"
 	StageUpscale  = "upscale"
+	StageSplit    = "split"
 	StageEncode   = "encode"
 	StageWrite    = "write"
 )

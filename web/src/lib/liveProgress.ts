@@ -37,7 +37,7 @@ export function useLiveProgress(): Map<number, LiveProgress> {
   );
 }
 
-const stageLabel: Record<string, string> = { download: "downloading", upscale: "upscaling", encode: "encoding", write: "writing" };
+const stageLabel: Record<string, string> = { download: "downloading", upscale: "upscaling", split: "splitting", encode: "encoding", write: "writing" };
 
 /** describe summarizes live progress: "encoding 34/60 · 3.1 p/s · −42% · 12s left". */
 export function describe(p: LiveProgress): string {

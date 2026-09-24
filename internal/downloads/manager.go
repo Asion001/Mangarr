@@ -48,8 +48,11 @@ type PageFile struct {
 // means pages were left untouched.
 // ProcessResult is the outcome of the processing stage.
 type ProcessResult struct {
-	Pages   []PageFile
-	Changed bool // pages differ from the input
+	Pages []PageFile
+	// SourcePages maps each output page to its zero-based input page. It is
+	// populated when a stage may change page count (currently tall splitting).
+	SourcePages []int
+	Changed     bool // pages differ from the input
 	// ProcessedPages counts pages whose stored image changed. It deliberately
 	// excludes pages inspected by a no-op run so speed statistics stay honest.
 	ProcessedPages int
@@ -64,6 +67,8 @@ type ProcessResult struct {
 	EncodeSeconds  float64
 	// Shrunk counts pages downsized to the profile's maximum width.
 	Shrunk int
+	// Split counts tall input pages split into two or more output pages.
+	Split int
 }
 
 // Processor upscales and/or re-encodes pages according to a profile.
@@ -1078,6 +1083,21 @@ func (m *Manager) importChapter(ctx context.Context, jc *jobCtx, proc ProcessRes
 			Set("cleaned_at = NULL").Set("updated_at = ?", now).Where("id = ?", jc.chapter.ID).Exec(ctx); err != nil {
 			return err
 		}
+		if proc.Split > 0 {
+			var states []model.ChapterReadState
+			if err := tx.NewSelect().Model(&states).Where("chapter_id = ?", jc.chapter.ID).Scan(ctx); err != nil && !errors.Is(err, sql.ErrNoRows) {
+				return err
+			}
+			for i := range states {
+				page := remapPage(states[i].Page, states[i].Completed, proc.SourcePages)
+				if page == states[i].Page {
+					continue
+				}
+				if _, err := tx.NewUpdate().Model(&states[i]).Set("page = ?", page).WherePK().Exec(ctx); err != nil {
+					return err
+				}
+			}
+		}
 		jc.job.Status, jc.job.Progress, jc.job.Error, jc.job.UpdatedAt = model.JobCompleted, 100, "", now
 		if _, err := tx.NewUpdate().Model(jc.job).Column("status", "progress", "error", "updated_at").WherePK().Exec(ctx); err != nil {
 			return err
@@ -1113,6 +1133,24 @@ func (m *Manager) importChapter(ctx context.Context, jc *jobCtx, proc ProcessRes
 	m.bus.Changed("series", "updated", jc.series.ID)
 	m.bus.Changed("queue", "updated", jc.job.ID)
 	return nil
+}
+
+// remapPage keeps an in-progress reader on the first segment of the same
+// original page. Completed progress points at the new final page.
+func remapPage(page int, completed bool, sourcePages []int) int {
+	if page <= 0 || len(sourcePages) == 0 {
+		return page
+	}
+	if completed {
+		return len(sourcePages)
+	}
+	source := page - 1
+	for i, original := range sourcePages {
+		if original >= source {
+			return i + 1
+		}
+	}
+	return len(sourcePages)
 }
 
 // EventFileWritten is published (payload: absolute path) whenever a library
