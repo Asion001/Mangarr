@@ -14,6 +14,11 @@ updates:
     groups:
       web:
         patterns: ["*"]
+    ignore:
+      # openapi-typescript still needs TypeScript 5 as a peer, so a
+      # TypeScript major breaks npm ci. Lift this once it supports the new one.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -25,3 +30,8 @@ updates:
     directory: /docker
     schedule:
       interval: monthly
+    ignore:
+      # The web stage tracks the Node LTS line that CI uses (setup-node and
+      # the Makefile's NODE_IMAGE); move all three together by hand.
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
