@@ -126,7 +126,7 @@ jobs:
       - id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ghcr.io/${{ github.repository_owner }}/mangarr
+          images: ghcr.io/${{ github.repository }}
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}
@@ -147,7 +147,7 @@ jobs:
       - id: meta-slim
         uses: docker/metadata-action@v6
         with:
-          images: ghcr.io/${{ github.repository_owner }}/mangarr
+          images: ghcr.io/${{ github.repository }}
           flavor: suffix=-slim,onlatest=true
           tags: |
             type=ref,event=branch
