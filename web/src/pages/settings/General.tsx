@@ -1,7 +1,7 @@
 import { t as tr, t } from "../../lib/i18n/core";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Copy, KeyRound, Plus, Trash2 } from "lucide-react";
+import { Copy, Eye, EyeOff, KeyRound, Plus, Trash2 } from "lucide-react";
 import { api, unwrap, type S } from "../../api/client";
 import { useTags } from "../../api/queries";
 import { Badge, Button, Card, EnvLock, ErrorBox, Field, IconButton, Input, Loading, PageHeader, SaveBar } from "../../components/ui";
@@ -13,6 +13,7 @@ type General = S["GeneralSettingsResource"];
 export function GeneralPage() {
   const { value: g, patch, save, saving, isLoading, error, setValue, lock, dirty, reset } = useSettingsDoc<General>("general");
   const toast = useToast();
+  const [showKey, setShowKey] = useState(false);
   const regen = async () => {
     try {
       const v = await unwrap(api.POST("/api/v1/settings/general/apikey"));
@@ -52,7 +53,10 @@ export function GeneralPage() {
               help={t("Send as X-Api-Key header. API docs: /api/docs")}
             >
               <div className="flex gap-2">
-                <Input readOnly value={g.apiKey} className="font-mono text-xs" />
+                <Input readOnly autoComplete="off" type={showKey ? "text" : "password"} value={g.apiKey} aria-label={t("API key")} className="font-mono text-xs" />
+                <IconButton title={showKey ? t("Hide API key") : t("Show API key")} aria-pressed={showKey} onClick={() => setShowKey(!showKey)}>
+                  {showKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </IconButton>
                 <IconButton title={t("Copy")} onClick={() => (navigator.clipboard.writeText(g.apiKey), toast.info(tr("Copied")))}>
                   <Copy className="size-4" />
                 </IconButton>
