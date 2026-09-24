@@ -6515,6 +6515,14 @@
     "ru": "обновлений: {n}",
     "uk": "оновлень: {n}"
   },
+  "{title}: {count} chapter imported": {
+    "ru": "{title}: импортирована {count} глава",
+    "uk": "{title}: імпортовано {count} розділ"
+  },
+  "{title}: {count} chapters imported": {
+    "ru": "{title}: импортировано глав: {count}",
+    "uk": "{title}: імпортовано розділів: {count}"
+  },
   "Series with their own source order: {n}. They ignore this list.": {
     "ru": "Серий со своим порядком источников: {n}. Этот список они не используют.",
     "uk": "Серій із власним порядком джерел: {n}. Цей список вони не використовують."

@@ -1,5 +1,5 @@
 import { useLocale } from "./lib/uiPreferences";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Navigate, Route, Routes, useMatch } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { Layout } from "./components/Layout";
@@ -7,6 +7,7 @@ import { Loading } from "./components/ui";
 import { useAuthStatus } from "./api/queries";
 import { onServerEvent, useLiveUpdates } from "./lib/events";
 import { useToast } from "./lib/toast";
+import { createEventToastController } from "./lib/eventToasts";
 import { LoginPage } from "./pages/auth/Login";
 import { InvitePage } from "./pages/auth/Invite";
 import { ReaderPage } from "./pages/reader/Reader";
@@ -51,6 +52,20 @@ export function App() {
   const toast = useToast();
   const authed = !!auth?.authenticated;
   const invite = useMatch("/invite/:token");
+  const readerOpen = !!useMatch("/read/:id");
+  const readerOpenRef = useRef(readerOpen);
+  const toastRef = useRef(toast);
+  readerOpenRef.current = readerOpen;
+  toastRef.current = toast;
+  const eventToasts = useRef<ReturnType<typeof createEventToastController> | null>(null);
+  if (!eventToasts.current) {
+    eventToasts.current = createEventToastController({
+      success: (title, message) => toastRef.current.success(title, message),
+      error: (title, message) => toastRef.current.error(title, message),
+      warning: (title, message) => toastRef.current.warning(title, message),
+      info: (title, message) => toastRef.current.info(title, message),
+    }, { suppressed: () => readerOpenRef.current });
+  }
   useLiveUpdates(authed);
 
   useEffect(() => {
@@ -60,17 +75,13 @@ export function App() {
   }, [qc]);
 
   useEffect(() => {
-    const off = onServerEvent((type, payload) => {
-        const p = payload as { title?: string; message?: string; seriesTitle?: string; chapter?: string };
-        if (type === "chapter.imported") toast.success(`${p.seriesTitle} ch. ${p.chapter} imported`);
-        if (type === "download.failed") toast.error(p.title ?? "Download failed", p.message);
-        if (type === "health.issue") toast.warning(p.title ?? "Health issue", p.message);
-        if (type === "cleanup.done") toast.info(p.title ?? "Cleanup done", p.message);
-    });
+    const controller = eventToasts.current!;
+    const off = onServerEvent(controller.handle);
     return () => {
       off();
+      controller.discard();
     };
-  }, [toast]);
+  }, []);
 
   if (invite) return <InvitePage token={invite.params.token ?? ""} />;
   if (isLoading) return <Loading />;
