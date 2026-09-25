@@ -21,6 +21,7 @@ func (s *Service) router() http.Handler {
 		writeError(w, r, http.StatusMethodNotAllowed, "Method Not Allowed")
 	})
 
+	s.webRoutes(r)
 	// public: KMReader checks that this is a Komga server before logging in
 	r.Get("/api/v1/client-settings/global/list", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, http.StatusOK, map[string]any{}) })
 	// KOReader sync uses its own MD5-key headers, not Komga authentication.

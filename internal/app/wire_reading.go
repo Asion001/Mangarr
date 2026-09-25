@@ -60,7 +60,7 @@ func (a *App) wireReading(ctx context.Context) error {
 	a.Reading = &reading.Service{DB: a.DB, Settings: a.Settings, Library: a.Library, ImageCache: a.ImageCache, Mods: a.Modules,
 		HTTP: a.HTTP, Bus: a.Bus, Downloads: a.Searcher, Staged: a.Downloads.StagedPage, Log: a.Log.With("component", "reading")}
 	a.Komga = komgaapi.NewService(komgaapi.Deps{DB: a.DB, Settings: a.Settings, Auth: a.Auth, Reading: a.Reading, Bus: a.Bus, Maintenance: a.InMaintenance,
-		Log: a.Log.With("component", "komga-api")}, a.Cfg.KomgaListen)
+		Log: a.Log.With("component", "komga-api"), WebListen: a.Cfg.Listen, URLBase: a.Cfg.URLBase}, a.Cfg.KomgaListen)
 	a.AddService(a.Komga)
 
 	// what library servers report is logged per server and announced like

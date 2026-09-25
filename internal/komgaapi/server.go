@@ -37,6 +37,9 @@ type Deps struct {
 	Reading  *reading.Service
 	Bus      *events.Bus
 	Log      *slog.Logger
+	// WebListen and URLBase locate the main web UI when General.PublicURL is unset.
+	WebListen string
+	URLBase   string
 	// Maintenance (optional) reports that the database is moving: writes
 	// answer 503 meanwhile.
 	Maintenance func() bool

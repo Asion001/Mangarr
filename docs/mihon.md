@@ -34,6 +34,20 @@ page files and no credentials for anything else.
 3. Open a title through the extension, then turn on **Komga** under
    **Settings → Tracking**.
 
+## Open in WebView
+
+**Open in WebView** opens mangarr's series page or chapter reader. The
+Komga listener redirects `/series/{id}`, `/book/{id}` and `/books/{id}`;
+`/readlists/{id}` opens the library because mangarr has no separate read-list
+page. The redirect needs no API credentials; sign in to the web UI if asked.
+Unknown series and chapter IDs are passed through to the web UI.
+
+Set **Settings → General → Public URL** (or `MANGARR_GENERAL_PUBLIC_URL`) to
+the externally reachable web UI URL, including its base path when applicable.
+Without it, redirects use the request hostname with the main web port from
+`MANGARR_LISTEN` (default `8787`) and `MANGARR_URL_BASE`. Set the public URL
+when a reverse proxy or container port mapping makes that address different.
+
 ## How progress syncs
 
 - **Finished chapters** sync through Mihon's Komga tracker (enhanced

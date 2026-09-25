@@ -21,11 +21,14 @@ func testService() *Service {
 	return NewService(Deps{Log: slog.New(slog.NewTextHandler(io.Discard, nil))}, "")
 }
 
-// routeList walks the protected routes.
-func routeList(t *testing.T) []string {
+// routeList walks protected routes, optionally including public web redirects.
+func routeList(t *testing.T, includeWeb bool) []string {
 	t.Helper()
 	r := chi.NewRouter()
 	testService().routes(r)
+	if includeWeb {
+		testService().webRoutes(r)
+	}
 	var out []string
 	_ = chi.Walk(r, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
 		out = append(out, method+" "+strings.TrimSuffix(route, "/"))
@@ -40,7 +43,7 @@ func routeList(t *testing.T) []string {
 // TestRoutesGolden keeps the route manifest reviewed: run with -update after
 // adding routes.
 func TestRoutesGolden(t *testing.T) {
-	got := strings.Join(routeList(t), "\n") + "\n"
+	got := strings.Join(routeList(t, true), "\n") + "\n"
 	if *update {
 		if err := os.WriteFile("testdata/routes.txt", []byte(got), 0o644); err != nil {
 			t.Fatal(err)
@@ -61,7 +64,7 @@ var param = regexp.MustCompile(`\{[^}]+\}`)
 // credentials, with the Basic challenge OkHttp needs before it sends a password.
 func TestProtectedRoutesNeedAuth(t *testing.T) {
 	h := testService().Handler()
-	for _, rt := range routeList(t) {
+	for _, rt := range routeList(t, false) {
 		method, path, _ := strings.Cut(rt, " ")
 		req := httptest.NewRequest(method, param.ReplaceAllString(path, "1"), nil)
 		rec := httptest.NewRecorder()
