@@ -1148,7 +1148,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Queue entries: running first, then by priority; filter by status, kind, series or title */
+        /** Queue entries: running first, then by durable rank; filter by status, kind, series or title */
         get: operations["queue-list"];
         put?: never;
         post?: never;
@@ -3808,6 +3808,8 @@ export interface components {
             /** Format: int64 */
             progress: number;
             /** Format: int64 */
+            rank: number;
+            /** Format: int64 */
             releaseId?: number;
             /** Format: int64 */
             seriesId: number;
@@ -4298,6 +4300,8 @@ export interface components {
             priority: number;
             /** Format: int64 */
             progress: number;
+            /** Format: int64 */
+            rank: number;
             /** Format: int64 */
             releaseId?: number;
             scanlator: string;
@@ -4840,7 +4844,12 @@ export interface components {
         };
         QueueBulkInput: {
             /** @enum {string} */
-            action: "pause" | "resume" | "retry" | "remove" | "blocklist" | "top" | "bottom";
+            action: "pause" | "resume" | "retry" | "remove" | "blocklist" | "top" | "bottom" | "before" | "after";
+            /**
+             * Format: int64
+             * @description Pending job to move before/after; must not be selected
+             */
+            anchorId?: number;
             /** @description Select every entry matching this filter instead of ids */
             filter?: components["schemas"]["ListFilter"];
             ids?: number[];
@@ -4854,6 +4863,11 @@ export interface components {
             page: number;
             /** Format: int64 */
             pageSize: number;
+            /**
+             * Format: int64
+             * @description Rank revision; send on later pages to detect intervening rank changes
+             */
+            revision: number;
             state: components["schemas"]["QueueState"];
             /** Format: int64 */
             total: number;
@@ -9049,6 +9063,8 @@ export interface operations {
                 includeDone?: boolean;
                 page?: number;
                 pageSize?: number;
+                /** @description Rank revision from the first page; a changed rank order returns 409; -1 disables the check */
+                revision?: number;
             };
             header?: never;
             path?: never;

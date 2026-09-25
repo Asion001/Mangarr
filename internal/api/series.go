@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/Asion001/mangarr/internal/access"
 	"github.com/Asion001/mangarr/internal/decision"
+	"github.com/Asion001/mangarr/internal/downloads"
 	"github.com/Asion001/mangarr/internal/metadataagg"
 	"github.com/Asion001/mangarr/internal/model"
 	"github.com/Asion001/mangarr/internal/modules"
@@ -480,8 +482,12 @@ func (s *Server) chapterResources(ctx context.Context, seriesID int64) ([]Chapte
 			Blocklisted: blocked[strconv.FormatInt(r.SeriesSourceID, 10)+"|"+r.ChapterURL]})
 	}
 	jobBy := map[int64]*model.DownloadJob{}
+	activeStatuses := downloads.ActiveStatuses()
 	for i := range jobs {
-		jobBy[jobs[i].ChapterID] = &jobs[i] // latest wins (ordered by id)
+		previous := jobBy[jobs[i].ChapterID]
+		if previous == nil || !slices.Contains(activeStatuses, previous.Status) {
+			jobBy[jobs[i].ChapterID] = &jobs[i] // active job wins; otherwise the latest
+		}
 	}
 	readBy := map[int64][]ReadStateView{}
 	own, onlyOwn := ownReaderOnly(ctx)

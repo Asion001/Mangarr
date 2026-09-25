@@ -22,7 +22,7 @@ var Tables = []string{
 	"settings", "tags", "root_folders", "profiles", "provider_definitions", "catalog_prefs",
 	"works", "series", "series_sources", "chapters", "chapter_releases", "chapter_files",
 	"notification_deliveries", "notification_dispatches",
-	"download_jobs", "history", "blocklist", "commands", "scheduled_tasks",
+	"download_queue_order", "download_jobs", "history", "blocklist", "commands", "scheduled_tasks",
 	"reader_accounts", "chapter_read_states", "koreader_documents",
 	"imports", "import_entries", "reading_keys", "read_events", "reading_sessions", "reader_prefs",
 	"requests", "request_users", "follows",
@@ -66,6 +66,10 @@ func Copy(ctx context.Context, src, dst *db.DB, overwrite bool, progress Progres
 			return nil, fmt.Errorf("empty target: %w", err)
 		}
 	}
+	// Migration 27 seeds this singleton even in an otherwise empty database.
+	if _, err := dst.ExecContext(ctx, "DELETE FROM download_queue_order"); err != nil {
+		return nil, err
+	}
 	// read Postgres in one snapshot, so rows added meanwhile can't break
 	// foreign keys in the copy
 	var from reader = src
@@ -103,10 +107,14 @@ func Copy(ctx context.Context, src, dst *db.DB, overwrite bool, progress Progres
 	return res, nil
 }
 
-// Rows counts the rows of every table (0 = an empty mangarr database).
+// Rows counts user data, excluding the migration-seeded queue singleton
+// (0 = an empty mangarr database).
 func Rows(ctx context.Context, d *db.DB) (int, error) {
 	counts, err := CountRows(ctx, d)
-	return counts.Total, err
+	if err != nil {
+		return 0, err
+	}
+	return counts.Total - counts.Rows["download_queue_order"], nil
 }
 
 // CountRows counts every required mangarr table and returns its row summary.

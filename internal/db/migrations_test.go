@@ -275,3 +275,71 @@ func migrationSchema(t *testing.T, d *DB) []schemaColumn {
 	})
 	return out
 }
+
+func TestQueueRankBackfill(t *testing.T) {
+	for _, dialect := range []Dialect{SQLite, Postgres} {
+		t.Run(string(dialect), func(t *testing.T) {
+			d := migrationTestDB(t, dialect)
+			p := migrationProvider(t, d)
+			ctx := t.Context()
+			if _, err := p.UpTo(ctx, 26); err != nil {
+				t.Fatal(err)
+			}
+			for _, query := range []string{
+				`INSERT INTO root_folders (id,path,created_at) VALUES (1,'/library/copper','2024-01-02T03:04:05Z')`,
+				`INSERT INTO profiles (id,name,created_at,updated_at) VALUES (1,'Queue profile','2024-01-02T03:04:05Z','2024-01-02T03:04:05Z')`,
+				`INSERT INTO series (id,title,sort_title,root_folder_id,path,profile_id,added_at,updated_at) VALUES (1,'Copper Clouds','copper clouds',1,'copper',1,'2024-01-02T03:04:05Z','2024-01-02T03:04:05Z')`,
+			} {
+				if _, err := d.ExecContext(ctx, query); err != nil {
+					t.Fatal(err)
+				}
+			}
+			priorities := []int{0, 100, 0, -100, 100, -100}
+			statuses := []string{"queued", "paused", "downloading", "processing", "failed", "completed"}
+			for i, priority := range priorities {
+				if _, err := d.ExecContext(ctx, `INSERT INTO chapters (id,series_id,number_key,number_sort,first_seen_at,updated_at) VALUES (?,1,?,?,'2024-01-02T03:04:05Z','2024-01-02T03:04:05Z')`, i+1, fmt.Sprint(i+1), i+1); err != nil {
+					t.Fatal(err)
+				}
+				kind := "download"
+				if i%2 == 1 {
+					kind = "reprocess"
+				}
+				if _, err := d.ExecContext(ctx, `INSERT INTO download_jobs (id,series_id,chapter_id,kind,status,priority,not_before,created_at,updated_at) VALUES (?,1,?,?,?,?,'2024-01-02T03:04:05Z','2024-01-02T03:04:05Z','2024-01-02T03:04:05Z')`, i+1, i+1, kind, statuses[i], priority); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := p.Up(ctx); err != nil {
+				t.Fatal(err)
+			}
+			type ranked struct {
+				ID       int64
+				Rank     int64
+				Priority int
+				Status   string
+			}
+			var jobs []ranked
+			if err := d.NewSelect().Table("download_jobs").Column("id", "rank", "priority", "status").Order("rank").Scan(ctx, &jobs); err != nil {
+				t.Fatal(err)
+			}
+			want := []int64{2, 5, 1, 3, 4, 6}
+			if len(jobs) != len(want) {
+				t.Fatal(jobs)
+			}
+			for i, job := range jobs {
+				if job.ID != want[i] || job.Rank != int64(i+1)*1048576 || job.Status != statuses[job.ID-1] || job.Priority != priorities[job.ID-1] {
+					t.Fatalf("backfill changed ordering or data: %+v", jobs)
+				}
+			}
+			if err := d.Migrate(ctx); err != nil {
+				t.Fatal(err)
+			}
+			var again []ranked
+			if err := d.NewSelect().Table("download_jobs").Column("id", "rank", "priority", "status").Order("rank").Scan(ctx, &again); err != nil {
+				t.Fatal(err)
+			}
+			if fmt.Sprint(again) != fmt.Sprint(jobs) {
+				t.Fatal("repeat migration changed ranks")
+			}
+		})
+	}
+}

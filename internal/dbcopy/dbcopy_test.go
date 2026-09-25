@@ -127,6 +127,20 @@ func seed(t *testing.T, d *db.DB) (*model.Series, time.Time) {
 	}).Exec(ctx); err != nil {
 		t.Fatal(err)
 	}
+	var chapters []model.Chapter
+	if err := d.NewSelect().Model(&chapters).Where("series_id = ?", ser.ID).Order("id").Scan(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for i, kind := range []string{model.JobKindDownload, model.JobKindReprocess} {
+		job := &model.DownloadJob{Kind: kind, SeriesID: ser.ID, ChapterID: chapters[i].ID, Status: model.JobQueued,
+			Rank: int64(2*i-1) * 1048576, NotBefore: now, CreatedAt: now, UpdatedAt: now}
+		if _, err := d.NewInsert().Model(job).Exec(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := d.ExecContext(ctx, "UPDATE download_queue_order SET revision = 7 WHERE id = 1"); err != nil {
+		t.Fatal(err)
+	}
 	return ser, now
 }
 
@@ -201,6 +215,21 @@ func check(t *testing.T, d *db.DB, want *model.Series, now time.Time) {
 	}
 	if n, _ := d.NewSelect().Model((*model.NotificationDispatch)(nil)).Count(ctx); n != 1 {
 		t.Fatalf("notification dispatches %d", n)
+	}
+	var jobs []model.DownloadJob
+	if err := d.NewSelect().Model(&jobs).Order("rank").Scan(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(jobs) != 2 || jobs[0].Rank != -1048576 || jobs[1].Rank != 1048576 ||
+		jobs[0].Kind != model.JobKindDownload || jobs[1].Kind != model.JobKindReprocess {
+		t.Fatalf("queue ranks not preserved: %+v", jobs)
+	}
+	var revision int64
+	if err := d.NewSelect().Table("download_queue_order").Column("revision").Where("id = 1").Scan(ctx, &revision); err != nil {
+		t.Fatal(err)
+	}
+	if revision != 7 {
+		t.Fatalf("queue revision: %d", revision)
 	}
 	// new rows get new ids after the copied ones
 	extra := &model.Tag{Label: "new in " + string(d.Kind)}

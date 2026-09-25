@@ -699,7 +699,9 @@ type DownloadJob struct {
 	ChapterID     int64  `bun:"chapter_id,notnull" json:"chapterId"`
 	ReleaseID     *int64 `bun:"release_id" json:"releaseId,omitempty"`
 	Status        string `bun:"status,notnull" json:"status"`
-	// Priority orders the queue: higher first (backlog work is negative).
+	// Priority is the legacy enqueue hint (higher first), retained for clients.
+	// Rank is the durable global order: lower first, with running jobs pinned.
+	Rank       int64      `bun:"rank,notnull" json:"rank"`
 	Priority   int        `bun:"priority,notnull" json:"priority"`
 	Progress   int        `bun:"progress,notnull" json:"progress"`
 	PagesDone  int        `bun:"pages_done,notnull" json:"pagesDone"`

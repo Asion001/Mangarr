@@ -2004,6 +2004,10 @@
             "format": "int64",
             "type": "integer"
           },
+          "rank": {
+            "format": "int64",
+            "type": "integer"
+          },
           "releaseId": {
             "format": "int64",
             "type": "integer"
@@ -2030,6 +2034,7 @@
           "seriesId",
           "chapterId",
           "status",
+          "rank",
           "priority",
           "progress",
           "pagesDone",
@@ -3564,6 +3569,10 @@
             "format": "int64",
             "type": "integer"
           },
+          "rank": {
+            "format": "int64",
+            "type": "integer"
+          },
           "releaseId": {
             "format": "int64",
             "type": "integer"
@@ -3607,6 +3616,7 @@
           "seriesId",
           "chapterId",
           "status",
+          "rank",
           "priority",
           "progress",
           "pagesDone",
@@ -5373,9 +5383,16 @@
               "remove",
               "blocklist",
               "top",
-              "bottom"
+              "bottom",
+              "before",
+              "after"
             ],
             "type": "string"
+          },
+          "anchorId": {
+            "description": "Pending job to move before/after; must not be selected",
+            "format": "int64",
+            "type": "integer"
           },
           "filter": {
             "$ref": "#/components/schemas/ListFilter",
@@ -5418,6 +5435,11 @@
             "format": "int64",
             "type": "integer"
           },
+          "revision": {
+            "description": "Rank revision; send on later pages to detect intervening rank changes",
+            "format": "int64",
+            "type": "integer"
+          },
           "state": {
             "$ref": "#/components/schemas/QueueState"
           },
@@ -5428,6 +5450,7 @@
         },
         "required": [
           "state",
+          "revision",
           "items",
           "total",
           "page",
@@ -14047,6 +14070,19 @@
               "format": "int64",
               "type": "integer"
             }
+          },
+          {
+            "description": "Rank revision from the first page; a changed rank order returns 409; -1 disables the check",
+            "explode": false,
+            "in": "query",
+            "name": "revision",
+            "schema": {
+              "default": -1,
+              "description": "Rank revision from the first page; a changed rank order returns 409; -1 disables the check",
+              "format": "int64",
+              "minimum": -1,
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -14071,7 +14107,7 @@
             "description": "Error"
           }
         },
-        "summary": "Queue entries: running first, then by priority; filter by status, kind, series or title",
+        "summary": "Queue entries: running first, then by durable rank; filter by status, kind, series or title",
         "tags": [
           "Activity"
         ]

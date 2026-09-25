@@ -57,6 +57,9 @@ func (q *Queue) EnqueuePriority(ctx context.Context, seriesID, chapterID int64, 
 		if err := q.Raise(ctx, chapterID, priority); err != nil {
 			return nil, false, err
 		}
+		if err := q.db.NewSelect().Model(&existing).Where("id = ?", existing.ID).Scan(ctx); err != nil {
+			return nil, false, err
+		}
 		return &existing, false, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
@@ -65,7 +68,15 @@ func (q *Queue) EnqueuePriority(ctx context.Context, seriesID, chapterID int64, 
 	now := time.Now().UTC()
 	job := &model.DownloadJob{Kind: kind, SeriesID: seriesID, ChapterID: chapterID, ReleaseID: releaseID, Status: model.JobQueued,
 		IsUpgrade: isUpgrade, Priority: priority, NotBefore: now, CreatedAt: now, UpdatedAt: now}
-	err = q.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	err = q.orderTx(ctx, func(ctx context.Context, tx bun.Tx) error {
+		ranks, err := insertionRanks(ctx, tx, priority, 1)
+		if err != nil {
+			return err
+		}
+		job.Rank = ranks[0]
+		if err := bumpOrder(ctx, tx); err != nil {
+			return err
+		}
 		if _, err := tx.NewInsert().Model(job).Exec(ctx); err != nil {
 			return err
 		}
@@ -105,12 +116,26 @@ func (q *Queue) EnqueueReprocessFiles(ctx context.Context, files []model.Chapter
 			jobs = append(jobs, model.DownloadJob{Kind: model.JobKindReprocess, SeriesID: file.SeriesID, ChapterID: file.ChapterID,
 				ReleaseID: file.ReleaseID, Status: model.JobQueued, IsUpgrade: true, Priority: priority, NotBefore: now, CreatedAt: now, UpdatedAt: now})
 		}
-		res, err := q.db.NewInsert().Model(&jobs).On("CONFLICT DO NOTHING").Exec(ctx)
+		var added int64
+		err := q.orderTx(ctx, func(ctx context.Context, tx bun.Tx) error {
+			values, err := insertionRanks(ctx, tx, priority, len(jobs))
+			if err != nil {
+				return err
+			}
+			for i := range jobs {
+				jobs[i].Rank = values[i]
+			}
+			res, err := tx.NewInsert().Model(&jobs).On("CONFLICT DO NOTHING").Exec(ctx)
+			if err != nil {
+				return err
+			}
+			added, _ = res.RowsAffected()
+			return bumpOrder(ctx, tx)
+		})
 		if err != nil {
 			return created, err
 		}
-		n, _ := res.RowsAffected()
-		created += int(n)
+		created += int(added)
 	}
 	if created > 0 {
 		q.bus.Changed("queue", "sync", 0)
@@ -146,8 +171,8 @@ type ListFilter struct {
 	IDs []int64 `json:"ids,omitempty"`
 }
 
-func (q *Queue) base(f ListFilter, withStatus bool) *bun.SelectQuery {
-	sel := q.db.NewSelect().TableExpr("download_jobs AS j").
+func (q *Queue) base(d bun.IDB, f ListFilter, withStatus bool) *bun.SelectQuery {
+	sel := d.NewSelect().TableExpr("download_jobs AS j").
 		Join("JOIN series AS s ON s.id = j.series_id").
 		Join("JOIN chapters AS c ON c.id = j.chapter_id").
 		Join("LEFT JOIN chapter_releases AS r ON r.id = j.release_id").
@@ -177,6 +202,7 @@ func (q *Queue) base(f ListFilter, withStatus bool) *bun.SelectQuery {
 
 // QueuePage is one page of the queue.
 type QueuePage struct {
+	Revision int64     `json:"revision" doc:"Rank revision; send on later pages to detect intervening rank changes"`
 	Items    []JobView `json:"items"`
 	Total    int       `json:"total"`
 	Page     int       `json:"page"`
@@ -185,36 +211,58 @@ type QueuePage struct {
 	Counts map[string]int `json:"counts"`
 }
 
-// ListPage returns a page of the queue: running jobs first, then by priority.
+// ListPage returns a page of the queue: running jobs first, then by durable rank.
 func (q *Queue) ListPage(ctx context.Context, f ListFilter, page, pageSize int) (*QueuePage, error) {
-	page, pageSize = max(page, 1), min(max(pageSize, 1), 500)
-	out := &QueuePage{Items: []JobView{}, Page: page, PageSize: pageSize, Counts: map[string]int{}}
-	total, err := q.base(f, true).Count(ctx)
-	if err != nil {
-		return nil, err
+	return q.ListPageAt(ctx, f, page, pageSize, nil)
+}
+
+var ErrQueueOrderChanged = errors.New("queue order changed; restart pagination")
+
+// ListPageAt optionally rejects a page from a different rank revision. Each
+// page's rows, total and counts come from one database snapshot.
+func (q *Queue) ListPageAt(ctx context.Context, f ListFilter, page, pageSize int, revision *int64) (*QueuePage, error) {
+	var out *QueuePage
+	var opts *sql.TxOptions
+	if q.db.Kind == db.Postgres {
+		opts = &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true}
 	}
-	out.Total = total
-	err = q.base(f, true).
-		ColumnExpr("j.*").
-		ColumnExpr("s.title AS series_title, c.number_key AS chapter, c.number_sort AS number_sort").
-		ColumnExpr("COALESCE(ss.source_name, '') AS source_name, COALESCE(r.scanlator, '') AS scanlator").
-		OrderExpr("CASE j.status WHEN 'importing' THEN 0 WHEN 'processing' THEN 1 WHEN 'downloading' THEN 2 WHEN 'queued' THEN 3 WHEN 'paused' THEN 4 WHEN 'failed' THEN 5 ELSE 6 END").
-		OrderExpr("j.priority DESC, j.id").
-		Limit(pageSize).Offset((page-1)*pageSize).Scan(ctx, &out.Items)
-	if err != nil {
-		return nil, err
-	}
-	var counts []struct {
-		Status string `bun:"status"`
-		N      int    `bun:"n"`
-	}
-	if err := q.base(f, false).ColumnExpr("j.status AS status, COUNT(*) AS n").GroupExpr("j.status").Scan(ctx, &counts); err != nil {
-		return nil, err
-	}
-	for _, c := range counts {
-		out.Counts[c.Status] = c.N
-	}
-	return out, nil
+	err := q.db.RunInTx(ctx, opts, func(ctx context.Context, tx bun.Tx) error {
+		page, pageSize = max(page, 1), min(max(pageSize, 1), 500)
+		out = &QueuePage{Items: []JobView{}, Page: page, PageSize: pageSize, Counts: map[string]int{}}
+		if err := tx.NewSelect().Table("download_queue_order").Column("revision").Where("id = 1").Scan(ctx, &out.Revision); err != nil {
+			return err
+		}
+		if revision != nil && *revision != out.Revision {
+			return ErrQueueOrderChanged
+		}
+		total, err := q.base(tx, f, true).Count(ctx)
+		if err != nil {
+			return err
+		}
+		out.Total = total
+		err = q.base(tx, f, true).
+			ColumnExpr("j.*").
+			ColumnExpr("s.title AS series_title, c.number_key AS chapter, c.number_sort AS number_sort").
+			ColumnExpr("COALESCE(ss.source_name, '') AS source_name, COALESCE(r.scanlator, '') AS scanlator").
+			OrderExpr("CASE j.status WHEN 'importing' THEN 0 WHEN 'processing' THEN 1 WHEN 'downloading' THEN 2 WHEN 'queued' THEN 3 WHEN 'paused' THEN 3 WHEN 'failed' THEN 4 ELSE 5 END").
+			OrderExpr("j.rank, j.id").
+			Limit(pageSize).Offset((page-1)*pageSize).Scan(ctx, &out.Items)
+		if err != nil {
+			return err
+		}
+		var counts []struct {
+			Status string `bun:"status"`
+			N      int    `bun:"n"`
+		}
+		if err := q.base(tx, f, false).ColumnExpr("j.status AS status, COUNT(*) AS n").GroupExpr("j.status").Scan(ctx, &counts); err != nil {
+			return err
+		}
+		for _, c := range counts {
+			out.Counts[c.Status] = c.N
+		}
+		return nil
+	})
+	return out, err
 }
 
 // List returns active jobs (plus recently failed/completed when includeDone).
@@ -229,7 +277,7 @@ func (q *Queue) List(ctx context.Context, includeDone bool) ([]JobView, error) {
 // IDs returns the ids of the jobs matching f.
 func (q *Queue) IDs(ctx context.Context, f ListFilter) ([]int64, error) {
 	var ids []int64
-	err := q.base(f, true).ColumnExpr("j.id").OrderExpr("j.id").Scan(ctx, &ids)
+	err := q.base(q.db, f, true).ColumnExpr("j.id").OrderExpr("j.id").Scan(ctx, &ids)
 	return ids, err
 }
 
@@ -327,14 +375,32 @@ func (q *Queue) Raise(ctx context.Context, chapterID int64, priority int) error 
 	if priority <= 0 {
 		return nil
 	}
-	res, err := q.db.NewUpdate().Model((*model.DownloadJob)(nil)).
-		Set("priority = ?", priority).Set("updated_at = ?", time.Now().UTC()).
-		Where("chapter_id = ? AND status = ? AND priority < ?", chapterID, model.JobQueued, priority).Exec(ctx)
-	if err != nil {
-		return err
-	}
-	if n, _ := res.RowsAffected(); n > 0 {
+	changed := false
+	err := q.orderTx(ctx, func(ctx context.Context, tx bun.Tx) error {
+		var job model.DownloadJob
+		err := tx.NewSelect().Model(&job).Where("chapter_id = ? AND status = ? AND priority < ?", chapterID, model.JobQueued, priority).Scan(ctx)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		values, err := insertionRanks(ctx, tx, priority, 1)
+		if err != nil {
+			return err
+		}
+		res, err := tx.NewUpdate().Model((*model.DownloadJob)(nil)).Set("priority = ?", priority).Set("rank = ?", values[0]).Set("updated_at = ?", time.Now().UTC()).Where("id = ? AND status = ?", job.ID, model.JobQueued).Exec(ctx)
+		if err != nil {
+			return err
+		}
+		n, _ := res.RowsAffected()
+		changed = n > 0
+		return bumpOrder(ctx, tx)
+	})
+	if err == nil && changed {
 		q.signal()
+		q.bus.Changed("queue", "sync", 0)
+		q.bus.Changed("chapter", "updated", chapterID)
 	}
-	return nil
+	return err
 }

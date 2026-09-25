@@ -337,7 +337,7 @@ func (m *Manager) dispatch(ctx context.Context) {
 		Join("LEFT JOIN chapter_releases AS r ON r.id = j.release_id").
 		Join("LEFT JOIN series_sources AS ss ON ss.id = r.series_source_id").
 		Where("j.status = ? AND j.not_before <= ?", model.JobQueued, time.Now().UTC()).
-		OrderExpr("j.priority DESC, j.id").Limit(100).Scan(ctx, &jobs)
+		OrderExpr("j.rank, j.id").Limit(100).Scan(ctx, &jobs)
 	if err != nil {
 		if ctx.Err() == nil {
 			m.log.Error("download queue", "err", err)
@@ -765,21 +765,7 @@ func (m *Manager) Bulk(ctx context.Context, ids []int64, action string) (int, er
 			}
 		}
 	case "top", "bottom":
-		var edge int
-		agg := "MAX(priority)"
-		if action == "bottom" {
-			agg = "MIN(priority)"
-		}
-		if e := m.db.NewSelect().Model((*model.DownloadJob)(nil)).ColumnExpr("COALESCE("+agg+", 0)").
-			Where("status IN (?)", bun.In(activeStatuses)).Scan(ctx, &edge); e != nil {
-			return 0, e
-		}
-		p := edge + 1
-		if action == "bottom" {
-			p = edge - 1
-		}
-		err = exec(m.db.NewUpdate().Model((*model.DownloadJob)(nil)).Set("priority = ?", p).Set("updated_at = ?", now).
-			Where("status IN (?)", bun.In(activeStatuses)))
+		return m.queue.Move(ctx, ids, action, 0)
 	default:
 		return 0, fmt.Errorf("unknown action %q", action)
 	}

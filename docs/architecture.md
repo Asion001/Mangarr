@@ -96,6 +96,36 @@ parsed Mihon-style (`internal/chapternum`).
    import. Upgrades and processing rename the new file over the **same path**,
    with the old one in the recycle bin, so Komga and Kavita keep read progress.
 
+Download and reprocess jobs share a persisted integer `rank` (lower first).
+The dispatcher selects eligible queued jobs by rank, subject to concurrency,
+source, schedule and retry limits. The queue API pins importing, processing
+and downloading jobs ahead of the pending order; queued and paused jobs share
+that order. Series chapter resources expose the active job and the same rank.
+`priority` remains an enqueue/reader-boost hint for compatibility; it does not
+sort existing jobs after a manual move. Migration 27 backfills both databases
+from `priority DESC, id`.
+
+`POST /api/v1/queue/bulk` keeps its existing `ids` or `filter` selection and
+`top`/`bottom` actions, and adds `before`/`after` with `anchorId`. Moves affect
+only queued/paused jobs, preserving their current relative order regardless
+of the order of submitted IDs. Missing or nonpending selected jobs are ignored;
+an anchor must be pending and outside the selection. All changes in a move
+commit together. A database singleton lock serializes moves, rank allocation
+and dispatch claims across processes. A claim from an obsolete rank revision
+is discarded and the dispatcher reads the queue again.
+
+Ranks are sparse order keys, not display positions. Allocation uses indexed
+neighbors and updates the selected jobs; exhausting an integer gap triggers
+an order-preserving compaction in the same transaction. Compaction can change
+numeric keys for all jobs, including finished jobs whose ranks are retained
+for retries, without changing their relative order. Clients should read fresh
+keys after a queue event. `GET /api/v1/queue` still accepts offset pagination
+and additionally returns a `revision`. Sending that value on subsequent pages
+returns HTTP 409 after an intervening enqueue, boost or move, so a client can
+restart pagination. Each page's rows and counts use one database snapshot.
+The revision covers rank changes, not job status transitions or removals;
+live clients should also refresh on queue events for those changes.
+
 ## Commands, tasks and events
 
 Long work runs as commands in a persisted queue (`internal/jobs`): duplicates

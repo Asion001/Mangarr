@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"time"
 
@@ -48,9 +49,10 @@ type QueueResponse struct {
 }
 
 type QueueBulkInput struct {
-	IDs    []int64               `json:"ids,omitempty"`
-	Filter *downloads.ListFilter `json:"filter,omitempty" doc:"Select every entry matching this filter instead of ids"`
-	Action string                `json:"action" enum:"pause,resume,retry,remove,blocklist,top,bottom"`
+	IDs      []int64               `json:"ids,omitempty"`
+	Filter   *downloads.ListFilter `json:"filter,omitempty" doc:"Select every entry matching this filter instead of ids"`
+	Action   string                `json:"action" enum:"pause,resume,retry,remove,blocklist,top,bottom,before,after"`
+	AnchorID int64                 `json:"anchorId,omitempty" doc:"Pending job to move before/after; must not be selected"`
 }
 
 func (s *Server) queueState(ctx context.Context) QueueState {
@@ -66,7 +68,7 @@ func (s *Server) queueState(ctx context.Context) QueueState {
 func (s *Server) registerActivity() {
 	tags := []string{"Activity"}
 	huma.Register(s.api, huma.Operation{OperationID: "queue-list", Method: http.MethodGet, Path: "/api/v1/queue", Tags: tags,
-		Summary: "Queue entries: running first, then by priority; filter by status, kind, series or title"},
+		Summary: "Queue entries: running first, then by durable rank; filter by status, kind, series or title"},
 		func(ctx context.Context, in *struct {
 			Status      []string `query:"status,explode" doc:"Statuses (repeat the parameter or separate with commas); empty = active (plus recent when includeDone)"`
 			Kind        string   `query:"kind" enum:",download,reprocess"`
@@ -75,8 +77,16 @@ func (s *Server) registerActivity() {
 			IncludeDone bool     `query:"includeDone"`
 			Page        int      `query:"page" default:"1"`
 			PageSize    int      `query:"pageSize" default:"100"`
+			Revision    int64    `query:"revision" default:"-1" minimum:"-1" doc:"Rank revision from the first page; a changed rank order returns 409; -1 disables the check"`
 		}) (*struct{ Body QueueResponse }, error) {
-			p, err := s.app.DLQueue.ListPage(ctx, downloads.ListFilter{Statuses: splitList(in.Status), Kind: in.Kind, SeriesID: in.SeriesID, Query: in.Query, IncludeDone: in.IncludeDone}, in.Page, in.PageSize)
+			var revision *int64
+			if in.Revision >= 0 {
+				revision = &in.Revision
+			}
+			p, err := s.app.DLQueue.ListPageAt(ctx, downloads.ListFilter{Statuses: splitList(in.Status), Kind: in.Kind, SeriesID: in.SeriesID, Query: in.Query, IncludeDone: in.IncludeDone}, in.Page, in.PageSize, revision)
+			if errors.Is(err, downloads.ErrQueueOrderChanged) {
+				return nil, huma.Error409Conflict(err.Error())
+			}
 			if err != nil {
 				return nil, toHTTPError(err)
 			}
@@ -102,7 +112,14 @@ func (s *Server) registerActivity() {
 					return nil, toHTTPError(err)
 				}
 			}
-			n, err := s.app.Downloads.Bulk(ctx, ids, in.Body.Action)
+			var n int
+			var err error
+			switch in.Body.Action {
+			case "top", "bottom", "before", "after":
+				n, err = s.app.DLQueue.Move(ctx, ids, in.Body.Action, in.Body.AnchorID)
+			default:
+				n, err = s.app.Downloads.Bulk(ctx, ids, in.Body.Action)
+			}
 			if err != nil {
 				return nil, huma.Error400BadRequest(err.Error())
 			}
