@@ -355,6 +355,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/discover/{shelf}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Browse a Discover shelf with cursor paging
+         * @description Library shelves support lang, genre, metadata tag, library tagId, format, status, linked source and inLibrary. They only contain series with chapters; recommendations excludes started series. Default sorts are personalized recommended and recently-updated respectively. Library sorts: recommended (recommendations only), recently-updated (series/chapter modification time), newest (library added time), title (case-insensitive ascending). Popularity is unavailable for library series.
+         *
+         *     Popular supports lang, source, inLibrary, popularity (default) and recently-updated (the source's Latest feed). Catalogs are traversed in configured priority order; ranking is per catalog, not global. Catalogs without Latest support are reported in sourceErrors and skipped for recently-updated sorting. Genre, tag, tagId, format, status, recommended, newest and title are unsupported because source browse pages do not expose the necessary metadata or ordering. Unsupported combinations return 400. Existing HideNSFW settings always exclude hidden source catalogs; as in the combined endpoint, this setting does not filter local library metadata. There is no per-request override.
+         *
+         *     Library membership is matched against visible titles and alternative titles, including series without chapters, as in the combined endpoint. Hidden library IDs are never exposed. RootFolderId narrows library results/membership and selects source priorities. Cards retain the existing Read/Add/Request identities; mutation permissions are unchanged.
+         *
+         *     Continue with nextCursor and identical filters/sort; pageSize may change. Cursors snapshot library order and retain unread source page remainders, and deduplicate source titles across pages. Visibility, filters and membership are rechecked. Inserts do not shift library pages; changed or deleted series may disappear. Source providers use page numbers, so upstream reordering can still omit titles between fetched pages. At most eight source pages are fetched per request; an empty page can have a nextCursor. Source errors are returned alongside partial results and the failed catalog is skipped. Cursors expire after 15 minutes or cache eviction/restart (410); filter, caller, permission or catalog-setting changes invalidate them (400). No total count is provided.
+         */
+        get: operations["discover-shelf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/groups": {
         parameters: {
             query?: never;
@@ -3764,6 +3790,12 @@ export interface components {
             sourceErrors: components["schemas"]["DiscoverSourceError"][];
             updates: components["schemas"]["DiscoverLibraryItem"][];
         };
+        DiscoverShelfPage: {
+            library: components["schemas"]["DiscoverLibraryItem"][];
+            nextCursor?: string;
+            popular: components["schemas"]["DiscoverSourceItem"][];
+            sourceErrors: components["schemas"]["DiscoverSourceError"][];
+        };
         DiscoverSourceError: {
             error: string;
             name: string;
@@ -7029,6 +7061,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": string;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "discover-shelf": {
+        parameters: {
+            query?: {
+                rootFolderId?: number;
+                /** @description Library language or source catalog language (including multi-language catalogs). */
+                lang?: string;
+                /** @description Exact metadata genre, case-insensitive; library shelves only. */
+                genre?: string;
+                /** @description Exact metadata tag, case-insensitive; library shelves only. */
+                tag?: string;
+                /** @description Library tag ID; library shelves only. */
+                tagId?: number;
+                format?: "" | "manga" | "manhwa" | "manhua";
+                status?: "" | "unknown" | "ongoing" | "completed" | "hiatus" | "cancelled";
+                /** @description Catalog key moduleId:sourceId. Library shelves match linked sources; popular narrows active catalogs. */
+                source?: string;
+                /** @description Membership in the caller's visible library. Library shelves with false are empty. */
+                inLibrary?: "" | "true" | "false";
+                sort?: "" | "recommended" | "popularity" | "recently-updated" | "newest" | "title";
+                pageSize?: number;
+                /** @description Opaque continuation; repeat the same filters and sort. Expired cursors return 410; restart without a cursor. */
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                shelf: "recommendations" | "recently-updated" | "popular";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoverShelfPage"];
                 };
             };
             /** @description Error */

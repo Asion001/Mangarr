@@ -143,67 +143,7 @@ func (s *Server) discoverLibrary(ctx context.Context, rootFolderID int64, lang s
 		}
 	}
 
-	following := s.follows(ctx)
-	genreWeight := map[string]int{}
-	genreDisplay := map[string]string{}
-	for _, info := range all {
-		if info.Read+info.InProgress == 0 && !following[info.Series.ID] {
-			continue
-		}
-		weight := 1 + min(info.Read+info.InProgress, 5)
-		if following[info.Series.ID] {
-			weight += 3
-		}
-		for _, genre := range info.Series.Metadata.Genres {
-			key := strings.ToLower(strings.TrimSpace(genre))
-			if key != "" {
-				genreWeight[key] += weight
-				genreDisplay[key] = genre
-			}
-		}
-	}
-
-	type candidate struct {
-		item  DiscoverLibraryItem
-		score int
-		added time.Time
-	}
-	candidates := []candidate{}
-	for _, info := range all {
-		if info.Books == 0 || info.Read+info.InProgress > 0 {
-			continue
-		}
-		item := discoverLibraryItem(info)
-		matches := []string{}
-		score := 0
-		for _, genre := range info.Series.Metadata.Genres {
-			key := strings.ToLower(strings.TrimSpace(genre))
-			if genreWeight[key] > 0 {
-				score += genreWeight[key]
-				matches = append(matches, genreDisplay[key])
-			}
-		}
-		switch {
-		case following[info.Series.ID]:
-			item.Reason = "followed"
-			score += 100
-		case score > 0:
-			item.Reason = "matches-genres"
-			item.MatchingGenres = matches[:min(2, len(matches))]
-		default:
-			item.Reason = "recently-added"
-		}
-		candidates = append(candidates, candidate{item: item, score: score, added: info.Series.AddedAt})
-	}
-	sort.SliceStable(candidates, func(i, j int) bool {
-		if candidates[i].score != candidates[j].score {
-			return candidates[i].score > candidates[j].score
-		}
-		if !candidates[i].added.Equal(candidates[j].added) {
-			return candidates[i].added.After(candidates[j].added)
-		}
-		return strings.ToLower(candidates[i].item.Title) < strings.ToLower(candidates[j].item.Title)
-	})
+	candidates := discoverRecommendations(all, s.follows(ctx))
 	recommendations := make([]DiscoverLibraryItem, 0, min(limit, len(candidates)))
 	for _, candidate := range candidates[:min(limit, len(candidates))] {
 		recommendations = append(recommendations, candidate.item)
@@ -231,6 +171,71 @@ func (s *Server) discoverLibrary(ctx context.Context, rootFolderID int64, lang s
 		return nil, nil, nil, err
 	}
 	return recommendations, updates, existing, nil
+}
+
+type discoverCandidate struct {
+	item  DiscoverLibraryItem
+	score int
+	added time.Time
+}
+
+func discoverRecommendations(all []reading.SeriesInfo, following map[int64]bool) []discoverCandidate {
+	genreWeight := map[string]int{}
+	genreDisplay := map[string]string{}
+	for _, info := range all {
+		if info.Read+info.InProgress == 0 && !following[info.Series.ID] {
+			continue
+		}
+		weight := 1 + min(info.Read+info.InProgress, 5)
+		if following[info.Series.ID] {
+			weight += 3
+		}
+		for _, genre := range info.Series.Metadata.Genres {
+			key := strings.ToLower(strings.TrimSpace(genre))
+			if key != "" {
+				genreWeight[key] += weight
+				genreDisplay[key] = genre
+			}
+		}
+	}
+
+	candidates := []discoverCandidate{}
+	for _, info := range all {
+		if info.Books == 0 || info.Read+info.InProgress > 0 {
+			continue
+		}
+		item := discoverLibraryItem(info)
+		matches := []string{}
+		score := 0
+		for _, genre := range info.Series.Metadata.Genres {
+			key := strings.ToLower(strings.TrimSpace(genre))
+			if genreWeight[key] > 0 {
+				score += genreWeight[key]
+				matches = append(matches, genreDisplay[key])
+			}
+		}
+		switch {
+		case following[info.Series.ID]:
+			item.Reason = "followed"
+			score += 100
+		case score > 0:
+			item.Reason = "matches-genres"
+			item.MatchingGenres = matches[:min(2, len(matches))]
+		default:
+			item.Reason = "recently-added"
+		}
+		candidates = append(candidates, discoverCandidate{item: item, score: score, added: info.Series.AddedAt})
+	}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		if candidates[i].score != candidates[j].score {
+			return candidates[i].score > candidates[j].score
+		}
+		if !candidates[i].added.Equal(candidates[j].added) {
+			return candidates[i].added.After(candidates[j].added)
+		}
+		return strings.ToLower(candidates[i].item.Title) < strings.ToLower(candidates[j].item.Title)
+	})
+	return candidates
 }
 
 func (s *Server) discoverLatestChapters(ctx context.Context, items []DiscoverLibraryItem) error {

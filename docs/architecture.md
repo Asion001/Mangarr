@@ -152,6 +152,11 @@ lookups. The performance target is a 50-row first page in under 250 ms at the
 95th percentile with 100,000 recent chapters on local PostgreSQL; the dialect
 regression walks a tied 600-row feed while inserts happen between pages.
 
+Discover also exposes [individual paged shelves](discover-api.md), preserving
+the combined endpoint used by the current UI. Shelf cursors retain library
+order or source-page remainders in the bounded source cache; account visibility
+and reader state are checked again on each request.
+
 ## Workers
 
 A worker is the same binary with `MANGARR_MODE=worker` (or

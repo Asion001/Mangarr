@@ -49,6 +49,7 @@ var operationPermissions = map[string][]string{
 	"series-follow":             {permSignedIn},
 	"series-unfollow":           {permSignedIn},
 	"discover":                  {permSignedIn},
+	"discover-shelf":            {permSignedIn},
 	"discover-thumbnail":        {permSignedIn},
 
 	"source-priorities-list":    {access.LibraryManage},

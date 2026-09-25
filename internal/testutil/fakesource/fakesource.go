@@ -63,6 +63,9 @@ type Scenario struct {
 	Browses     map[string]int
 	BrowseDelay time.Duration
 	BrowseErr   map[string]error
+	// BrowsePages overrides numbered browse results by kind and catalog.
+	BrowsePages map[string]map[int]*source.MangaPage
+	BrowseKinds map[string]int
 	// PageNoise fills pages with gray noise (large PNGs, like real scans).
 	PageNoise bool
 	// PageDelay slows down every page fetch (honoring cancellation).
@@ -101,7 +104,7 @@ func NewScenario(name string) *Scenario {
 	return s
 }
 
-func (m *Module) browse(ctx context.Context, sourceID string) (*source.MangaPage, error) {
+func (m *Module) browse(ctx context.Context, sourceID, kind string, pageNumber int) (*source.MangaPage, error) {
 	m.sc.mu.Lock()
 	m.sc.Browses[sourceID]++
 	delay := m.sc.BrowseDelay
@@ -118,6 +121,16 @@ func (m *Module) browse(ctx context.Context, sourceID string) (*source.MangaPage
 	if err := m.sc.BrowseErr[sourceID]; err != nil {
 		return nil, err
 	}
+	if m.sc.BrowseKinds == nil {
+		m.sc.BrowseKinds = map[string]int{}
+	}
+	m.sc.BrowseKinds[kind]++
+	if pages, ok := m.sc.BrowsePages[kind+"|"+sourceID]; ok {
+		if page, ok := pages[pageNumber]; ok {
+			return page, nil
+		}
+		return &source.MangaPage{Mangas: []source.Manga{}}, nil
+	}
 	page := &source.MangaPage{Mangas: []source.Manga{}}
 	for _, manga := range m.sc.Mangas {
 		if manga.SourceID == sourceID {
@@ -130,11 +143,11 @@ func (m *Module) browse(ctx context.Context, sourceID string) (*source.MangaPage
 }
 
 func (m *Module) Latest(ctx context.Context, sourceID string, page int) (*source.MangaPage, error) {
-	return m.browse(ctx, sourceID)
+	return m.browse(ctx, sourceID, "latest", page)
 }
 
 func (m *Module) Popular(ctx context.Context, sourceID string, page int) (*source.MangaPage, error) {
-	return m.browse(ctx, sourceID)
+	return m.browse(ctx, sourceID, "popular", page)
 }
 
 func (s *Scenario) AddManga(m *Manga) {

@@ -1885,6 +1885,38 @@
         ],
         "type": "object"
       },
+      "DiscoverShelfPage": {
+        "additionalProperties": false,
+        "properties": {
+          "library": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoverLibraryItem"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": "string"
+          },
+          "popular": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoverSourceItem"
+            },
+            "type": "array"
+          },
+          "sourceErrors": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoverSourceError"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "library",
+          "popular",
+          "sourceErrors"
+        ],
+        "type": "object"
+      },
       "DiscoverSourceError": {
         "additionalProperties": false,
         "properties": {
@@ -11283,6 +11315,199 @@
           }
         },
         "summary": "A signed thumbnail returned by the discover feed",
+        "tags": [
+          "Discover"
+        ]
+      }
+    },
+    "/api/v1/discover/{shelf}": {
+      "get": {
+        "description": "Library shelves support lang, genre, metadata tag, library tagId, format, status, linked source and inLibrary. They only contain series with chapters; recommendations excludes started series. Default sorts are personalized recommended and recently-updated respectively. Library sorts: recommended (recommendations only), recently-updated (series/chapter modification time), newest (library added time), title (case-insensitive ascending). Popularity is unavailable for library series.\n\nPopular supports lang, source, inLibrary, popularity (default) and recently-updated (the source's Latest feed). Catalogs are traversed in configured priority order; ranking is per catalog, not global. Catalogs without Latest support are reported in sourceErrors and skipped for recently-updated sorting. Genre, tag, tagId, format, status, recommended, newest and title are unsupported because source browse pages do not expose the necessary metadata or ordering. Unsupported combinations return 400. Existing HideNSFW settings always exclude hidden source catalogs; as in the combined endpoint, this setting does not filter local library metadata. There is no per-request override.\n\nLibrary membership is matched against visible titles and alternative titles, including series without chapters, as in the combined endpoint. Hidden library IDs are never exposed. RootFolderId narrows library results/membership and selects source priorities. Cards retain the existing Read/Add/Request identities; mutation permissions are unchanged.\n\nContinue with nextCursor and identical filters/sort; pageSize may change. Cursors snapshot library order and retain unread source page remainders, and deduplicate source titles across pages. Visibility, filters and membership are rechecked. Inserts do not shift library pages; changed or deleted series may disappear. Source providers use page numbers, so upstream reordering can still omit titles between fetched pages. At most eight source pages are fetched per request; an empty page can have a nextCursor. Source errors are returned alongside partial results and the failed catalog is skipped. Cursors expire after 15 minutes or cache eviction/restart (410); filter, caller, permission or catalog-setting changes invalidate them (400). No total count is provided.",
+        "operationId": "discover-shelf",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "shelf",
+            "required": true,
+            "schema": {
+              "enum": [
+                "recommendations",
+                "recently-updated",
+                "popular"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "rootFolderId",
+            "schema": {
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Library language or source catalog language (including multi-language catalogs).",
+            "explode": false,
+            "in": "query",
+            "name": "lang",
+            "schema": {
+              "description": "Library language or source catalog language (including multi-language catalogs).",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Exact metadata genre, case-insensitive; library shelves only.",
+            "explode": false,
+            "in": "query",
+            "name": "genre",
+            "schema": {
+              "description": "Exact metadata genre, case-insensitive; library shelves only.",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Exact metadata tag, case-insensitive; library shelves only.",
+            "explode": false,
+            "in": "query",
+            "name": "tag",
+            "schema": {
+              "description": "Exact metadata tag, case-insensitive; library shelves only.",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Library tag ID; library shelves only.",
+            "explode": false,
+            "in": "query",
+            "name": "tagId",
+            "schema": {
+              "description": "Library tag ID; library shelves only.",
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "format",
+            "schema": {
+              "enum": [
+                "",
+                "manga",
+                "manhwa",
+                "manhua"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "enum": [
+                "",
+                "unknown",
+                "ongoing",
+                "completed",
+                "hiatus",
+                "cancelled"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Catalog key moduleId:sourceId. Library shelves match linked sources; popular narrows active catalogs.",
+            "explode": false,
+            "in": "query",
+            "name": "source",
+            "schema": {
+              "description": "Catalog key moduleId:sourceId. Library shelves match linked sources; popular narrows active catalogs.",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Membership in the caller's visible library. Library shelves with false are empty.",
+            "explode": false,
+            "in": "query",
+            "name": "inLibrary",
+            "schema": {
+              "description": "Membership in the caller's visible library. Library shelves with false are empty.",
+              "enum": [
+                "",
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "enum": [
+                "",
+                "recommended",
+                "popularity",
+                "recently-updated",
+                "newest",
+                "title"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "pageSize",
+            "schema": {
+              "default": 50,
+              "format": "int64",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Opaque continuation; repeat the same filters and sort. Expired cursors return 410; restart without a cursor.",
+            "explode": false,
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "description": "Opaque continuation; repeat the same filters and sort. Expired cursors return 410; restart without a cursor.",
+              "maxLength": 128,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoverShelfPage"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Browse a Discover shelf with cursor paging",
         "tags": [
           "Discover"
         ]
