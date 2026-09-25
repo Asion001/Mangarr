@@ -96,6 +96,30 @@ parsed Mihon-style (`internal/chapternum`).
    import. Upgrades and processing rename the new file over the **same path**,
    with the old one in the recycle bin, so Komga and Kavita keep read progress.
 
+The download manager stays in one package, with responsibilities split into
+files:
+
+- `manager.go` owns shared dependencies, startup recovery and shutdown handback.
+- `dispatch.go` schedules eligible jobs; `queue_control.go` owns cancellation,
+  bulk actions, claims, status transitions and persisted progress. `queue.go`
+  and `rank.go` provide the persisted queue and ordering operations.
+- `pipeline.go` loads a `jobCtx` and runs a local attempt. It owns staging cleanup
+  and passes failures to `retry.go`, which classifies errors and chooses retry,
+  release fallback or terminal failure.
+- `fetch.go` downloads and validates ordered `PageFile` values; `screen.go`
+  applies page rules. `process.go` also extracts existing archives for reprocess
+  jobs and calls the `Processor` interface, whose `ProcessResult` contains the
+  complete ordered pages and processing metadata for import.
+- `import.go` writes the archive, records file/job state and history, remaps read
+  progress after page splitting, and publishes events after the transaction.
+- `offload.go` handles worker handoff and uploads. Worker completions use the
+  same `finish` processing/import path as local downloads and clean up their
+  staging directory when it returns.
+
+These stages share the existing `Manager` dependencies. Page files stay on disk
+until the attempt finishes. Stage errors retain their permanent/infrastructure
+classification so moving a stage does not change retry or blocklist policy.
+
 Download and reprocess jobs share a persisted integer `rank` (lower first).
 The dispatcher selects eligible queued jobs by rank, subject to concurrency,
 source, schedule and retry limits. The queue API pins importing, processing
