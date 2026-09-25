@@ -18,14 +18,15 @@ import (
 type Kind string
 
 const (
-	KindSource   Kind = "source"
-	KindMetadata Kind = "metadata"
-	KindLibrary  Kind = "library"
-	KindNotify   Kind = "notify"
-	KindUpscale  Kind = "upscale"
+	KindSource      Kind = "source"
+	KindMetadata    Kind = "metadata"
+	KindLibrary     Kind = "library"
+	KindNotify      Kind = "notify"
+	KindUpscale     Kind = "upscale"
+	KindMediaServer Kind = "mediaserver"
 )
 
-var Kinds = []Kind{KindSource, KindMetadata, KindLibrary, KindNotify, KindUpscale}
+var Kinds = []Kind{KindSource, KindMetadata, KindLibrary, KindNotify, KindUpscale, KindMediaServer}
 
 func ValidKind(k string) bool {
 	for _, x := range Kinds {

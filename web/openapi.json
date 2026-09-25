@@ -108,6 +108,50 @@
         ],
         "type": "object"
       },
+      "AdaptationResource": {
+        "additionalProperties": false,
+        "properties": {
+          "coverUrl": {
+            "type": "string"
+          },
+          "externalIds": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "format": {
+            "type": "string"
+          },
+          "links": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "title": {
+            "type": "string"
+          },
+          "watchLinks": {
+            "items": {
+              "$ref": "#/components/schemas/WatchLink"
+            },
+            "type": "array"
+          },
+          "year": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "watchLinks",
+          "title",
+          "format",
+          "externalIds",
+          "links"
+        ],
+        "type": "object"
+      },
       "AddEditionsRequest": {
         "additionalProperties": false,
         "properties": {
@@ -4314,7 +4358,8 @@
               "metadata",
               "library",
               "notify",
-              "upscale"
+              "upscale",
+              "mediaserver"
             ],
             "type": "string"
           },
@@ -4472,7 +4517,8 @@
               "metadata",
               "library",
               "notify",
-              "upscale"
+              "upscale",
+              "mediaserver"
             ],
             "type": "string"
           },
@@ -7679,7 +7725,7 @@
         "properties": {
           "adaptations": {
             "items": {
-              "$ref": "#/components/schemas/Adaptation"
+              "$ref": "#/components/schemas/AdaptationResource"
             },
             "type": "array"
           },
@@ -9608,6 +9654,30 @@
           "total",
           "page",
           "pageSize"
+        ],
+        "type": "object"
+      },
+      "WatchLink": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "jellyfin",
+              "silo"
+            ],
+            "type": "string"
+          },
+          "serverName": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "serverName",
+          "kind",
+          "url"
         ],
         "type": "object"
       },

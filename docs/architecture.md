@@ -67,8 +67,14 @@ interface table are in [modules.md](modules.md).
   (`anilist`, optionally `mal`) and `links`. Older records and series without
   AniList data return `[]`. A successful metadata refresh replaces this list,
   including clearing removed relations; a failed AniList fetch preserves the
-  last successful result. This is metadata only, without media-server matching
-  or a web UI.
+  last successful result.
+- **Media servers**: admin-configured `jellyfin` and `silo` instances resolve
+  adaptations through `internal/modules/mediaserver`. Series detail resources
+  add transient `watchLinks` without changing stored metadata. Matching and
+  bounded caches live in the modules; the API imposes a shared deadline and
+  keeps returning metadata when a server is unavailable. See
+  [media-server contracts and limitations](modules.md#media-servers). There is
+  no series-page UI for these links yet.
 
 ## Chapters and the pipeline
 

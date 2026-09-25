@@ -34,7 +34,7 @@ type ModuleResource struct {
 }
 
 type ModuleInput struct {
-	Kind           string         `json:"kind" enum:"source,metadata,library,notify,upscale"`
+	Kind           string         `json:"kind" enum:"source,metadata,library,notify,upscale,mediaserver"`
 	Implementation string         `json:"implementation"`
 	Name           string         `json:"name"`
 	Enabled        bool           `json:"enabled"`

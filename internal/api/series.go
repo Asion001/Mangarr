@@ -81,7 +81,7 @@ type AddEditionsResponse struct {
 
 type SeriesResource struct {
 	model.Series
-	Adaptations []model.Adaptation   `json:"adaptations" nullable:"false"`
+	Adaptations []AdaptationResource `json:"adaptations" nullable:"false"`
 	Stats       SeriesStats          `json:"stats"`
 	Sources     []model.SeriesSource `json:"sources,omitempty"`
 	CoverURL    string               `json:"coverUrl"`
@@ -342,7 +342,10 @@ func (s *Server) sourceCounts(ctx context.Context, links []model.SeriesSource) {
 func (s *Server) seriesResource(ctx context.Context, ser model.Series, stats map[int64]SeriesStats, detail bool) SeriesResource {
 	r := SeriesResource{Series: ser, Stats: stats[ser.ID],
 		CoverURL: seriesCoverURL(ser)}
-	r.Adaptations = append([]model.Adaptation{}, ser.Metadata.Adaptations...)
+	r.Adaptations = make([]AdaptationResource, len(ser.Metadata.Adaptations))
+	for i, a := range ser.Metadata.Adaptations {
+		r.Adaptations[i] = AdaptationResource{Adaptation: a, WatchLinks: []WatchLink{}}
+	}
 	if detail {
 		_ = s.app.DB.NewSelect().Model(&r.Sources).Where("series_id = ?", ser.ID).Order("priority", "id").Scan(ctx)
 		if ranks, err := sourcepriority.Ranks(ctx, s.app.DB, ser, r.Sources); err == nil {
@@ -354,6 +357,7 @@ func (s *Server) seriesResource(ctx context.Context, ser model.Series, stats map
 		s.sourceCounts(ctx, r.Sources)
 		r.FullPath, _ = s.app.Library.SeriesDir(ctx, &ser)
 		r.Reading = s.readingInfo(ctx, &ser, r.FullPath)
+		s.adaptationWatchLinks(ctx, r.Adaptations)
 	}
 	return r
 }

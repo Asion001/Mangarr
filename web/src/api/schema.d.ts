@@ -3252,6 +3252,20 @@ export interface components {
             /** Format: int64 */
             year?: number;
         };
+        AdaptationResource: {
+            coverUrl?: string;
+            externalIds: {
+                [key: string]: string;
+            };
+            format: string;
+            links: {
+                [key: string]: string;
+            };
+            title: string;
+            watchLinks: components["schemas"]["WatchLink"][];
+            /** Format: int64 */
+            year?: number;
+        };
         AddEditionsRequest: {
             blockedScanlators?: string[];
             editions?: components["schemas"]["EditionOptions"][];
@@ -4536,7 +4550,7 @@ export interface components {
             events?: string[];
             implementation: string;
             /** @enum {string} */
-            kind: "source" | "metadata" | "library" | "notify" | "upscale";
+            kind: "source" | "metadata" | "library" | "notify" | "upscale" | "mediaserver";
             name: string;
             /** Format: int64 */
             priority: number;
@@ -4581,7 +4595,7 @@ export interface components {
             id?: number;
             implementation: string;
             /** @enum {string} */
-            kind: "source" | "metadata" | "library" | "notify" | "upscale";
+            kind: "source" | "metadata" | "library" | "notify" | "upscale" | "mediaserver";
             name: string;
             /** Format: int64 */
             priority: number;
@@ -5531,7 +5545,7 @@ export interface components {
             title: string;
         };
         SeriesResource: {
-            adaptations: components["schemas"]["Adaptation"][];
+            adaptations: components["schemas"]["AdaptationResource"][];
             addOptions: components["schemas"]["AddOptions"];
             /** Format: date-time */
             addedAt: string;
@@ -6104,6 +6118,12 @@ export interface components {
             pageSize: number;
             /** Format: int64 */
             total: number;
+        };
+        WatchLink: {
+            /** @enum {string} */
+            kind: "jellyfin" | "silo";
+            serverName: string;
+            url: string;
         };
         WatchStatus: {
             /** Format: int64 */

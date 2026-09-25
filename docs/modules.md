@@ -52,6 +52,7 @@ Then add a blank import to `internal/modules/all/all.go`.
 | `library` | `library.Module`: `Rescan` | `ProgressReader` (per-reader credentials + progress) |
 | `notify` | `notify.Module`: `Send` | — |
 | `upscale` | `upscale.Module`: `Info`, `Upscale` | — |
+| `mediaserver` | `mediaserver.Module`: `Find` (adaptation → web URL) | — |
 
 ### Fetchable: pages a worker can get
 
@@ -94,3 +95,91 @@ that has them; lists are unioned.
   for pipeline tests (`internal/app/*_test.go`).
 - Real-service tests go in `internal/integration` behind the `integration`
   build tag.
+
+## Media servers
+
+The `mediaserver` kind has `jellyfin` and `silo` implementations. Configure
+instances through the existing admin-only module API with `url` and `apiKey`
+settings. The URL is the server's web root, including any reverse-proxy path
+prefix. Credentials belong in the API key field, never the URL. Keys are
+masked in module responses, and masked updates retain the stored key. These
+are shared admin targets, not per-reader accounts; only expose servers whose
+catalog presence may be shared with mangarr readers.
+
+For example, `POST /api/v1/modules` accepts:
+
+```json
+{
+  "kind": "mediaserver",
+  "implementation": "jellyfin",
+  "name": "Screen room",
+  "enabled": true,
+  "settings": {
+    "url": "https://media.example/screen",
+    "apiKey": "replace-with-server-key"
+  }
+}
+```
+
+Use `POST /api/v1/modules/test` with the same body to test before saving, or
+`POST /api/v1/modules/{id}/test` for a saved instance. Jellyfin tests the
+protected `/System/Info` endpoint; Silo tests an authenticated catalog read.
+Requests use the module manager's HTTP transport, which allows admin-defined
+LAN targets. Redirects are rejected to avoid forwarding keys. Upstream
+response bodies and transport details are omitted from errors because they
+can contain credentials.
+
+`GET /api/v1/series/{id}` adds `watchLinks` to each top-level adaptation:
+
+```json
+{
+  "serverName": "Screen room",
+  "kind": "jellyfin",
+  "url": "https://media.example/screen/web/index.html#!/details?id=screen-item"
+}
+```
+
+The field is an array, ordered by module priority, with at most one link per
+enabled server. No match, an ambiguous match, or an unavailable server yields
+no link for that server. Existing AniList/MAL `links` remain available. The
+stored `metadata.adaptations` is unchanged. List responses have empty
+`watchLinks` arrays and do not perform media-server lookups. These links open
+item detail pages; the reader signs in on that server, which enforces its own
+playback access.
+
+- **Jellyfin:** reads paginated `/Items` with `ProviderIds`, restricted to
+  movies and series, excluding virtual items and placeholders. It matches
+  `AniList` or `MAL`/`MyAnimeList` IDs case-insensitively by provider name,
+  before considering titles. A snapshot of up to 50,000 items permits ID
+  matches even when the server uses a different title. A conflicting provider
+  ID rules out a title match.
+- **Silo:** uses `Authorization: Bearer <API key>` and the native
+  `/api/v1/catalog` query API (`q`, `type`, `year_min`, `year_max`, `offset`,
+  `limit`, `snapshot`, `has_more`). Use an unscoped API key for an account with
+  access to the intended libraries; Silo's current scoped-key allowlist does
+  not include catalog reads. No profile or playback token is needed for this
+  account-level catalog lookup. The native catalog does **not** expose
+  AniList/MAL IDs, so this implementation uses title/year fallback only, with
+  a 10,000-result search limit. Deep links use `/item/{content_id}`.
+- **Fallback:** exact title equality after Unicode NFKC normalization,
+  lowercasing, and removing punctuation/whitespace, plus an equal, known
+  year. Movies match movies; TV formats match series; OVA/ONA/special may
+  match either. Multiple distinct matching items are left unlinked.
+- **Caching and failures:** each module instance caches matches and misses for
+  ten minutes and failures for thirty seconds. Jellyfin also shares a
+  ten-minute catalog snapshot, and invalidates its match cache with that
+  snapshot. Caches are bounded, concurrent loads are coalesced, and any module
+  settings reload discards them. Pagination failures never cache a partial
+  catalog as success. All servers share a five-second enrichment deadline
+  per series detail request and run independently; errors leave metadata
+  usable. Oversized result sets fail without returning a partial match.
+
+The Silo contract was checked at
+[`1aa1eb2`](https://github.com/Silo-Server/silo-server/tree/1aa1eb2d80d947349d4458169080d5d32c4aabe9):
+[catalog handler](https://github.com/Silo-Server/silo-server/blob/1aa1eb2d80d947349d4458169080d5d32c4aabe9/internal/api/handlers/catalog.go),
+[catalog parser](https://github.com/Silo-Server/silo-server/blob/1aa1eb2d80d947349d4458169080d5d32c4aabe9/internal/catalog/catalog_parser.go),
+[item response and account access](https://github.com/Silo-Server/silo-server/blob/1aa1eb2d80d947349d4458169080d5d32c4aabe9/internal/api/handlers/items.go),
+[API-key middleware](https://github.com/Silo-Server/silo-server/blob/1aa1eb2d80d947349d4458169080d5d32c4aabe9/internal/api/middleware/auth.go),
+[scope allowlist](https://github.com/Silo-Server/silo-server/blob/1aa1eb2d80d947349d4458169080d5d32c4aabe9/internal/api/middleware/api_key_scopes.go),
+and [web routes](https://github.com/Silo-Server/silo-server/blob/1aa1eb2d80d947349d4458169080d5d32c4aabe9/web/src/App.tsx).
+No reverse manga exposure or series-page UI is included.
