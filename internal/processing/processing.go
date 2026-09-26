@@ -104,7 +104,7 @@ func (p *Processor) Process(ctx context.Context, cfg model.ProfileConfig, pages 
 			res.Upscaled, res.UpscaleModel, res.Changed = true, mdl, true
 		}
 	}
-	if cfg.Pages.SplitHeight() > 0 {
+	if cfg.Pages.SplitTall {
 		out, mapped, mask, split, err := splitTallPages(ctx, cur, sources, processable, cfg.Pages, encoding, workDir)
 		if err != nil {
 			return res, err

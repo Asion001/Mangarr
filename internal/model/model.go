@@ -6,6 +6,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
+	"strconv"
 	"time"
 
 	"github.com/uptrace/bun"
@@ -223,14 +224,16 @@ func (c ProfileConfig) ProcessParams() string {
 		Encode  *EncodeConfig  `json:"e,omitempty"`
 		// only non-default page rules take part, so older profiles keep
 		// their hash and their files aren't processed again
-		Junk     int `json:"j,omitempty"`
-		MaxWidth int `json:"w,omitempty"`
-		Split    int `json:"h,omitempty"`
+		Junk     int    `json:"j,omitempty"`
+		MaxWidth int    `json:"w,omitempty"`
+		Split    string `json:"s,omitempty"`
 	}
 	encoding := c.Encode.Format != "" && c.Encode.Format != "keep"
 	parts.MaxWidth = c.Pages.MaxWidth
-	parts.Split = c.Pages.SplitHeight()
-	if j := c.Pages.JunkSize(); j != DefaultJunkUnder && (c.Upscale.Enabled || encoding || parts.MaxWidth > 0 || parts.Split > 0) {
+	if threshold, segment := c.Pages.SplitRatios(); threshold > 0 {
+		parts.Split = strconv.FormatFloat(threshold, 'g', -1, 64) + ":" + strconv.FormatFloat(segment, 'g', -1, 64)
+	}
+	if j := c.Pages.JunkSize(); j != DefaultJunkUnder && (c.Upscale.Enabled || encoding || parts.MaxWidth > 0 || parts.Split != "") {
 		parts.Junk = j
 		if j == 0 {
 			parts.Junk = -1
@@ -249,7 +252,7 @@ func (c ProfileConfig) ProcessParams() string {
 		e.RecycleOriginals = false
 		parts.Encode = &e
 	}
-	if parts.Upscale == nil && parts.Encode == nil && parts.MaxWidth == 0 && parts.Split == 0 {
+	if parts.Upscale == nil && parts.Encode == nil && parts.MaxWidth == 0 && parts.Split == "" {
 		return ""
 	}
 	b, _ := json.Marshal(parts)
@@ -292,9 +295,14 @@ type EncodeConfig struct {
 // (spacers, logos, tracking pixels) when a profile doesn't set its own.
 const DefaultJunkUnder = 300
 
-// DefaultSplitHeight keeps webtoon segments quick to transfer and below the
-// dimension limits of common readers and image formats.
-const DefaultSplitHeight = 2500
+// DefaultSplitRatio is the height:width ratio above which a page counts as a
+// webtoon strip. Manga pages (about 1.4) and double-height pages stay whole,
+// however far they were upscaled.
+const DefaultSplitRatio = 3.0
+
+// DefaultSegmentRatio is the tallest height:width ratio of a split segment,
+// about one phone screen, so segments keep full width and quality.
+const DefaultSegmentRatio = 2.0
 
 // PageRules are the page size limits of a profile.
 type PageRules struct {
@@ -308,20 +316,30 @@ type PageRules struct {
 	// as wide). 0 = no limit.
 	MaxWidth int `json:"maxWidth"`
 	// SplitTall enables splitting long strips after upscaling and before
-	// re-encoding. MaxHeight 0 uses DefaultSplitHeight.
-	SplitTall bool `json:"splitTall"`
-	MaxHeight int  `json:"maxHeight"`
+	// re-encoding. Only pages taller than SplitRatio times their width are
+	// split, into segments at most SegmentRatio times their width tall.
+	// 0 uses DefaultSplitRatio / DefaultSegmentRatio.
+	SplitTall    bool    `json:"splitTall"`
+	SplitRatio   float64 `json:"splitRatio" doc:"Split pages taller than this many times their width (0 = 3)"`
+	SegmentRatio float64 `json:"segmentRatio" doc:"Segments are at most this many times their width tall (0 = 2)"`
 }
 
-// SplitHeight is the maximum segment height, or 0 when splitting is off.
-func (r PageRules) SplitHeight() int {
+// SplitRatios returns the height:width ratio above which a page is split and
+// the tallest segment ratio, or zeros when splitting is off.
+func (r PageRules) SplitRatios() (threshold, segment float64) {
 	if !r.SplitTall {
-		return 0
+		return 0, 0
 	}
-	if r.MaxHeight <= 0 {
-		return DefaultSplitHeight
+	threshold, segment = r.SplitRatio, r.SegmentRatio
+	if threshold <= 0 {
+		threshold = DefaultSplitRatio
 	}
-	return r.MaxHeight
+	if segment <= 0 {
+		segment = DefaultSegmentRatio
+	}
+	threshold = max(threshold, 1)
+	segment = min(max(segment, 0.5), threshold)
+	return threshold, segment
 }
 
 // JunkSize is the junk threshold in pixels (0 = off).

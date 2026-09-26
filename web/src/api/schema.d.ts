@@ -4717,10 +4717,18 @@ export interface components {
             /** Format: int64 */
             junkUnder: number;
             /** Format: int64 */
-            maxHeight: number;
-            /** Format: int64 */
             maxWidth: number;
             removeJunk: boolean;
+            /**
+             * Format: double
+             * @description Segments are at most this many times their width tall (0 = 2)
+             */
+            segmentRatio: number;
+            /**
+             * Format: double
+             * @description Split pages taller than this many times their width (0 = 3)
+             */
+            splitRatio: number;
             splitTall: boolean;
         };
         Patch: {

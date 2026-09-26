@@ -21,12 +21,14 @@ import (
 	"github.com/Asion001/mangarr/internal/progress"
 )
 
-// splitTallPages cuts supported still images into balanced segments no taller
-// than the configured limit. A full-width light/dark quiet band near the
-// balanced cut is preferred; when none exists the balanced cut is used.
+// splitTallPages cuts webtoon strips (pages taller than the profile's split
+// ratio times their width) into balanced segments no taller than the segment
+// ratio times their width. Ratios, not pixels, decide, so an upscaled manga
+// page is never mistaken for a strip. A full-width light/dark quiet band near
+// the balanced cut is preferred; when none exists the balanced cut is used.
 func splitTallPages(ctx context.Context, pages []downloads.PageFile, sources []int, processable []bool, rules model.PageRules, toPNG bool, workDir string) ([]downloads.PageFile, []int, []bool, int, error) {
-	limit := rules.SplitHeight()
-	if limit <= 0 {
+	threshold, segment := rules.SplitRatios()
+	if threshold <= 0 {
 		return pages, sources, processable, 0, nil
 	}
 	out, mapped, mask := make([]downloads.PageFile, 0, len(pages)), make([]int, 0, len(pages)), make([]bool, 0, len(pages))
@@ -37,9 +39,9 @@ func splitTallPages(ctx context.Context, pages []downloads.PageFile, sources []i
 			return nil, nil, nil, split, err
 		}
 		parts := []downloads.PageFile{pg}
-		if processable[i] && pg.Height > limit && splitSupported(pg.Format) {
+		if processable[i] && isStrip(pg, threshold) && splitSupported(pg.Format) {
 			var err error
-			parts, err = splitTallPage(pg, limit, toPNG, workDir)
+			parts, err = splitTallPage(pg, max(1, int(float64(pg.Width)*segment)), toPNG, workDir)
 			if err != nil {
 				return nil, nil, nil, split, err
 			}
@@ -61,6 +63,11 @@ func splitTallPages(ctx context.Context, pages []downloads.PageFile, sources []i
 		out[i].Name = cbz.PageName(i, imagecheck.Ext(out[i].Format))
 	}
 	return out, mapped, mask, split, nil
+}
+
+// isStrip reports whether a page is taller than threshold times its width.
+func isStrip(pg downloads.PageFile, threshold float64) bool {
+	return pg.Width > 0 && float64(pg.Height) > float64(pg.Width)*threshold
 }
 
 func splitSupported(format string) bool {

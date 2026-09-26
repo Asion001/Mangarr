@@ -112,7 +112,7 @@ func TestPreviewNeedsAnUpscaler(t *testing.T) {
 		t.Fatalf("no upscaler: %d %s", resp.StatusCode, msg)
 	}
 	splitBody := fmt.Sprintf(`{"chapterId":%d,"encode":{"format":"keep","preset":"balanced","quality":0,"speed":0,"grayscale":true,"progressive":false,"minSavingsPct":10,"recycleOriginals":false},`+
-		`"pages":{"junkUnder":-1,"removeJunk":false,"maxWidth":0,"splitTall":true,"maxHeight":250}}`, ch.ID)
+		`"pages":{"junkUnder":-1,"removeJunk":false,"maxWidth":0,"splitTall":true,"splitRatio":1.2,"segmentRatio":0.625}}`, ch.ID)
 	var preview api.PreviewResult
 	if code := c.do("POST", "/api/v1/processing/preview", splitBody, &preview); code != 200 {
 		t.Fatalf("split preview: %d", code)

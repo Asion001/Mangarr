@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("an older profile can enable tall-page splitting and save its height", async ({ page }) => {
+test("an older profile can enable tall-page splitting and save its ratios", async ({ page }) => {
   const profile = {
     id: 1,
     name: "Default",
@@ -34,9 +34,10 @@ test("an older profile can enable tall-page splitting and save its height", asyn
   await page.getByRole("button", { name: "Edit" }).click();
   await page.getByRole("button", { name: "Page processing" }).click();
   await page.getByRole("switch", { name: "Split tall pages" }).click();
-  await page.getByPlaceholder("2500").fill("2800");
-  await expect(page.getByText("Split over 2800 px tall").first()).toBeVisible();
+  await page.getByPlaceholder("3", { exact: true }).fill("4");
+  await page.getByPlaceholder("2", { exact: true }).fill("1.8");
+  await expect(page.getByText("Split strips over 4× width").first()).toBeVisible();
   await page.getByRole("button", { name: "Save", exact: true }).click();
 
-  await expect.poll(() => saved?.config?.pages).toEqual({ junkUnder: 0, removeJunk: false, maxWidth: 0, splitTall: true, maxHeight: 2800 });
+  await expect.poll(() => saved?.config?.pages).toEqual({ junkUnder: 0, removeJunk: false, maxWidth: 0, splitTall: true, splitRatio: 4, segmentRatio: 1.8 });
 });

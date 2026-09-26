@@ -4912,16 +4912,22 @@
             "format": "int64",
             "type": "integer"
           },
-          "maxHeight": {
-            "format": "int64",
-            "type": "integer"
-          },
           "maxWidth": {
             "format": "int64",
             "type": "integer"
           },
           "removeJunk": {
             "type": "boolean"
+          },
+          "segmentRatio": {
+            "description": "Segments are at most this many times their width tall (0 = 2)",
+            "format": "double",
+            "type": "number"
+          },
+          "splitRatio": {
+            "description": "Split pages taller than this many times their width (0 = 3)",
+            "format": "double",
+            "type": "number"
           },
           "splitTall": {
             "type": "boolean"
@@ -4932,7 +4938,8 @@
           "removeJunk",
           "maxWidth",
           "splitTall",
-          "maxHeight"
+          "splitRatio",
+          "segmentRatio"
         ],
         "type": "object"
       },

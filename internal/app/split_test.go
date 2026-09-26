@@ -60,7 +60,7 @@ func TestReprocessSplitsTallPagesAndRemapsProgress(t *testing.T) {
 	if err := e.App.DB.NewSelect().Model(&profile).Where("id = ?", ser.ProfileID).Scan(e.Ctx); err != nil {
 		t.Fatal(err)
 	}
-	profile.Config.Pages = model.PageRules{JunkUnder: -1, SplitTall: true, MaxHeight: 250}
+	profile.Config.Pages = model.PageRules{JunkUnder: -1, SplitTall: true, SplitRatio: 1.2, SegmentRatio: 0.625} // 400 x 600 → 3 x 200
 	if _, err := e.App.DB.NewUpdate().Model(&profile).WherePK().Exec(e.Ctx); err != nil {
 		t.Fatal(err)
 	}

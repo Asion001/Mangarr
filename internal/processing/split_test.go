@@ -59,7 +59,7 @@ func TestSplitTallPagesUsesQuietRowsAndRenumbers(t *testing.T) {
 	tall := writeTestImage(t, dir, "source.png", "png", patternedStrip(80, 620, 202, 411))
 	normal := writeTestImage(t, dir, "other.png", "png", patternedStrip(80, 180))
 	res, err := New(nil, nil).Process(context.Background(), model.ProfileConfig{
-		Pages: model.PageRules{SplitTall: true, MaxHeight: 250},
+		Pages: model.PageRules{SplitTall: true, SplitRatio: 3, SegmentRatio: 3.125}, // segments up to 250 px
 	}, []downloads.PageFile{tall, normal}, dir)
 	if err != nil {
 		t.Fatal(err)
@@ -122,6 +122,31 @@ func TestSplitTallPageFallsBackToBalancedHardCuts(t *testing.T) {
 	for i := 0; i+1 < len(points); i++ {
 		if h := points[i+1] - points[i]; h > 200 || h < 160 {
 			t.Errorf("segment %d height = %d", i, h)
+		}
+	}
+}
+
+// An upscaled manga page is tall in pixels but not a strip: splitting goes by
+// shape, so it stays whole with the default ratios.
+func TestSplitKeepsUpscaledMangaPagesWhole(t *testing.T) {
+	dir := t.TempDir()
+	page := writeTestImage(t, dir, "page.png", "png", patternedStrip(1950, 2799))
+	strip := writeTestImage(t, dir, "strip.png", "png", patternedStrip(300, 3000))
+	res, err := New(nil, nil).Process(context.Background(), model.ProfileConfig{
+		Pages: model.PageRules{JunkUnder: -1, SplitTall: true},
+	}, []downloads.PageFile{page, strip}, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Split != 1 || res.Pages[0].Path != page.Path {
+		t.Fatalf("manga page was split: split=%d pages=%+v", res.Split, res.Pages)
+	}
+	if len(res.Pages) != 1+5 { // 3000 / (300 * 2) = 5 segments
+		t.Fatalf("strip segments = %d", len(res.Pages)-1)
+	}
+	for _, pg := range res.Pages[1:] {
+		if pg.Width != 300 || pg.Height > 600 {
+			t.Fatalf("segment %+v is taller than twice its width", pg)
 		}
 	}
 }

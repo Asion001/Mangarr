@@ -295,7 +295,7 @@ func (s *Server) registerProcessing() {
 			if in.Body.Pages != nil {
 				rules = *in.Body.Pages
 			}
-			if !upscale && !encoding && rules.MaxWidth <= 0 && rules.SplitHeight() <= 0 {
+			if !upscale && !encoding && rules.MaxWidth <= 0 && !rules.SplitTall {
 				return nil, huma.Error422UnprocessableEntity("nothing to preview: every processing step is off")
 			}
 			if upscale && (s.app.Processing == nil || s.app.Processing.Up == nil) {

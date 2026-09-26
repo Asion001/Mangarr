@@ -447,8 +447,11 @@ func validateProfile(p *model.Profile) error {
 	if p.Config.Pages.MaxWidth < 0 {
 		p.Config.Pages.MaxWidth = 0
 	}
-	if p.Config.Pages.MaxHeight < 0 {
-		p.Config.Pages.MaxHeight = 0
+	if p.Config.Pages.SplitRatio < 0 {
+		p.Config.Pages.SplitRatio = 0
+	}
+	if p.Config.Pages.SegmentRatio < 0 {
+		p.Config.Pages.SegmentRatio = 0
 	}
 	if p.Config.LowRes.Width < 0 {
 		p.Config.LowRes.Width = 0

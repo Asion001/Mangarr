@@ -23,7 +23,7 @@ const emptyConfig: Cfg = {
   minPages: 0,
   upscale: { enabled: false, upscalerId: 0, minWidth: 1400, maxWidth: 2048, model: "waifu2x-cunet", noise: 1, format: "source", quality: 90 },
   encode: { format: "keep", preset: "balanced", quality: 0, speed: 0, grayscale: true, progressive: false, minSavingsPct: 10, recycleOriginals: true },
-  pages: { junkUnder: 0, removeJunk: false, maxWidth: 0, splitTall: false, maxHeight: 0 },
+  pages: { junkUnder: 0, removeJunk: false, maxWidth: 0, splitTall: false, splitRatio: 0, segmentRatio: 0 },
   lowRes: { width: 0, action: "retry" },
   processTiming: "background",
   processExisting: false,
@@ -68,7 +68,7 @@ function processingSummary(c: Cfg) {
   const steps = [];
   if (c.pages?.maxWidth) steps.push(tr("shrink over {px} px", { px: c.pages.maxWidth }));
   if (c.upscale.enabled) steps.push(tr("Upscale under {px} px", { px: c.upscale.minWidth }));
-  if (c.pages?.splitTall) steps.push(tr("Split over {px} px tall", { px: c.pages.maxHeight || 2500 }));
+  if (c.pages?.splitTall) steps.push(tr("Split strips over {ratio}× width", { ratio: c.pages.splitRatio || 3 }));
   if (c.encode?.format && c.encode.format !== "keep") steps.push(formatName(c.encode.format));
   return steps.length ? steps.join(" → ") : tr("Pages as downloaded");
 }
@@ -214,8 +214,8 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
   const encoding = enc.format !== "keep";
   const processing = up.enabled || encoding || pg.maxWidth > 0 || pg.splitTall;
   const changedProcessing =
-    JSON.stringify([base.config.upscale, base.config.encode, base.config.pages.maxWidth, base.config.pages.splitTall, base.config.pages.maxHeight]) !==
-    JSON.stringify([cfg.upscale, cfg.encode, pg.maxWidth, pg.splitTall, pg.maxHeight]);
+    JSON.stringify([base.config.upscale, base.config.encode, base.config.pages.maxWidth, base.config.pages.splitTall, base.config.pages.splitRatio, base.config.pages.segmentRatio]) !==
+    JSON.stringify([cfg.upscale, cfg.encode, pg.maxWidth, pg.splitTall, pg.splitRatio, pg.segmentRatio]);
 
   const save = async () => {
     setSaving(true);
@@ -363,7 +363,7 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
                 {pg.splitTall && (
                   <>
                     <ArrowRight className="size-4 text-muted" />
-                    <span className="rounded bg-warn/15 px-2.5 py-1 text-warn">{t("Split over {px} px tall", { px: pg.maxHeight || 2500 })}</span>
+                    <span className="rounded bg-warn/15 px-2.5 py-1 text-warn">{t("Split strips over {ratio}× width", { ratio: pg.splitRatio || 3 })}</span>
                   </>
                 )}
                 <ArrowRight className="size-4 text-muted" />
@@ -448,9 +448,14 @@ function ProfileEditor({ profile, onClose }: { profile: Profile; onClose: () => 
                 action={<Switch checked={pg.splitTall} onChange={(v) => setPages({ splitTall: v })} label={<span className="sr-only">{t("Split tall pages")}</span>} />}
               >
                 {pg.splitTall && (
-                  <Field label={t("Maximum segment height (px)")} help={t("Quiet rows near this height are preferred. Empty uses {px} px.", { px: 2500 })} className="max-w-64">
-                    <Input type="number" min={500} placeholder="2500" value={pg.maxHeight || ""} onChange={(e) => setPages({ maxHeight: Number(e.target.value) || 0 })} />
-                  </Field>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Field label={t("Split pages taller than (× width)")} help={t("Only webtoon strips. Manga pages are about 1.4× as tall as wide, even after upscaling.")}>
+                      <Input type="number" min={1} step={0.1} placeholder="3" value={pg.splitRatio || ""} onChange={(e) => setPages({ splitRatio: Number(e.target.value) || 0 })} />
+                    </Field>
+                    <Field label={t("Segment height (× width)")} help={t("Pieces keep full width and cut near quiet rows. A phone screen is about 2.2.")}>
+                      <Input type="number" min={0.5} step={0.1} placeholder="2" value={pg.segmentRatio || ""} onChange={(e) => setPages({ segmentRatio: Number(e.target.value) || 0 })} />
+                    </Field>
+                  </div>
                 )}
               </Step>
 

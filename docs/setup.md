@@ -438,10 +438,13 @@ threshold (default 1400 px) with waifu2x / Real-CUGAN / Real-ESRGAN.
 
 ### Tall webtoon pages
 
-Profiles can split very tall stored pages into shorter segments (2,500 px by
-default). The step runs after upscaling and before re-encoding, prefers a
+Profiles can split webtoon strips into shorter segments. Splitting goes by
+shape, not pixels: only pages more than 3× as tall as they are wide are split
+(manga pages are about 1.4×, so upscaled pages are never cut), into segments at
+most 2× as tall as wide, about one phone screen. Both ratios can be changed in
+the profile. The step runs after upscaling and before re-encoding, prefers a
 full-width light or dark gap near each balanced cut, and falls back to a hard
-cut when there is no safe gap. Every segment stays below the configured height.
+cut when there is no safe gap. Segments keep the page's full width.
 
 When re-encoding follows, segments use lossless PNG as the hand-off. Otherwise
 JPEG, PNG, WebP, BMP and AVIF keep their source format. Animated images and

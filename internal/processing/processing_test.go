@@ -88,9 +88,14 @@ func TestProcessParamsKeepsOlderHashes(t *testing.T) {
 	if old.ProcessParams() == splitting.ProcessParams() || splitting.ProcessParams() == "" {
 		t.Fatal("tall-page splitting must be a processing change")
 	}
-	defaultHeight, explicitHeight := splitting, splitting
-	explicitHeight.Pages.MaxHeight = model.DefaultSplitHeight
-	if defaultHeight.ProcessParams() != explicitHeight.ProcessParams() {
-		t.Fatal("the default split height must have one stable processing hash")
+	defaultRatios, explicitRatios := splitting, splitting
+	explicitRatios.Pages.SplitRatio, explicitRatios.Pages.SegmentRatio = model.DefaultSplitRatio, model.DefaultSegmentRatio
+	if defaultRatios.ProcessParams() != explicitRatios.ProcessParams() {
+		t.Fatal("the default split ratios must have one stable processing hash")
+	}
+	shorter := splitting
+	shorter.Pages.SegmentRatio = 1.5
+	if shorter.ProcessParams() == splitting.ProcessParams() {
+		t.Fatal("the segment ratio is a processing change")
 	}
 }
