@@ -118,6 +118,10 @@ func (l *Ledger) Claim(ctx context.Context, workerID int64, kinds []string, limi
 			return nil, err
 		}
 	}
+	var worker model.Worker
+	if err := l.db.NewSelect().Model(&worker).Where("id = ?", workerID).Scan(ctx); err != nil {
+		return nil, err
+	}
 	now := time.Now().UTC()
 	var waiting []model.WorkerTask
 	err := l.db.NewSelect().Model(&waiting).
@@ -128,6 +132,9 @@ func (l *Ledger) Claim(ctx context.Context, workerID int64, kinds []string, limi
 		return nil, err
 	}
 	for _, t := range waiting {
+		if !upscalesIfNeeded(&worker, &t) {
+			continue // pages that need upscaling, and it can't
+		}
 		until := now.Add(Lease)
 		// the compare-and-set: only one worker can move a row out of pending
 		res, err := l.db.NewUpdate().Model((*model.WorkerTask)(nil)).
@@ -242,13 +249,43 @@ func takes(w *model.Worker, kind string) bool {
 	return true
 }
 
+// SpecNeedsUpscale marks an encode task whose pages need upscaling: only a
+// worker with an upscaling engine can do it.
+const SpecNeedsUpscale = "needsUpscale"
+
+// upscalesIfNeeded reports whether a worker can do a task's upscaling, when
+// the task has any.
+func upscalesIfNeeded(w *model.Worker, t *model.WorkerTask) bool {
+	if t.Kind != model.TaskEncode {
+		return true
+	}
+	need, known := t.Spec[SpecNeedsUpscale].(bool)
+	if !known {
+		// written before the server said: any task whose profile upscales
+		profile, _ := t.Spec["profile"].(map[string]any)
+		upscale, _ := profile["upscale"].(map[string]any)
+		need, _ = upscale["enabled"].(bool)
+	}
+	if !need {
+		return true
+	}
+	models, _ := w.Info["models"].([]any)
+	return len(models) > 0
+}
+
 // InfoProcess is what a worker puts in its hello to say it can do the
 // processing stage (the encode role).
 const InfoProcess = "process"
 
 // CanDo reports whether a worker that can do this kind of task is online.
 func (l *Ledger) CanDo(ctx context.Context, kind string) (bool, error) {
-	return l.someoneCanDo(ctx, kind)
+	return l.someoneCanDo(ctx, &model.WorkerTask{Kind: kind})
+}
+
+// CanTake reports whether a worker that can do this task, with what its
+// spec asks for, is online.
+func (l *Ledger) CanTake(ctx context.Context, t *model.WorkerTask) (bool, error) {
+	return l.someoneCanDo(ctx, t)
 }
 
 // Progress is what a worker reports while it works.
@@ -458,7 +495,7 @@ func (l *Ledger) DropUnclaimed(ctx context.Context) (int, error) {
 	}
 	dropped := 0
 	for _, t := range waiting {
-		ok, err := l.someoneCanDo(ctx, t.Kind)
+		ok, err := l.someoneCanDo(ctx, &t)
 		if err != nil {
 			return dropped, err
 		}
@@ -484,15 +521,15 @@ func (l *Ledger) DropUnclaimed(ctx context.Context) (int, error) {
 	return dropped, nil
 }
 
-// someoneCanDo reports whether a worker that may do this kind of work has
-// been here recently.
-func (l *Ledger) someoneCanDo(ctx context.Context, kind string) (bool, error) {
+// someoneCanDo reports whether a worker that may do this task has been here
+// recently.
+func (l *Ledger) someoneCanDo(ctx context.Context, t *model.WorkerTask) (bool, error) {
 	var list []model.Worker
 	if err := l.db.NewSelect().Model(&list).Where("enabled = ?", true).Scan(ctx); err != nil {
 		return false, err
 	}
 	for _, w := range list {
-		if takes(&w, kind) && w.LastSeenAt != nil && time.Since(*w.LastSeenAt) < OnlineWithin {
+		if takes(&w, t.Kind) && upscalesIfNeeded(&w, t) && w.LastSeenAt != nil && time.Since(*w.LastSeenAt) < OnlineWithin {
 			return true, nil
 		}
 	}

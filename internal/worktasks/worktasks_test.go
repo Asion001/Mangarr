@@ -426,3 +426,52 @@ func TestEncodeNeedsAWorkerThatProcesses(t *testing.T) {
 		}
 	})
 }
+
+// Pages that need upscaling go only to a worker with an upscaler; one that
+// only re-encodes still gets the rest.
+func TestUpscaledEncodeNeedsAnUpscaler(t *testing.T) {
+	each(t, func(t *testing.T, d *db.DB) {
+		ctx := context.Background()
+		l := ledger(d)
+		job := seedJob(t, d)
+		plain, gpu := seedWorker(t, d, "plain"), seedWorker(t, d, "gpu")
+		now := time.Now().UTC()
+		infos := map[int64]map[string]any{
+			plain: {worktasks.InfoProcess: true},
+			gpu:   {worktasks.InfoProcess: true, "models": []any{map[string]any{"name": "realesrgan-x4plus-anime"}}},
+		}
+		for id, info := range infos {
+			if _, err := d.NewUpdate().Model((*model.Worker)(nil)).Set("roles = ?", []string{model.RoleEncode}).
+				Set("info = ?", info).Set("last_seen_at = ?", now).Where("id = ?", id).Exec(ctx); err != nil {
+				t.Fatal(err)
+			}
+		}
+		upscaled := &model.WorkerTask{Kind: model.TaskEncode, Spec: map[string]any{worktasks.SpecNeedsUpscale: true}}
+		if ok, err := l.CanTake(ctx, upscaled); err != nil || !ok {
+			t.Fatalf("CanTake with the GPU worker online = %v, %v", ok, err)
+		}
+		upscaled.JobID = job
+		if err := l.Add(ctx, upscaled); err != nil {
+			t.Fatal(err)
+		}
+		if task, err := l.Claim(ctx, plain, []string{model.TaskEncode}, 0, 1); err != nil || task != nil {
+			t.Fatalf("the worker without an upscaler got %v, %v", task, err)
+		}
+		if err := l.Add(ctx, &model.WorkerTask{JobID: job, Kind: model.TaskEncode, Spec: map[string]any{worktasks.SpecNeedsUpscale: false}}); err != nil {
+			t.Fatal(err)
+		}
+		if task, err := l.Claim(ctx, plain, []string{model.TaskEncode}, 0, 1); err != nil || task == nil || task.ID == upscaled.ID {
+			t.Fatalf("the worker without an upscaler should get the plain task, got %v, %v", task, err)
+		}
+		if task, err := l.Claim(ctx, gpu, []string{model.TaskEncode}, 0, 1); err != nil || task == nil || task.ID != upscaled.ID {
+			t.Fatalf("the GPU worker should get the upscaled task, got %v, %v", task, err)
+		}
+		// with only the plain worker around, nobody can take upscaled pages
+		if _, err := d.NewUpdate().Model((*model.Worker)(nil)).Set("enabled = ?", false).Where("id = ?", gpu).Exec(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if ok, err := l.CanTake(ctx, &model.WorkerTask{Kind: model.TaskEncode, Spec: map[string]any{worktasks.SpecNeedsUpscale: true}}); err != nil || ok {
+			t.Fatalf("CanTake without an upscaler = %v, %v", ok, err)
+		}
+	})
+}

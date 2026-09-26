@@ -15,6 +15,7 @@ import (
 	"github.com/Asion001/mangarr/internal/downloads"
 	"github.com/Asion001/mangarr/internal/model"
 	"github.com/Asion001/mangarr/internal/progress"
+	"github.com/Asion001/mangarr/internal/upscaling"
 	"github.com/Asion001/mangarr/internal/worktasks"
 )
 
@@ -93,8 +94,20 @@ func (r *Remote) Process(ctx context.Context, cfg model.ProfileConfig, pages []d
 	if r.Tasks == nil {
 		return res, Unavailable{errors.New("processing runs on workers, but there is no task ledger")}
 	}
-	if ok, err := r.Tasks.CanDo(ctx, model.TaskEncode); err != nil {
+	needsUpscale := false
+	if cfg.Upscale.Enabled {
+		for _, p := range pages {
+			if upscaling.NeedsUpscale(p, cfg.Upscale.MinWidth) {
+				needsUpscale = true
+				break
+			}
+		}
+	}
+	probe := &model.WorkerTask{Kind: model.TaskEncode, Spec: map[string]any{worktasks.SpecNeedsUpscale: needsUpscale}}
+	if ok, err := r.Tasks.CanTake(ctx, probe); err != nil {
 		return res, err
+	} else if !ok && needsUpscale {
+		return res, Unavailable{errors.New("processing runs on workers (MANGARR_PROCESSING=workers), these pages need upscaling, and no worker with the encode role and an upscaler is online")}
 	} else if !ok {
 		return res, Unavailable{errors.New("processing runs on workers (MANGARR_PROCESSING=workers) and no worker with the encode role is online")}
 	}
@@ -115,6 +128,7 @@ func (r *Remote) Process(ctx context.Context, cfg model.ProfileConfig, pages []d
 	if err != nil {
 		return res, err
 	}
+	raw[worktasks.SpecNeedsUpscale] = needsUpscale
 	task := &model.WorkerTask{JobID: jobID, Kind: model.TaskEncode, Spec: raw, PagesTotal: len(pages)}
 	if err := r.Tasks.Add(ctx, task); err != nil {
 		return res, err
