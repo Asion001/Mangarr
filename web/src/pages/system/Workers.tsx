@@ -16,7 +16,7 @@ type UpscaleModel = { name: string; description?: string };
 const roles = [
   { key: "download", label: "Download", help: "Fetches chapters from their source and uploads the pages here" },
   { key: "upscale", label: "Upscale", help: "Runs the upscaler on pages" },
-  { key: "encode", label: "Encode", help: "Re-encodes pages to AVIF or JPEG XL" },
+  { key: "encode", label: "Encode", help: "Processes downloaded pages (resize, split, upscale, re-encode) when the server runs with MANGARR_PROCESSING=workers" },
 ];
 
 /** modelsOf reads the upscaling models a worker said it has when it last dialled in. */

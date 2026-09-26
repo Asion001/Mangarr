@@ -209,6 +209,14 @@ take comes back to the server, and a worker that dies loses its task to
 another. Workers have priorities: a lower-priority worker gets a kind of task
 only when every better-placed worker that can take it is full.
 
+With `MANGARR_PROCESSING=workers` the whole processing stage is a task too
+(kind `encode`, `processing.Remote`): the server writes the page list and the
+profile into the task and imports what comes back, and the worker runs the
+same `processing.Processor` with its own encoder and upscaling engine. A
+worker with `MANGARR_WORKER_SHARED_STORAGE=true` that can see the job's
+folder works on it in place; any other gets the pages as a zip and sends the
+new ones back the same way.
+
 ## Stack
 
 - **HTTP**: `chi` and `huma/v2`, which generates the OpenAPI 3.1 document

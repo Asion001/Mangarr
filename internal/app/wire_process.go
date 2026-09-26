@@ -8,6 +8,7 @@ import (
 
 	"github.com/uptrace/bun"
 
+	"github.com/Asion001/mangarr/internal/config"
 	"github.com/Asion001/mangarr/internal/downloads"
 	"github.com/Asion001/mangarr/internal/health"
 	"github.com/Asion001/mangarr/internal/imageenc"
@@ -29,6 +30,17 @@ func (a *App) wireProcess(ctx context.Context) error {
 	a.Processing = processing.New(upscaling.New(a.Modules), a.Encoder)
 	a.Processing.Guard = processing.NewGuard(a.Settings, a.Modules, a.Bus, a.Log.With("component", "processing"))
 	a.Downloads.Processor = a.Processing
+	if a.Cfg.Processing == config.ProcessingWorkers {
+		// the image work runs on a worker with the encode role; this process
+		// only hands the pages over and imports what comes back
+		a.Downloads.Processor = &processing.Remote{Tasks: a.Tasks, Guard: a.Processing.Guard}
+		a.Log.Info("processing runs on workers (MANGARR_PROCESSING=workers)")
+	}
+	if a.Cfg.Mode == config.ModeServer {
+		// MANGARR_MODE=server upscales nowhere in this process, even when
+		// the built-in upscaler was set up by an earlier integrated run
+		a.Processing.Up.Online = func(def model.ProviderDefinition) bool { return def.Implementation != "local" }
+	}
 	a.Health.AddCheck(a.processingHealth)
 	if err := a.wireUpscalers(ctx); err != nil {
 		return err
@@ -177,6 +189,21 @@ func (a *App) processingHealth(ctx context.Context) []health.Check {
 	}
 	var profiles []model.Profile
 	_ = a.DB.NewSelect().Model(&profiles).Scan(ctx)
+	if a.Cfg.Processing == config.ProcessingWorkers {
+		// the encoders that matter are the workers'; what matters here is
+		// that one is around
+		for _, p := range profiles {
+			if p.Config.ProcessParams() == "" {
+				continue
+			}
+			if ok, err := a.Tasks.CanDo(ctx, model.TaskEncode); err == nil && !ok {
+				out = append(out, health.Check{Source: "Processing", Type: health.Warning, Link: "/system/workers",
+					Message: "Processing runs on workers (MANGARR_PROCESSING=workers), but no worker with the encode role is online: chapters are imported unprocessed and processed once one is back"})
+			}
+			break
+		}
+		return out
+	}
 	seen := map[string]bool{}
 	for _, p := range profiles {
 		f := p.Config.Encode.Format

@@ -201,6 +201,9 @@ func (l *Ledger) claimableKinds(ctx context.Context, workerID int64, kinds []str
 	now := time.Now()
 	out := make([]string, 0, len(kinds))
 	for _, kind := range kinds {
+		if kind == model.TaskEncode && !takes(current, kind) {
+			continue // a worker too old to process pages still holds the role
+		}
 		yield := false
 		for i := range workers {
 			w := &workers[i]
@@ -226,11 +229,26 @@ func takes(w *model.Worker, kind string) bool {
 	if !w.HasRole(kind) {
 		return false
 	}
-	if kind == model.TaskUpscale {
+	switch kind {
+	case model.TaskUpscale:
 		models, _ := w.Info["models"].([]any)
 		return len(models) > 0
+	case model.TaskEncode:
+		// only a worker that says it can process pages: one from before
+		// processing moved to workers holds the role but can't do the work
+		ok, _ := w.Info[InfoProcess].(bool)
+		return ok
 	}
 	return true
+}
+
+// InfoProcess is what a worker puts in its hello to say it can do the
+// processing stage (the encode role).
+const InfoProcess = "process"
+
+// CanDo reports whether a worker that can do this kind of task is online.
+func (l *Ledger) CanDo(ctx context.Context, kind string) (bool, error) {
+	return l.someoneCanDo(ctx, kind)
 }
 
 // Progress is what a worker reports while it works.
@@ -474,7 +492,7 @@ func (l *Ledger) someoneCanDo(ctx context.Context, kind string) (bool, error) {
 		return false, err
 	}
 	for _, w := range list {
-		if w.HasRole(kind) && w.LastSeenAt != nil && time.Since(*w.LastSeenAt) < OnlineWithin {
+		if takes(&w, kind) && w.LastSeenAt != nil && time.Since(*w.LastSeenAt) < OnlineWithin {
 			return true, nil
 		}
 	}

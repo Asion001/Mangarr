@@ -26,9 +26,15 @@ type Processor struct {
 	// Online (optional) reports whether an upscaler instance is reachable
 	// (e.g. a desktop GPU node that may be switched off).
 	Online func(def model.ProviderDefinition) bool
+	// Fixed (optional) is the only upscaler to use, in place of the
+	// modules: a worker processing pages upscales with its own engine.
+	Fixed upscale.Module
 }
 
 func New(m *modules.Manager) *Processor { return &Processor{mods: m} }
+
+// NewFixed is a processor that always upscales with up.
+func NewFixed(up upscale.Module) *Processor { return &Processor{Fixed: up} }
 
 // ErrNoUpscaler means no upscaler is configured or none is reachable now.
 type ErrNoUpscaler struct{ Reason string }
@@ -37,6 +43,13 @@ func (e ErrNoUpscaler) Error() string { return "no upscaler available: " + e.Rea
 
 // upscaler returns the configured upscaler, or the first reachable one by priority.
 func (p *Processor) upscaler(ctx context.Context, cfg model.UpscaleConfig) (upscale.Module, *upscale.Info, error) {
+	if p.Fixed != nil {
+		info, err := p.Fixed.Info(ctx)
+		if err == nil && len(info.Models) == 0 {
+			err = ErrNoUpscaler{"this machine's upscaler has no models"}
+		}
+		return p.Fixed, info, err
+	}
 	if cfg.UpscalerID > 0 {
 		m, _, err := modules.GetAs[upscale.Module](p.mods, cfg.UpscalerID)
 		if err != nil {

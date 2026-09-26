@@ -526,7 +526,7 @@ The roles:
 |---|---|---|
 | Download | Fetches a chapter's pages and uploads them here | The requests come from the worker's address, so a second machine spreads the load a site sees — and a slow uplink at home isn't the bottleneck |
 | Upscale | Runs the upscaler on batches of pages | The GPU box does the work; the server keeps the library |
-| Encode | Re-encodes pages | CPU work, off the server |
+| Encode | Processes downloaded pages: resizes, upscales (with its own engine), splits and re-encodes them | All image work off the server, when it runs with `MANGARR_PROCESSING=workers` (below) |
 
 Notes:
 
@@ -559,8 +559,51 @@ Notes:
   Settings → Downloads' page concurrency.
 - **Switching one off** in System → Workers stops it being given work at
   once; removing it invalidates its key.
+- **Shared storage.** A worker in the same compose file as the server can
+  mount the server's data folder at the same path (`/config`) and set
+  `MANGARR_WORKER_SHARED_STORAGE=true`. It then reads and writes the pages of
+  its upscale and processing tasks in place instead of sending them over
+  HTTP. A task whose files it can't see falls back to HTTP, so a wrong mount
+  is slower, not broken. Run it as the same user as the server.
 - `MANGARR_MODE=upscaler` still starts a worker (it says so), but the old
   push-based node with its own port and the server's admin key is gone.
+
+### Processing in a separate container
+
+Upscaling and re-encoding are the heaviest things mangarr does, and in the
+default setup (`MANGARR_MODE=integrated`, `MANGARR_PROCESSING=local`) they
+run inside the server: a GPU driver crash or a huge page that runs the
+container out of memory takes the web UI down with it. To keep the server
+light, move all of it into a worker next to it:
+
+1. System → Workers → **Add worker**, with the **Encode** role (and
+   **Upscale** when profiles upscale: the worker upscales with its own engine,
+   so it needs `/dev/dri` instead of the server).
+2. Start the server with `MANGARR_MODE=server` (no built-in upscaler, even one
+   set up earlier) and `MANGARR_PROCESSING=workers` (the processing stage is
+   handed to a worker instead of running here).
+3. Add the worker to the same compose file, sharing the data folder:
+   ```yaml
+   mangarr-worker:
+     image: ghcr.io/asion001/mangarr:latest
+     user: "1000:1000"                    # the same user as the server
+     environment:
+       MANGARR_MODE: worker
+       MANGARR_SERVER_URL: http://mangarr:8787
+       MANGARR_WORKER_KEY: ${MANGARR_WORKER_KEY}
+       MANGARR_WORKER_ROLES: encode,upscale
+       MANGARR_WORKER_SHARED_STORAGE: "true"
+     volumes:
+       - ./mangarr:/config                # the server's data folder, same path
+     devices:
+       - /dev/dri:/dev/dri                # only for upscaling
+     mem_limit: 4g                        # a crash here restarts the worker only
+     restart: unless-stopped
+   ```
+
+While no such worker is online, new chapters are imported unprocessed (the
+health page says why) and processed once it is back; reprocessing jobs wait
+and retry. Previews on the profile page still run on the server.
 
 ## 13. Moving and renaming
 

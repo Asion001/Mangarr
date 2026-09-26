@@ -38,6 +38,10 @@ type Config struct {
 	WebDir string
 	// KomgaListen is where the Komga-compatible API listens while enabled.
 	KomgaListen string
+	// Processing says where downloaded pages are processed (resized, split,
+	// upscaled, re-encoded): ProcessingLocal in this process, or
+	// ProcessingWorkers on a worker with the encode role.
+	Processing string
 	// Env is the MANGARR_* environment used to pin settings, root folders and
 	// modules (see internal/envcfg). Nil in tests unless set explicitly.
 	Env map[string]string
@@ -58,6 +62,7 @@ var Vars = []VarDoc{
 	{"MANGARR_URL_BASE", "", "Serve under a sub path, e.g. /mangarr."},
 	{"MANGARR_AUTH_DISABLED", "false", "Disable login and API key checks (only behind an auth proxy)."},
 	{"MANGARR_WEB_DIR", "", "Serve the UI from this directory instead of the embedded copy (development)."},
+	{"MANGARR_PROCESSING", "local", "Where downloaded pages are processed (resized, split, upscaled, re-encoded): local (in this process) or workers (on a worker with the encode role, so heavy image work never runs in the server)."},
 	{"MANGARR_KOMGA_LISTEN", ":25600", "Listen address of the Komga-compatible API for reading apps (when enabled in Settings → Reading apps)."},
 }
 
@@ -68,6 +73,12 @@ const (
 	ModeUpscaler   = "upscaler"
 	// ModeWorker pulls tasks from a server: it listens on nothing.
 	ModeWorker = "worker"
+)
+
+// Where pages are processed.
+const (
+	ProcessingLocal   = "local"
+	ProcessingWorkers = "workers"
 )
 
 // ModeFromEnv returns the process mode; a binary named mangarr-upscaler is a node.
@@ -97,6 +108,11 @@ func Load() (*Config, error) {
 		WebDir:      env("MANGARR_WEB_DIR", ""),
 		KomgaListen: env("MANGARR_KOMGA_LISTEN", ":25600"),
 		Env:         Environ(),
+	}
+	switch c.Processing = strings.ToLower(env("MANGARR_PROCESSING", ProcessingLocal)); c.Processing {
+	case ProcessingLocal, ProcessingWorkers:
+	default:
+		return nil, fmt.Errorf("MANGARR_PROCESSING must be local or workers (got %q)", c.Processing)
 	}
 	if c.AuthDisabled, err = envBool("MANGARR_AUTH_DISABLED", false); err != nil {
 		return nil, err

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
@@ -33,9 +34,22 @@ func (w *Worker) upscale(ctx context.Context, t Task) (result, error) {
 			return result{}, fmt.Errorf("the upscaling parameters make no sense: %w", err)
 		}
 	}
-	in, err := w.input(ctx, t.ID)
-	if err != nil {
-		return result{}, err
+	inPath, _ := t.Spec["input"].(string)
+	outPath, _ := t.Spec["output"].(string)
+	shared := w.cfg.SharedStorage && inPath != "" && outPath != ""
+	var in []byte
+	var err error
+	if shared {
+		// the batch is on the volume this worker shares with the server
+		if in, err = os.ReadFile(inPath); err != nil {
+			w.log.Info("shared storage: the batch isn't here, fetching it over HTTP", "path", inPath)
+			shared = false
+		}
+	}
+	if !shared {
+		if in, err = w.input(ctx, t.ID); err != nil {
+			return result{}, err
+		}
 	}
 	images, err := unzip(in)
 	if err != nil {
@@ -55,7 +69,11 @@ func (w *Worker) upscale(ctx context.Context, t Task) (result, error) {
 	if err != nil {
 		return result{}, err
 	}
-	if err := w.output(ctx, t.ID, data); err != nil {
+	if shared {
+		if err := writeAtomic(outPath, data); err != nil {
+			return result{}, err
+		}
+	} else if err := w.output(ctx, t.ID, data); err != nil {
 		return result{}, err
 	}
 	return result{Pages: len(out), BytesIn: int64(len(in)), BytesOut: int64(len(data)), GPU: gpu}, nil

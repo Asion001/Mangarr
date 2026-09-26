@@ -15,6 +15,7 @@ var Vars = [][3]string{
 	{"MANGARR_WORKER_CONCURRENT", "", "0"},
 	{"MANGARR_WORKER_PREFETCH", "", "0"},
 	{"MANGARR_WORKER_PAGE_CONCURRENCY", "", "0"},
+	{"MANGARR_WORKER_SHARED_STORAGE", "", "false"},
 }
 
 // Help describes each variable for the configuration reference.
@@ -25,6 +26,7 @@ var Help = map[string]string{
 	"MANGARR_WORKER_CONCURRENT":       "Tasks it takes at once (0 = what System → Workers says, applied without a restart).",
 	"MANGARR_WORKER_PREFETCH":         "Pages it fetches ahead of its uploads (0 = what the server says).",
 	"MANGARR_WORKER_PAGE_CONCURRENCY": "Pages it fetches at a time when System → Workers leaves it at 0 (0 = 4).",
+	"MANGARR_WORKER_SHARED_STORAGE":   "true when this worker sees the server's data folder at the same path (the same volume mounted at /config): it then reads and writes pages there instead of sending them over HTTP. Falls back to HTTP for any task whose files it can't see.",
 }
 
 // LoadConfig reads a worker's configuration from the environment.
@@ -61,6 +63,11 @@ func LoadConfig(getenv func(string) string) (Config, error) {
 	}
 	if c.PageConcurrency, err = strconv.Atoi(get("MANGARR_WORKER_PAGE_CONCURRENCY")); err != nil {
 		return c, fmt.Errorf("MANGARR_WORKER_PAGE_CONCURRENCY: %w", err)
+	}
+	if v := get("MANGARR_WORKER_SHARED_STORAGE"); v != "" {
+		if c.SharedStorage, err = strconv.ParseBool(v); err != nil {
+			return c, fmt.Errorf("MANGARR_WORKER_SHARED_STORAGE: %w", err)
+		}
 	}
 	if c.ServerURL == "" {
 		return c, fmt.Errorf("MANGARR_SERVER_URL: a worker needs the address of its server")

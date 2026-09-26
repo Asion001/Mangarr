@@ -23,6 +23,11 @@ services:
     #   - "993" # the host's render group id: getent group render
     environment:
       TZ: Europe/Madrid
+      # Optional: keep upscaling and re-encoding out of this container and
+      # let the mangarr-processing worker below do them (docs/setup.md,
+      # "Processing in a separate container"):
+      # MANGARR_MODE: server
+      # MANGARR_PROCESSING: workers
       # SQLite by default; optional Postgres:
       # MANGARR_DB: postgres://mangarr:secret@db:5432/mangarr?sslmode=disable
       #
@@ -117,3 +122,27 @@ services:
   #   devices:
   #     - /dev/dri:/dev/dri           # only needed for upscaling
   #   restart: unless-stopped
+
+  # Optional: processing (resize, upscale, split, re-encode) in its own
+  # container, so a GPU crash or a page that runs out of memory can't take
+  # the server down. Set MANGARR_MODE=server and MANGARR_PROCESSING=workers on
+  # mangarr above, and make a key with the Encode (and Upscale) roles in
+  # System → Workers. It shares mangarr's data folder at the same path, so
+  # pages are read and written in place instead of travelling over HTTP.
+  # mangarr-processing:
+  #   image: ghcr.io/asion001/mangarr:latest
+  #   user: "1000:1000"                   # the same user as mangarr
+  #   environment:
+  #     TZ: Europe/Madrid
+  #     MANGARR_MODE: worker
+  #     MANGARR_SERVER_URL: http://mangarr:8787
+  #     MANGARR_WORKER_KEY: ${MANGARR_PROCESSING_KEY}   # System → Workers
+  #     MANGARR_WORKER_ROLES: encode,upscale
+  #     MANGARR_WORKER_SHARED_STORAGE: "true"
+  #   volumes:
+  #     - ./mangarr:/config               # the same folder as mangarr's /config
+  #   devices:
+  #     - /dev/dri:/dev/dri               # only needed for upscaling
+  #   mem_limit: 4g
+  #   restart: unless-stopped
+  #   depends_on: [mangarr]

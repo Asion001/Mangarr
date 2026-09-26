@@ -20,7 +20,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Asion001/mangarr/internal/imageenc"
 	"github.com/Asion001/mangarr/internal/upscaler"
+	"github.com/Asion001/mangarr/internal/worktasks"
 )
 
 // Config is what a worker is started with.
@@ -41,6 +43,10 @@ type Config struct {
 	// PageConcurrency is how many pages it fetches at a time when the server
 	// leaves it to the worker (0: 4).
 	PageConcurrency int
+	// SharedStorage says this worker sees the server's data folder at the
+	// same path, so it works on the files there instead of trading them
+	// over HTTP.
+	SharedStorage bool
 	// Upscaler is the engine this machine upscales with (nil: it can't).
 	Upscaler *upscaler.Server
 	Log      *slog.Logger
@@ -64,6 +70,8 @@ type Worker struct {
 
 	// up is the upscaling engine on this machine (nil when it has none).
 	up *upscaler.Server
+	// enc re-encodes pages for the processing stage.
+	enc *imageenc.Encoder
 
 	mu   sync.Mutex
 	held map[int64]bool // tasks in progress, for a clean goodbye
@@ -118,7 +126,7 @@ func New(cfg Config) (*Worker, error) {
 		cfg.Fetch = &http.Client{Timeout: 2 * time.Minute}
 	}
 	cfg.ServerURL = strings.TrimRight(cfg.ServerURL, "/")
-	w := &Worker{cfg: cfg, log: cfg.Log, held: map[int64]bool{}}
+	w := &Worker{cfg: cfg, log: cfg.Log, held: map[int64]bool{}, enc: imageenc.Detect()}
 	if slices.Contains(cfg.Roles, "upscale") && cfg.Upscaler != nil {
 		w.up = cfg.Upscaler
 	}
@@ -205,7 +213,7 @@ func (w *Worker) pageLimit() int {
 // hello announces the worker, retrying until the server answers: a worker
 // that starts before its server should wait for it, not give up.
 func (w *Worker) hello(ctx context.Context) error {
-	info := map[string]any{"cpus": runtime.NumCPU()}
+	info := map[string]any{"cpus": runtime.NumCPU(), worktasks.InfoProcess: true, "sharedStorage": w.cfg.SharedStorage}
 	roles := w.cfg.Roles
 	if w.up != nil {
 		up := w.up.Info()
@@ -295,6 +303,8 @@ func (w *Worker) do(ctx context.Context, t Task) {
 		res, err = w.download(ctx, t)
 	case "upscale":
 		res, err = w.upscale(ctx, t)
+	case "encode":
+		res, err = w.process(ctx, t)
 	default:
 		err = fmt.Errorf("this worker doesn't know how to %q", t.Kind)
 	}

@@ -396,3 +396,33 @@ func TestUnclaimedComesBack(t *testing.T) {
 		}
 	})
 }
+
+// A worker from before processing moved to workers still holds the encode
+// role, but only one that says it can process pages gets that work.
+func TestEncodeNeedsAWorkerThatProcesses(t *testing.T) {
+	each(t, func(t *testing.T, d *db.DB) {
+		ctx := context.Background()
+		l := ledger(d)
+		job := seedJob(t, d)
+		old, current := seedWorker(t, d, "old"), seedWorker(t, d, "new")
+		now := time.Now().UTC()
+		for id, info := range map[int64]map[string]any{old: {}, current: {worktasks.InfoProcess: true}} {
+			if _, err := d.NewUpdate().Model((*model.Worker)(nil)).Set("roles = ?", []string{model.RoleEncode}).
+				Set("info = ?", info).Set("last_seen_at = ?", now).Where("id = ?", id).Exec(ctx); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := l.Add(ctx, &model.WorkerTask{JobID: job, Kind: model.TaskEncode, Spec: map[string]any{}}); err != nil {
+			t.Fatal(err)
+		}
+		if task, err := l.Claim(ctx, old, []string{model.TaskEncode}, 0, 1); err != nil || task != nil {
+			t.Fatalf("the old worker got %v, %v", task, err)
+		}
+		if task, err := l.Claim(ctx, current, []string{model.TaskEncode}, 0, 1); err != nil || task == nil {
+			t.Fatalf("the new worker got %v, %v", task, err)
+		}
+		if ok, err := l.CanDo(ctx, model.TaskEncode); err != nil || !ok {
+			t.Fatalf("CanDo = %v, %v", ok, err)
+		}
+	})
+}

@@ -20,6 +20,7 @@ Lists are comma-separated (`a,b,c`) or JSON; key/value settings use `key=value,k
 | `MANGARR_URL_BASE` | `` | Serve under a sub path, e.g. /mangarr. |
 | `MANGARR_AUTH_DISABLED` | `false` | Disable login and API key checks (only behind an auth proxy). |
 | `MANGARR_WEB_DIR` | `` | Serve the UI from this directory instead of the embedded copy (development). |
+| `MANGARR_PROCESSING` | `local` | Where downloaded pages are processed (resized, split, upscaled, re-encoded): local (in this process) or workers (on a worker with the encode role, so heavy image work never runs in the server). |
 | `MANGARR_KOMGA_LISTEN` | `:25600` | Listen address of the Komga-compatible API for reading apps (when enabled in Settings → Reading apps). |
 | `MANGARR_ROOT_FOLDERS` | `` | Root folders to create and lock, comma-separated; append \|lang to set a language (/data/manga/ja\|ja), or \|* for the automatic folder that gets a subfolder per language (/data/manga\|*). |
 
@@ -35,6 +36,7 @@ A worker holds a key of its own and asks the server for work, so it needs no por
 | `MANGARR_WORKER_CONCURRENT` | `0` | Tasks it takes at once (0 = what System → Workers says, applied without a restart). |
 | `MANGARR_WORKER_PREFETCH` | `0` | Pages it fetches ahead of its uploads (0 = what the server says). |
 | `MANGARR_WORKER_PAGE_CONCURRENCY` | `0` | Pages it fetches at a time when System → Workers leaves it at 0 (0 = 4). |
+| `MANGARR_WORKER_SHARED_STORAGE` | `false` | true when this worker sees the server's data folder at the same path (the same volume mounted at /config): it then reads and writes pages there instead of sending them over HTTP. Falls back to HTTP for any task whose files it can't see. |
 
 ## The upscaling engine
 

@@ -157,7 +157,11 @@ See [docker/compose.example.yml](docker/compose.example.yml) and the full
 A second machine that downloads, upscales or re-encodes is the same image
 with `MANGARR_MODE=worker`, a server address and a key from System →
 Workers. It asks the server for work, so it needs no port of its own.
-(`MANGARR_MODE=upscaler` still starts it, and says so.)
+(`MANGARR_MODE=upscaler` still starts it, and says so.) To keep upscaling and
+re-encoding out of the server container entirely, run the server with
+`MANGARR_MODE=server` and `MANGARR_PROCESSING=workers` and a worker next to it
+that shares its data folder (`docs/setup.md`, "Processing in a separate
+container").
 
 ## Configuration
 

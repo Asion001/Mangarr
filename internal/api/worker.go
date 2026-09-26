@@ -1,6 +1,7 @@
 package api
 
 import (
+	"archive/zip"
 	"context"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/Asion001/mangarr/internal/access"
 	"github.com/Asion001/mangarr/internal/model"
+	"github.com/Asion001/mangarr/internal/processing"
 	"github.com/Asion001/mangarr/internal/settings"
 	"github.com/Asion001/mangarr/internal/worktasks"
 )
@@ -141,6 +143,9 @@ func (s *Server) registerWorkerProtocol() {
 					if err := s.app.Tasks.UseWorkerModel(ctx, task, w); err != nil {
 						s.app.Log.Warn("could not give the task this worker's model", "task", task.ID, "worker", w.Name, "err", err)
 					}
+					if task.Kind == model.TaskEncode && w.UpscaleModel != "" {
+						task.Spec["upscaleModel"] = w.UpscaleModel // this worker's own, not stored
+					}
 					out.Task = task
 					return &struct{ Body WorkerTaskOutput }{out}, nil
 				}
@@ -189,6 +194,9 @@ func (s *Server) registerWorkerProtocol() {
 			task, err := s.app.Tasks.Held(ctx, in.ID, w.ID)
 			if err != nil {
 				return nil, huma.Error409Conflict("this task is not yours any more")
+			}
+			if task.Kind == model.TaskEncode {
+				return s.workerProcessInput(task)
 			}
 			path, _ := task.Spec["input"].(string)
 			f, err := os.Open(path)
@@ -474,4 +482,43 @@ func workerConflict(err error) error {
 		return huma.Error409Conflict("this task is not yours any more")
 	}
 	return toHTTPError(err)
+}
+
+// workerProcessInput streams a processing task's pages as a zip, entry i
+// being page i, for a worker that can't read the job's folder itself.
+func (s *Server) workerProcessInput(task *model.WorkerTask) (*huma.StreamResponse, error) {
+	spec, err := processing.ParseSpec(task.Spec)
+	if err != nil {
+		return nil, huma.Error422UnprocessableEntity(err.Error())
+	}
+	for _, p := range spec.Pages {
+		if _, err := os.Stat(p.Path); err != nil {
+			return nil, huma.Error404NotFound("this task's pages are gone")
+		}
+	}
+	return &huma.StreamResponse{Body: func(hctx huma.Context) {
+		hctx.SetHeader("Content-Type", "application/zip")
+		zw := zip.NewWriter(hctx.BodyWriter())
+		for i, p := range spec.Pages {
+			if err := zipFile(zw, processing.InputName(i, p), p.Path); err != nil {
+				s.app.Log.Warn("could not send a page to a worker", "task", task.ID, "page", p.Name, "err", err)
+				return
+			}
+		}
+		_ = zw.Close()
+	}}, nil
+}
+
+func zipFile(zw *zip.Writer, name, path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	w, err := zw.CreateHeader(&zip.FileHeader{Name: name, Method: zip.Store})
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(w, f)
+	return err
 }
