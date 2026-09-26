@@ -30,9 +30,9 @@ test('processing queue pages through the complete materialized backlog',async({p
   else if(p.endsWith('/queue')&&url.searchParams.get('kind')==='reprocess'){
    seen.push(url.search);
    const pageNumber=Number(url.searchParams.get('page')||1);
-   body={total:125,page:pageNumber,pageSize:100,counts:{queued:125},state:{paused:false,quiet:{}},items:[{
+   body={revision:7,total:125,page:pageNumber,pageSize:100,counts:{queued:125},state:{paused:false,quiet:{}},items:[{
     id:pageNumber,kind:'reprocess',seriesId:1,seriesTitle:'Long Backlog',chapter:String(pageNumber),numberSort:pageNumber,sourceName:'',scanlator:'',
-    status:'queued',priority:-100,progress:0,pagesDone:0,pagesTotal:0,attempt:0,isUpgrade:true,error:'',
+    status:'queued',priority:-100,rank:pageNumber*1024,progress:0,pagesDone:0,pagesTotal:0,attempt:0,isUpgrade:true,error:'',
     notBefore:'2026-09-23T00:00:00Z',createdAt:'2026-09-23T00:00:00Z',updatedAt:'2026-09-23T00:00:00Z'
    }]};
   }

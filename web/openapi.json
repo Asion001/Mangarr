@@ -5463,7 +5463,8 @@
               "top",
               "bottom",
               "before",
-              "after"
+              "after",
+              "sort"
             ],
             "type": "string"
           },

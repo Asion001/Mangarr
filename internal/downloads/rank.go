@@ -1,10 +1,12 @@
 package downloads
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/uptrace/bun"
@@ -181,6 +183,76 @@ func (q *Queue) Move(ctx context.Context, ids []int64, action string, anchorID i
 			}
 		}
 		affected = len(jobs)
+		return bumpOrder(ctx, tx)
+	})
+	if err != nil {
+		return 0, err
+	}
+	if affected > 0 {
+		q.signal()
+		q.bus.Changed("queue", "sync", 0)
+		q.bus.Changed("chapter", "updated", 0)
+	}
+	return affected, nil
+}
+
+type sortJob struct {
+	ID         int64   `bun:"id"`
+	SeriesID   int64   `bun:"series_id"`
+	Rank       int64   `bun:"rank"`
+	NumberSort float64 `bun:"number_sort"`
+}
+
+// SortByChapter reorders the selected queued/paused jobs by chapter number
+// within the places they already hold, so the rest of the queue is untouched.
+// Series keep the order of their earliest selected job.
+func (q *Queue) SortByChapter(ctx context.Context, ids []int64) (int, error) {
+	affected := 0
+	err := q.orderTx(ctx, func(ctx context.Context, tx bun.Tx) error {
+		var jobs []sortJob
+		sel := tx.NewSelect().TableExpr("download_jobs AS j").Join("JOIN chapters AS c ON c.id = j.chapter_id").
+			ColumnExpr("j.id, j.series_id, j.rank, c.number_sort").
+			Where("j.id IN (?) AND j.status IN (?)", bun.In(ids), bun.In(pendingStatuses)).OrderExpr("j.rank, j.id")
+		if q.db.Kind == db.Postgres {
+			sel = sel.For("UPDATE OF j")
+		}
+		if len(ids) == 0 {
+			return nil
+		}
+		if err := sel.Scan(ctx, &jobs); err != nil {
+			return err
+		}
+		if len(jobs) < 2 {
+			return nil
+		}
+		slots := make([]int64, len(jobs))
+		seriesOrder := map[int64]int{}
+		for i, j := range jobs {
+			slots[i] = j.Rank
+			if _, ok := seriesOrder[j.SeriesID]; !ok {
+				seriesOrder[j.SeriesID] = len(seriesOrder)
+			}
+		}
+		sorted := slices.Clone(jobs)
+		slices.SortStableFunc(sorted, func(a, b sortJob) int {
+			if c := cmp.Compare(seriesOrder[a.SeriesID], seriesOrder[b.SeriesID]); c != 0 {
+				return c
+			}
+			return cmp.Compare(a.NumberSort, b.NumberSort)
+		})
+		now := time.Now().UTC()
+		for i, j := range sorted {
+			if j.Rank == slots[i] {
+				continue
+			}
+			if _, err := tx.NewUpdate().Model((*model.DownloadJob)(nil)).Set("rank = ?", slots[i]).Set("updated_at = ?", now).Where("id = ?", j.ID).Exec(ctx); err != nil {
+				return err
+			}
+			affected++
+		}
+		if affected == 0 {
+			return nil
+		}
 		return bumpOrder(ctx, tx)
 	})
 	if err != nil {

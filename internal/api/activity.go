@@ -51,7 +51,7 @@ type QueueResponse struct {
 type QueueBulkInput struct {
 	IDs      []int64               `json:"ids,omitempty"`
 	Filter   *downloads.ListFilter `json:"filter,omitempty" doc:"Select every entry matching this filter instead of ids"`
-	Action   string                `json:"action" enum:"pause,resume,retry,remove,blocklist,top,bottom,before,after"`
+	Action   string                `json:"action" enum:"pause,resume,retry,remove,blocklist,top,bottom,before,after,sort"`
 	AnchorID int64                 `json:"anchorId,omitempty" doc:"Pending job to move before/after; must not be selected"`
 }
 
@@ -117,6 +117,8 @@ func (s *Server) registerActivity() {
 			switch in.Body.Action {
 			case "top", "bottom", "before", "after":
 				n, err = s.app.DLQueue.Move(ctx, ids, in.Body.Action, in.Body.AnchorID)
+			case "sort":
+				n, err = s.app.DLQueue.SortByChapter(ctx, ids)
 			default:
 				n, err = s.app.Downloads.Bulk(ctx, ids, in.Body.Action)
 			}

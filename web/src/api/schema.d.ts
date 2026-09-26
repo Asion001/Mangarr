@@ -4890,7 +4890,7 @@ export interface components {
         };
         QueueBulkInput: {
             /** @enum {string} */
-            action: "pause" | "resume" | "retry" | "remove" | "blocklist" | "top" | "bottom" | "before" | "after";
+            action: "pause" | "resume" | "retry" | "remove" | "blocklist" | "top" | "bottom" | "before" | "after" | "sort";
             /**
              * Format: int64
              * @description Pending job to move before/after; must not be selected

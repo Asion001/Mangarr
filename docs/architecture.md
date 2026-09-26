@@ -156,6 +156,16 @@ restart pagination. Each page's rows and counts use one database snapshot.
 The revision covers rank changes, not job status transitions or removals;
 live clients should also refresh on queue events for those changes.
 
+The web queue shows each pending job's place in line (1 runs next), counted
+from rank order across pages; running jobs show "now". Rows carry only a
+checkbox, and one toolbar acts on the selection: up/down (one place past the
+nearest unselected pending job, fetching at most one adjacent page with the
+current revision at a page boundary), top/bottom, sort by chapter, pause,
+resume, retry, blocklist and remove. Sort by chapter (`action: "sort"`)
+reorders the selected pending jobs by chapter number within the ranks they
+already hold; series keep the order of their first selected job. Finished jobs
+are left to History, so the queue lists waiting, running and failed jobs.
+
 ## Commands, tasks and events
 
 Long work runs as commands in a persisted queue (`internal/jobs`): duplicates

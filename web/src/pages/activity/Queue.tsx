@@ -1,19 +1,22 @@
 import { t as tr, t } from "../../lib/i18n/core";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowDownToLine, ArrowUpToLine, Ban, Eraser, Pause, Play, RotateCw, Trash2 } from "lucide-react";
-import { api, unwrap, type Job } from "../../api/client";
+import { ArrowDown, ArrowUp, ArrowDownToLine, ArrowUpToLine, Ban, ListOrdered, Pause, Play, RotateCw, Trash2 } from "lucide-react";
+import { api, ApiError, unwrap, type Job } from "../../api/client";
 import { useQueue } from "../../api/queries";
-import { Badge, Button, Confirm, EmptyState, ErrorBox, IconButton, Input, Loading, PageHeader, Progress, Select, Switch, Table, Td, Th } from "../../components/ui";
+import { Badge, Button, Confirm, EmptyState, ErrorBox, Input, Loading, Menu, PageHeader, Progress, Switch, Table, Td, Th } from "../../components/ui";
+import { isPending, isRunning, queueGroups, queuePositions, selectionNeighbor } from "../../lib/queueOrder";
 import { relative } from "../../lib/format";
 import { useListParam, useQueryParam } from "../../lib/urlState";
 import { useToast } from "../../lib/toast";
 import { describe, useLiveProgress } from "../../lib/liveProgress";
 
 const tone = (s: string) => (s === "completed" ? "ok" : s === "failed" ? "err" : s === "paused" ? "warn" : s === "queued" ? "default" : "info");
-const statuses = ["downloading", "processing", "importing", "queued", "paused", "failed", "completed"] as const;
-type Action = "pause" | "resume" | "retry" | "remove" | "blocklist" | "top" | "bottom";
+// Finished chapters live in History, so the queue shows only what still
+// needs something: waiting, running and failed jobs.
+const statuses = ["downloading", "processing", "importing", "queued", "paused", "failed"] as const;
+type Action = "pause" | "resume" | "retry" | "remove" | "blocklist" | "top" | "bottom" | "before" | "after" | "sort";
 
 const groupKey = "mangarr:queue-group";
 const storedGroup = () => {
@@ -44,30 +47,87 @@ export function QueuePage({ mode }: { mode: "downloads" | "processing" }) {
   };
   const page = Number(pageStr) || 1;
   const pageSize = 100;
-  const filter = { status: status ? status.split(",") : undefined, kind: mode === "processing" ? "reprocess" as const : "download" as const, q: q || undefined, includeDone: true };
-  const { data, isLoading, error } = useQueue({ ...filter, page, pageSize });
+  const filter = { status: status ? status.split(",") : [...statuses], kind: mode === "processing" ? "reprocess" as const : "download" as const, q: q || undefined, includeDone: true };
+  const { data, isLoading, isFetching, isPlaceholderData, error } = useQueue({ ...filter, page, pageSize });
   const liveMap = useLiveProgress();
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [allMatching, setAllMatching] = useState(false);
   const [lastClicked, setLastClicked] = useState<number | null>(null);
   const [confirm, setConfirm] = useState<{ action: Action; label: string } | null>(null);
+  const [moving, setMoving] = useState(false);
+  const moveLock = useRef(false);
+  const [announcement, setAnnouncement] = useState("");
   const items = data?.items ?? [];
+  const reorderDisabled = moving || isFetching || isPlaceholderData;
   const total = data?.total ?? 0;
   const state = data?.state;
 
-  const refresh = () => qc.invalidateQueries({ queryKey: ["queue"] });
-  const resetSelection = () => (setSelected(new Set()), setAllMatching(false));
-  const run = async (action: Action, ids?: number[]) => {
+  const refresh = () => Promise.all([
+    qc.invalidateQueries({ queryKey: ["queue"] }),
+    qc.invalidateQueries({ queryKey: ["series"] }),
+  ]);
+  const resetSelection = () => (setSelected(new Set()), setAllMatching(false), setLastClicked(null));
+  const queueChanged = () => {
+    const message = t("Queue changed. Refresh and try again.");
+    setAnnouncement(message);
+    toast.info(message);
+  };
+  const run = async (action: Action, ids?: number[], anchorId?: number) => {
+    if (moveLock.current) return;
+    moveLock.current = true;
+    setMoving(true);
     try {
-      const body = allMatching && !ids ? { action, filter: { statuses: filter.status, kind: filter.kind, q: filter.q, includeDone: true } } : { action, ids: ids ?? [...selected] };
+      const body = allMatching && !ids ? { action, filter: { statuses: filter.status, kind: filter.kind, q: filter.q, includeDone: true } } : { action, ids: ids ?? [...selected], anchorId };
       const r = await unwrap(api.POST("/api/v1/queue/bulk", { body }));
-      toast.success(`${r.affected} ${r.affected === 1 ? "entry" : "entries"} updated`);
+      const message = r.affected ? t("{count} queue entries updated", { count: r.affected }) : t("Queue changed. Refresh and try again.");
+      toast.success(message);
+      setAnnouncement(message);
       if (!ids) resetSelection();
-      refresh();
     } catch (e) {
       toast.fromError(e);
+      setAnnouncement(t("Could not reorder queue. Try again."));
+    } finally {
+      await refresh();
+      moveLock.current = false;
+      setMoving(false);
     }
   };
+  // Moves the selected pending jobs one place past their pending neighbour,
+  // keeping their order. At a page edge it looks at the neighbouring page.
+  const moveSelected = async (direction: -1 | 1) => {
+    if (reorderDisabled || moveLock.current) return;
+    let anchor = selectionNeighbor(items, selected, direction);
+    if (!anchor) {
+      moveLock.current = true;
+      setMoving(true);
+      try {
+        const adjacent = await unwrap(api.GET("/api/v1/queue", { params: { query: {
+          ...filter, page: page + direction, pageSize, revision: data?.revision,
+        } } }));
+        anchor = adjacent.items.filter(isPending).at(direction === -1 ? -1 : 0);
+        if (!anchor) queueChanged();
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 409) {
+          queueChanged();
+        } else toast.fromError(e);
+      } finally {
+        if (!anchor) await refresh();
+        moveLock.current = false;
+        setMoving(false);
+      }
+    }
+    const ids = items.filter((job) => isPending(job) && selected.has(job.id)).map((job) => job.id);
+    if (anchor && ids.length) await run(direction === -1 ? "before" : "after", ids, anchor.id);
+  };
+  const countStatuses = (values: string[]) => values.reduce((sum, value) =>
+    sum + (!filter.status || filter.status.includes(value) ? data?.counts?.[value] ?? 0 : 0), 0);
+  const runningCount = countStatuses(["importing", "processing", "downloading"]);
+  const pendingEnd = runningCount + countStatuses(["queued", "paused"]);
+  const selectedJobs = allMatching ? items : items.filter((job) => selected.has(job.id));
+  const selectedPending = selectedJobs.filter(isPending);
+  const canMove = (direction: -1 | 1) => !allMatching && selectedPending.length > 0 && (!!selectionNeighbor(items, selected, direction)
+    || (direction === -1 ? (page - 1) * pageSize > runningCount : page * pageSize < pendingEnd));
+  const positions = queuePositions(items, (page - 1) * pageSize, runningCount);
   const pauseAll = async (minutes?: number) => {
     try {
       await unwrap(minutes === undefined ? api.POST("/api/v1/queue/resume") : api.POST("/api/v1/queue/pause", { body: { minutes } }));
@@ -76,10 +136,7 @@ export function QueuePage({ mode }: { mode: "downloads" | "processing" }) {
       toast.fromError(e);
     }
   };
-  const clear = async () => {
-    await unwrap(api.POST("/api/v1/queue/clear-finished"));
-    refresh();
-  };
+
 
   // click selects one row; shift+click selects the range from the last click
   const toggle = (idx: number, shift: boolean) => {
@@ -87,38 +144,32 @@ export function QueuePage({ mode }: { mode: "downloads" | "processing" }) {
     const id = items[idx].id;
     setSelected((cur) => {
       const next = new Set(cur);
-      if (shift && lastClicked !== null) {
-        const [a, b] = [Math.min(lastClicked, idx), Math.max(lastClicked, idx)];
+      const lastIndex = items.findIndex((job) => job.id === lastClicked);
+      if (shift && lastIndex >= 0) {
+        const [a, b] = [Math.min(lastIndex, idx), Math.max(lastIndex, idx)];
         const on = !cur.has(id);
         for (let i = a; i <= b; i++) on ? next.add(items[i].id) : next.delete(items[i].id);
       } else if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
-    setLastClicked(idx);
+    setLastClicked(id);
   };
   const pageAllSelected = items.length > 0 && items.every((j) => selected.has(j.id));
   const count = allMatching ? total : selected.size;
 
-  const groups = useMemo(() => {
-    if (!group) return null;
-    const m = new Map<number, { title: string; jobs: { job: Job; idx: number }[] }>();
-    items.forEach((job, idx) => {
-      const g = m.get(job.seriesId) ?? { title: job.seriesTitle, jobs: [] };
-      g.jobs.push({ job, idx });
-      m.set(job.seriesId, g);
-    });
-    return [...m.entries()];
-  }, [items, group]);
+  const groups = useMemo(() => group ? queueGroups(items) : null, [items, group]);
 
   const row = (j: Job, idx: number) => {
     const live = j.status === "completed" || j.status === "failed" ? undefined : (liveMap.get(j.id) ?? j.live);
     return (
-    <tr key={j.id} className={selected.has(j.id) || allMatching ? "bg-accent/5" : undefined}>
+    <tr key={j.id} data-queue-job={j.id} className={selected.has(j.id) || allMatching ? "bg-accent/5" : ""}>
       <Td className="w-8">
         <input type="checkbox" aria-label={t("Select")} checked={allMatching || selected.has(j.id)} onChange={() => undefined} onClick={(e) => toggle(idx, e.shiftKey)} />
       </Td>
-      <Td className="w-14 font-mono text-xs text-muted">{(page - 1) * pageSize + idx + 1}</Td>
+      <Td className="w-16 whitespace-nowrap tabular-nums">
+        <QueuePosition job={j} position={positions.get(j.id)} />
+      </Td>
       {!group && (
         <Td>
           <Link to={`/series/${j.seriesId}`} className="font-medium hover:text-accent-2">
@@ -138,7 +189,6 @@ export function QueuePage({ mode }: { mode: "downloads" | "processing" }) {
             <Badge tone="accent">{t("process")}</Badge>
           </span>
         )}
-        {j.priority !== 0 && <span className="ml-1.5 text-xs text-muted">{j.priority > 0 ? "↑" : "↓"}</span>}
       </Td>
       <Td className="text-muted">
         {j.sourceName}
@@ -175,39 +225,6 @@ export function QueuePage({ mode }: { mode: "downloads" | "processing" }) {
         )}
       </Td>
       <Td className="whitespace-nowrap text-muted">{relative(j.updatedAt)}</Td>
-      <Td className="text-right">
-        <div className="flex justify-end">
-          {j.status === "failed" && (
-            <IconButton title={t("Retry")} onClick={() => run("retry", [j.id])}>
-              <RotateCw className="size-4" />
-            </IconButton>
-          )}
-          {j.status === "paused" ? (
-            <IconButton title={t("Resume")} onClick={() => run("resume", [j.id])}>
-              <Play className="size-4" />
-            </IconButton>
-          ) : (
-            ["queued", "downloading", "processing"].includes(j.status) && (
-              <IconButton title={t("Pause")} onClick={() => run("pause", [j.id])}>
-                <Pause className="size-4" />
-              </IconButton>
-            )
-          )}
-          {j.status !== "completed" && (
-            <>
-              <IconButton title={t("Move to top")} onClick={() => run("top", [j.id])}>
-                <ArrowUpToLine className="size-4" />
-              </IconButton>
-              <IconButton title={t("Move to bottom")} onClick={() => run("bottom", [j.id])}>
-                <ArrowDownToLine className="size-4" />
-              </IconButton>
-              <IconButton title={t("Remove")} onClick={() => (setSelected(new Set([j.id])), setAllMatching(false), setConfirm({ action: "remove", label: "Remove" }))}>
-                <Trash2 className="size-4" />
-              </IconButton>
-            </>
-          )}
-        </div>
-      </Td>
     </tr>
     );
   };
@@ -220,15 +237,13 @@ export function QueuePage({ mode }: { mode: "downloads" | "processing" }) {
         actions={
           <>
             {!state?.paused && (
-              <Select className="w-44" value="" onChange={(e) => e.target.value && pauseAll(Number(e.target.value))} title={t("Pause the whole queue")}>
-                <option value="">{t("Pause queue…")}</option>
-                <option value="60">{t("for 1 hour")}</option>
-                <option value="360">{t("for 6 hours")}</option>
-                <option value="1440">{t("for 24 hours")}</option>
-                <option value="0">{t("until resumed")}</option>
-              </Select>
+              <Menu label={t("Pause")} icon={<Pause className="size-4" />} align="right" items={[
+                { label: t("for 1 hour"), onSelect: () => void pauseAll(60) },
+                { label: t("for 6 hours"), onSelect: () => void pauseAll(360) },
+                { label: t("for 24 hours"), onSelect: () => void pauseAll(1440) },
+                { label: t("until resumed"), onSelect: () => void pauseAll(0) },
+              ]} />
             )}
-            <Button icon={<Eraser className="size-4" />} onClick={clear}>{t("Clear finished")}</Button>
           </>
         }
       />
@@ -259,7 +274,7 @@ export function QueuePage({ mode }: { mode: "downloads" | "processing" }) {
           onClick={() => (setStatus(""), setPage("1"), resetSelection())}
           className={`rounded-full border px-3 py-1 text-xs ${!status ? "border-accent bg-accent/15 text-fg" : "border-border text-muted hover:text-fg"}`}
           title={t("Show every status")}
-        >{t("all") + " "}{Object.values(data?.counts ?? {}).reduce((a, b) => a + b, 0)}
+        >{t("all") + " "}{statuses.reduce((sum, s) => sum + (data?.counts?.[s] ?? 0), 0)}
         </button>
         {statuses.map((s) => {
           const n = data?.counts?.[s] ?? 0;
@@ -278,21 +293,27 @@ export function QueuePage({ mode }: { mode: "downloads" | "processing" }) {
         <Input className="max-w-xs" placeholder={t("Filter by series…")} defaultValue={q} onChange={(e) => (setQ(e.target.value), setPage("1"), resetSelection())} />
         <Switch checked={group} onChange={setGroup} label={t("Group by series")} />
       </div>
-      {count > 0 && (
-        <div className="sticky top-0 z-10 mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-accent/40 bg-panel p-2 text-sm shadow">
-          <span className="font-medium">{count}{" " + t("selected")}</span>
+
+      <p role="status" aria-live="polite" className="sr-only">{announcement}</p>
+      {items.length > 0 && (
+        <div className={`sticky top-0 z-10 mb-3 flex flex-wrap items-center gap-2 rounded-lg border bg-panel p-2 text-sm ${count > 0 ? "border-accent/40 shadow" : "border-border"}`}>
+          <span className={count > 0 ? "font-medium" : "text-muted"}>{count > 0 ? t("{count} selected", { count }) : t("Select chapters to act on them")}</span>
           {pageAllSelected && !allMatching && total > items.length && (
             <button className="text-accent-2 hover:underline" onClick={() => setAllMatching(true)}>{t("Select all") + " "}{total}{" " + t("matching")}</button>
           )}
           <div className="ml-auto flex flex-wrap gap-1">
-            <Button size="sm" icon={<Pause className="size-3.5" />} onClick={() => run("pause")}>{t("Pause")}</Button>
-            <Button size="sm" icon={<Play className="size-3.5" />} onClick={() => run("resume")}>{t("Resume")}</Button>
-            <Button size="sm" icon={<RotateCw className="size-3.5" />} onClick={() => run("retry")}>{t("Retry")}</Button>
-            <Button size="sm" icon={<ArrowUpToLine className="size-3.5" />} onClick={() => run("top")}>{t("Top")}</Button>
-            <Button size="sm" icon={<ArrowDownToLine className="size-3.5" />} onClick={() => run("bottom")}>{t("Bottom")}</Button>
-            <Button size="sm" icon={<Ban className="size-3.5" />} onClick={() => setConfirm({ action: "blocklist", label: "Remove and blocklist" })}>{t("Blocklist")}</Button>
-            <Button size="sm" variant="danger" icon={<Trash2 className="size-3.5" />} onClick={() => setConfirm({ action: "remove", label: "Remove" })}>{t("Remove")}</Button>
-            <Button size="sm" variant="ghost" onClick={resetSelection}>{t("Clear")}</Button>
+            <Button size="sm" disabled={reorderDisabled || !canMove(-1)} icon={<ArrowUp className="size-3.5" />} onClick={() => void moveSelected(-1)}>{t("Up")}</Button>
+            <Button size="sm" disabled={reorderDisabled || !canMove(1)} icon={<ArrowDown className="size-3.5" />} onClick={() => void moveSelected(1)}>{t("Down")}</Button>
+            <Button size="sm" disabled={reorderDisabled || !selectedPending.length} icon={<ArrowUpToLine className="size-3.5" />} onClick={() => run("top")}>{t("Top")}</Button>
+            <Button size="sm" disabled={reorderDisabled || !selectedPending.length} icon={<ArrowDownToLine className="size-3.5" />} onClick={() => run("bottom")}>{t("Bottom")}</Button>
+            <Button size="sm" disabled={reorderDisabled || allMatching || selectedPending.length < 2} title={t("Put the selected chapters in chapter order, in the places they already hold")} icon={<ListOrdered className="size-3.5" />} onClick={() => run("sort")}>{t("Sort by chapter")}</Button>
+            <span className="mx-1 hidden w-px self-stretch bg-border sm:block" />
+            <Button size="sm" disabled={!selectedJobs.some((job) => job.status === "queued" || isRunning(job))} icon={<Pause className="size-3.5" />} onClick={() => run("pause")}>{t("Pause")}</Button>
+            <Button size="sm" disabled={!selectedJobs.some((job) => job.status === "paused")} icon={<Play className="size-3.5" />} onClick={() => run("resume")}>{t("Resume")}</Button>
+            <Button size="sm" disabled={!selectedJobs.some((job) => job.status === "failed")} icon={<RotateCw className="size-3.5" />} onClick={() => run("retry")}>{t("Retry")}</Button>
+            <Button size="sm" disabled={!count} icon={<Ban className="size-3.5" />} onClick={() => setConfirm({ action: "blocklist", label: "Remove and blocklist" })}>{t("Blocklist")}</Button>
+            <Button size="sm" variant="danger" disabled={!count} icon={<Trash2 className="size-3.5" />} onClick={() => setConfirm({ action: "remove", label: "Remove" })}>{t("Remove")}</Button>
+            {count > 0 && <Button size="sm" variant="ghost" onClick={resetSelection}>{t("Clear")}</Button>}
           </div>
         </div>
       )}
@@ -300,7 +321,12 @@ export function QueuePage({ mode }: { mode: "downloads" | "processing" }) {
       {error && <ErrorBox error={error} />}
       {data && total === 0 && <EmptyState title={t("Queue is empty")}>{t("New chapters are queued automatically when a monitored series gets an update.")}</EmptyState>}
       {items.length > 0 && (
-        <div className="overflow-x-auto">
+        <ul className="flex flex-col gap-2 md:hidden">
+          {items.map((j, i) => <QueueCard key={j.id} job={j} position={positions.get(j.id)} selected={allMatching || selected.has(j.id)} onToggle={(shift) => toggle(i, shift)} live={j.status === "completed" || j.status === "failed" ? undefined : (liveMap.get(j.id) ?? j.live)} />)}
+        </ul>
+      )}
+      {items.length > 0 && (
+        <div className="hidden overflow-x-auto md:block">
           <Table>
             <thead>
               <tr>
@@ -312,22 +338,21 @@ export function QueuePage({ mode }: { mode: "downloads" | "processing" }) {
                     onChange={() => (pageAllSelected ? resetSelection() : setSelected(new Set(items.map((j) => j.id))))}
                   />
                 </Th>
-                <Th className="w-14">{t("Order")}</Th>
+                <Th>#</Th>
                 {!group && <Th>{t("Series")}</Th>}
                 <Th>{t("Chapter")}</Th>
                 <Th>{t("Source")}</Th>
                 <Th>{t("Status")}</Th>
                 <Th>{t("Progress")}</Th>
                 <Th>{t("Updated")}</Th>
-                <Th />
               </tr>
             </thead>
             <tbody>
               {groups
-                ? groups.map(([sid, g]) => (
+                ? groups.map((g) => (
                     <SeriesGroup
-                      key={sid}
-                      seriesId={sid}
+                      key={g.jobs[0].job.id}
+                      seriesId={g.seriesId}
                       title={g.title}
                       count={g.jobs.length}
                       selected={g.jobs.every(({ job }) => selected.has(job.id))}
@@ -397,7 +422,7 @@ function SeriesGroup({
         <Td className="w-8">
           <input type="checkbox" aria-label={`Select ${title}`} checked={selected} onChange={(e) => onSelect(e.target.checked)} />
         </Td>
-        <Td colSpan={7}>
+        <Td colSpan={6}>
           <button className="mr-2 text-muted" onClick={() => setOpen(!open)} aria-label={open ? tr("Collapse") : tr("Expand")}>
             {open ? "▾" : "▸"}
           </button>
@@ -409,5 +434,37 @@ function SeriesGroup({
       </tr>
       {open && children}
     </>
+  );
+}
+
+function QueuePosition({ job, position }: { job: Job; position?: number }) {
+  if (isRunning(job)) return <Badge tone="info">{t("now")}</Badge>;
+  if (position === undefined) return <span className="text-muted">—</span>;
+  return <span className="font-medium">{position}</span>;
+}
+
+function QueueCard({ job, position, selected, onToggle, live }: {
+  job: Job; position?: number; selected: boolean; onToggle: (shift: boolean) => void; live?: ReturnType<ReturnType<typeof useLiveProgress>["get"]>;
+}) {
+  return (
+    <li className={`flex gap-3 rounded-lg border p-3 ${selected ? "border-accent/50 bg-accent/5" : "border-border bg-panel"}`}>
+      <input type="checkbox" className="mt-1" aria-label={t("Select")} checked={selected} onChange={() => undefined} onClick={(e) => onToggle(e.shiftKey)} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <Link to={`/series/${job.seriesId}`} className="block truncate font-medium hover:text-accent-2">{job.seriesTitle}</Link>
+            <div className="truncate text-sm text-muted">{job.chapter}{job.sourceName && ` · ${job.sourceName}`}</div>
+          </div>
+          <QueuePosition job={job} position={position} />
+        </div>
+        <div className="mt-2 flex items-center gap-2">
+          <Badge tone={tone(job.status)}>{job.status}</Badge>
+          {live ? <span className="flex-1"><Progress value={live.total > 0 ? (live.done / live.total) * 100 : 0} tone="accent" /></span>
+            : job.status === "failed" || job.status === "completed" ? <span className="flex-1"><Progress value={job.progress} tone={job.status === "failed" ? "err" : "ok"} /></span>
+            : <span className="text-xs text-muted">{relative(job.updatedAt)}</span>}
+        </div>
+        {job.error && <div className="mt-1 truncate text-xs text-err" title={job.error}>{job.error}</div>}
+      </div>
+    </li>
   );
 }

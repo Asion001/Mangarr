@@ -380,3 +380,34 @@ func TestQueueRankPaginationRevision(t *testing.T) {
 		}
 	})
 }
+
+func TestQueueSortByChapterKeepsTheSelectionsPlaces(t *testing.T) {
+	dbtest.ForEachDialect(t, func(t *testing.T, d *db.DB) {
+		q, chapters := rankFixture(t, d, 6)
+		jobs := enqueueRankJobs(t, q, chapters)
+		ctx := t.Context()
+		// Scramble the queue into chapters 1 5 2 4 3 6.
+		if _, err := q.Move(ctx, []int64{jobs[4].ID}, "before", jobs[1].ID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := q.Move(ctx, []int64{jobs[3].ID}, "after", jobs[1].ID); err != nil {
+			t.Fatal(err)
+		}
+		want := []int64{jobs[0].ID, jobs[4].ID, jobs[1].ID, jobs[3].ID, jobs[2].ID, jobs[5].ID}
+		if got := rankOrder(t, q, ListFilter{}, 10); !slices.Equal(got, want) {
+			t.Fatalf("setup order %v, want %v", got, want)
+		}
+		n, err := q.SortByChapter(ctx, []int64{jobs[4].ID, jobs[1].ID, jobs[3].ID})
+		if err != nil || n != 3 {
+			t.Fatalf("sort: %d %v", n, err)
+		}
+		// 5 2 4 become 2 4 5 in the same places; 1, 3 and 6 don't move.
+		want = []int64{jobs[0].ID, jobs[1].ID, jobs[3].ID, jobs[4].ID, jobs[2].ID, jobs[5].ID}
+		if got := rankOrder(t, q, ListFilter{}, 10); !slices.Equal(got, want) {
+			t.Fatalf("sorted order %v, want %v", got, want)
+		}
+		if n, err := q.SortByChapter(ctx, []int64{jobs[1].ID, jobs[3].ID, jobs[4].ID}); err != nil || n != 0 {
+			t.Fatalf("already sorted: %d %v", n, err)
+		}
+	})
+}
