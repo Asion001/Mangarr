@@ -95,18 +95,25 @@ func TestWorkerKeys(t *testing.T) {
 	}
 
 	path := "/api/v1/workers/" + strconv.FormatInt(made.Worker.ID, 10)
-	resp = do(http.MethodPut, path, `{"enabled":true,"roles":["encode"],"priority":7,"concurrent":4}`, admin)
+	resp = do(http.MethodPut, path, `{"enabled":true,"roles":["encode"],"priority":7,"concurrent":4,"pageConcurrency":6}`, admin)
 	var updated struct {
-		Priority   int `json:"priority"`
-		Concurrent int `json:"concurrent"`
+		Priority        int `json:"priority"`
+		Concurrent      int `json:"concurrent"`
+		PageConcurrency int `json:"pageConcurrency"`
 	}
-	if resp.StatusCode != http.StatusOK || json.NewDecoder(resp.Body).Decode(&updated) != nil || updated.Priority != 7 || updated.Concurrent != 4 {
+	if resp.StatusCode != http.StatusOK || json.NewDecoder(resp.Body).Decode(&updated) != nil || updated.Priority != 7 || updated.Concurrent != 4 || updated.PageConcurrency != 6 {
 		t.Fatalf("worker limits: status=%d worker=%+v", resp.StatusCode, updated)
 	}
+	if resp := do(http.MethodPut, path, `{"pageConcurrency":-1}`, admin); resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("negative page concurrency: %d", resp.StatusCode)
+	}
 	resp = do(http.MethodPost, "/api/v1/worker/hello", `{"roles":["encode"]}`, made.Key)
-	welcome.Concurrent = 0
-	if resp.StatusCode != http.StatusOK || json.NewDecoder(resp.Body).Decode(&welcome) != nil || welcome.Concurrent != 4 {
-		t.Fatalf("worker concurrency override: status=%d welcome=%+v", resp.StatusCode, welcome)
+	var limits struct {
+		Concurrent      int `json:"concurrent"`
+		PageConcurrency int `json:"pageConcurrency"`
+	}
+	if resp.StatusCode != http.StatusOK || json.NewDecoder(resp.Body).Decode(&limits) != nil || limits.Concurrent != 4 || limits.PageConcurrency != 6 {
+		t.Fatalf("worker limits at hello: status=%d welcome=%+v", resp.StatusCode, limits)
 	}
 	if resp := do(http.MethodPut, path, `{"enabled":false,"roles":["encode"]}`, admin); resp.StatusCode != 200 {
 		t.Fatalf("update: %d", resp.StatusCode)

@@ -70,7 +70,7 @@ export function WorkersPage() {
       toast.fromError(e, t("Could not update this server"));
     }
   };
-  const update = async (w: Worker, body: { enabled?: boolean; roles?: string[]; priority?: number; concurrent?: number; upscaleModel?: string }) => {
+  const update = async (w: Worker, body: { enabled?: boolean; roles?: string[]; priority?: number; concurrent?: number; pageConcurrency?: number; upscaleModel?: string }) => {
     try {
       await unwrap(api.PUT("/api/v1/workers/{id}", { params: { path: { id: w.id } }, body }));
       reload();
@@ -106,6 +106,7 @@ export function WorkersPage() {
               <Th>{t("Upscale model")}</Th>
               <Th>{t("Priority")}</Th>
               <Th>{t("Concurrent tasks")}</Th>
+              <Th>{t("Pages at a time")}</Th>
               <Th>{t("Doing now")}</Th>
               <Th>{t("Last 24 hours")}</Th>
               <Th>{t("Lifetime")}</Th>
@@ -154,6 +155,9 @@ export function WorkersPage() {
                 </Td>
                 <Td>
                   <DeferredNumber value={w.concurrent} min={0} onSave={(concurrent) => update(w, { concurrent })} title={t("0 = default")} />
+                </Td>
+                <Td>
+                  <DeferredNumber value={w.pageConcurrency} min={0} max={64} onSave={(pageConcurrency) => update(w, { pageConcurrency })} title={t("Pages one download fetches at once. 0 = the worker's own setting (4 unless set).")} />
                 </Td>
                 <Td className="text-muted">
                   {w.busy?.length ? (
@@ -332,6 +336,7 @@ function ServerRow({ engine, onUpdate }: { engine?: ModuleResource; onUpdate: (e
         )}
       </Td>
       <Td className="text-xs text-muted">—</Td>
+      <Td className="text-xs text-muted">—</Td>
       <Td className="text-xs text-muted">{fallback}</Td>
       <Td className="text-xs text-muted">—</Td>
       <Td className="text-xs text-muted">—</Td>
@@ -373,7 +378,7 @@ function ModelSelect({ value, models, onChange, disabled }: { value: string; mod
   );
 }
 
-function DeferredNumber({ value, onSave, min, title }: { value: number; onSave: (value: number) => void; min?: number; title: string }) {
+function DeferredNumber({ value, onSave, min, max, title }: { value: number; onSave: (value: number) => void; min?: number; max?: number; title: string }) {
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
   const save = () => {
@@ -384,6 +389,7 @@ function DeferredNumber({ value, onSave, min, title }: { value: number; onSave: 
       className="w-24"
       type="number"
       min={min}
+      max={max}
       value={draft}
       onChange={(e) => setDraft(Number(e.target.value))}
       onBlur={save}

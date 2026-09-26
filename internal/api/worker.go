@@ -14,6 +14,7 @@ import (
 
 	"github.com/Asion001/mangarr/internal/access"
 	"github.com/Asion001/mangarr/internal/model"
+	"github.com/Asion001/mangarr/internal/settings"
 	"github.com/Asion001/mangarr/internal/worktasks"
 )
 
@@ -48,14 +49,29 @@ type WorkerWelcome struct {
 	Prefetch int `json:"prefetch"`
 	// Concurrent is how many tasks it may hold at once.
 	Concurrent int `json:"concurrent"`
+	// PageConcurrency is how many pages it fetches at a time (0: its own
+	// setting).
+	PageConcurrency int `json:"pageConcurrency"`
 	// OutputChunkBytes keeps processing-result uploads below proxy limits.
 	OutputChunkBytes int    `json:"outputChunkBytes"`
 	ServerTime       string `json:"serverTime"`
 }
 
-// WorkerTaskOutput is one task, as handed to a worker.
+// WorkerTaskOutput is one task, as handed to a worker, with its limits as
+// they are now: they can be changed in System → Workers while it runs.
 type WorkerTaskOutput struct {
-	Task *model.WorkerTask `json:"task,omitempty"`
+	Task            *model.WorkerTask `json:"task,omitempty"`
+	Concurrent      int               `json:"concurrent"`
+	PageConcurrency int               `json:"pageConcurrency"`
+}
+
+// workerConcurrent is how many tasks a worker may hold at once: its own
+// limit, or the installation default.
+func workerConcurrent(w *model.Worker, dl settings.Downloads) int {
+	if w.Concurrent > 0 {
+		return w.Concurrent
+	}
+	return max(dl.MaxConcurrentPerWorker, 1)
 }
 
 // workerPoll is how long a lease request waits for work before answering
@@ -91,14 +107,11 @@ func (s *Server) registerWorkerProtocol() {
 				s.app.OfferWorkersUpscaler(ctx)
 			}
 			dl, _ := s.app.Settings.Downloads(ctx)
-			concurrent := w.Concurrent
-			if concurrent <= 0 {
-				concurrent = dl.MaxConcurrentPerWorker
-			}
 			welcome := WorkerWelcome{WorkerID: w.ID, Name: w.Name, Roles: allowedRoles(w, in.Body.Roles),
 				LeaseSeconds: int(worktasks.Lease / time.Second), PollSeconds: int(workerPoll / time.Second),
-				Prefetch: dl.WorkerPrefetch, Concurrent: max(concurrent, 1), OutputChunkBytes: workerOutputChunkBytes,
-				ServerTime: now.Format(time.RFC3339)}
+				Prefetch: dl.WorkerPrefetch, Concurrent: workerConcurrent(w, dl), PageConcurrency: w.PageConcurrency,
+				OutputChunkBytes: workerOutputChunkBytes,
+				ServerTime:       now.Format(time.RFC3339)}
 			return &struct{ Body WorkerWelcome }{welcome}, nil
 		})
 
@@ -117,6 +130,7 @@ func (s *Server) registerWorkerProtocol() {
 			}
 			kinds := allowedRoles(w, in.Body.Kinds)
 			dl, _ := s.app.Settings.Downloads(ctx)
+			out := WorkerTaskOutput{Concurrent: workerConcurrent(w, dl), PageConcurrency: w.PageConcurrency}
 			deadline := time.Now().Add(workerPoll)
 			for {
 				task, err := s.app.Tasks.Claim(ctx, w.ID, kinds, dl.MaxWorkerTasks, dl.MaxConcurrentPerWorker)
@@ -127,14 +141,15 @@ func (s *Server) registerWorkerProtocol() {
 					if err := s.app.Tasks.UseWorkerModel(ctx, task, w); err != nil {
 						s.app.Log.Warn("could not give the task this worker's model", "task", task.ID, "worker", w.Name, "err", err)
 					}
-					return &struct{ Body WorkerTaskOutput }{WorkerTaskOutput{Task: task}}, nil
+					out.Task = task
+					return &struct{ Body WorkerTaskOutput }{out}, nil
 				}
 				if time.Now().After(deadline) {
-					return &struct{ Body WorkerTaskOutput }{WorkerTaskOutput{}}, nil
+					return &struct{ Body WorkerTaskOutput }{out}, nil
 				}
 				select {
 				case <-ctx.Done():
-					return &struct{ Body WorkerTaskOutput }{WorkerTaskOutput{}}, nil
+					return &struct{ Body WorkerTaskOutput }{out}, nil
 				case <-time.After(pollEvery):
 				}
 			}

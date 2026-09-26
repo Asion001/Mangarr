@@ -17,6 +17,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Asion001/mangarr/internal/upscaler"
@@ -37,7 +38,8 @@ type Config struct {
 	// Prefetch is how many pages it fetches ahead of its uploads (0: what
 	// the server says).
 	Prefetch int
-	// PageConcurrency is how many pages it fetches at a time.
+	// PageConcurrency is how many pages it fetches at a time when the server
+	// leaves it to the worker (0: 4).
 	PageConcurrency int
 	// Upscaler is the engine this machine upscales with (nil: it can't).
 	Upscaler *upscaler.Server
@@ -53,6 +55,12 @@ type Worker struct {
 	cfg     Config
 	log     *slog.Logger
 	welcome Welcome
+
+	// concurrent and pages are the limits the server gave last: they come
+	// with every lease, so a change in System → Workers applies without a
+	// restart.
+	concurrent atomic.Int64
+	pages      atomic.Int64
 
 	// up is the upscaling engine on this machine (nil when it has none).
 	up *upscaler.Server
@@ -70,6 +78,7 @@ type Welcome struct {
 	PollSeconds      int      `json:"pollSeconds"`
 	Prefetch         int      `json:"prefetch"`
 	Concurrent       int      `json:"concurrent"`
+	PageConcurrency  int      `json:"pageConcurrency"`
 	OutputChunkBytes int      `json:"outputChunkBytes"`
 	ServerTime       string   `json:"serverTime"`
 }
@@ -122,23 +131,27 @@ func (w *Worker) Run(ctx context.Context) error {
 		return err
 	}
 	w.log.Info("worker ready", "name", w.welcome.Name, "roles", w.welcome.Roles, "server", w.cfg.ServerURL)
-	concurrent := w.cfg.Concurrent
-	if concurrent <= 0 {
-		concurrent = max(w.welcome.Concurrent, 1)
-	}
-	slots := make(chan struct{}, concurrent)
-	var wg sync.WaitGroup
+	var (
+		wg     sync.WaitGroup
+		active atomic.Int64
+		freed  = make(chan struct{}, 1)
+	)
 	for {
-		select {
-		case <-ctx.Done():
+		if ctx.Err() != nil {
 			wg.Wait()
 			w.bye()
 			return nil
-		case slots <- struct{}{}:
+		}
+		if active.Load() >= int64(w.taskLimit()) {
+			select {
+			case <-ctx.Done():
+			case <-freed:
+			case <-time.After(10 * time.Second):
+			}
+			continue
 		}
 		task, err := w.lease(ctx)
 		if err != nil {
-			<-slots
 			if ctx.Err() != nil {
 				continue
 			}
@@ -150,16 +163,43 @@ func (w *Worker) Run(ctx context.Context) error {
 			continue
 		}
 		if task == nil {
-			<-slots
 			continue
 		}
+		active.Add(1)
 		wg.Add(1)
 		go func(t Task) {
 			defer wg.Done()
-			defer func() { <-slots }()
+			defer func() {
+				active.Add(-1)
+				select {
+				case freed <- struct{}{}:
+				default:
+				}
+			}()
 			w.do(ctx, t)
 		}(*task)
 	}
+}
+
+// taskLimit is how many tasks it takes at once: its own setting, or what the
+// server said last.
+func (w *Worker) taskLimit() int {
+	if w.cfg.Concurrent > 0 {
+		return w.cfg.Concurrent
+	}
+	return max(int(w.concurrent.Load()), 1)
+}
+
+// pageLimit is how many pages a download fetches at a time: what System →
+// Workers says for this worker, or its own setting when that is left at 0.
+func (w *Worker) pageLimit() int {
+	if n := int(w.pages.Load()); n > 0 {
+		return n
+	}
+	if w.cfg.PageConcurrency > 0 {
+		return w.cfg.PageConcurrency
+	}
+	return 4
 }
 
 // hello announces the worker, retrying until the server answers: a worker
@@ -192,6 +232,8 @@ func (w *Worker) hello(ctx context.Context) error {
 				return fmt.Errorf("this worker has no roles it may do here (it asked for %v)", w.cfg.Roles)
 			}
 			w.welcome = out
+			w.concurrent.Store(int64(out.Concurrent))
+			w.pages.Store(int64(out.PageConcurrency))
 			return nil
 		}
 		if ctx.Err() != nil {
@@ -217,10 +259,19 @@ func (w *Worker) hello(ctx context.Context) error {
 // so an idle worker makes one request every half minute or so.
 func (w *Worker) lease(ctx context.Context) (*Task, error) {
 	var out struct {
-		Task *Task `json:"task"`
+		Task            *Task `json:"task"`
+		Concurrent      *int  `json:"concurrent"`
+		PageConcurrency *int  `json:"pageConcurrency"`
 	}
 	if err := w.call(ctx, http.MethodPost, "/api/v1/worker/lease", map[string]any{"kinds": w.welcome.Roles}, &out); err != nil {
 		return nil, err
+	}
+	// an older server says nothing about limits: keep the ones from hello
+	if out.Concurrent != nil {
+		w.concurrent.Store(int64(*out.Concurrent))
+	}
+	if out.PageConcurrency != nil {
+		w.pages.Store(int64(*out.PageConcurrency))
 	}
 	return out.Task, nil
 }

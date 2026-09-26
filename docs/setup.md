@@ -548,7 +548,11 @@ Notes:
   online worker that can take it is full, so a GPU box can go first and a
   spare machine only catches the overflow. System → Workers → *Worker
   concurrency* caps tasks per worker (overridable per worker) and across all
-  of them.
+  of them. Each row also sets *Pages at a time*, how many pages one of its
+  downloads fetches at once (0 leaves it to the worker's
+  `MANGARR_WORKER_PAGE_CONCURRENCY`, 4 by default; a catalog's own
+  politeness limit still caps it). A running worker picks up both on its
+  next request for work, so no restart is needed.
 - **Switching one off** in System → Workers stops it being given work at
   once; removing it invalidates its key.
 - `MANGARR_MODE=upscaler` still starts a worker (it says so), but the old

@@ -45,10 +45,7 @@ func (w *Worker) download(ctx context.Context, t Task) (result, error) {
 	if prefetch <= 0 {
 		prefetch = 50
 	}
-	conc := w.cfg.PageConcurrency
-	if conc <= 0 {
-		conc = 4
-	}
+	conc := w.pageLimit()
 	// the share of the catalog's budget the server handed over: it paces the
 	// site for everyone, and a worker keeps to its part of that
 	pace := rateFrom(t.Spec)

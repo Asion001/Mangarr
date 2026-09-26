@@ -3204,7 +3204,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Rename a worker, change its roles, model or priority, or switch it off */
+        /** Rename a worker, change its roles, model, priority or limits, or switch it off */
         put: operations["workers-update"];
         post?: never;
         /** Remove a worker and its key */
@@ -6167,6 +6167,8 @@ export interface components {
             lastSeenAt?: string;
             name: string;
             /** Format: int64 */
+            pageConcurrency: number;
+            /** Format: int64 */
             pagesDone: number;
             platform: string;
             prefix: string;
@@ -6277,6 +6279,8 @@ export interface components {
             name: string;
             online: boolean;
             /** Format: int64 */
+            pageConcurrency: number;
+            /** Format: int64 */
             pagesDone: number;
             platform: string;
             prefix: string;
@@ -6331,6 +6335,10 @@ export interface components {
             workerId?: number;
         };
         WorkerTaskOutput: {
+            /** Format: int64 */
+            concurrent: number;
+            /** Format: int64 */
+            pageConcurrency: number;
             task?: components["schemas"]["WorkerTask"];
         };
         WorkerWelcome: {
@@ -6341,6 +6349,8 @@ export interface components {
             name: string;
             /** Format: int64 */
             outputChunkBytes: number;
+            /** Format: int64 */
+            pageConcurrency: number;
             /** Format: int64 */
             pollSeconds: number;
             /** Format: int64 */
@@ -6359,6 +6369,8 @@ export interface components {
             concurrent?: number;
             enabled?: boolean;
             name?: string;
+            /** Format: int64 */
+            pageConcurrency?: number;
             /** Format: int64 */
             priority?: number;
             roles?: string[];

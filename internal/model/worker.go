@@ -38,6 +38,9 @@ type Worker struct {
 	Priority int `bun:"priority,notnull" json:"priority"`
 	// Concurrent overrides the installation default; 0 inherits it.
 	Concurrent int `bun:"concurrent,notnull" json:"concurrent"`
+	// PageConcurrency is how many pages it fetches at a time within one
+	// download; 0 leaves it to the worker (MANGARR_WORKER_PAGE_CONCURRENCY).
+	PageConcurrency int `bun:"page_concurrency,notnull" json:"pageConcurrency"`
 	// UpscaleModel is what this worker upscales with, in place of the
 	// profile's model; empty (or a model it does not have) uses the profile's.
 	UpscaleModel string `bun:"upscale_model,notnull" json:"upscaleModel"`

@@ -106,7 +106,7 @@ func (s *Server) registerWorkers() {
 		})
 
 	huma.Register(s.api, huma.Operation{OperationID: "workers-update", Method: http.MethodPut, Path: "/api/v1/workers/{id}", Tags: tags,
-		Summary: "Rename a worker, change its roles, model or priority, or switch it off"},
+		Summary: "Rename a worker, change its roles, model, priority or limits, or switch it off"},
 		func(ctx context.Context, in *struct {
 			ID   int64 `path:"id"`
 			Body struct {
@@ -115,6 +115,8 @@ func (s *Server) registerWorkers() {
 				Enabled    *bool     `json:"enabled,omitempty"`
 				Priority   *int      `json:"priority,omitempty"`
 				Concurrent *int      `json:"concurrent,omitempty" minimum:"0"`
+				// PageConcurrency is pages fetched at a time per download (0 leaves it to the worker).
+				PageConcurrency *int `json:"pageConcurrency,omitempty" minimum:"0" maximum:"64"`
 				// UpscaleModel replaces the profile's model on this worker ("" uses the profile's).
 				UpscaleModel *string `json:"upscaleModel,omitempty"`
 			}
@@ -156,10 +158,13 @@ func (s *Server) registerWorkers() {
 			if in.Body.Concurrent != nil {
 				w.Concurrent = *in.Body.Concurrent
 			}
+			if in.Body.PageConcurrency != nil {
+				w.PageConcurrency = *in.Body.PageConcurrency
+			}
 			if in.Body.UpscaleModel != nil {
 				w.UpscaleModel = strings.TrimSpace(*in.Body.UpscaleModel)
 			}
-			if _, err := s.app.DB.NewUpdate().Model(&w).Column("name", "roles", "enabled", "priority", "concurrent", "upscale_model").WherePK().Exec(ctx); err != nil {
+			if _, err := s.app.DB.NewUpdate().Model(&w).Column("name", "roles", "enabled", "priority", "concurrent", "page_concurrency", "upscale_model").WherePK().Exec(ctx); err != nil {
 				return nil, toHTTPError(err)
 			}
 			s.app.Auth.InvalidateWorkers()

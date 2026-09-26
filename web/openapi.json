@@ -9765,6 +9765,10 @@
           "name": {
             "type": "string"
           },
+          "pageConcurrency": {
+            "format": "int64",
+            "type": "integer"
+          },
           "pagesDone": {
             "format": "int64",
             "type": "integer"
@@ -9808,6 +9812,7 @@
           "enabled",
           "priority",
           "concurrent",
+          "pageConcurrency",
           "upscaleModel",
           "version",
           "platform",
@@ -10099,6 +10104,10 @@
           "online": {
             "type": "boolean"
           },
+          "pageConcurrency": {
+            "format": "int64",
+            "type": "integer"
+          },
           "pagesDone": {
             "format": "int64",
             "type": "integer"
@@ -10147,6 +10156,7 @@
           "enabled",
           "priority",
           "concurrent",
+          "pageConcurrency",
           "upscaleModel",
           "version",
           "platform",
@@ -10264,10 +10274,22 @@
       "WorkerTaskOutput": {
         "additionalProperties": false,
         "properties": {
+          "concurrent": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "pageConcurrency": {
+            "format": "int64",
+            "type": "integer"
+          },
           "task": {
             "$ref": "#/components/schemas/WorkerTask"
           }
         },
+        "required": [
+          "concurrent",
+          "pageConcurrency"
+        ],
         "type": "object"
       },
       "WorkerWelcome": {
@@ -10285,6 +10307,10 @@
             "type": "string"
           },
           "outputChunkBytes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "pageConcurrency": {
             "format": "int64",
             "type": "integer"
           },
@@ -10318,6 +10344,7 @@
           "pollSeconds",
           "prefetch",
           "concurrent",
+          "pageConcurrency",
           "outputChunkBytes",
           "serverTime"
         ],
@@ -10356,6 +10383,12 @@
           },
           "name": {
             "type": "string"
+          },
+          "pageConcurrency": {
+            "format": "int64",
+            "maximum": 64,
+            "minimum": 0,
+            "type": "integer"
           },
           "priority": {
             "format": "int64",
@@ -20957,7 +20990,7 @@
             "description": "Error"
           }
         },
-        "summary": "Rename a worker, change its roles, model or priority, or switch it off",
+        "summary": "Rename a worker, change its roles, model, priority or limits, or switch it off",
         "tags": [
           "Workers"
         ]
