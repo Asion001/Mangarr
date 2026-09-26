@@ -13,7 +13,7 @@ import { ContinueReading, useReadingShelf } from "../series/ContinueReading";
 type LibraryItem = S["DiscoverLibraryItem"];
 type SourceItem = S["DiscoverSourceItem"];
 
-function useDiscover() {
+export function useDiscover() {
   return useQuery({
     queryKey: ["discover"],
     queryFn: () => unwrap(api.GET("/api/v1/discover", { params: { query: { limit: 24 } } })),
@@ -34,7 +34,7 @@ function recommendationReason(item: LibraryItem) {
   }
 }
 
-function Shelf({ title, subtitle, icon, children }: { title: string; subtitle?: string; icon: React.ReactNode; children: React.ReactNode }) {
+function Shelf({ title, subtitle, icon, href, children }: { href: string; title: string; subtitle?: string; icon: React.ReactNode; children: React.ReactNode }) {
   return (
     <section className="mb-8" aria-label={title}>
       <div className="mb-3 flex items-end justify-between gap-3">
@@ -42,16 +42,17 @@ function Shelf({ title, subtitle, icon, children }: { title: string; subtitle?: 
           <h2 className="flex items-center gap-2 text-base font-semibold">{icon}{title}</h2>
           {subtitle && <p className="mt-0.5 text-sm text-muted">{subtitle}</p>}
         </div>
+        <Link to={href} className="flex shrink-0 items-center gap-1 rounded-md py-2 text-sm font-medium text-accent-2 hover:underline">{t("See all")}<ArrowRight className="size-4" /></Link>
       </div>
       <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-3">{children}</div>
     </section>
   );
 }
 
-function LibraryCard({ item, recommendation = false }: { item: LibraryItem; recommendation?: boolean }) {
+export function LibraryCard({ item, recommendation = false, grid = false }: { item: LibraryItem; recommendation?: boolean; grid?: boolean }) {
   const detail = recommendation ? recommendationReason(item) : item.latestChapter ? `${t("Chapter")} ${item.latestChapter}` : t("Library updated");
   return (
-    <Link to={`/series/${item.seriesId}`} className="group w-36 shrink-0 snap-start sm:w-40" aria-label={`${t("Open series")}: ${item.title}`}>
+    <Link to={`/series/${item.seriesId}`} className={grid ? "group min-w-0" : "group w-36 shrink-0 snap-start sm:w-40"} aria-label={`${t("Open series")}: ${item.title}`}>
       <div className="relative">
         <Cover src={apiUrl(item.coverUrl)} alt={item.title} className="aspect-[2/3] w-full ring-accent/60 transition duration-200 group-hover:-translate-y-1 group-hover:ring-2" />
         {item.unread > 0 && <span className="absolute right-1.5 top-1.5"><Badge tone="accent">{item.unread} {t("unread")}</Badge></span>}
@@ -73,7 +74,7 @@ function sourceDestination(item: SourceItem, manage: boolean, request: boolean) 
   return "";
 }
 
-function SourceCard({ item, manage, request }: { item: SourceItem; manage: boolean; request: boolean }) {
+export function SourceCard({ item, manage, request, grid = false }: { item: SourceItem; manage: boolean; request: boolean; grid?: boolean }) {
   const destination = sourceDestination(item, manage, request);
   const card = (
     <>
@@ -90,7 +91,7 @@ function SourceCard({ item, manage, request }: { item: SourceItem; manage: boole
       <div className="mt-1 line-clamp-1 text-xs text-muted">{item.sourceName}</div>
     </>
   );
-  const className = "group w-36 shrink-0 snap-start sm:w-40";
+  const className = grid ? "group min-w-0" : "group w-36 shrink-0 snap-start sm:w-40";
   return destination ? <Link to={destination} className={className} aria-label={`${item.existingSeriesId ? t("Open series") : manage ? t("Add series") : t("Request")}: ${item.title}`}>{card}</Link> : <article className={className}>{card}</article>;
 }
 
@@ -154,17 +155,17 @@ export function DiscoverPage() {
           {spotlight && <Spotlight item={spotlight} />}
           <ContinueReading />
           {data.recommendations.length > 0 && (
-            <Shelf title={t("Recommendations")} subtitle={t("Picked from your unread library using what you read and follow.")} icon={<Sparkles className="size-4 text-accent-2" />}>
+            <Shelf href="/discover/recommendations" title={t("Recommendations")} subtitle={t("Picked from your unread library using what you read and follow.")} icon={<Sparkles className="size-4 text-accent-2" />}>
               {data.recommendations.map((item) => <LibraryCard key={item.seriesId} item={item} recommendation />)}
             </Shelf>
           )}
           {data.updates.length > 0 && (
-            <Shelf title={t("Recently updated")} subtitle={t("The latest changes across your library.")} icon={<Clock3 className="size-4 text-info" />}>
+            <Shelf href="/discover/recently-updated" title={t("Recently updated")} subtitle={t("The latest changes across your library.")} icon={<Clock3 className="size-4 text-info" />}>
               {data.updates.map((item) => <LibraryCard key={item.seriesId} item={item} />)}
             </Shelf>
           )}
           {data.popular.length > 0 && (
-            <Shelf title={t("Popular from your sources")} subtitle={t("Prioritized using your library and language source order.")} icon={<Compass className="size-4 text-ok" />}>
+            <Shelf href="/discover/popular" title={t("Popular from your sources")} subtitle={t("Prioritized using your library and language source order.")} icon={<Compass className="size-4 text-ok" />}>
               {data.popular.map((item) => <SourceCard key={`${item.moduleId}:${item.sourceId}:${item.url}`} item={item} manage={manage} request={request} />)}
             </Shelf>
           )}

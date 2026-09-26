@@ -2,8 +2,37 @@
 
 `GET /api/v1/discover` retains its existing response and limits. The additional
 `GET /api/v1/discover/{shelf}` accepts `recommendations`, `recently-updated` or
-`popular`. It requires the same signed-in access as Discover. No web pages or
-preference persistence are added by this API change.
+`popular`. It requires the same signed-in access as Discover.
+
+## Web browsing
+
+Each Discover shelf has a **See all** link to `/discover/{shelf}`. The page
+reuses Discover cards and their permission-aware series, Add and Request links,
+and loads the next cursor as the end of the grid approaches. A **Load more**
+button also supports manual paging. Empty pages with a continuation keep loading;
+the end message appears only when no continuation remains. Failed requests can
+be retried without discarding loaded cards. An expired cursor offers **Restart
+browsing**, which clears the old pages and requests a fresh first page. Source
+warnings preserve successful results and offer a fresh traversal to retry sources.
+
+Filters open in a dialog from the **Filters** button (which shows how many are
+active) and are applied together with **Apply filters**; sorting applies
+immediately.
+Only controls supported by the shelf are offered. Genre and metadata tag match
+exact values. Language is a picker of language names built from available
+results, catalogs and root folders; the code is what is stored. The existing source content setting applies on the server; there
+is no separate NSFW override.
+
+The URL contains the applied filters and sort, never a cursor. Choices are
+remembered in browser local storage per account and shelf, following the library
+page's browser-local persistence pattern. A bare shelf URL restores those choices;
+an explicit query string takes precedence as complete state. Browser Back restores
+previous choices, and changing filters starts a separate cursor chain.
+
+The catalog-list endpoint requires management permissions. Managers can select
+catalogs from that list; readers can select the named sources returned by Discover.
+A source selected in a shared URL remains clearable even when it is absent from
+those options. Catalog enumeration for readers would require a backend change.
 
 Responses contain `library` (existing `DiscoverLibraryItem` cards), `popular`
 (existing `DiscoverSourceItem` cards), `sourceErrors`, and optional `nextCursor`.

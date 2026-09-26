@@ -43,6 +43,7 @@ import { WorkersPage } from "./pages/system/Workers";
 import { ImportsPage } from "./pages/import/Imports";
 import { ImportDetailPage } from "./pages/import/ImportDetail";
 import { UpdatesPage } from "./pages/updates/Updates";
+import { DiscoverShelfPage } from "./pages/discover/DiscoverShelf";
 import { DiscoverPage } from "./pages/discover/Discover";
 
 export function App() {
@@ -93,6 +94,7 @@ export function App() {
       <Route element={<Layout />}>
         <Route index element={<SeriesIndex />} />
         <Route path="discover" element={<DiscoverPage />} />
+        <Route path="discover/:shelf" element={<DiscoverShelfPage />} />
         <Route path="series/:id" element={<SeriesDetail />} />
         <Route path="updates" element={<UpdatesPage />} />
         <Route path="account" element={<AccountPage />} />
