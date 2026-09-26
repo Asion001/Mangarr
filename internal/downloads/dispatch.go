@@ -129,10 +129,21 @@ func (m *Manager) dispatch(ctx context.Context) {
 			// a worker with the right role takes downloads off this machine;
 			// anything it can't have runs here
 			handed, err := m.offload(jctx, job)
+			// this server keeps to its own task limit; while it is full, a
+			// worker that frees up can still take the chapter
+			for !handed && !m.takeLocal(jctx) {
+				select {
+				case <-jctx.Done():
+					return
+				case <-time.After(localWait):
+				}
+				handed, err = m.offload(jctx, job)
+			}
 			if err != nil {
 				m.log.Warn("could not hand a chapter to the workers", "job", job.ID, "err", err)
 			}
 			if !handed {
+				defer m.releaseLocal()
 				m.run(jctx, job)
 			}
 		}(j.DownloadJob, src)
@@ -161,4 +172,28 @@ func (m *Manager) runningOfKind(kind string) int {
 		}
 	}
 	return n
+}
+
+// localWait is how often a chapter waiting for one of this server's own
+// slots looks again (and offers itself to the workers again).
+const localWait = 2 * time.Second
+
+// takeLocal takes one of this server's own task slots when one is free.
+func (m *Manager) takeLocal(ctx context.Context) bool {
+	dl, _ := m.settings.Downloads(ctx)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if dl.MaxLocalTasks > 0 && m.local >= dl.MaxLocalTasks {
+		return false
+	}
+	m.local++
+	return true
+}
+
+// releaseLocal gives a slot back.
+func (m *Manager) releaseLocal() {
+	m.mu.Lock()
+	m.local--
+	m.mu.Unlock()
+	m.queue.signal()
 }

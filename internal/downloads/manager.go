@@ -50,6 +50,9 @@ type Manager struct {
 	running     map[int64]context.CancelFunc
 	runningKind map[int64]string
 	runningSrc  map[string]int
+	// local counts the jobs this server is working on itself (not handed
+	// to a worker), for Downloads.MaxLocalTasks.
+	local       int
 	lastMaint   time.Time
 	wasBusy     bool
 	held        bool

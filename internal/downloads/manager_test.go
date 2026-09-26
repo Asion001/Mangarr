@@ -161,3 +161,39 @@ func TestManagerPausedJobRejectsStaleTransitions(t *testing.T) {
 		}
 	})
 }
+
+// TestLocalTaskLimit: this server's own task limit counts only what it runs
+// itself, follows the setting without a restart, and 0 sets no cap.
+func TestLocalTaskLimit(t *testing.T) {
+	dbtest.ForEachDialect(t, func(t *testing.T, d *db.DB) {
+		q, _ := rankFixture(t, d, 1)
+		st := settings.NewStore(d)
+		m := NewManager(d, q.bus, nil, st, nil, q, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), t.TempDir())
+		ctx := t.Context()
+		set := func(n int) {
+			dl, _ := st.Downloads(ctx)
+			dl.MaxLocalTasks = n
+			if err := st.Set(ctx, settings.KeyDownloads, dl); err != nil {
+				t.Fatal(err)
+			}
+		}
+		set(1)
+		if !m.takeLocal(ctx) || m.takeLocal(ctx) {
+			t.Fatal("a limit of 1 should give exactly one slot")
+		}
+		set(2)
+		if !m.takeLocal(ctx) || m.takeLocal(ctx) {
+			t.Fatal("raising the limit should free one more slot")
+		}
+		m.releaseLocal()
+		if !m.takeLocal(ctx) {
+			t.Fatal("a released slot should be free again")
+		}
+		set(0)
+		for range 5 {
+			if !m.takeLocal(ctx) {
+				t.Fatal("0 should set no cap")
+			}
+		}
+	})
+}

@@ -115,7 +115,7 @@ export function WorkersPage() {
             </tr>
           </thead>
           <tbody>
-            <ServerRow engine={local} onUpdate={updateEngine} />
+            <ServerRow engine={local} onUpdate={updateEngine} limits={limits.value} onLimits={(patch) => limits.value && limits.save({ ...limits.value, ...patch })} />
             {data.map((w) => (
               <tr key={w.id} className={w.enabled ? undefined : "opacity-60"}>
                 <Td>
@@ -283,7 +283,12 @@ export function WorkersPage() {
  * encodes what no worker takes; it upscales when the image has the built-in
  * upscaler, and that is what its priority and model apply to.
  */
-function ServerRow({ engine, onUpdate }: { engine?: ModuleResource; onUpdate: (engine: ModuleResource, patch: { enabled?: boolean; priority?: number; model?: string }) => Promise<void> }) {
+function ServerRow({ engine, onUpdate, limits, onLimits }: {
+  engine?: ModuleResource;
+  onUpdate: (engine: ModuleResource, patch: { enabled?: boolean; priority?: number; model?: string }) => Promise<void>;
+  limits: Downloads | null;
+  onLimits: (patch: Partial<Downloads>) => void;
+}) {
   const { data: info } = useQuery({
     queryKey: ["upscaler-info", engine?.id],
     queryFn: () => unwrap(api.GET("/api/v1/modules/{id}/upscaler-info", { params: { path: { id: engine!.id } } })),
@@ -335,8 +340,20 @@ function ServerRow({ engine, onUpdate }: { engine?: ModuleResource; onUpdate: (e
           <span className="text-xs text-muted">—</span>
         )}
       </Td>
-      <Td className="text-xs text-muted">—</Td>
-      <Td className="text-xs text-muted">—</Td>
+      <Td>
+        {limits ? (
+          <DeferredNumber value={limits.maxLocalTasks ?? 0} min={0} onSave={(maxLocalTasks) => onLimits({ maxLocalTasks })} title={t("Downloads and chapter files this server works on itself at once. 0 = no limit of its own.")} />
+        ) : (
+          <span className="text-xs text-muted">—</span>
+        )}
+      </Td>
+      <Td>
+        {limits ? (
+          <DeferredNumber value={limits.pageConcurrency} min={1} max={64} onSave={(pageConcurrency) => onLimits({ pageConcurrency })} title={t("Pages fetched in parallel within a chapter.")} />
+        ) : (
+          <span className="text-xs text-muted">—</span>
+        )}
+      </Td>
       <Td className="text-xs text-muted">{fallback}</Td>
       <Td className="text-xs text-muted">—</Td>
       <Td className="text-xs text-muted">—</Td>

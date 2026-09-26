@@ -2147,6 +2147,10 @@
             "format": "int64",
             "type": "integer"
           },
+          "maxLocalTasks": {
+            "format": "int64",
+            "type": "integer"
+          },
           "maxPerSource": {
             "format": "int64",
             "type": "integer"
@@ -2182,7 +2186,8 @@
           "maxConcurrentPerWorker",
           "maxWorkerTasks",
           "maxConcurrentProcessing",
-          "workerPrefetch"
+          "workerPrefetch",
+          "maxLocalTasks"
         ],
         "type": "object"
       },

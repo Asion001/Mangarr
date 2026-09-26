@@ -553,6 +553,10 @@ Notes:
   `MANGARR_WORKER_PAGE_CONCURRENCY`, 4 by default; a catalog's own
   politeness limit still caps it). A running worker picks up both on its
   next request for work, so no restart is needed.
+  The *This server* row takes the same two limits for the work it does
+  itself: *Concurrent tasks* caps the downloads and chapter files it works
+  on at once (0 leaves only the other limits), and *Pages at a time* is
+  Settings → Downloads' page concurrency.
 - **Switching one off** in System → Workers stops it being given work at
   once; removing it invalidates its key.
 - `MANGARR_MODE=upscaler` still starts a worker (it says so), but the old
