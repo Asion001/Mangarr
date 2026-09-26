@@ -89,9 +89,15 @@ type Downloads struct {
 	// uploaded.
 	WorkerPrefetch int `json:"workerPrefetch" desc:"Pages a worker fetches ahead of what it has uploaded."`
 	// MaxLocalTasks caps the downloads and chapter files this server works on
-	// itself, not counting what it hands to workers; 0 sets no cap of its own.
-	MaxLocalTasks int `json:"maxLocalTasks" desc:"Tasks this server runs itself at once (0 = only the other limits)."`
+	// itself, not counting what it hands to workers; 0 sets no cap of its own
+	// and a negative value (LocalOff) switches this server's own work off.
+	MaxLocalTasks int `json:"maxLocalTasks" desc:"Tasks this server runs itself at once (0 = only the other limits, -1 = none: downloads and processing wait for the workers)."`
 }
+
+// LocalOff reports whether this server does no downloading or processing
+// of its own: chapters wait for a worker with the download role, and pages
+// are processed by one with the encode role.
+func (d Downloads) LocalOff() bool { return d.MaxLocalTasks < 0 }
 
 // Placements a chapter's download can be given.
 const (

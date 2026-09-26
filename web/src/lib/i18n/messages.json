@@ -1,4 +1,16 @@
 {
+  "Switched off: downloads and processing wait for the workers": {
+    "ru": "Выключен: загрузки и обработка ждут воркеров",
+    "uk": "Вимкнено: завантаження та обробка чекають на воркерів"
+  },
+  "switched off": {
+    "ru": "выключен",
+    "uk": "вимкнено"
+  },
+  "Off: this server downloads and processes nothing itself, and chapters wait for a worker": {
+    "ru": "Выключено: этот сервер сам ничего не скачивает и не обрабатывает, главы ждут воркера",
+    "uk": "Вимкнено: цей сервер сам нічого не завантажує й не обробляє, розділи чекають на воркера"
+  },
   "Interface": {
     "ru": "Интерфейс",
     "uk": "Інтерфейс"

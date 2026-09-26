@@ -131,7 +131,7 @@ func (m *Manager) dispatch(ctx context.Context) {
 			handed, err := m.offload(jctx, job)
 			// this server keeps to its own task limit; while it is full, a
 			// worker that frees up can still take the chapter
-			for !handed && !m.takeLocal(jctx) {
+			for !handed && !m.takeLocal(jctx, job.Kind) {
 				select {
 				case <-jctx.Done():
 					return
@@ -179,10 +179,16 @@ func (m *Manager) runningOfKind(kind string) int {
 const localWait = 2 * time.Second
 
 // takeLocal takes one of this server's own task slots when one is free.
-func (m *Manager) takeLocal(ctx context.Context) bool {
+// With this server's own work switched off a download never gets one — it
+// waits for a worker — but reprocessing a file still runs, since its image
+// work is handed to the workers too and only the file handling stays here.
+func (m *Manager) takeLocal(ctx context.Context, kind string) bool {
 	dl, _ := m.settings.Downloads(ctx)
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if dl.LocalOff() && kind == model.JobKindDownload {
+		return false
+	}
 	if dl.MaxLocalTasks > 0 && m.local >= dl.MaxLocalTasks {
 		return false
 	}

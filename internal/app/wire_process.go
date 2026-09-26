@@ -30,10 +30,13 @@ func (a *App) wireProcess(ctx context.Context) error {
 	a.Processing = processing.New(upscaling.New(a.Modules), a.Encoder)
 	a.Processing.Guard = processing.NewGuard(a.Settings, a.Modules, a.Bus, a.Log.With("component", "processing"))
 	a.Downloads.Processor = a.Processing
+	// with MANGARR_PROCESSING=workers, or this server's own work switched
+	// off in System → Workers, the image work runs on a worker with the
+	// encode role; this process only hands the pages over and imports what
+	// comes back
+	a.Downloads.Processor = &processing.Switch{Local: a.Processing, UseRemote: a.processesOnWorkers,
+		Remote: &processing.Remote{Tasks: a.Tasks, Guard: a.Processing.Guard}}
 	if a.Cfg.Processing == config.ProcessingWorkers {
-		// the image work runs on a worker with the encode role; this process
-		// only hands the pages over and imports what comes back
-		a.Downloads.Processor = &processing.Remote{Tasks: a.Tasks, Guard: a.Processing.Guard}
 		a.Log.Info("processing runs on workers (MANGARR_PROCESSING=workers)")
 	}
 	if a.Cfg.Mode == config.ModeServer {
@@ -138,6 +141,17 @@ func (a *App) wireProcess(ctx context.Context) error {
 	return nil
 }
 
+// processesOnWorkers reports whether pages are processed by the workers
+// rather than in this process: MANGARR_PROCESSING=workers, or this
+// server's own work switched off in System → Workers.
+func (a *App) processesOnWorkers(ctx context.Context) bool {
+	if a.Cfg.Processing == config.ProcessingWorkers {
+		return true
+	}
+	dl, err := a.Settings.Downloads(ctx)
+	return err == nil && dl.LocalOff()
+}
+
 // PushProcessBacklog asks the backlog to look for work (e.g. after profile changes).
 func (a *App) PushProcessBacklog(trigger string) {
 	_, _ = a.Queue.Push(context.Background(), "ProcessBacklog", nil, trigger)
@@ -187,9 +201,15 @@ func (a *App) processingHealth(ctx context.Context) []health.Check {
 		out = append(out, health.Check{Source: "Processing", Type: health.Error, Link: "/settings/profiles",
 			Message: "Re-encoding is paused: " + reason})
 	}
+	if dl, err := a.Settings.Downloads(ctx); err == nil && dl.LocalOff() {
+		if ok, err := a.Tasks.CanDo(ctx, model.TaskDownload); err == nil && !ok {
+			out = append(out, health.Check{Source: "Workers", Type: health.Warning, Link: "/system/workers",
+				Message: "This server's own work is switched off and no worker with the download role is online: downloads wait until one is"})
+		}
+	}
 	var profiles []model.Profile
 	_ = a.DB.NewSelect().Model(&profiles).Scan(ctx)
-	if a.Cfg.Processing == config.ProcessingWorkers {
+	if a.processesOnWorkers(ctx) {
 		// the encoders that matter are the workers'; what matters here is
 		// that one is around
 		for _, p := range profiles {
@@ -198,7 +218,7 @@ func (a *App) processingHealth(ctx context.Context) []health.Check {
 			}
 			if ok, err := a.Tasks.CanDo(ctx, model.TaskEncode); err == nil && !ok {
 				out = append(out, health.Check{Source: "Processing", Type: health.Warning, Link: "/system/workers",
-					Message: "Processing runs on workers (MANGARR_PROCESSING=workers), but no worker with the encode role is online: chapters are imported unprocessed and processed once one is back"})
+					Message: "Processing runs on workers, but no worker with the encode role is online: chapters are imported unprocessed and processed once one is back"})
 			}
 			break
 		}

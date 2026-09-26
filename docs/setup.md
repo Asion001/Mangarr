@@ -601,6 +601,12 @@ light, move all of it into a worker next to it:
      restart: unless-stopped
    ```
 
+Instead of `MANGARR_PROCESSING=workers` you can switch the **This server**
+row off in System → Workers (the same as *Concurrent tasks* `-1`). That keeps
+all work off the server without a restart: downloads wait for a worker with
+the download role, and processing goes to one with the encode role. Only
+sources whose pages can't be fetched by a worker then stop downloading.
+
 While no such worker is online, new chapters are imported unprocessed (the
 health page says why) and processed once it is back; reprocessing jobs wait
 and retry. Previews on the profile page still run on the server.

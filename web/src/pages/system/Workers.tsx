@@ -279,9 +279,10 @@ export function WorkersPage() {
 }
 
 /**
- * ServerRow is this server in the list of workers. It always downloads and
- * encodes what no worker takes; it upscales when the image has the built-in
- * upscaler, and that is what its priority and model apply to.
+ * ServerRow is this server in the list of workers. It downloads and encodes
+ * what no worker takes unless its own work is switched off (maxLocalTasks
+ * -1), when everything waits for the workers; it upscales when the image has
+ * the built-in upscaler, and that is what its priority and model apply to.
  */
 function ServerRow({ engine, onUpdate, limits, onLimits }: {
   engine?: ModuleResource;
@@ -297,12 +298,13 @@ function ServerRow({ engine, onUpdate, limits, onLimits }: {
   });
   const upscales = !!engine?.enabled;
   const model = typeof engine?.settings?.model === "string" ? engine.settings.model : "";
-  const fallback = t("Always does the work no worker takes");
+  const off = (limits?.maxLocalTasks ?? 0) < 0;
+  const fallback = off ? t("Switched off: downloads and processing wait for the workers") : t("Always does the work no worker takes");
   return (
-    <tr className="bg-panel-2/40">
+    <tr className={off ? "bg-panel-2/40 opacity-60" : "bg-panel-2/40"}>
       <Td>
         <div className="flex items-center gap-2">
-          <span className="size-2 rounded-full bg-ok" title={t("online")} />
+          <span className={`size-2 rounded-full ${off ? "bg-border" : "bg-ok"}`} title={off ? t("switched off") : t("online")} />
           <span className="whitespace-nowrap font-medium">{t("This server")}</span>
         </div>
         <div className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-muted">
@@ -321,7 +323,7 @@ function ServerRow({ engine, onUpdate, limits, onLimits }: {
                 <RoleChip key={r.key} label={r.label} help={t("Needs the full image, which has the upscaling tools")} on={false} />
               )
             ) : (
-              <RoleChip key={r.key} label={r.label} help={fallback} on />
+              <RoleChip key={r.key} label={r.label} help={fallback} on={!off} />
             ),
           )}
         </div>
@@ -341,7 +343,7 @@ function ServerRow({ engine, onUpdate, limits, onLimits }: {
         )}
       </Td>
       <Td>
-        {limits ? (
+        {limits && !off ? (
           <DeferredNumber value={limits.maxLocalTasks ?? 0} min={0} onSave={(maxLocalTasks) => onLimits({ maxLocalTasks })} title={t("Downloads and chapter files this server works on itself at once. 0 = no limit of its own.")} />
         ) : (
           <span className="text-xs text-muted">—</span>
@@ -357,7 +359,13 @@ function ServerRow({ engine, onUpdate, limits, onLimits }: {
       <Td className="text-xs text-muted">{fallback}</Td>
       <Td className="text-xs text-muted">—</Td>
       <Td className="text-xs text-muted">—</Td>
-      <Td />
+      <Td>
+        {limits && (
+          <span title={t("Off: this server downloads and processes nothing itself, and chapters wait for a worker")}>
+            <Switch checked={!off} onChange={(v) => onLimits({ maxLocalTasks: v ? 0 : -1 })} />
+          </span>
+        )}
+      </Td>
       <Td />
     </tr>
   );

@@ -95,7 +95,7 @@ Read wherever the engine runs: in the server, or on a worker with the upscale ro
 | `MANGARR_DOWNLOADS_MAX_WORKER_TASKS` | int | `8` | Tasks all remote workers run at once. |
 | `MANGARR_DOWNLOADS_MAX_CONCURRENT_PROCESSING` | int | `4` | Chapter files processed at once. |
 | `MANGARR_DOWNLOADS_WORKER_PREFETCH` | int | `50` | Pages a worker fetches ahead of what it has uploaded. |
-| `MANGARR_DOWNLOADS_MAX_LOCAL_TASKS` | int | `0` | Tasks this server runs itself at once (0 = only the other limits). |
+| `MANGARR_DOWNLOADS_MAX_LOCAL_TASKS` | int | `0` | Tasks this server runs itself at once (0 = only the other limits, -1 = none: downloads and processing wait for the workers). |
 
 ### cleanup
 

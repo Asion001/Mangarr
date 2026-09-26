@@ -178,22 +178,29 @@ func TestLocalTaskLimit(t *testing.T) {
 			}
 		}
 		set(1)
-		if !m.takeLocal(ctx) || m.takeLocal(ctx) {
+		if !m.takeLocal(ctx, model.JobKindDownload) || m.takeLocal(ctx, model.JobKindDownload) {
 			t.Fatal("a limit of 1 should give exactly one slot")
 		}
 		set(2)
-		if !m.takeLocal(ctx) || m.takeLocal(ctx) {
+		if !m.takeLocal(ctx, model.JobKindDownload) || m.takeLocal(ctx, model.JobKindDownload) {
 			t.Fatal("raising the limit should free one more slot")
 		}
 		m.releaseLocal()
-		if !m.takeLocal(ctx) {
+		if !m.takeLocal(ctx, model.JobKindDownload) {
 			t.Fatal("a released slot should be free again")
 		}
 		set(0)
 		for range 5 {
-			if !m.takeLocal(ctx) {
+			if !m.takeLocal(ctx, model.JobKindDownload) {
 				t.Fatal("0 should set no cap")
 			}
+		}
+		set(-1)
+		if m.takeLocal(ctx, model.JobKindDownload) {
+			t.Fatal("-1 should keep downloads off this server")
+		}
+		if !m.takeLocal(ctx, model.JobKindReprocess) {
+			t.Fatal("reprocessing hands its image work to the workers and still runs")
 		}
 	})
 }

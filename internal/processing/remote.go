@@ -307,3 +307,20 @@ func extract(f *zip.File, path string) error {
 }
 
 var _ downloads.Processor = (*Remote)(nil)
+
+// Switch processes pages here or on the workers, decided per chapter so a
+// change in System → Workers applies without a restart.
+type Switch struct {
+	Local, Remote downloads.Processor
+	// UseRemote says whether the workers do it now.
+	UseRemote func(ctx context.Context) bool
+}
+
+func (s *Switch) Process(ctx context.Context, cfg model.ProfileConfig, pages []downloads.PageFile, workDir string) (downloads.ProcessResult, error) {
+	if s.UseRemote != nil && s.UseRemote(ctx) {
+		return s.Remote.Process(ctx, cfg, pages, workDir)
+	}
+	return s.Local.Process(ctx, cfg, pages, workDir)
+}
+
+var _ downloads.Processor = (*Switch)(nil)
